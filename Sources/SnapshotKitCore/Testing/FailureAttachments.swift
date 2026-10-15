@@ -14,6 +14,18 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
     /// Repository-relative path of the reference PNG, when it could be read from the failure message.
     public var referencePath: String?
 
+    public init(testIdentifier: String, repetition: Int, index: Int, reference: URL? = nil, failure: URL? = nil,
+                difference: URL? = nil, device: String? = nil, referencePath: String? = nil) {
+        self.testIdentifier = testIdentifier
+        self.repetition = repetition
+        self.index = index
+        self.reference = reference
+        self.failure = failure
+        self.difference = difference
+        self.device = device
+        self.referencePath = referencePath
+    }
+
     public var id: String { "\(testIdentifier)#\(repetition)#\(index)" }
 }
 

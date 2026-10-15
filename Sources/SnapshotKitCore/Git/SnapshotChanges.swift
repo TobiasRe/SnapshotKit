@@ -74,6 +74,14 @@ public struct SnapshotChangeSet: Sendable {
     public var baseCommit: String
     public var changes: [SnapshotChange]
 
+    public init(baseBranch: String, baseRef: String, diffBase: DiffBase, baseCommit: String, changes: [SnapshotChange]) {
+        self.baseBranch = baseBranch
+        self.baseRef = baseRef
+        self.diffBase = diffBase
+        self.baseCommit = baseCommit
+        self.changes = changes
+    }
+
     public var groups: [SnapshotChangeGroup] { Self.group(changes) }
 
     public static func group(_ changes: [SnapshotChange]) -> [SnapshotChangeGroup] {

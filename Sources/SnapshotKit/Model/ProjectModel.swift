@@ -9,7 +9,7 @@ enum ProjectTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum Operation: Equatable {
+enum RunOperation: Equatable {
     case run, rerecord, flakeCheck
     case remoteRun, remoteRecord, remoteFlakeCheck
 
@@ -61,7 +61,7 @@ final class ProjectModel: ObservableObject {
     @Published var tab: ProjectTab = .run
 
     // Running
-    @Published private(set) var operation: Operation?
+    @Published private(set) var operation: RunOperation?
     @Published private(set) var stageLabel: String = ""
     @Published private(set) var phase: RunPhase = .preparing
     @Published private(set) var passed = 0
@@ -95,11 +95,14 @@ final class ProjectModel: ObservableObject {
     private let lineBuffer = LineBatcher()
     private var lastFailingSuites: [SuiteResult] = []
 
-    init(project: Project, store: ProjectStore) {
+    /// Image bytes for changes, used instead of git when set (previews and snapshot tests).
+    private var fixtureImages: [String: (Data?, Data?)]?
+
+    init(project: Project, store: ProjectStore, autoload: Bool = true) {
         self.project = project
         self.store = store
         lineBuffer.onFlush = { [weak self] lines in self?.appendLog(lines) }
-        reload()
+        if autoload { reload() }
     }
 
     var settings: ProjectSettings { store.settings(for: project) }
@@ -201,6 +204,7 @@ final class ProjectModel: ObservableObject {
 
     /// Loader for the compare view; runs `git show`, so call it off the main thread.
     func imageLoader(for change: SnapshotChange) -> @Sendable () -> (Data?, Data?) {
+        if let images = fixtureImages?[change.path] { return { images } }
         guard let set = changeSet else { return { (nil, nil) } }
         let git = Git(root: project.url)
         return { (git.baseImage(for: change, in: set), git.currentImage(for: change)) }
@@ -265,7 +269,7 @@ final class ProjectModel: ObservableObject {
 
     // MARK: Operations
 
-    private func begin(_ op: Operation) -> Bool {
+    private func begin(_ op: RunOperation) -> Bool {
         guard operation == nil else { return false }
         operation = op
         stageLabel = op.label
@@ -478,7 +482,7 @@ final class ProjectModel: ObservableObject {
         runRemote(.remoteRecord, mode: .record(suites: lastFailingSuites), onlyTesting: nil)
     }
 
-    private func runRemote(_ op: Operation, mode: RemoteMode, onlyTesting: [String]?) {
+    private func runRemote(_ op: RunOperation, mode: RemoteMode, onlyTesting: [String]?) {
         guard begin(op) else { return }
         guard let ctx = context else { finish(message: configError ?? "No configuration.", isError: true); return }
         let transport: RemoteTransport
@@ -523,6 +527,74 @@ final class ProjectModel: ObservableObject {
         line.hasPrefix("$ ") || line.hasPrefix("snapkit:") || line.hasPrefix("◇ Suite") || line.hasPrefix("◇ Test") || line.hasPrefix("✔") || line.hasPrefix("✘")
             || line.hasPrefix("↳ ") || line.hasPrefix("** ") || line.contains(": error: ") || line.hasPrefix("Test Case '") || line.hasPrefix("Test case '")
             || line.hasPrefix("Testing started") || line.hasPrefix("Resolve Package Graph")
+    }
+}
+
+// MARK: - Fixtures (snapshot tests)
+
+/// A complete, side-effect-free state for rendering project views deterministically.
+struct ProjectFixture {
+    var context: ProjectContext?
+    var environment: TestEnvironment?
+    var environmentError: String?
+    var modules: [String] = []
+    var detectedBaseBranch: String?
+    var currentBranch: String?
+    var tab: ProjectTab = .run
+    var operation: RunOperation?
+    var stageLabel = ""
+    var phase: RunPhase = .preparing
+    var passed = 0
+    var failed = 0
+    var skipped = 0
+    var expectedTotal: Int?
+    var currentTest: String?
+    var log: [String] = []
+    var lastResult: TestRunResult?
+    var lastMessage: String?
+    var lastMessageIsError = false
+    var failingSuites: [SuiteResult] = []
+    var failures: [FailureItem] = []
+    var failureSource: FailureSource?
+    var flakeResults: [FlakeResult] = []
+    var historyFlaky: [FlakySignal] = []
+    var changeSet: SnapshotChangeSet?
+    var changeImages: [String: (Data?, Data?)] = [:]
+}
+
+extension ProjectModel {
+    func apply(_ f: ProjectFixture) {
+        context = f.context
+        configError = nil
+        environment = f.environment
+        environmentError = f.environmentError
+        modules = f.modules
+        detectedBaseBranch = f.detectedBaseBranch ?? f.context?.config.baseBranch
+        currentBranch = f.currentBranch
+        tab = f.tab
+        operation = f.operation
+        stageLabel = f.stageLabel
+        phase = f.phase
+        passed = f.passed
+        failed = f.failed
+        skipped = f.skipped
+        expectedTotal = f.expectedTotal
+        currentTest = f.currentTest
+        log = f.log
+        lastResult = f.lastResult
+        lastMessage = f.lastMessage
+        lastMessageIsError = f.lastMessageIsError
+        lastFailingSuites = f.failingSuites
+        flakeResults = f.flakeResults
+        historyFlaky = f.historyFlaky
+        failures = f.failures
+        failureSource = f.failureSource
+        selectedFailureID = f.failures.first?.id
+        changeSet = f.changeSet
+        changesError = nil
+        isLoadingChanges = false
+        fixtureImages = f.changeImages
+        selectedChangeID = filteredChanges.first?.id
     }
 }
 

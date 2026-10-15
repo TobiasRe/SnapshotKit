@@ -110,10 +110,16 @@ which is handy for trying the workflow out.
 ## Development
 
 ```bash
-swift test                              # unit tests for SnapshotKitCore
+swift test                              # core unit tests + the app's own snapshot tests
 scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view
 ```
+
+The app's UI is covered by snapshot tests (swift-snapshot-testing with Swift Testing) in
+`Tests/SnapshotKitAppTests`. They render real views from fixture state in light and dark. Liquid Glass
+can't be composited off-screen, so those renders use an opaque stand-in and leave out the system toolbar
+and sidebar chrome. To update references, delete the PNG or set `record: .all`, or re-record them with
+SnapshotKit itself. Visual guidelines are in [docs/DESIGN.md](docs/DESIGN.md).
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,
 remote runner and project store. `SnapshotKit` (SwiftUI) and `snapkit` are thin front ends.

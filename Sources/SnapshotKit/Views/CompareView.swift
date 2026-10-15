@@ -39,6 +39,20 @@ struct ComparePair {
     }
 }
 
+/// Decoded pairs keyed by the compare view's identity, so revisiting a snapshot is instant.
+final class ComparePairCache {
+    final class Box { let pair: ComparePair; init(_ pair: ComparePair) { self.pair = pair } }
+    static let shared: NSCache<NSString, Box> = {
+        let cache = NSCache<NSString, Box>()
+        cache.countLimit = 40
+        return cache
+    }()
+
+    static func store(_ pair: ComparePair, for identity: String) {
+        shared.setObject(Box(pair), forKey: identity as NSString)
+    }
+}
+
 struct CompareView: View {
     @EnvironmentObject private var app: AppModel
     /// Produces the (before, after) image bytes; called off the main thread.
@@ -51,12 +65,18 @@ struct CompareView: View {
     @State private var pair: ComparePair?
     @State private var split: CGFloat = 0.5
 
+    init(load: @escaping @Sendable () -> (Data?, Data?), beforeLabel: String, afterLabel: String, identity: String) {
+        self.load = load
+        self.beforeLabel = beforeLabel
+        self.afterLabel = afterLabel
+        self.identity = identity
+        _pair = State(initialValue: ComparePairCache.shared.object(forKey: identity as NSString)?.pair)
+    }
+
     private var mode: CompareMode { CompareMode(rawValue: modeRaw) ?? .sideBySide }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
+        ZStack(alignment: .bottom) {
             Group {
                 if let pair {
                     content(pair)
@@ -65,58 +85,89 @@ struct CompareView: View {
                 }
             }
             .background(CheckerboardBackground())
-            .clipped()
+
+            controls
+                .padding(.bottom, DS.Space.m)
         }
+        .clipped()
         .task(id: identity) {
+            if let cached = ComparePairCache.shared.object(forKey: identity as NSString) {
+                pair = cached.pair
+                return
+            }
             pair = nil
-            let load = load
-            pair = await Task.detached {
+            let load = load, identity = identity
+            let computed = await Task.detached {
                 let (before, after) = load()
                 return ComparePair.make(before: before, after: after)
             }.value
+            ComparePairCache.store(computed, for: identity)
+            pair = computed
         }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 12) {
-            Picker("Mode", selection: $modeRaw) {
-                ForEach(CompareMode.allCases) { m in
-                    Label(m.rawValue, systemImage: m.systemImage).tag(m.rawValue)
+    /// One floating glass bar over the canvas: mode, what changed, zoom.
+    private var controls: some View {
+        GlassGroup {
+            HStack(spacing: DS.Space.m) {
+                Picker("Mode", selection: $modeRaw) {
+                    ForEach(CompareMode.allCases) { m in Text(m.rawValue).tag(m.rawValue) }
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
 
-            if let stats = pair?.stats {
-                Group {
-                    if stats.isIdentical {
-                        Label("Identical pixels", systemImage: "checkmark.circle").foregroundStyle(.green)
-                    } else {
-                        Label(String(format: "%d px differ (%.2f%%)%@", stats.changedPixels, stats.changedFraction * 100,
-                                     stats.sizeChanged ? " · size changed" : ""), systemImage: "exclamationmark.circle")
-                            .foregroundStyle(.orange)
+                if let stats = pair?.stats {
+                    HStack(spacing: DS.Space.xs + 1) {
+                        Circle()
+                            .fill(stats.isIdentical ? DS.Status.passed : DS.Status.changed)
+                            .frame(width: 7, height: 7)
+                        Text(stats.isIdentical
+                             ? "Identical"
+                             : String(format: "%.2f%% changed", stats.changedFraction * 100) + (stats.sizeChanged ? " · size differs" : ""))
+                            .monospacedDigit()
                     }
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .help(stats.isIdentical ? "Pixel-identical" : "\(stats.changedPixels.formatted()) of \(stats.totalPixels.formatted()) pixels differ")
                 }
-                .font(.caption)
+
+                if let size = pair?.pixelSize, size.width > 0 {
+                    Text("\(Int(size.width))×\(Int(size.height))")
+                        .font(DS.Font.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+
+                ControlGroup {
+                    Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
+                        .help("Zoom out (⌘−)")
+                    Menu {
+                        Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
+                        Divider()
+                        ForEach([2, 4, 8, 16], id: \.self) { factor in
+                            Button("\(factor)×") { withAnimation(DS.motion) { app.viewport = Viewport(scale: CGFloat(factor), offset: .zero) } }
+                        }
+                    } label: {
+                        Text(zoomLabel).monospacedDigit().frame(minWidth: 34)
+                    }
+                    .help("Zoom relative to fit. ⌘0 or double-click fits.")
+                    Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
+                        .help("Zoom in (⌘=)")
+                }
+                .controlGroupStyle(.navigation)
+                .fixedSize()
             }
-            if let size = pair?.pixelSize, size.width > 0 {
-                Text("\(Int(size.width))×\(Int(size.height)) px").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button { app.viewport.zoomOut() } label: { Image(systemName: "minus.magnifyingglass") }
-                .help("Zoom out (⌘−)")
-            Text("\(Int((app.viewport.scale * 100).rounded()))%")
-                .font(.caption.monospacedDigit())
-                .frame(width: 44)
-            Button { app.viewport.zoomIn() } label: { Image(systemName: "plus.magnifyingglass") }
-                .help("Zoom in (⌘=)")
-            Button { app.viewport.reset() } label: { Image(systemName: "arrow.up.left.and.down.right.magnifyingglass") }
-                .help("Fit (⌘0, or double-click the image)")
+            .controlSize(.small)
+            .padding(.horizontal, DS.Space.m)
+            .padding(.vertical, DS.Space.s - 2)
+            .floatingGlassCapsule()
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+    }
+
+    private var zoomLabel: String {
+        let s = app.viewport.scale
+        if abs(s - 1) < 0.01 { return "Fit" }
+        return s >= 10 ? String(format: "%.0f×", s) : String(format: "%.1f×", s)
     }
 
     @ViewBuilder
@@ -129,55 +180,64 @@ struct CompareView: View {
                 pane(pair.after, label: afterLabel, size: pair.pixelSize)
             }
         case .slider:
-            VStack(spacing: 0) {
-                GeometryReader { geo in
-                    ZStack(alignment: .topLeading) {
-                        ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: app.viewport)
-                        ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: app.viewport)
-                            .mask(alignment: .leading) {
-                                Rectangle().frame(width: geo.size.width * split)
-                            }
-                        Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(width: 2)
-                            .offset(x: geo.size.width * split - 1)
-                        caption(beforeLabel).padding(8)
-                        caption(afterLabel).frame(maxWidth: .infinity, alignment: .trailing).padding(8)
-                    }
-                    .overlay(ZoomPanSurface(viewport: $app.viewport))
+            GeometryReader { geo in
+                let x = geo.size.width * split
+                ZStack(alignment: .topLeading) {
+                    ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: app.viewport)
+                    ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: app.viewport)
+                        .mask(alignment: .leading) { Rectangle().frame(width: x) }
+                    ZoomPanSurface(viewport: $app.viewport)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.9))
+                        .frame(width: 1)
+                        .shadow(color: .black.opacity(0.35), radius: 1)
+                        .offset(x: x - 0.5)
+                        .allowsHitTesting(false)
+                    sliderKnob
+                        .position(x: x, y: geo.size.height / 2)
+                        .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                            split = min(max(value.location.x / max(geo.size.width, 1), 0), 1)
+                        })
+                    caption(beforeLabel).padding(DS.Space.m)
+                    caption(afterLabel).frame(maxWidth: .infinity, alignment: .trailing).padding(DS.Space.m)
                 }
-                HStack {
-                    Text(beforeLabel).font(.caption)
-                    Slider(value: $split, in: 0...1)
-                    Text(afterLabel).font(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.bar)
             }
         case .difference:
             pane(pair.diff ?? pair.after ?? pair.before,
-                 label: pair.diff == nil ? "Only one side exists" : "Changed pixels in magenta",
+                 label: pair.diff == nil ? "Only one side exists" : "Changed pixels",
                  size: pair.pixelSize)
         }
+    }
+
+    private var sliderKnob: some View {
+        Image(systemName: "arrow.left.and.right")
+            .font(.system(size: 11, weight: .semibold))
+            .frame(width: 30, height: 30)
+            .floatingGlass(in: Circle())
+            .contentShape(Circle())
+            .help("Drag to compare")
+            .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
     }
 
     private func pane(_ image: NSImage?, label: String, size: CGSize) -> some View {
         ZoomableImage(image: image, pixelSize: size, viewport: app.viewport)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
-                if image == nil { Text("No image").foregroundStyle(.secondary) }
+                if image == nil {
+                    ContentUnavailableView("No Image", systemImage: "photo", description: Text("This side doesn't exist."))
+                }
             }
-            .overlay(alignment: .topLeading) { caption(label).padding(8) }
             .overlay(ZoomPanSurface(viewport: $app.viewport))
+            .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m) }
     }
 
     private func caption(_ text: String) -> some View {
         Text(text)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.thinMaterial, in: Capsule())
+            .font(DS.Font.caption.weight(.medium))
+            .lineLimit(1)
+            .padding(.horizontal, DS.Space.s)
+            .padding(.vertical, DS.Space.xs)
+            .floatingGlassCapsule()
     }
 }
 
@@ -192,16 +252,19 @@ struct ZoomableImage: View {
         Canvas { context, canvasSize in
             guard let image else { return }
             let size = pixelSize.width > 0 ? pixelSize : image.size
-            let fit = Viewport.fitScale(image: size, in: CGSize(width: canvasSize.width - 24, height: canvasSize.height - 24))
+            // Leave room for the floating controls at the bottom.
+            let fit = Viewport.fitScale(image: size, in: CGSize(width: canvasSize.width - 48, height: canvasSize.height - 120))
             let scale = fit * viewport.scale
             let drawn = CGSize(width: size.width * scale, height: size.height * scale)
             let rect = CGRect(
                 x: canvasSize.width / 2 + viewport.offset.width - drawn.width / 2,
-                y: canvasSize.height / 2 + viewport.offset.height - drawn.height / 2,
+                y: (canvasSize.height - 40) / 2 + viewport.offset.height - drawn.height / 2,
                 width: drawn.width, height: drawn.height
             )
             // Nearest-neighbour when zoomed in so individual pixels stay crisp.
             context.draw(Image(nsImage: image).interpolation(scale >= 2 ? .none : .high), in: rect)
+            // Hairline frame so the image edge is visible on any background.
+            context.stroke(Path(rect.insetBy(dx: -0.5, dy: -0.5)), with: .color(Color(nsColor: .separatorColor)), lineWidth: 1)
         }
     }
 }
@@ -290,7 +353,7 @@ struct CheckerboardBackground: View {
         Canvas { context, size in
             let tile: CGFloat = 10
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(nsColor: .controlBackgroundColor)))
-            let dark = Color.gray.opacity(0.12)
+            let dark = Color.gray.opacity(0.08)
             var y: CGFloat = 0, row = 0
             while y < size.height {
                 var x: CGFloat = row % 2 == 0 ? 0 : tile

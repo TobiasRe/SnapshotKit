@@ -60,8 +60,13 @@ struct SidebarView: View {
     @ViewBuilder
     private func rows(_ projects: [Project]) -> some View {
         ForEach(projects) { project in
-            ProjectRow(project: project, pinned: model.isPinned(project))
-                .tag(project.path)
+            Label {
+                Text(project.name).lineLimit(1)
+            } icon: {
+                Image(systemName: model.isPinned(project) ? "pin.fill" : "folder")
+            }
+            .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+            .tag(project.path)
                 .contextMenu {
                     Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }

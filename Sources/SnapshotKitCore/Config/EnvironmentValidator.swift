@@ -5,6 +5,12 @@ public struct XcodeInstall: Equatable, Sendable, Codable {
     public var version: String
     public var build: String?
 
+    public init(path: String, version: String, build: String? = nil) {
+        self.path = path
+        self.version = version
+        self.build = build
+    }
+
     public var developerDir: String { path + "/Contents/Developer" }
 }
 
@@ -14,6 +20,14 @@ public struct Simulator: Equatable, Sendable, Codable {
     public var osVersion: String
     public var platform: String
     public var state: String
+
+    public init(name: String, udid: String, osVersion: String, platform: String, state: String) {
+        self.name = name
+        self.udid = udid
+        self.osVersion = osVersion
+        self.platform = platform
+        self.state = state
+    }
 }
 
 /// A config checked against the machine: the Xcode to use and the simulator to run on.
@@ -22,6 +36,12 @@ public struct TestEnvironment: Sendable {
     public var simulator: Simulator
     /// True when CI does not pin Xcode and the currently selected one is used.
     public var xcodeIsDefault: Bool
+
+    public init(xcode: XcodeInstall, simulator: Simulator, xcodeIsDefault: Bool) {
+        self.xcode = xcode
+        self.simulator = simulator
+        self.xcodeIsDefault = xcodeIsDefault
+    }
 
     public var destination: String { "platform=\(simulator.platform) Simulator,id=\(simulator.udid)" }
     public var processEnvironment: [String: String] { ["DEVELOPER_DIR": xcode.developerDir] }

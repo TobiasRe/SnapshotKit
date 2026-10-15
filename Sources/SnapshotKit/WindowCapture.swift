@@ -7,7 +7,7 @@ import SwiftUI
 ///     SnapshotKit --capture out.png --project /path/to/repo --tab changes \
 ///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference]
 ///                 [--zoom 3] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
-///                 [--action run|rerecord|flaky|remote] [--size 1400x880] [--timeout 600]
+///                 [--action run|rerecord|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
 ///
 /// The window is placed off-screen and the app does not activate, so it does not disturb
 /// whatever is on screen. Set SNAPSHOTKIT_HOME to keep captures away from real settings.
@@ -23,6 +23,7 @@ struct CaptureOptions: Equatable {
     var importBundle: String?
     var action: String?
     var size = CGSize(width: 1400, height: 880)
+    var appearance: String?
     var timeout: TimeInterval = 900
 
     static func parse(_ args: [String]) -> CaptureOptions? {
@@ -54,6 +55,7 @@ struct CaptureOptions: Equatable {
             o.size = CGSize(width: w, height: h)
         }
         if let t = value("--timeout").flatMap(Double.init) { o.timeout = t }
+        o.appearance = value("--appearance")
         return o
     }
 }
@@ -64,6 +66,10 @@ enum WindowCapture {
         let deadline = Date().addingTimeInterval(o.timeout)
         func log(_ s: String) { FileHandle.standardError.write(Data("capture: \(s)\n".utf8)) }
 
+        DS.solidSurfaces = true
+        if let appearance = o.appearance {
+            NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
+        }
         if let path = o.project { model.open(path: path) }
         guard let window = await waitFor(deadline: Date().addingTimeInterval(15), { mainWindow() }) else {
             log("no window appeared"); exit(3)

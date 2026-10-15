@@ -243,6 +243,8 @@ fi
 
 if [ "$SKIP_REMOTE" = 0 ]; then
   step "Remote runner (local-directory transport) and flakiness check"
+  # A fresh view change, so this section does not depend on the interrupt section having run.
+  (cd "$SAMPLE" && sed -i '' -E 's/Color\.[a-z]+\.opacity/Color.purple.opacity/' Sources/SampleUI/GreetingView.swift && git commit -qam "Purple")
   printf 'remoteHost: local\nremoteDirectory: %s\n' "$WORK/remote-checkout" > "$SAMPLE/.snapshotkit.yml"
   (cd "$SAMPLE" && git add .snapshotkit.yml && git commit -qm "Remote config")
   set +e; sk run --remote > "$LOGS/remote.log" 2>&1; status=$?; set -e

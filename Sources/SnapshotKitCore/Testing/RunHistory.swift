@@ -50,6 +50,13 @@ public struct FlakySignal: Hashable, Sendable, Identifiable {
     /// Hosts where it was seen failing, e.g. ["local", "ci-mac-1"].
     public var failingHosts: [String]
     public var id: String { test }
+
+    public init(test: String, passes: Int, failures: Int, failingHosts: [String]) {
+        self.test = test
+        self.passes = passes
+        self.failures = failures
+        self.failingHosts = failingHosts
+    }
 }
 
 /// Per-project run history persisted as JSON under the SnapshotKit home directory.

@@ -14,6 +14,20 @@ public struct TestRunResult: Sendable {
     /// "local" or the remote machine's label.
     public var host: String = "local"
 
+    public init(commandLine: String, exitStatus: Int32, cancelled: Bool, resultBundle: URL, summary: TestRunSummary?,
+                passed: Int, failed: Int, skipped: Int, buildErrors: [String], host: String = "local") {
+        self.commandLine = commandLine
+        self.exitStatus = exitStatus
+        self.cancelled = cancelled
+        self.resultBundle = resultBundle
+        self.summary = summary
+        self.passed = passed
+        self.failed = failed
+        self.skipped = skipped
+        self.buildErrors = buildErrors
+        self.host = host
+    }
+
     public var succeeded: Bool { exitStatus == 0 && !cancelled }
     public var failingSuites: [SuiteResult] { summary?.failingSuites ?? [] }
 }
