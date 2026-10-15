@@ -37,6 +37,28 @@ import Testing
         #expect(!reloaded.isPinned(c))
     }
 
+    @Test func partialSettingsFileUsesDefaults() throws {
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"pinned": ["/a"]}"#.utf8))
+        #expect(settings.pinned == ["/a"])
+        #expect(settings.flakeIterations == 5)
+        #expect(settings.verifyAfterRecord)
+    }
+
+    @Test func privateVarAliasesAreOneProject() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-settings-\(UUID().uuidString).json")
+        let name = "snapkit-alias-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: "/private/var/tmp/\(name)", withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: "/private/var/tmp/\(name)") }
+        try Data(#"{"discovered": ["/private/var/tmp/\#(name)", "/var/tmp/\#(name)"], "recents": ["/private/var/tmp/\#(name)"]}"#.utf8).write(to: url)
+        let store = ProjectStore(url: url)
+        #expect(store.allProjects.count == 1)
+    }
+
+    @Test func nameMatchesBeatPathMatches() {
+        let projects = [Project(path: "/tmp/snapkit-capture/projects/design-system"), Project(path: "/tmp/x/payments-ui")]
+        #expect(FuzzyMatcher.rank(projects, query: "pay", primary: \.name, secondary: \.path).first?.name == "payments-ui")
+    }
+
     @Test func recentsAreCapped() {
         let store = makeStore()
         for i in 0..<(ProjectStore.maxRecents + 3) { store.markOpened(Project(path: "/r/\(i)")) }

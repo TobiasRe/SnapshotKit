@@ -88,11 +88,25 @@ public final class TestRunner: @unchecked Sendable {
         throw ConfigError.missingScheme
     }
 
+    /// Result bundles kept in the temporary results folder; older ones are deleted.
+    public static let keptResultBundles = 30
+
     public static func newResultBundleURL() -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/results", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        pruneResults(in: dir)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         return dir.appendingPathComponent("\(stamp)-\(UUID().uuidString.prefix(8)).xcresult")
+    }
+
+    static func pruneResults(in dir: URL) {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        let bundles = entries.filter { $0.pathExtension == "xcresult" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        for old in bundles.dropFirst(keptResultBundles) {
+            try? fm.removeItem(at: old)
+            try? fm.removeItem(at: old.deletingPathExtension().appendingPathExtension("attachments"))
+        }
     }
 
     /// Runs the tests. `onLine` receives every output line; `onEvent` receives parsed

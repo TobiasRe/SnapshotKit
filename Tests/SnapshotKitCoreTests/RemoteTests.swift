@@ -63,6 +63,12 @@ import Testing
         #expect(try repo.read(paths[0]) == RecordSessionTests.suiteSource)
     }
 
+    @Test func mapsRemotePathsToLocalCheckout() {
+        let message = "@\u{2212}\n\"file:///private/var/x/remote/Tests/A/__Snapshots__/S/t.1.png\""
+        #expect(RemoteRunner.mapPath(message, from: "/var/x/remote", to: "/repo") == "@\u{2212}\n\"file:///repo/Tests/A/__Snapshots__/S/t.1.png\"")
+        #expect(RemoteRunner.mapPath("/Users/ci/w/a.swift", from: "/Users/ci/w", to: "/repo") == "/repo/a.swift")
+    }
+
     @Test func sshCommandShape() {
         let ssh = SSHTransport(host: "ci-mac")
         let (exe, args) = ssh.command(for: "echo 'hi'", interactive: true)

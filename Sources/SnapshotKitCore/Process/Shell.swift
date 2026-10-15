@@ -42,6 +42,7 @@ public enum Shell {
         process.standardError = err
         let inPipe = Pipe()
         process.standardInput = input == nil ? FileHandle.nullDevice : inPipe
+        let exited = exitSemaphore(for: process)
 
         try process.run()
         if let input {
@@ -59,7 +60,7 @@ public enum Shell {
         }
         let outData = out.fileHandleForReading.readDataToEndOfFile()
         group.wait()
-        process.waitUntilExit()
+        exited.wait()
 
         return CommandResult(
             status: process.terminationStatus,
@@ -90,13 +91,22 @@ public enum Shell {
         process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
+        let exited = exitSemaphore(for: process)
         try process.run()
         let data = out.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        exited.wait()
         guard process.terminationStatus == 0 else {
             throw CommandError(command: arguments, result: CommandResult(status: process.terminationStatus, stdout: "", stderr: ""))
         }
         return data
+    }
+
+    /// `Process.waitUntilExit()` spins the current run loop, which re-enters AppKit/SwiftUI
+    /// layout when called on the main thread. Waiting on a semaphore does not.
+    private static func exitSemaphore(for process: Process) -> DispatchSemaphore {
+        let semaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in semaphore.signal() }
+        return semaphore
     }
 
     /// Quotes an argument for display in a copy-pasteable command line.

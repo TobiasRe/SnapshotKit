@@ -30,6 +30,8 @@ public struct RemoteRunResult: Sendable {
     public var remoteDirectory: String
     public var run: TestRunResult
     public var attachments: [SnapshotFailureImages]
+    /// Local folder holding the downloaded attachments (with its manifest.json).
+    public var attachmentsDirectory: URL?
     /// Repository-relative paths of snapshots recorded remotely and copied into the working tree.
     public var downloadedSnapshots: [String]
 }
@@ -229,7 +231,8 @@ public final class RemoteRunner: @unchecked Sendable {
         if !patchedPaths.isEmpty { try? transport.upload(files: patchedPaths, from: repository, to: dir) }
 
         let summary = try? collectSummary(bundle: bundle, environment: environment, remoteDir: dir)
-        let attachments = (try? collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir)) ?? []
+        let attachmentsDir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/remote-attachments/\(stamp)")
+        let attachments = (try? collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)) ?? []
         var downloaded: [String] = []
         if case .record = mode, !process.isCancelled {
             downloaded = try downloadRecordedSnapshots(dir: dir, stateDir: stateDir)
@@ -250,7 +253,9 @@ public final class RemoteRunner: @unchecked Sendable {
             host: transport.label
         )
         return RemoteRunResult(host: transport.label, environment: environment, remoteDirectory: dir,
-                               run: run, attachments: attachments, downloadedSnapshots: downloaded)
+                               run: run, attachments: attachments,
+                               attachmentsDirectory: attachments.isEmpty ? nil : attachmentsDir,
+                               downloadedSnapshots: downloaded)
     }
 
     public func cancel() {
@@ -318,19 +323,30 @@ public final class RemoteRunner: @unchecked Sendable {
     func collectSummary(bundle: String, environment: TestEnvironment, remoteDir: String) throws -> TestRunSummary {
         let json = try transport.run("DEVELOPER_DIR=\(Shell.quote(environment.xcode.developerDir)) xcrun xcresulttool get test-results tests --path \(Shell.quote(bundle))")
         var summary = try XCResultParser.parse(Data(json.utf8))
-        // Map remote source paths onto the local checkout.
+        // Map remote source and snapshot paths onto the local checkout.
         for i in summary.suites.indices {
-            summary.suites[i].failureFiles = summary.suites[i].failureFiles.map {
-                $0.hasPrefix(remoteDir + "/") ? repository.path + $0.dropFirst(remoteDir.count) : $0
+            summary.suites[i].failureFiles = summary.suites[i].failureFiles.map { Self.mapPath($0, from: remoteDir, to: repository.path) }
+            for j in summary.suites[i].tests.indices {
+                summary.suites[i].tests[j].failureMessages = summary.suites[i].tests[j].failureMessages.map {
+                    Self.mapPath($0, from: remoteDir, to: repository.path)
+                }
             }
         }
         return summary
     }
 
-    func collectAttachments(bundle: String, environment: TestEnvironment, stateDir: String) throws -> [SnapshotFailureImages] {
+    /// Replaces the remote checkout prefix (also in its /private/var form) with the local one.
+    static func mapPath(_ text: String, from remoteDir: String, to localDir: String) -> String {
+        var result = text
+        for prefix in ["/private" + remoteDir, remoteDir] {
+            result = result.replacingOccurrences(of: prefix + "/", with: localDir + "/")
+        }
+        return result
+    }
+
+    func collectAttachments(bundle: String, environment: TestEnvironment, stateDir: String, into local: URL) throws -> [SnapshotFailureImages] {
         let remoteOut = stateDir + "/attachments"
         _ = try transport.run("rm -rf \(Shell.quote(remoteOut)) && DEVELOPER_DIR=\(Shell.quote(environment.xcode.developerDir)) xcrun xcresulttool export attachments --path \(Shell.quote(bundle)) --output-path \(Shell.quote(remoteOut)) >/dev/null")
-        let local = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/remote-attachments/\(UUID().uuidString)")
         try transport.download(remoteOut + "/", to: local)
         return try FailureAttachments.parse(manifest: Data(contentsOf: local.appendingPathComponent("manifest.json")), directory: local)
     }
