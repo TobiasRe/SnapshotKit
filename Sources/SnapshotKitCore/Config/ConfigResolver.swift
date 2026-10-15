@@ -9,6 +9,14 @@ public struct ResolvedConfig: Sendable {
     public var overrideFile: String?
     public var notes: [String]
 
+    public init(repository: URL, config: SnapshotConfig, ciFiles: [String], overrideFile: String?, notes: [String]) {
+        self.repository = repository
+        self.config = config
+        self.ciFiles = ciFiles
+        self.overrideFile = overrideFile
+        self.notes = notes
+    }
+
     /// The base branch, falling back to auto-detection when neither CI nor the override sets one.
     public var baseBranch: String? { config.baseBranch }
 }

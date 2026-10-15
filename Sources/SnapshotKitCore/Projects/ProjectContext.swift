@@ -7,6 +7,12 @@ public struct ProjectContext: Sendable {
     public var resolved: ResolvedConfig
     public var settings: ProjectSettings
 
+    public init(repository: URL, resolved: ResolvedConfig, settings: ProjectSettings = ProjectSettings()) {
+        self.repository = repository
+        self.resolved = resolved
+        self.settings = settings
+    }
+
     /// The configuration actually used: CI → .snapshotkit.yml → per-project settings.
     public var config: SnapshotConfig {
         var config = resolved.config

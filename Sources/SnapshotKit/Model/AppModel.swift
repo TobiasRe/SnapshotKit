@@ -120,6 +120,13 @@ final class AppModel: ObservableObject {
         if panel.runModal() == .OK, let url = panel.url { current?.importResultBundle(url) }
     }
 
+    /// Shows a prepared project model (snapshot tests and previews).
+    func show(_ model: ProjectModel) {
+        models[model.project.path] = model
+        selectedPath = model.project.path
+        current = model
+    }
+
     /// Called on quit: undo any active record patch.
     func applicationWillTerminate() {
         _ = InterruptGuard.restoreAll()

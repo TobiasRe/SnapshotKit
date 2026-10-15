@@ -62,11 +62,12 @@ struct NoticeBanner: View {
     var onClose: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? .red : .accentColor)
             Text(text)
                 .font(.callout)
+                .lineLimit(3)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let onClose {
@@ -74,8 +75,9 @@ struct NoticeBanner: View {
                     .buttonStyle(.borderless)
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isError ? Color.red.opacity(0.1) : Color.accentColor.opacity(0.1)))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isError ? Color.red.opacity(0.3) : Color.accentColor.opacity(0.25)))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill((isError ? Color.red : Color.accentColor).opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder((isError ? Color.red : Color.accentColor).opacity(0.2)))
     }
 }
