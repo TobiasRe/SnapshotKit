@@ -1,0 +1,53 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "00000000-0000-0000-0000-000000000000",
+      "deviceName" : "Example Phone",
+      "modelName" : "Example Phone",
+      "osBuildNumber" : "99A1",
+      "osVersion" : "99.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0,12s",
+                  "durationInSeconds" : 0.12227916717529297,
+                  "name" : "greeting()",
+                  "nodeIdentifier" : "GreetingViewTests/greeting()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "GreetingViewTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "SampleUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "SampleUI",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

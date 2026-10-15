@@ -1,0 +1,21 @@
+Test Suite 'All tests' started at 2026-10-15 23:26:28.366.
+Test Suite 'All tests' passed at 2026-10-15 23:26:28.367.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64-apple-ios17.0-simulator
+◇ Suite GreetingViewTests started.
+◇ Test greeting() started.
+✔ Test greeting() passed after 0.122 seconds.
+✔ Suite GreetingViewTests passed after 0.124 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.124 seconds.
+2026-10-15 23:26:28.784 xcodebuild[15815:18045701] [MT] IDETestOperationsObserverDebug: 1.497 elapsed -- Testing started completed.
+2026-10-15 23:26:28.784 xcodebuild[15815:18045701] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-15 23:26:28.784 xcodebuild[15815:18045701] [MT] IDETestOperationsObserverDebug: 1.497 sec, +1.497 sec -- end
+
+Test session results, code coverage, and logs:
+	/path/to/output/r2.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
