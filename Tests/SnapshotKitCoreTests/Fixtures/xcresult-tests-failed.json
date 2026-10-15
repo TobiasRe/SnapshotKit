@@ -1,0 +1,63 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "00000000-0000-0000-0000-000000000000",
+      "deviceName" : "Example Phone",
+      "modelName" : "Example Phone",
+      "osBuildNumber" : "99A1",
+      "osVersion" : "99.0",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Issue recorded: No reference was found on disk. Automatically recorded snapshot: …\n\nopen \"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n\nRe-run \"greeting\" to assert against the newly-recorded snapshot.",
+                      "nodeType" : "Failure Message",
+                      "sourceLocation" : {
+                        "filePath" : "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                        "lineNumber" : 10
+                      }
+                    }
+                  ],
+                  "duration" : "0,47s",
+                  "durationInSeconds" : 0.4696941375732422,
+                  "name" : "greeting()",
+                  "nodeIdentifier" : "GreetingViewTests/greeting()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "GreetingViewTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "SampleUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "SampleUI",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "93609FAA-45D1-40D5-A1FD-16E97CD8F15B.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 1,
+        "suggestedHumanReadableName" : "difference_0_EE39A252-3818-4131-9EE6-21C6AADF7EA5.png",
+        "timestamp" : 1792100350.05
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "5B3291FA-109A-4603-B97D-34732FA7696A.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 1,
+        "suggestedHumanReadableName" : "failure_0_66C1548F-9166-4078-AFF6-2A3EA9678911.png",
+        "timestamp" : 1792100350.05
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "FCFCEC99-6E55-4E4F-83A7-BDC094DCDE2D.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 1,
+        "suggestedHumanReadableName" : "reference_0_6400ABE9-426B-4300-9912-A503C2E0F8B4.png",
+        "timestamp" : 1792100350.049
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "0E645C8C-EA55-4E77-9822-0CD5C6D9C68C.txt",
+        "isAssociatedWithFailure" : true,
+        "repetitionNumber" : 1,
+        "suggestedHumanReadableName" : "Complete Issue Description.txt"
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "4C02220B-2758-4F59-BE01-B1CA31FD4908.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 2,
+        "suggestedHumanReadableName" : "difference_0_2F96A416-148E-4E40-AAB5-154128B55CD1.png",
+        "timestamp" : 1792100350.119
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "3F07F9B7-8448-4E0A-994A-CACDB2F464DC.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 2,
+        "suggestedHumanReadableName" : "failure_0_0A6C6A90-1045-4564-A46F-7556836BC4EB.png",
+        "timestamp" : 1792100350.119
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "ED891560-1192-41CC-BDB2-9065B5DADA20.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 2,
+        "suggestedHumanReadableName" : "reference_0_380F4922-79A1-4DEC-87FD-193E591C62B9.png",
+        "timestamp" : 1792100350.119
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "4B9A8127-5572-4049-9EF7-FAC2B908005B.txt",
+        "isAssociatedWithFailure" : true,
+        "repetitionNumber" : 2,
+        "suggestedHumanReadableName" : "Complete Issue Description.txt"
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "D70BBFA6-473A-4F54-8586-E00F4AAAF9E5.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 3,
+        "suggestedHumanReadableName" : "difference_0_8767D2B2-05F3-4E1A-A7A6-52D1F4FA9C36.png",
+        "timestamp" : 1792100350.186
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "7C0D5096-52C4-4FCD-9433-8DD0D94E5B2F.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 3,
+        "suggestedHumanReadableName" : "failure_0_82984AC4-C855-4571-8215-B0FECB77A8E3.png",
+        "timestamp" : 1792100350.186
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "8A6CA723-605C-41B0-AAAB-B995BF17E0E2.png",
+        "isAssociatedWithFailure" : false,
+        "repetitionNumber" : 3,
+        "suggestedHumanReadableName" : "reference_0_CB8CB09F-9B72-4499-ADF2-73722DEDF020.png",
+        "timestamp" : 1792100350.186
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00000000-0000-0000-0000-000000000000",
+        "deviceName" : "Example Phone",
+        "exportedFileName" : "E7C5796D-A33C-4A69-B6C9-93FCFC9FF2C1.txt",
+        "isAssociatedWithFailure" : true,
+        "repetitionNumber" : 3,
+        "suggestedHumanReadableName" : "Complete Issue Description.txt"
+      }
+    ],
+    "testIdentifier" : "GreetingViewTests/greeting()",
+    "testIdentifierURL" : "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()"
+  }
+]
