@@ -43,6 +43,8 @@ struct FailureSource: Equatable {
     var label: String
     var date: Date
     var host: String
+    /// Local result bundle, when there is one (not for remote runs).
+    var resultBundle: URL?
 }
 
 @MainActor
@@ -58,6 +60,8 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var modules: [String] = []
     @Published private(set) var detectedBaseBranch: String?
     @Published private(set) var currentBranch: String?
+    /// Local branches plus origin's, for choosing the base branch.
+    @Published private(set) var branches: [String] = []
     @Published var tab: ProjectTab = .run
 
     // Running
@@ -73,7 +77,15 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var lastResult: TestRunResult?
     @Published private(set) var lastMessage: String?
     @Published private(set) var lastMessageIsError = false
-    @Published var showFullLog = false
+    @Published var showFullLog = false { didSet { recomputeVisibleLog() } }
+    @Published var logFilter = "" { didSet { recomputeVisibleLog() } }
+    /// The log lines currently shown, kept up to date incrementally instead of re-filtering
+    /// thousands of lines on every UI update during a run.
+    @Published private(set) var visibleLog: [String] = []
+    /// When the current operation started (drives the elapsed-time display).
+    @Published private(set) var startedAt: Date?
+    /// How long the last operation took.
+    @Published private(set) var lastDuration: TimeInterval?
 
     // Failures
     @Published private(set) var failures: [FailureItem] = []
@@ -114,22 +126,45 @@ final class ProjectModel: ObservableObject {
 
     // MARK: Loading
 
+    private var reloadGeneration = 0
+
+    /// Re-reads configuration, branches and history off the main thread (git and file I/O
+    /// can take a while in large repositories), then refreshes everything that depends on them.
     func reload() {
-        currentBranch = Git(root: project.url).currentBranch()
-        do {
-            let ctx = try ProjectContext.load(repository: project.url, settings: settings)
-            context = ctx
-            configError = nil
-            modules = ctx.modules()
-            detectedBaseBranch = ctx.resolved.config.baseBranch
-        } catch {
-            context = nil
-            configError = error.localizedDescription
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        let url = project.url, settings = settings
+        Task {
+            let loaded = await Task.detached {
+                let git = Git(root: url)
+                let context = Result { try ProjectContext.load(repository: url, settings: settings) }
+                return (
+                    branch: git.currentBranch(),
+                    branches: ProjectModel.branchList(git),
+                    context: context,
+                    modules: (try? context.get())?.modules() ?? [],
+                    flaky: RunHistory.flakySignals(RunHistory(repository: url).load())
+                )
+            }.value
+            // A newer reload (e.g. a quick second settings change) wins.
+            guard generation == reloadGeneration else { return }
+            currentBranch = loaded.branch
+            branches = loaded.branches
+            modules = loaded.modules
+            historyFlaky = loaded.flaky
+            switch loaded.context {
+            case .success(let ctx):
+                context = ctx
+                configError = nil
+                detectedBaseBranch = ctx.resolved.config.baseBranch
+            case .failure(let error):
+                context = nil
+                configError = error.localizedDescription
+            }
+            validateEnvironment()
+            loadLastRun()
+            refreshChanges()
         }
-        validateEnvironment()
-        loadLastRun()
-        historyFlaky = RunHistory.flakySignals(RunHistory(repository: project.url).load())
-        refreshChanges()
     }
 
     func validateEnvironment() {
@@ -159,7 +194,25 @@ final class ProjectModel: ObservableObject {
             images = (try? FailureAttachments.parse(manifest: manifest, directory: dir)) ?? []
         }
         setFailures(suites: last.failingSuites, images: images,
-                    source: FailureSource(label: "Last run", date: last.date, host: last.host))
+                    source: FailureSource(label: "Last run", date: last.date, host: last.host,
+                                          resultBundle: last.resultBundle.map { URL(fileURLWithPath: $0) }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }))
+    }
+
+    nonisolated static func branchList(_ git: Git) -> [String] {
+        let remote = (git.tryRun(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"]) ?? "")
+            .split(separator: "\n").map(String.init)
+            .compactMap { $0.hasPrefix("origin/") ? String($0.dropFirst(7)) : nil }
+            .filter { $0 != "HEAD" }
+        let all = Array(Set(git.localBranches() + remote))
+        let preferred = ["develop", "main", "master"]
+        return all.sorted { a, b in
+            let ia = preferred.firstIndex(of: a) ?? Int.max, ib = preferred.firstIndex(of: b) ?? Int.max
+            return ia == ib ? a.localizedStandardCompare(b) == .orderedAscending : ia < ib
+        }
+    }
+
+    func setBaseBranch(_ branch: String?) {
+        updateSettings { $0.baseBranch = branch }
     }
 
     func updateSettings(_ change: (inout ProjectSettings) -> Void) {
@@ -200,6 +253,51 @@ final class ProjectModel: ObservableObject {
 
     var selectedChange: SnapshotChange? {
         changeSet?.changes.first { $0.id == selectedChangeID }
+    }
+
+    func fileURL(for change: SnapshotChange) -> URL {
+        project.url.appendingPathComponent(change.path)
+    }
+
+    /// Writes the base-side image to a temporary file (for opening in another app).
+    func exportBaseImage(for change: SnapshotChange) -> URL? {
+        guard let data = imageLoader(for: change)().0 else { return nil }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/base-images", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("\(change.testName) (\(changeSet?.baseBranch ?? "base")).png")
+        return (try? data.write(to: url)) != nil ? url : nil
+    }
+
+    /// Throws away a working-tree change to a snapshot (e.g. an unwanted re-record).
+    func discard(_ change: SnapshotChange) {
+        let git = Git(root: project.url)
+        do {
+            switch change.kind {
+            case .uncommitted:
+                try git.run(["restore", "--source=HEAD", "--staged", "--worktree", "--", change.path])
+            case .new where git.tryRun(["ls-files", "--error-unmatch", "--", change.path]) == nil:
+                try FileManager.default.removeItem(at: fileURL(for: change))
+            default:
+                return
+            }
+            ThumbnailCache.shared.removeAllObjects()
+            ComparePairCache.shared.removeAllObjects()
+            lastMessage = "Discarded the working-tree change to \(change.fileName)."
+            lastMessageIsError = false
+        } catch {
+            lastMessage = "Could not discard \(change.fileName): \(error.localizedDescription)"
+            lastMessageIsError = true
+        }
+        refreshChanges()
+    }
+
+    /// Whether `discard` applies: uncommitted edits and untracked new files only — never committed work.
+    func canDiscard(_ change: SnapshotChange) -> Bool {
+        switch change.kind {
+        case .uncommitted: true
+        case .new: fixtureImages == nil && Git(root: project.url).tryRun(["ls-files", "--error-unmatch", "--", change.path]) == nil
+        default: false
+        }
     }
 
     /// Loader for the compare view; runs `git show`, so call it off the main thread.
@@ -256,7 +354,7 @@ final class ProjectModel: ObservableObject {
                                                                   summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: url.path))
                     self.lastFailingSuites = summary.failingSuites
                     self.setFailures(suites: summary.failingSuites, images: images,
-                                     source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported"))
+                                     source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
                     self.lastMessage = "Imported \(summary.failed) failing test(s) from \(url.lastPathComponent)."
                     self.tab = .failures
                 case .failure(let error):
@@ -272,11 +370,13 @@ final class ProjectModel: ObservableObject {
     private func begin(_ op: RunOperation) -> Bool {
         guard operation == nil else { return false }
         operation = op
+        startedAt = Date()
         stageLabel = op.label
         phase = .preparing
         passed = 0; failed = 0; skipped = 0
         currentTest = nil
         log = []
+        visibleLog = []
         lastMessage = nil
         lastMessageIsError = false
         return true
@@ -284,6 +384,8 @@ final class ProjectModel: ObservableObject {
 
     private func finish(message: String?, isError: Bool = false) {
         lineBuffer.flushNow()
+        lastDuration = startedAt.map { Date().timeIntervalSince($0) }
+        startedAt = nil
         operation = nil
         cancelAction = nil
         stageLabel = ""
@@ -292,6 +394,15 @@ final class ProjectModel: ObservableObject {
         historyFlaky = RunHistory.flakySignals(RunHistory(repository: project.url).load())
         currentBranch = Git(root: project.url).currentBranch()
         refreshChanges()
+        announce(isError: isError)
+        NotificationCenter.default.post(name: AppModel.runFinished, object: nil)
+    }
+
+    /// Dock badge with the failing count, and a bounce when the run ends while you're elsewhere.
+    private func announce(isError: Bool) {
+        guard NSApp != nil, !DS.solidSurfaces else { return }
+        NSApp.dockTile.badgeLabel = failed > 0 ? "\(failed)" : nil
+        if !NSApp.isActive { NSApp.requestUserAttention(isError ? .criticalRequest : .informationalRequest) }
     }
 
     func cancel() {
@@ -364,12 +475,13 @@ final class ProjectModel: ObservableObject {
             lastFailingSuites = result.failingSuites
             flakeResults = []
             setFailures(suites: result.failingSuites, images: images,
-                        source: FailureSource(label: result.host == "local" ? "Local run" : "Remote run", date: Date(), host: result.host))
+                        source: FailureSource(label: result.host == "local" ? "Local run" : "Remote run", date: Date(), host: result.host,
+                                              resultBundle: result.host == "local" ? result.resultBundle : nil))
         }
         let message: String
         if result.cancelled { message = "Cancelled." }
         else if !result.buildErrors.isEmpty && result.summary == nil { message = "Build failed: \(result.buildErrors.first ?? "")" }
-        else if result.failed > 0 { message = "\(result.failed) failing test(s) in \(result.failingSuites.count) suite(s): \(result.failingSuites.map(\.name).joined(separator: ", "))" }
+        else if result.failed > 0 { message = Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) }
         else { message = "All \(result.passed) tests passed." }
         finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled))
     }
@@ -419,16 +531,17 @@ final class ProjectModel: ObservableObject {
         }
     }
 
-    func checkFlakiness(remote: Bool = false) {
+    /// Reruns the failing suites — or just `tests` (`Bundle/Suite/test()`) — N times.
+    func checkFlakiness(remote: Bool = false, tests: [String]? = nil) {
         let targets = lastFailingSuites
-        guard !targets.isEmpty else {
+        guard !targets.isEmpty || tests != nil else {
             lastMessage = "No failing suites to check. Run the tests first."
             lastMessageIsError = true
             return
         }
         let iterations = store.settings.flakeIterations
         if remote {
-            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: targets.map(\.identifier))
+            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: tests ?? targets.map(\.identifier))
             return
         }
         guard begin(.flakeCheck), let (ctx, env) = requireEnvironment() else { return }
@@ -437,7 +550,7 @@ final class ProjectModel: ObservableObject {
         let onLine = onLine, onEvent = onEvent
         Task {
             do {
-                let result = try await runner.run(onlyTesting: targets.map(\.identifier),
+                let result = try await runner.run(onlyTesting: tests ?? targets.map(\.identifier),
                                                   additionalArguments: Flakiness.arguments(iterations: iterations),
                                                   onLine: onLine, onEvent: onEvent)
                 applyFlakeResult(result, iterations: iterations)
@@ -454,7 +567,10 @@ final class ProjectModel: ObservableObject {
             finish(message: result.cancelled ? "Cancelled." : "Flakiness check produced no results.", isError: !result.cancelled)
             return
         }
-        flakeResults = Flakiness.classify(summary)
+        // Merge, so checking one test keeps verdicts for the others.
+        var merged = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for r in Flakiness.classify(summary) { merged[r.id] = r }
+        flakeResults = merged.values.sorted { $0.id < $1.id }
         lastResult = result
         passed = flakeResults.reduce(0) { $0 + $1.passed }
         failed = flakeResults.reduce(0) { $0 + $1.failed }
@@ -512,15 +628,34 @@ final class ProjectModel: ObservableObject {
         }
     }
 
-    // MARK: Log
-
-    private func appendLog(_ lines: [String]) {
-        log.append(contentsOf: lines)
-        if log.count > 8000 { log.removeFirst(log.count - 8000) }
+    static func failureTitle(tests: Int, suites: Int) -> String {
+        let t = tests == 1 ? "1 failing test" : "\(tests) failing tests"
+        return suites > 0 ? t + (suites == 1 ? " in 1 suite" : " in \(suites) suites") : t
     }
 
-    var visibleLog: [String] {
-        showFullLog ? log : log.filter(Self.isInteresting)
+    // MARK: Log
+
+    static let maxLogLines = 8000
+
+    func appendLog(_ lines: [String]) {
+        log.append(contentsOf: lines)
+        // Trim in chunks so the full re-filter happens rarely, not on every batch.
+        if log.count > Self.maxLogLines + 1000 {
+            log.removeFirst(log.count - Self.maxLogLines)
+            recomputeVisibleLog()
+        } else {
+            visibleLog.append(contentsOf: lines.filter(isVisible))
+        }
+    }
+
+    private func isVisible(_ line: String) -> Bool {
+        guard showFullLog || Self.isInteresting(line) else { return false }
+        let query = logFilter.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty || line.localizedCaseInsensitiveContains(query)
+    }
+
+    private func recomputeVisibleLog() {
+        visibleLog = log.filter(isVisible)
     }
 
     static func isInteresting(_ line: String) -> Bool {
@@ -537,9 +672,12 @@ struct ProjectFixture {
     var context: ProjectContext?
     var environment: TestEnvironment?
     var environmentError: String?
+    var configError: String?
+    var changesError: String?
     var modules: [String] = []
     var detectedBaseBranch: String?
     var currentBranch: String?
+    var branches: [String] = ["develop", "main", "feature/checkout-redesign"]
     var tab: ProjectTab = .run
     var operation: RunOperation?
     var stageLabel = ""
@@ -553,6 +691,8 @@ struct ProjectFixture {
     var lastResult: TestRunResult?
     var lastMessage: String?
     var lastMessageIsError = false
+    var startedAt: Date?
+    var lastDuration: TimeInterval?
     var failingSuites: [SuiteResult] = []
     var failures: [FailureItem] = []
     var failureSource: FailureSource?
@@ -565,12 +705,13 @@ struct ProjectFixture {
 extension ProjectModel {
     func apply(_ f: ProjectFixture) {
         context = f.context
-        configError = nil
+        configError = f.configError
         environment = f.environment
         environmentError = f.environmentError
         modules = f.modules
         detectedBaseBranch = f.detectedBaseBranch ?? f.context?.config.baseBranch
         currentBranch = f.currentBranch
+        branches = f.branches
         tab = f.tab
         operation = f.operation
         stageLabel = f.stageLabel
@@ -581,9 +722,12 @@ extension ProjectModel {
         expectedTotal = f.expectedTotal
         currentTest = f.currentTest
         log = f.log
+        recomputeVisibleLog()
         lastResult = f.lastResult
         lastMessage = f.lastMessage
         lastMessageIsError = f.lastMessageIsError
+        startedAt = f.startedAt
+        lastDuration = f.lastDuration
         lastFailingSuites = f.failingSuites
         flakeResults = f.flakeResults
         historyFlaky = f.historyFlaky
@@ -591,7 +735,7 @@ extension ProjectModel {
         failureSource = f.failureSource
         selectedFailureID = f.failures.first?.id
         changeSet = f.changeSet
-        changesError = nil
+        changesError = f.changesError
         isLoadingChanges = false
         fixtureImages = f.changeImages
         selectedChangeID = filteredChanges.first?.id

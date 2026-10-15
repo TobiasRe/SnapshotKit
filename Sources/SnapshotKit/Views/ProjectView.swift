@@ -1,3 +1,4 @@
+import AppKit
 import SnapshotKitCore
 import SwiftUI
 
@@ -9,15 +10,18 @@ struct ProjectView: View {
             // The Run tab shows the outcome in its own header; other tabs get a compact banner.
             if let message = project.lastMessage, !project.isRunning, project.tab != .run {
                 NoticeBanner(text: message, isError: project.lastMessageIsError)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, DS.Space.m)
+                    .padding(.vertical, DS.Space.s)
                 Divider()
             }
-            switch project.tab {
-            case .run: RunTab(project: project)
-            case .failures: FailuresTab(project: project)
-            case .changes: ChangesTab(project: project)
+            Group {
+                switch project.tab {
+                case .run: RunTab(project: project)
+                case .failures: FailuresTab(project: project)
+                case .changes: ChangesTab(project: project)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(project.project.name)
         .navigationSubtitle(subtitle)
@@ -72,7 +76,7 @@ struct RunTab: View {
                 Divider()
                 LogView(project: project)
             }
-            .frame(minWidth: 440)
+            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -124,8 +128,10 @@ struct RunInspector: View {
 
                 Section {
                     TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
+                        .accessibilityLabel("Base branch")
                         .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
                     TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
+                        .accessibilityLabel("Remote host")
                         .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
                 } header: {
                     Text("Comparison & Remote")
@@ -162,7 +168,7 @@ struct RunInspector: View {
                 Text(env.simulator.state)
             }
         } else if let error = project.environmentError {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: DS.Space.s) {
                 Label {
                     Text(error).textSelection(.enabled)
                 } icon: {
@@ -170,8 +176,11 @@ struct RunInspector: View {
                 }
                 Button("Check Again") { project.validateEnvironment() }
             }
-        } else if project.configError == nil {
-            HStack(spacing: 8) {
+        } else if project.configError != nil {
+            Text("Fix the configuration to check Xcode and the simulator.")
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: DS.Space.s) {
                 ProgressView().controlSize(.small)
                 Text("Checking Xcode and simulator…").foregroundStyle(.secondary)
             }
@@ -195,20 +204,30 @@ struct RunStatusHeader: View {
     @ObservedObject var project: ProjectModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
+        VStack(alignment: .leading, spacing: DS.Space.m) {
+            HStack(alignment: .center, spacing: DS.Space.m) {
                 statusIcon
                     .font(.title2)
                     .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Space.xxs) {
                     Text(title)
                         .font(.title3.weight(.semibold))
                         .lineLimit(2)
-                    Text(subtitle)
+                    if let started = project.startedAt, project.isRunning {
+                        TimelineView(.periodic(from: started, by: 1)) { context in
+                            Text("\(project.phase.label)… · \(Self.elapsed(context.date.timeIntervalSince(started)))")
+                                .monospacedDigit()
+                        }
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    } else {
+                        Text(subtitle)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
                 Spacer(minLength: 12)
                 actions
@@ -222,7 +241,7 @@ struct RunStatusHeader: View {
                 }
             }
 
-            HStack(spacing: 16) {
+            HStack(spacing: DS.Space.l) {
                 Count(value: project.passed, label: "passed", symbol: "checkmark.circle.fill", color: .green)
                 Count(value: project.failed, label: "failed", symbol: "xmark.circle.fill", color: .red)
                 Count(value: project.skipped, label: "skipped", symbol: "minus.circle.fill", color: .secondary)
@@ -236,13 +255,17 @@ struct RunStatusHeader: View {
                 }
             }
         }
-        .padding(16)
+        .padding(DS.Space.l)
     }
 
     @ViewBuilder
     private var statusIcon: some View {
         if project.isRunning {
             ProgressView().controlSize(.small)
+        } else if project.configError != nil {
+            Image(systemName: "doc.badge.gearshape").foregroundStyle(DS.Status.failed)
+        } else if project.environmentError != nil {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
         } else if project.lastMessageIsError || (project.lastMessage == nil && project.failed > 0) {
             Image(systemName: "xmark.octagon.fill").foregroundStyle(DS.Status.failed)
         } else if project.lastResult != nil || project.lastMessage != nil || project.passed > 0 {
@@ -254,23 +277,36 @@ struct RunStatusHeader: View {
 
     private var title: String {
         if project.isRunning { return project.stageLabel }
+        if project.configError != nil { return "Configuration can't be read" }
+        if project.environmentError != nil { return "Can't run on this Mac yet" }
         if let message = project.lastMessage { return message }
         if project.failed > 0 { return "\(project.failed) failing test\(project.failed == 1 ? "" : "s") in the last run" }
         return "Ready to run"
     }
 
+    static let dateStyle = Date.FormatStyle(date: .abbreviated, time: .shortened)
+
+    static func elapsed(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds.rounded())
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+
     private var subtitle: String {
         if project.isRunning { return project.phase.label + "…" }
-        if let result = project.lastResult { return result.commandLine }
+        if project.configError != nil { return "Fix the problem shown on the left, then try again." }
+        if project.environmentError != nil { return "Install what's missing, then check again." }
+        if let result = project.lastResult {
+            return (project.lastDuration.map { "Took \(Self.elapsed($0)) · " } ?? "") + result.commandLine
+        }
         if let source = project.failureSource {
-            return "\(source.label) on \(source.host), \(source.date.formatted(.relative(presentation: .named)))"
+            return "\(source.label) on \(source.host), \(source.date.formatted(Self.dateStyle))"
         }
         return "Runs the snapshot tests exactly like CI."
     }
 
     @ViewBuilder
     private var actions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: DS.Space.s) {
             if project.isRunning {
                 Button("Cancel", role: .cancel) { project.cancel() }
                     .secondaryActionStyle()
@@ -289,21 +325,28 @@ struct RunStatusHeader: View {
                     }
                     .disabled(!project.hasRemote)
                 } label: {
-                    Label("More", systemImage: "ellipsis")
-                        .labelStyle(.iconOnly)
+                    Label("More Actions", systemImage: "ellipsis")
                 }
+                .labelStyle(.iconOnly)
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Flakiness check and remote runs")
+                .accessibilityLabel("More Actions")
 
-                Button("Re-record Failed") { project.reRecordFailed() }
-                    .secondaryActionStyle()
-                    .disabled(project.failingSuites.isEmpty || project.environment == nil)
-                    .help("Re-record only the failing suites, then verify (⇧⌘R)")
-                Button("Run Tests") { project.runTests() }
-                    .primaryActionStyle()
-                    .keyboardShortcut("r")
-                    .disabled(project.environment == nil)
+                if project.environmentError != nil || project.configError != nil {
+                    // Nothing can run; offer the one action that can help.
+                    Button("Check Again") { project.reload() }
+                        .primaryActionStyle()
+                } else {
+                    Button("Re-record Failed") { project.reRecordFailed() }
+                        .secondaryActionStyle()
+                        .disabled(project.failingSuites.isEmpty || project.environment == nil)
+                        .help("Re-record only the failing suites, then verify (⇧⌘R)")
+                    Button("Run Tests") { project.runTests() }
+                        .primaryActionStyle()
+                        .keyboardShortcut("r")
+                        .disabled(project.environment == nil)
+                }
             }
         }
         .controlSize(.regular)
@@ -325,18 +368,21 @@ struct FormFooter: View {
 }
 
 struct Count: View {
+    // Read as "12 passed".
     var value: Int
     var label: String
     var symbol: String
     var color: Color
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: DS.Space.xs) {
             Image(systemName: symbol)
                 .foregroundStyle(value > 0 ? color : Color.secondary.opacity(0.5))
             Text("\(value)").font(.body.monospacedDigit().weight(.medium))
             Text(label).foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(value) \(label)")
     }
 }
 
@@ -346,20 +392,34 @@ struct LogView: View {
     var body: some View {
         let lines = project.visibleLog
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: DS.Space.m) {
                 Text("Output").font(.subheadline.weight(.semibold))
-                Text("\(lines.count) lines").font(.caption).foregroundStyle(.secondary)
+                Text("\(lines.count) lines").font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
-                Toggle("Include build output", isOn: $project.showFullLog)
+                SearchField(prompt: "Filter output", text: $project.logFilter)
+                    .frame(maxWidth: 220)
+                    .controlSize(.small)
+                Toggle("Build output", isOn: $project.showFullLog)
                     .toggleStyle(.checkbox)
                     .controlSize(.small)
+                    .help("Include compiler and linker output")
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+                } label: {
+                    Label("Copy Output", systemImage: "doc.on.doc").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .disabled(lines.isEmpty)
+                .help("Copy the visible output")
+                .accessibilityLabel("Copy Output")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DS.Space.l)
+            .padding(.vertical, DS.Space.s)
             Divider()
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
-                    LazyVStack(alignment: .leading, spacing: 2) {
+                    LazyVStack(alignment: .leading, spacing: DS.Space.xxs) {
                         ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                             Text(line)
                                 .font(.system(size: 11, design: .monospaced))
@@ -369,8 +429,8 @@ struct LogView: View {
                                 .id(index)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, DS.Space.l)
+                    .padding(.vertical, DS.Space.m)
                 }
                 .overlay {
                     if lines.isEmpty {

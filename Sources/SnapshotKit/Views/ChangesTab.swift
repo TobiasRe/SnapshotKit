@@ -1,8 +1,10 @@
+import AppKit
 import SnapshotKitCore
 import SwiftUI
 
 struct ChangesTab: View {
     @ObservedObject var project: ProjectModel
+    @State private var pendingDiscard: SnapshotChange?
 
     var body: some View {
         HSplitView {
@@ -10,14 +12,27 @@ struct ChangesTab: View {
                 filterBar
                 Divider()
                 list
+                    .frame(maxHeight: .infinity)
             }
-            .frame(minWidth: 280, idealWidth: 330, maxWidth: 460)
+            .frame(minWidth: 280, idealWidth: 330, maxWidth: 460, maxHeight: .infinity, alignment: .top)
 
             Group {
                 if let change = project.selectedChange {
                     VStack(spacing: 0) {
                         DetailHeader(title: change.testName, subtitle: change.path) {
-                            KindBadge(kind: change.kind, style: .label)
+                            HStack(spacing: DS.Space.s) {
+                                KindBadge(kind: change.kind, style: .label)
+                                Menu {
+                                    actions(for: change)
+                                } label: {
+                                    Label("Snapshot Actions", systemImage: "ellipsis")
+                                }
+                                .labelStyle(.iconOnly)
+                                .menuIndicator(.hidden)
+                                .fixedSize()
+                                .help("Open, reveal or discard this snapshot")
+                                .accessibilityLabel("Snapshot Actions")
+                            }
                         }
                         Divider()
                         CompareView(load: project.imageLoader(for: change),
@@ -25,6 +40,9 @@ struct ChangesTab: View {
                                     afterLabel: change.kind == .uncommitted || change.kind == .new ? "Working tree" : "This branch",
                                     identity: change.id + "#" + (project.changeSet?.baseCommit ?? "") + "#\(change.kind)")
                     }
+                } else if project.changesError != nil {
+                    ContentUnavailableView("Choose a Base Branch", systemImage: "arrow.triangle.branch",
+                                           description: Text("Pick the branch your merge requests target from the base branch menu above the list."))
                 } else if project.changeSet != nil {
                     ContentUnavailableView("No Snapshot Selected", systemImage: "photo.on.rectangle",
                                            description: Text("Select a changed snapshot to compare it with \(project.baseBranch ?? "the base branch")."))
@@ -32,19 +50,76 @@ struct ChangesTab: View {
                     Color.clear
                 }
             }
-            .frame(minWidth: 440)
+            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .confirmationDialog(
+            "Discard the change to \(pendingDiscard?.fileName ?? "this snapshot")?",
+            isPresented: Binding(get: { pendingDiscard != nil }, set: { if !$0 { pendingDiscard = nil } }),
+            presenting: pendingDiscard
+        ) { change in
+            Button("Discard", role: .destructive) { project.discard(change) }
+        } message: { change in
+            Text(change.kind == .new
+                 ? "The new, untracked file is deleted."
+                 : "The snapshot is restored to the committed version. Uncommitted edits to it are lost.")
+        }
+        // Pick up re-records or edits made outside the app.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            project.refreshChanges()
+        }
+    }
+
+    @ViewBuilder
+    private func actions(for change: SnapshotChange) -> some View {
+        if change.kind != .deleted {
+            Button("Open in Default App") { NSWorkspace.shared.open(project.fileURL(for: change)) }
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.fileURL(for: change)]) }
+        }
+        if change.kind != .new {
+            Button("Open \(project.changeSet?.baseBranch ?? "Base") Version") {
+                if let url = project.exportBaseImage(for: change) { NSWorkspace.shared.open(url) }
+            }
+        }
+        Divider()
+        Button("Copy Path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(change.path, forType: .string)
+        }
+        if project.canDiscard(change) {
+            Divider()
+            Button("Discard Change…", role: .destructive) { pendingDiscard = change }
         }
     }
 
     private var filterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Space.s) {
             SearchField(prompt: "Filter suites and tests", text: $project.changeFilter)
-            HStack(spacing: 8) {
+            HStack(spacing: DS.Space.s) {
+                Menu {
+                    ForEach(project.branches, id: \.self) { branch in
+                        Button {
+                            project.setBaseBranch(branch)
+                        } label: {
+                            if branch == project.baseBranch { Label(branch, systemImage: "checkmark") } else { Text(branch) }
+                        }
+                    }
+                    if project.settings.baseBranch != nil {
+                        Divider()
+                        Button("Use Detected Branch") { project.setBaseBranch(nil) }
+                    }
+                } label: {
+                    Label(project.baseBranch ?? "Base Branch", systemImage: "arrow.triangle.branch")
+                }
+                .fixedSize()
+                .help("The branch to compare against")
+                .accessibilityLabel("Base branch: \(project.baseBranch ?? "none")")
+
                 Picker("Compare with", selection: $project.diffBase) {
                     ForEach(DiffBase.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .labelsHidden()
                 .fixedSize()
+                .accessibilityLabel("Compare with")
                 .help("Merge-base shows only this branch's changes; branch tip also shows changes made on the base branch since.")
 
                 Menu {
@@ -60,11 +135,13 @@ struct ChangesTab: View {
                     Label(kindsLabel, systemImage: "line.3.horizontal.decrease.circle")
                 }
                 .fixedSize()
+                .accessibilityLabel("Show: \(kindsLabel)")
 
                 Spacer()
                 Button { project.refreshChanges() } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.borderless)
                     .help("Refresh")
+                    .accessibilityLabel("Refresh")
             }
             .controlSize(.small)
             if let set = project.changeSet {
@@ -73,7 +150,7 @@ struct ChangesTab: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(12)
+        .padding(DS.Space.m)
     }
 
     private func count(_ kind: SnapshotChangeKind) -> Int {
@@ -100,6 +177,7 @@ struct ChangesTab: View {
                         ForEach(group.changes) { change in
                             ChangeRow(change: change, load: project.imageLoader(for: change))
                                 .tag(change.id)
+                                .contextMenu { actions(for: change) }
                         }
                     } header: {
                         HStack {
@@ -125,19 +203,20 @@ struct ChangesTab: View {
 }
 
 struct ChangeRow: View {
+    // Read as one element: "payButton, Committed".
     var change: SnapshotChange
     var load: @Sendable () -> (Data?, Data?)
 
     var body: some View {
         let load = load
-        HStack(spacing: 10) {
+        HStack(spacing: DS.Space.m) {
             Thumbnail(id: "change:\(change.path)#\(change.kind)") {
                 let (base, current) = load()
                 return current ?? base
             }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(change.testName).lineLimit(1)
-                HStack(spacing: 5) {
+                HStack(spacing: DS.Space.xs) {
                     KindBadge(kind: change.kind, style: .dot)
                     Text("\(change.kind.label) · \(change.fileName)")
                         .font(.caption)
@@ -146,7 +225,9 @@ struct ChangeRow: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, DS.Space.xxs)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(change.testName), \(change.kind.label), in \(change.suite)")
     }
 }
 
@@ -157,8 +238,8 @@ struct DetailHeader<Accessory: View>: View {
     @ViewBuilder var accessory: Accessory
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: DS.Space.m) {
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(title).font(.headline).lineLimit(1)
                 if let subtitle {
                     Text(subtitle)
@@ -172,8 +253,8 @@ struct DetailHeader<Accessory: View>: View {
             Spacer()
             accessory
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, DS.Space.l)
+        .padding(.vertical, DS.Space.m)
     }
 }
 
@@ -182,19 +263,22 @@ struct SearchField: View {
     @Binding var text: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(prompt, text: $text).textFieldStyle(.plain)
+        HStack(spacing: DS.Space.s) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .accessibilityLabel(prompt)
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel("Clear")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+        .padding(.horizontal, DS.Space.s)
+        .padding(.vertical, DS.Space.xs)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
     }
 }
 
@@ -211,8 +295,8 @@ struct KindBadge: View {
         case .label:
             Text(kind.label)
                 .font(.caption.weight(.medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, DS.Space.s)
+                .padding(.vertical, DS.Space.xs)
                 .background(Capsule().fill(color.opacity(0.15)))
                 .foregroundStyle(color)
         }

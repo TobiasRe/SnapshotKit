@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var isDropTargeted = false
 
     var body: some View {
         NavigationSplitView {
@@ -21,6 +22,20 @@ struct ContentView: View {
                 QuickSwitcherView()
             }
         }
+        // Drop a repository folder anywhere on the window to add and open it.
+        .dropDestination(for: URL.self) { urls, _ in
+            model.addDroppedFolders(urls)
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 3)
+                    .padding(DS.Space.xs)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .bottom) {
             if let notice = model.startupNotice {
                 NoticeBanner(text: notice, isError: false) { model.dismissStartupNotice() }
@@ -34,13 +49,13 @@ struct WelcomeView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DS.Space.l) {
             Image(systemName: "photo.stack")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text("No project selected")
                 .font(.title2.weight(.semibold))
-            Text("Add a repository with snapshot tests, or a folder to scan for them.")
+            Text("Drop a repository with snapshot tests here, or add a folder to scan for them.")
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Add Project…") { model.addProjectFromPanel() }
@@ -62,7 +77,7 @@ struct NoticeBanner: View {
     var onClose: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Space.s) {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? .red : .accentColor)
             Text(text)
@@ -75,9 +90,9 @@ struct NoticeBanner: View {
                     .buttonStyle(.borderless)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill((isError ? Color.red : Color.accentColor).opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder((isError ? Color.red : Color.accentColor).opacity(0.2)))
+        .padding(.horizontal, DS.Space.m)
+        .padding(.vertical, DS.Space.s)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill((isError ? Color.red : Color.accentColor).opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).strokeBorder((isError ? Color.red : Color.accentColor).opacity(0.2)))
     }
 }

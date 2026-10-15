@@ -1,3 +1,4 @@
+import AppKit
 import SnapshotKitCore
 import SwiftUI
 
@@ -60,8 +61,10 @@ enum DS {
     /// window server composites; they get an opaque stand-in so controls stay legible.
     nonisolated(unsafe) static var solidSurfaces = ProcessInfo.processInfo.environment["SNAPSHOTKIT_SOLID_SURFACES"] == "1"
 
-    /// Short and calm: 150 ms ease-out, no springs.
-    static let motion = Animation.easeOut(duration: 0.15)
+    /// Short and calm: 150 ms ease-out, no springs — and none at all with Reduce Motion on.
+    static var motion: Animation? {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : .easeOut(duration: 0.15)
+    }
 }
 
 // MARK: - Glass, with fallbacks for macOS 14–25

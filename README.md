@@ -19,7 +19,8 @@ scripts/make-app.sh          # builds dist/SnapshotKit.app and dist/snapkit
 open dist/SnapshotKit.app
 ```
 
-Add a repository (⌘O) or a folder to scan (sidebar **+** › Add Scan Folder). Then:
+Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (sidebar **+** › Add Scan
+Folder). The sidebar shows each project's failing count from its last run. Then:
 
 | | |
 |---|---|
@@ -30,7 +31,16 @@ Add a repository (⌘O) or a folder to scan (sidebar **+** › Add Scan Folder).
 | ⌘. | Cancel |
 | ⇧⌘O | Import an `.xcresult` (e.g. a CI artifact) |
 | ⌘K | Quick switch project |
+| ⌥⌘1 / ⌥⌘2 / ⌥⌘3 | Run / Failures / Changes |
+| ⌘1 / ⌘2 / ⌘3 | Side by side / slider / difference |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
+| ← / → | Move the slider divider (or drag its knob) |
+
+Right-click a failing test to check just that test for flakiness, re-record its suite, reveal the
+reference or copy its identifier and failure message. Right-click a changed snapshot to open or reveal it,
+open the base branch version, or discard an unwanted working-tree change. The Changes tab picks the base
+branch from a menu, and you can switch to comparing against the branch tip. The dock icon shows the
+failing count, and bounces when a run finishes in the background.
 
 The same features are on the command line:
 
