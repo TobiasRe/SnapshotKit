@@ -29,9 +29,10 @@ struct Thumbnail: View {
                 Image(systemName: "photo").foregroundStyle(.tertiary)
             }
         }
+        .accessibilityHidden(true)
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
         .task(id: id) {
             if let cached = ThumbnailCache.shared.object(forKey: id as NSString) {
                 image = cached
@@ -46,7 +47,11 @@ struct Thumbnail: View {
 }
 
 enum ThumbnailCache {
-    static let shared = NSCache<NSString, NSImage>()
+    static let shared: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 600
+        return cache
+    }()
 
     /// Decodes and caches a thumbnail synchronously (snapshot tests).
     static func preload(id: String, data: Data?) {

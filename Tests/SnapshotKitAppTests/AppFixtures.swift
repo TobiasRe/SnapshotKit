@@ -188,7 +188,7 @@ enum AppFixtures {
         return store
     }
 
-    enum Scenario { case failedRun, running, changes, failures, empty }
+    enum Scenario { case failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
 
     static func project(_ scenario: Scenario, store: ProjectStore) -> ProjectModel {
         let model = ProjectModel(project: Project(path: repository.path), store: store, autoload: false)
@@ -213,8 +213,9 @@ enum AppFixtures {
             f.failed = 2
             f.log = log
             f.lastResult = lastResult
-            f.lastMessage = "2 failing tests in 2 suites: CheckoutViewTests, ProfileViewTests"
+            f.lastMessage = ProjectModel.failureTitle(tests: 2, suites: 2)
             f.lastMessageIsError = true
+            f.lastDuration = 94
         case .running:
             f.tab = .run
             f.operation = .run
@@ -229,6 +230,30 @@ enum AppFixtures {
             f.tab = .changes
         case .failures:
             f.tab = .failures
+        case .missingXcode:
+            f.tab = .run
+            f.environment = nil
+            f.environmentError = EnvironmentError.xcodeNotInstalled(
+                required: "99.2", source: ".gitlab-ci.yml",
+                installed: [XcodeInstall(path: "/Applications/Xcode.app", version: "99.1")]).errorDescription
+            f.failingSuites = []
+            f.failures = []
+            f.failureSource = nil
+        case .brokenConfig:
+            f.tab = .run
+            f.context = nil
+            f.environment = nil
+            f.configError = ConfigError.invalidOverride("line 3: nested mappings are not supported").errorDescription
+        case .missingBaseBranch:
+            f.tab = .changes
+            f.changeSet = nil
+            f.changesError = SnapshotChangeError.baseBranchNotFound("develop").errorDescription
+        case .neverRun:
+            f.tab = .run
+            f.failingSuites = []
+            f.failures = []
+            f.failureSource = nil
+            f.historyFlaky = []
         case .empty:
             f.tab = .run
             f.failingSuites = []

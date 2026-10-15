@@ -1,3 +1,4 @@
+import AppKit
 import SnapshotKitCore
 import SwiftUI
 
@@ -27,14 +28,14 @@ struct FailuresTab: View {
                                                              : "Select a failing test to compare it with its reference."))
                 }
             }
-            .frame(minWidth: 440)
+            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Space.s) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Space.xxs) {
                     Text(project.failureSource?.label ?? "No results yet")
                         .font(.headline)
                     if let source = project.failureSource {
@@ -44,10 +45,22 @@ struct FailuresTab: View {
                     }
                 }
                 Spacer()
-                Button { app.importResultBundleFromPanel() } label: { Label("Import", systemImage: "square.and.arrow.down") }
-                    .help("Import an .xcresult, for example from a CI job (⇧⌘O)")
+                Menu {
+                    Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
+                    if let bundle = project.failureSource?.resultBundle {
+                        Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
+                        Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
+                    }
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                } primaryAction: {
+                    app.importResultBundleFromPanel()
+                }
+                .fixedSize()
+                .help("Import an .xcresult, for example from a CI job (⇧⌘O)")
+                .accessibilityLabel("Import Result Bundle")
             }
-            HStack(spacing: 8) {
+            HStack(spacing: DS.Space.s) {
                 Button("Re-record All") { project.reRecordFailed() }
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
                 Button("Check Flakiness") { project.checkFlakiness() }
@@ -55,7 +68,7 @@ struct FailuresTab: View {
             }
         }
         .controlSize(.small)
-        .padding(12)
+        .padding(DS.Space.m)
     }
 
     private var list: some View {
@@ -66,6 +79,7 @@ struct FailuresTab: View {
                     ForEach(bySuite[suite] ?? []) { item in
                         FailureRow(item: item, repositoryURL: project.project.url)
                             .tag(item.id)
+                            .contextMenu { actions(for: item) }
                     }
                 } header: {
                     HStack {
@@ -93,7 +107,7 @@ struct FailuresTab: View {
 
         return VStack(spacing: 0) {
             DetailHeader(title: item.test.name, subtitle: item.referencePaths.first ?? item.suite.identifier) {
-                HStack(spacing: 8) {
+                HStack(spacing: DS.Space.s) {
                     if let verdict = item.verdict { VerdictTag(verdict: verdict) }
                     if reps.count > 1 {
                         Picker("Repetition", selection: $repetition) {
@@ -103,12 +117,21 @@ struct FailuresTab: View {
                         .fixedSize()
                     }
                     Button("Re-record Suite") { project.reRecordFailed(suites: [item.suite]) }
+                        .secondaryActionStyle()
                         .disabled(project.isRunning)
+                    Menu { actions(for: item) } label: {
+                        Label("Test Actions", systemImage: "ellipsis")
+                    }
+                    .labelStyle(.iconOnly)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("More actions for this test")
+                    .accessibilityLabel("Test Actions")
                 }
                 .controlSize(.small)
             }
             if let message = item.test.failureMessages.first {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Space.xs) {
                     Label(firstLine(message), systemImage: "xmark.circle.fill")
                         .foregroundStyle(.red)
                         .lineLimit(2)
@@ -117,8 +140,8 @@ struct FailuresTab: View {
                 }
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .padding(.horizontal, DS.Space.l)
+                .padding(.bottom, DS.Space.m)
             }
             Divider()
             if referenceURL != nil || failureURL != nil {
@@ -131,6 +154,33 @@ struct FailuresTab: View {
                                        description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))
             }
         }
+    }
+
+    @ViewBuilder
+    private func actions(for item: FailureItem) -> some View {
+        Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
+            .disabled(project.isRunning || project.environment == nil)
+        Button("Re-record \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+            .disabled(project.isRunning || project.environment == nil)
+        Divider()
+        if let reference = item.referencePaths.first {
+            Button("Reveal Reference in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([project.project.url.appendingPathComponent(reference)])
+            }
+        }
+        if let failure = item.images.first?.failure {
+            Button("Open Actual Image") { NSWorkspace.shared.open(failure) }
+        }
+        Divider()
+        Button("Copy Test Identifier") { copy(item.id) }
+        if let message = item.test.failureMessages.first {
+            Button("Copy Failure Message") { copy(message) }
+        }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     @ViewBuilder
@@ -185,13 +235,13 @@ struct FailureRow: View {
     var body: some View {
         let failure = item.images.first?.failure
         let reference = item.images.first?.reference ?? item.referencePaths.first.map { repositoryURL.appendingPathComponent($0) }
-        HStack(spacing: 10) {
+        HStack(spacing: DS.Space.m) {
             Thumbnail(id: "failure:\(item.id)#\(failure?.path ?? reference?.path ?? "")") {
                 (failure ?? reference).flatMap { try? Data(contentsOf: $0) }
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: DS.Space.xs) {
                 Text(item.test.name).lineLimit(1)
-                HStack(spacing: 4) {
+                HStack(spacing: DS.Space.xs) {
                     if let verdict = item.verdict { VerdictTag(verdict: verdict) }
                     if item.test.repetitions.count > 1 {
                         Chip(text: "\(item.test.failedRepetitions)/\(item.test.repetitions.count) runs failed", color: .secondary)
@@ -207,7 +257,7 @@ struct FailureRow: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, DS.Space.xxs)
     }
 }
 

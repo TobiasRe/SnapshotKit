@@ -90,6 +90,10 @@ struct CompareView: View {
                 .padding(.bottom, DS.Space.m)
         }
         .clipped()
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.leftArrow) { nudgeSplit(-1) }
+        .onKeyPress(.rightArrow) { nudgeSplit(1) }
         .task(id: identity) {
             if let cached = ComparePairCache.shared.object(forKey: identity as NSString) {
                 pair = cached.pair
@@ -107,61 +111,90 @@ struct CompareView: View {
     }
 
     /// One floating glass bar over the canvas: mode, what changed, zoom.
+    /// Drops the less important parts first when the pane is narrow instead of wrapping.
     private var controls: some View {
         GlassGroup {
-            HStack(spacing: DS.Space.m) {
-                Picker("Mode", selection: $modeRaw) {
-                    ForEach(CompareMode.allCases) { m in Text(m.rawValue).tag(m.rawValue) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-
-                if let stats = pair?.stats {
-                    HStack(spacing: DS.Space.xs + 1) {
-                        Circle()
-                            .fill(stats.isIdentical ? DS.Status.passed : DS.Status.changed)
-                            .frame(width: 7, height: 7)
-                        Text(stats.isIdentical
-                             ? "Identical"
-                             : String(format: "%.2f%% changed", stats.changedFraction * 100) + (stats.sizeChanged ? " · size differs" : ""))
-                            .monospacedDigit()
-                    }
-                    .font(DS.Font.caption)
-                    .foregroundStyle(.secondary)
-                    .help(stats.isIdentical ? "Pixel-identical" : "\(stats.changedPixels.formatted()) of \(stats.totalPixels.formatted()) pixels differ")
-                }
-
-                if let size = pair?.pixelSize, size.width > 0 {
-                    Text("\(Int(size.width))×\(Int(size.height))")
-                        .font(DS.Font.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                }
-
-                ControlGroup {
-                    Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
-                        .help("Zoom out (⌘−)")
-                    Menu {
-                        Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
-                        Divider()
-                        ForEach([2, 4, 8, 16], id: \.self) { factor in
-                            Button("\(factor)×") { withAnimation(DS.motion) { app.viewport = Viewport(scale: CGFloat(factor), offset: .zero) } }
-                        }
-                    } label: {
-                        Text(zoomLabel).monospacedDigit().frame(minWidth: 34)
-                    }
-                    .help("Zoom relative to fit. ⌘0 or double-click fits.")
-                    Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
-                        .help("Zoom in (⌘=)")
-                }
-                .controlGroupStyle(.navigation)
-                .fixedSize()
+            ViewThatFits(in: .horizontal) {
+                controlBar(showStats: true, showSize: true)
+                controlBar(showStats: true, showSize: false)
+                controlBar(showStats: false, showSize: false)
             }
-            .controlSize(.small)
             .padding(.horizontal, DS.Space.m)
-            .padding(.vertical, DS.Space.s - 2)
-            .floatingGlassCapsule()
         }
+    }
+
+    private func controlBar(showStats: Bool, showSize: Bool) -> some View {
+        HStack(spacing: DS.Space.m) {
+            Picker("Mode", selection: $modeRaw) {
+                ForEach(CompareMode.allCases) { m in Text(m.rawValue).tag(m.rawValue) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Compare mode (⌘1, ⌘2, ⌘3)")
+            .accessibilityLabel("Compare Mode")
+
+            if showStats, let stats = pair?.stats {
+                HStack(spacing: DS.Space.xs + 1) {
+                    Circle()
+                        .fill(stats.isIdentical ? DS.Status.passed : DS.Status.changed)
+                        .frame(width: 7, height: 7)
+                    Text(stats.isIdentical
+                         ? "Identical"
+                         : String(format: "%.2f%% changed", stats.changedFraction * 100) + (stats.sizeChanged ? " · size differs" : ""))
+                        .monospacedDigit()
+                }
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .help(stats.isIdentical ? "Pixel-identical" : "\(stats.changedPixels.formatted()) of \(stats.totalPixels.formatted()) pixels differ")
+            }
+
+            if showSize, let size = pair?.pixelSize, size.width > 0 {
+                Text("\(Int(size.width))×\(Int(size.height))")
+                    .font(DS.Font.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .fixedSize()
+            }
+
+            ControlGroup {
+                Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
+                    .help("Zoom out (⌘−)")
+                    .accessibilityLabel("Zoom Out")
+                Menu {
+                    Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
+                    Divider()
+                    ForEach([2, 4, 8, 16], id: \.self) { factor in
+                        Button("\(factor)×") {
+                            // Keep the area being looked at centered while changing level.
+                            withAnimation(DS.motion) { app.viewport.zoom(by: CGFloat(factor) / app.viewport.scale) }
+                        }
+                    }
+                } label: {
+                    Text(zoomLabel).monospacedDigit().frame(minWidth: 34)
+                }
+                .help("Zoom relative to fit. ⌘0 or double-click fits.")
+                .accessibilityLabel("Zoom Level")
+                .accessibilityValue(zoomLabel)
+                Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
+                    .help("Zoom in (⌘=)")
+                    .accessibilityLabel("Zoom In")
+            }
+            .controlGroupStyle(.navigation)
+            .fixedSize()
+        }
+        .controlSize(.small)
+        .padding(.horizontal, DS.Space.m)
+        .padding(.vertical, DS.Space.s - 2)
+        .floatingGlassCapsule()
+        .fixedSize()
+    }
+
+    /// ← / → move the slider divider by 5% in slider mode.
+    private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
+        guard mode == .slider else { return .ignored }
+        withAnimation(DS.motion) { split = min(max(split + direction * 0.05, 0), 1) }
+        return .handled
     }
 
     private var zoomLabel: String {
@@ -216,7 +249,17 @@ struct CompareView: View {
             .floatingGlass(in: Circle())
             .contentShape(Circle())
             .help("Drag to compare")
-            .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+            .accessibilityElement()
+            .accessibilityLabel("Comparison Divider")
+            .accessibilityValue("\(Int((split * 100).rounded())) percent reference")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: split = min(split + 0.05, 1)
+                case .decrement: split = max(split - 0.05, 0)
+                @unknown default: break
+                }
+            }
+            .onHover { inside in (inside ? NSCursor.resizeLeftRight : NSCursor.arrow).set() }
     }
 
     private func pane(_ image: NSImage?, label: String, size: CGSize) -> some View {

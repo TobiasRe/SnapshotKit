@@ -7,14 +7,15 @@ import Testing
 
 /// Snapshot tests of SnapshotKit's own UI, in light and dark appearance.
 ///
-/// Record or update references with SnapshotKit itself, or set `record: .all` below.
+/// Missing references are recorded automatically. To update all of them after an intended UI
+/// change: `SNAPSHOT_TESTING_RECORD=all swift test --filter AppSnapshotTests`.
 /// Glass is drawn as an opaque stand-in (`DS.solidSurfaces`) because off-screen rendering
 /// cannot composite Liquid Glass.
 @MainActor
-@Suite(.serialized, .snapshots(record: .missing))
+@Suite(.serialized)
 struct AppSnapshotTests {
     static let paneSize = CGSize(width: 1100, height: 700)
-    static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.995, perceptualPrecision: 0.98)
+    static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.999, perceptualPrecision: 0.99)
 
     init() {
         DS.solidSurfaces = true
@@ -39,6 +40,12 @@ struct AppSnapshotTests {
         assertPane(project, app: app, appearance: appearance)
     }
 
+    @Test func runTabFilteredOutput() {
+        let (app, project) = makeApp(.failedRun)
+        project.logFilter = "payButton"
+        assertPane(project, app: app, appearance: .aqua)
+    }
+
     @Test func runTabWhileRunning() {
         let (app, project) = makeApp(.running)
         assertPane(project, app: app, appearance: .aqua)
@@ -58,6 +65,19 @@ struct AppSnapshotTests {
         assertPane(project, app: app, appearance: appearance)
     }
 
+    @Test(arguments: ["missingXcode", "brokenConfig", "missingBaseBranch", "neverRun"])
+    func problemStates(name: String) {
+        let scenario: AppFixtures.Scenario = switch name {
+        case "missingXcode": .missingXcode
+        case "brokenConfig": .brokenConfig
+        case "missingBaseBranch": .missingBaseBranch
+        default: .neverRun
+        }
+        let (app, project) = makeApp(scenario)
+        let view = ProjectView(project: project).environmentObject(app)
+        assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy, named: name)
+    }
+
     @Test func nothingChangedOrFailing() {
         let (app, project) = makeApp(.empty)
         project.tab = .changes
@@ -70,6 +90,7 @@ struct AppSnapshotTests {
     func sidebar(appearance: NSAppearance.Name) {
         // No selection: the sidebar's selection material can't be rendered off-screen.
         let app = AppModel(store: AppFixtures.store())
+        app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
         let view = SidebarView().environmentObject(app)
         assertSnapshot(of: host(view, size: CGSize(width: 260, height: 420), appearance: appearance), as: Self.strategy,
                        named: appearance == .darkAqua ? "dark" : "light")
@@ -100,6 +121,16 @@ struct AppSnapshotTests {
             .environmentObject(app)
         let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference" }
         assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy, named: name)
+    }
+
+    /// The floating bar drops stats and size instead of wrapping.
+    @Test func compareNarrowPane() {
+        UserDefaults.standard.set(CompareMode.difference.rawValue, forKey: "compareMode")
+        let app = AppModel(store: AppFixtures.store())
+        ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-narrow")
+        let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-narrow")
+            .environmentObject(app)
+        assertSnapshot(of: host(view, size: CGSize(width: 440, height: 360), appearance: .aqua), as: Self.strategy, named: "440pt")
     }
 
     @Test func compareZoomedIn() {
@@ -135,7 +166,10 @@ struct AppSnapshotTests {
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance)
         window.isReleasedWhenClosed = false
-        let hosting = NSHostingView(rootView: deterministic(view.frame(width: size.width, height: size.height)))
+        // Rendering the hosting view skips the window's own background, which left headers
+        // transparent (white text on white in dark mode); draw it as the window would.
+        let hosting = NSHostingView(rootView: deterministic(view.frame(width: size.width, height: size.height)
+            .background(Color(nsColor: .windowBackgroundColor))))
         hosting.frame = CGRect(origin: .zero, size: size)
         window.contentView = hosting
         settle(hosting)

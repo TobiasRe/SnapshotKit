@@ -49,6 +49,15 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 - `Chip`: a small status label.
 - `softTopEdge()`: a soft scroll-edge blur under headers.
 
+## Enforcement
+
+- **Every view uses the tokens.** The only literal left is one layout offset.
+- **Snapshot tests** (`Tests/SnapshotKitAppTests`) render every pane, state and compare mode in light and
+  dark at a 99.9% pixel tolerance, so visual changes have to be re-recorded on purpose.
+  Off-screen rendering can't composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
+  (headless captures included). Real glass needs a look on screen.
+- **An accessibility audit test** walks each tab's live accessibility tree and fails on unlabeled controls.
+
 ## Don'ts
 
 - Don't paint behind the sidebar or toolbar, and don't put glass inside lists or forms.

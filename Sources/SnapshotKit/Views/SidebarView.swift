@@ -24,7 +24,9 @@ struct SidebarView: View {
             }
             Section(model.isScanning ? "Projects (scanning…)" : "Projects") {
                 if others.isEmpty && pinned.isEmpty && recents.isEmpty {
-                    Text("No projects yet").foregroundStyle(.secondary)
+                    Text("Drop a repository here, or use + below.")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.secondary)
                 }
                 rows(others)
             }
@@ -53,7 +55,7 @@ struct SidebarView: View {
                 .buttonStyle(.borderless)
                 .help("Quick switch project (⌘K)")
             }
-            .padding(8)
+            .padding(DS.Space.s)
         }
     }
 
@@ -65,7 +67,9 @@ struct SidebarView: View {
             } icon: {
                 Image(systemName: model.isPinned(project) ? "pin.fill" : "folder")
             }
-            .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+            .badge(model.failingCounts[project.path] ?? 0)
+            .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+                  + ((model.failingCounts[project.path]).map { " — \($0) failing in the last run" } ?? ""))
             .tag(project.path)
                 .contextMenu {
                     Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
@@ -82,8 +86,8 @@ struct ProjectRow: View {
     var pinned: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: DS.Space.xxs) {
+            HStack(spacing: DS.Space.xs) {
                 Text(project.name).lineLimit(1)
                 if pinned {
                     Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
@@ -95,7 +99,7 @@ struct ProjectRow: View {
                 .lineLimit(1)
                 .truncationMode(.head)
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, DS.Space.xxs)
     }
 }
 
@@ -126,7 +130,7 @@ struct QuickSwitcherView: View {
                         .onKeyPress(.upArrow) { move(-1); return .handled }
                         .onKeyPress(.escape) { close(); return .handled }
                 }
-                .padding(12)
+                .padding(DS.Space.m)
                 Divider()
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -139,8 +143,8 @@ struct QuickSwitcherView: View {
                                         Text("current").font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
+                                .padding(.horizontal, DS.Space.m)
+                                .padding(.vertical, DS.Space.s)
                                 .background(index == highlighted ? Color.accentColor.opacity(0.2) : Color.clear)
                                 .contentShape(Rectangle())
                                 .onTapGesture { choose(at: index) }
@@ -156,9 +160,8 @@ struct QuickSwitcherView: View {
                 }
             }
             .frame(width: 520)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-            .shadow(radius: 20)
+            // Floats over content, so it's glass (see docs/DESIGN.md).
+            .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
             .padding(.top, 80)
         }
         .onAppear {

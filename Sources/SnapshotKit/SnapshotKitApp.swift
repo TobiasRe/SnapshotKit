@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct SnapshotKitCommands: Commands {
     @ObservedObject var model: AppModel
+    @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -82,6 +83,19 @@ struct SnapshotKitCommands: Commands {
                 .disabled(!(project?.isRunning ?? false))
         }
         CommandGroup(after: .toolbar) {
+            if let project = model.current {
+                Button("Run") { project.tab = .run }.keyboardShortcut("1", modifiers: [.command, .option])
+                Button("Failures") { project.tab = .failures }.keyboardShortcut("2", modifiers: [.command, .option])
+                Button("Changes") { project.tab = .changes }.keyboardShortcut("3", modifiers: [.command, .option])
+                Divider()
+            }
+            Picker("Compare", selection: $compareMode) {
+                Text("Side by Side").tag(CompareMode.sideBySide.rawValue).keyboardShortcut("1")
+                Text("Slider").tag(CompareMode.slider.rawValue).keyboardShortcut("2")
+                Text("Difference").tag(CompareMode.difference.rawValue).keyboardShortcut("3")
+            }
+            .pickerStyle(.inline)
+            Divider()
             Button("Zoom In") { model.viewport.zoomIn() }
                 .keyboardShortcut("=")
             Button("Zoom Out") { model.viewport.zoomOut() }

@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var startupNotice: String?
     /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
     @Published var viewport = Viewport()
+    /// Failing test count per project path, from each repository's last run.
+    @Published var failingCounts: [String: Int] = [:]
 
     private var models: [String: ProjectModel] = [:]
 
@@ -40,6 +42,44 @@ final class AppModel: ObservableObject {
 
     func refreshProjects() {
         projects = store.allProjects
+        refreshFailingCounts()
+    }
+
+    static let runFinished = Notification.Name("SnapshotKitRunFinished")
+    private var isRefreshingCounts = false
+    private var runObserver: NSObjectProtocol?
+
+    /// Reads every project's last-run summary in the background (cheap: one small JSON per repo).
+    func refreshFailingCounts() {
+        if runObserver == nil {
+            runObserver = NotificationCenter.default.addObserver(forName: Self.runFinished, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshFailingCounts() }
+            }
+        }
+        guard !isRefreshingCounts else { return }
+        isRefreshingCounts = true
+        let paths = projects.map(\.path)
+        Task {
+            defer { isRefreshingCounts = false }
+            let counts = await Task.detached { () -> [String: Int] in
+                var counts: [String: Int] = [:]
+                for path in paths where FileManager.default.fileExists(atPath: path + "/.git") {
+                    if let last = LastRun.load(repository: URL(fileURLWithPath: path)), last.failed > 0 { counts[path] = last.failed }
+                }
+                return counts
+            }.value
+            if !DS.solidSurfaces { failingCounts = counts }
+        }
+    }
+
+    /// Adds dropped folders that are (inside) git repositories; returns whether any was added.
+    @discardableResult
+    func addDroppedFolders(_ urls: [URL]) -> Bool {
+        let roots = urls.compactMap { Git.repository(containing: $0)?.root }
+        guard let last = roots.last else { return false }
+        for root in roots { store.markOpened(Project(path: root.path)) }
+        open(path: last.path)
+        return true
     }
 
     func isPinned(_ project: Project) -> Bool { store.isPinned(project) }
