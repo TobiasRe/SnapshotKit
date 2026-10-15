@@ -132,7 +132,7 @@ public enum EnvironmentValidator {
         return (first, true)
     }
 
-    /// "16" matches "16.2"; "16.2" matches "16.2" and "16.2.0"; "16.2" does not match "16.20".
+    /// "X" matches "X.Y"; "X.Y" matches "X.Y" and "X.Y.0"; "X.1" does not match "X.10".
     public static func versionMatches(installed: String, required: String) -> Bool {
         let have = installed.split(separator: ".").map { Int($0) ?? -1 }
         let want = required.split(separator: ".").map { Int($0) ?? -1 }
@@ -180,7 +180,7 @@ public enum EnvironmentValidator {
         }
     }
 
-    /// `com.apple.CoreSimulator.SimRuntime.iOS-18-2` → ("iOS", "18.2").
+    /// `com.apple.CoreSimulator.SimRuntime.iOS-<major>-<minor>` → ("iOS", "<major>.<minor>").
     public static func parseRuntime(_ identifier: String) -> (String, String)? {
         guard let last = identifier.split(separator: ".").last else { return nil }
         let parts = last.split(separator: "-")

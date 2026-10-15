@@ -5,7 +5,7 @@
 #   1. records the reference on `develop`
 #   2. changes the view on a branch, confirms the test fails and the failing suite is named
 #   3. re-records, confirms only the PNG changed (test source restored) and verification passes
-#   4. interrupts a re-record with SIGINT and confirms the record patch is restored
+#   4. interrupts a re-record with SIGINT/SIGTERM and confirms the record patch is restored
 #   5. SIGKILLs a re-record and confirms the next launch restores the leftover patch
 #   6. runs the same tests through the remote runner (local-directory transport) and a flakiness check
 #
@@ -214,6 +214,17 @@ if [ "$SKIP_INTERRUPT" = 0 ]; then
   tail -3 "$LOGS/rerecord-int.log"
   check "SIGINT: test source restored" "(cd '$SAMPLE' && git diff --quiet HEAD -- '$TEST_FILE')"
   check "SIGINT: journal removed" "[ ! -f '$JOURNAL' ]"
+
+  step "Terminate a re-record (SIGTERM) — patch restored and xcodebuild stopped"
+  (cd "$SAMPLE" && exec -a snapkit-e2e "$SNAPKIT" rerecord --no-verify > "$LOGS/rerecord-term.log" 2>&1) &
+  PID=$!
+  check "record patch applied while running" "wait_for_patch"
+  sleep 3
+  kill -TERM "$PID"
+  wait "$PID" || true
+  sleep 1
+  check "SIGTERM: test source restored" "(cd '$SAMPLE' && git diff --quiet HEAD -- '$TEST_FILE')"
+  check "SIGTERM: no xcodebuild left running" "! pgrep -f 'xcodebuild.*-only-testing:SampleUITests/GreetingViewTests' >/dev/null"
 
   step "Kill a re-record (SIGKILL) — the next launch must restore the leftover patch"
   (cd "$SAMPLE" && exec -a snapkit-e2e "$SNAPKIT" rerecord --no-verify > "$LOGS/rerecord-kill.log" 2>&1) &

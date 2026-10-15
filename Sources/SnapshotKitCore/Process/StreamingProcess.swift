@@ -63,6 +63,7 @@ public final class StreamingProcess: @unchecked Sendable {
         }
 
         process.terminationHandler = { [weak self] proc in
+            ChildProcesses.shared.remove(proc.processIdentifier)
             // Wait (briefly) for the reader to drain the pipe before finishing the stream.
             _ = readDone.wait(timeout: .now() + 2)
             guard let self else { return }
@@ -74,6 +75,7 @@ public final class StreamingProcess: @unchecked Sendable {
             }
         }
         try process.run()
+        ChildProcesses.shared.add(process.processIdentifier)
     }
 
     /// Waits for the process to exit and returns its status.
@@ -103,6 +105,36 @@ public final class StreamingProcess: @unchecked Sendable {
                 if process.isRunning { kill(pid, SIGKILL) }
             }
         }
+    }
+}
+
+/// Long-running children of this process, so they can be stopped when SnapshotKit is
+/// interrupted or quits — an orphaned xcodebuild could otherwise keep recording snapshots.
+public final class ChildProcesses: @unchecked Sendable {
+    public static let shared = ChildProcesses()
+    private let lock = NSLock()
+    private var pids = Set<Int32>()
+
+    func add(_ pid: Int32) { lock.withLock { _ = pids.insert(pid) } }
+    func remove(_ pid: Int32) { lock.withLock { _ = pids.remove(pid) } }
+    public var running: [Int32] { lock.withLock { Array(pids) } }
+
+    /// Interrupts all children, waits up to `timeout` for them to exit, then kills the rest.
+    public func terminateAll(timeout: TimeInterval = 5) {
+        let children = running
+        guard !children.isEmpty else { return }
+        for pid in children { kill(pid, SIGINT) }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline, children.contains(where: { kill($0, 0) == 0 && !isZombie($0) }) {
+            usleep(100_000)
+        }
+        for pid in children where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+    }
+
+    private func isZombie(_ pid: Int32) -> Bool {
+        var info = proc_bsdinfo()
+        let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
+        return size > 0 && info.pbi_status == SZOMB
     }
 }
 

@@ -309,8 +309,9 @@ public enum InterruptGuard {
     private static var sources: [DispatchSourceSignal] = []
     private static let queue = DispatchQueue(label: "snapshotkit.signals")
 
-    /// Installs handlers for SIGINT, SIGTERM, SIGHUP and SIGQUIT that restore every
-    /// active record session and then exit with the conventional status.
+    /// Installs handlers for SIGINT, SIGTERM, SIGHUP and SIGQUIT that stop child processes
+    /// (so nothing keeps recording), restore every active record session, and exit with the
+    /// conventional status.
     public static func install(onRestore: (@Sendable (RestoreReport) -> Void)? = nil) {
         queue.sync {
             guard sources.isEmpty else { return }
@@ -318,6 +319,7 @@ public enum InterruptGuard {
                 signal(sig, SIG_IGN)
                 let source = DispatchSource.makeSignalSource(signal: sig, queue: queue)
                 source.setEventHandler {
+                    ChildProcesses.shared.terminateAll()
                     for session in ActiveSessions.shared.all() {
                         let report = session.restore()
                         onRestore?(report)
@@ -330,8 +332,9 @@ public enum InterruptGuard {
         }
     }
 
-    /// Restores every active session immediately (for app termination).
+    /// Stops child processes and restores every active session (for app termination).
     public static func restoreAll() -> [RestoreReport] {
-        ActiveSessions.shared.all().map { $0.restore() }
+        ChildProcesses.shared.terminateAll()
+        return ActiveSessions.shared.all().map { $0.restore() }
     }
 }
