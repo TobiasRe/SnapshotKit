@@ -1,0 +1,127 @@
+import AppKit
+import Foundation
+import SnapshotKitCore
+
+@MainActor
+final class AppModel: ObservableObject {
+    let store: ProjectStore
+    @Published private(set) var projects: [Project] = []
+    @Published var selectedPath: String? {
+        didSet { if oldValue != selectedPath { openSelected() } }
+    }
+    @Published private(set) var current: ProjectModel?
+    @Published var showQuickSwitcher = false
+    @Published var showProjectSettings = false
+    @Published private(set) var isScanning = false
+    @Published private(set) var startupNotice: String?
+    /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
+    @Published var viewport = Viewport()
+
+    private var models: [String: ProjectModel] = [:]
+
+    init(store: ProjectStore = ProjectStore()) {
+        self.store = store
+        restoreLeftoverPatches()
+        refreshProjects()
+        if let last = store.settings.lastProject, projects.contains(where: { $0.path == last }) {
+            selectedPath = last
+            openSelected()
+        }
+    }
+
+    /// A record patch can survive a crash or force quit; undo it before anything else.
+    private func restoreLeftoverPatches() {
+        let reports = RecordSession.restoreAllLeftovers().filter { !$0.files.isEmpty }
+        guard !reports.isEmpty else { return }
+        startupNotice = "Restored a record patch left by an interrupted run:\n" + reports.map(\.summary).joined(separator: "\n")
+    }
+
+    func dismissStartupNotice() { startupNotice = nil }
+
+    func refreshProjects() {
+        projects = store.allProjects
+    }
+
+    func isPinned(_ project: Project) -> Bool { store.isPinned(project) }
+
+    func togglePin(_ project: Project) {
+        store.togglePin(project)
+        refreshProjects()
+    }
+
+    func remove(_ project: Project) {
+        store.remove(project)
+        if selectedPath == project.path { selectedPath = nil }
+        refreshProjects()
+    }
+
+    func open(path: String) {
+        let project = Project(path: path)
+        store.markOpened(project)
+        refreshProjects()
+        selectedPath = project.path
+    }
+
+    private func openSelected() {
+        guard let path = selectedPath else {
+            current = nil
+            return
+        }
+        let project = Project(path: path)
+        store.markOpened(project)
+        if let existing = models[path] {
+            current = existing
+        } else {
+            let model = ProjectModel(project: project, store: store)
+            models[path] = model
+            current = model
+        }
+        viewport.reset()
+        refreshProjects()
+    }
+
+    func addScanRoot(_ url: URL) {
+        store.addScanRoot(url.path)
+        rescan()
+    }
+
+    func rescan() {
+        isScanning = true
+        let store = store
+        Task {
+            _ = await Task.detached { store.rescan() }.value
+            isScanning = false
+            refreshProjects()
+        }
+    }
+
+    func chooseFolder(message: String, completion: @escaping (URL) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = message
+        if panel.runModal() == .OK, let url = panel.url { completion(url) }
+    }
+
+    func addProjectFromPanel() {
+        chooseFolder(message: "Choose a git repository with snapshot tests") { [weak self] url in
+            guard let root = Git.repository(containing: url)?.root else { return }
+            self?.open(path: root.path)
+        }
+    }
+
+    func importResultBundleFromPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.treatsFilePackagesAsDirectories = false
+        panel.message = "Choose an .xcresult bundle (for example a CI artifact)"
+        if panel.runModal() == .OK, let url = panel.url { current?.importResultBundle(url) }
+    }
+
+    /// Called on quit: undo any active record patch.
+    func applicationWillTerminate() {
+        _ = InterruptGuard.restoreAll()
+    }
+}
