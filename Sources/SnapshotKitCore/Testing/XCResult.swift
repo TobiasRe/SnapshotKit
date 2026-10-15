@@ -45,6 +45,15 @@ public struct TestCaseResult: Hashable, Codable, Sendable {
     /// One outcome per repetition when run with `-test-iterations`/retries; otherwise `[outcome]`.
     public var repetitions: [TestOutcome]
 
+    public init(name: String, identifier: String, outcome: TestOutcome, failureMessages: [String], duration: Double? = nil, repetitions: [TestOutcome]) {
+        self.name = name
+        self.identifier = identifier
+        self.outcome = outcome
+        self.failureMessages = failureMessages
+        self.duration = duration
+        self.repetitions = repetitions
+    }
+
     public var failedRepetitions: Int { repetitions.filter { $0 == .failed }.count }
     public var passedRepetitions: Int { repetitions.filter { $0 == .passed }.count }
 }
@@ -59,6 +68,13 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
     /// Source files that reported failures in this suite.
     public var failureFiles: [String]
 
+    public init(bundle: String, path: [String], tests: [TestCaseResult], failureFiles: [String]) {
+        self.bundle = bundle
+        self.path = path
+        self.tests = tests
+        self.failureFiles = failureFiles
+    }
+
     public var name: String { path.last ?? bundle }
     public var identifier: String { ([bundle] + path).joined(separator: "/") }
     public var id: String { identifier }
@@ -70,6 +86,10 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
 
 public struct TestRunSummary: Codable, Sendable {
     public var suites: [SuiteResult]
+
+    public init(suites: [SuiteResult]) {
+        self.suites = suites
+    }
 
     public var failingSuites: [SuiteResult] { suites.filter(\.isFailing) }
     public var passed: Int { suites.reduce(0) { $0 + $1.passedCount } }

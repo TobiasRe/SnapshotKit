@@ -39,6 +39,38 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var verifyAfterRecord: Bool = true
 
     public init() {}
+
+    /// Missing keys fall back to defaults, so older or hand-written settings files still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AppSettings()
+        scanRoots = try c.decodeIfPresent([String].self, forKey: .scanRoots) ?? d.scanRoots
+        discovered = try c.decodeIfPresent([String].self, forKey: .discovered) ?? d.discovered
+        pinned = try c.decodeIfPresent([String].self, forKey: .pinned) ?? d.pinned
+        recents = try c.decodeIfPresent([String].self, forKey: .recents) ?? d.recents
+        projectSettings = try c.decodeIfPresent([String: ProjectSettings].self, forKey: .projectSettings) ?? d.projectSettings
+        lastProject = try c.decodeIfPresent(String.self, forKey: .lastProject)
+        flakeIterations = try c.decodeIfPresent(Int.self, forKey: .flakeIterations) ?? d.flakeIterations
+        verifyAfterRecord = try c.decodeIfPresent(Bool.self, forKey: .verifyAfterRecord) ?? d.verifyAfterRecord
+    }
+}
+
+extension AppSettings {
+    /// Paths in one canonical form (e.g. `/private/var/…` and `/var/…` are the same folder), without duplicates.
+    func normalized() -> AppSettings {
+        func norm(_ paths: [String]) -> [String] {
+            var seen = Set<String>()
+            return paths.map { Project(path: $0).path }.filter { seen.insert($0).inserted }
+        }
+        var s = self
+        s.scanRoots = norm(scanRoots)
+        s.discovered = norm(discovered)
+        s.pinned = norm(pinned)
+        s.recents = norm(recents)
+        s.lastProject = lastProject.map { Project(path: $0).path }
+        s.projectSettings = Dictionary(projectSettings.map { (Project(path: $0.key).path, $0.value) }, uniquingKeysWith: { a, _ in a })
+        return s
+    }
 }
 
 /// Loads and saves `AppSettings`, and answers project-list questions.
@@ -50,7 +82,7 @@ public final class ProjectStore: @unchecked Sendable {
 
     public init(url: URL = SnapshotKitPaths.home.appendingPathComponent("settings.json")) {
         self.url = url
-        cached = Self.read(url) ?? AppSettings()
+        cached = (Self.read(url) ?? AppSettings()).normalized()
     }
 
     public var settings: AppSettings { lock.withLock { cached } }
