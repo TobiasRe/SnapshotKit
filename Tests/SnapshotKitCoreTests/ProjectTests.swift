@@ -14,7 +14,7 @@ import Testing
 
 @Suite struct ProjectStoreTests {
     func makeStore() -> ProjectStore {
-        ProjectStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-settings-\(UUID().uuidString).json"))
+        ProjectStore(url: testTemp("settings").appendingPathExtension("json"))
     }
 
     @Test func pinsRecentsAndSettingsPersist() {
@@ -45,7 +45,7 @@ import Testing
     }
 
     @Test func privateVarAliasesAreOneProject() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-settings-\(UUID().uuidString).json")
+        let url = testTemp("settings").appendingPathExtension("json")
         let name = "snapkit-alias-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: "/private/var/tmp/\(name)", withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: "/private/var/tmp/\(name)") }
@@ -67,7 +67,7 @@ import Testing
     }
 
     @Test func scannerFindsReposWithSnapshots() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-scan-\(UUID().uuidString)").resolvingSymlinksInPath()
+        let root = testTemp("scan")
         func makeRepo(_ path: String, snapshots: Bool, override: Bool = false) throws {
             let dir = root.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

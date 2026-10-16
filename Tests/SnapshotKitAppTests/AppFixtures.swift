@@ -46,6 +46,8 @@ enum AppFixtures {
     static let reference = screen(accent: .systemBlue)
     static let actual = screen(accent: .systemOrange, titleWidth: 0.5)
     static let badged = screen(accent: .systemBlue, badge: true)
+    /// The reference with its button a hair lighter: fails an exact comparison, looks the same.
+    static let renderingNoise = screen(accent: NSColor.systemBlue.blended(withFraction: 0.008, of: .white)!)
 
     // MARK: Configuration
 
@@ -59,8 +61,9 @@ enum AppFixtures {
         config.osVersion = "99.0"
         config.baseBranch = "develop"
         let ci = ".gitlab-ci.yml"
-        config.sources = ["scheme": ci, "workspace": ci, "testPlan": ci, "xcode": ci, "device": ci, "os": ci, "baseBranch": ci]
-        let resolved = ResolvedConfig(repository: repository, config: config, ciFiles: [ci], overrideFile: nil, notes: [])
+        // The device comes from the override file, so the inspector names that one source.
+        config.sources = ["scheme": ci, "workspace": ci, "testPlan": ci, "xcode": ci, "device": ".snapshotkit.yml", "os": ".snapshotkit.yml", "baseBranch": ci]
+        let resolved = ResolvedConfig(repository: repository, config: config, ciFiles: [ci], overrideFile: ".snapshotkit.yml", notes: [])
         return ProjectContext(repository: repository, resolved: resolved)
     }
 
@@ -112,6 +115,15 @@ enum AppFixtures {
                       passed: 1, failed: 2, skipped: 0, buildErrors: [])
     }
 
+    /// Daily runs ending at `date`, alternating between this machine and CI.
+    static func timeline(_ results: [HistoryPoint.Result]) -> [HistoryPoint] {
+        results.enumerated().map { i, result in
+            HistoryPoint(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", i))!,
+                         date: date.addingTimeInterval(Double(i - results.count) * 86_400),
+                         kind: .run, host: i.isMultiple(of: 2) ? "local" : "ci-mac", commit: "3f1c2a9", result: result)
+        }
+    }
+
     /// Writes reference/actual PNGs to a temp folder and returns failure items pointing at them.
     static func failures(in dir: URL) -> [FailureItem] {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -121,7 +133,8 @@ enum AppFixtures {
             return url
         }
         let ref = write(reference, "reference.png"), act = write(actual, "failure.png")
-        let ref2 = write(reference, "reference2.png"), act2 = write(badged, "failure2.png")
+        // badge() fails on every run, but invisibly: rendered on another machine or OS version.
+        let ref2 = write(reference, "reference2.png"), act2 = write(renderingNoise, "failure2.png")
         let pay = checkoutSuite.tests[0], badge = profileSuite.tests[0]
         let items = [
             FailureItem(
@@ -130,14 +143,16 @@ enum AppFixtures {
                                                difference: nil, device: "Example Phone")],
                 referencePaths: ["\(snapshotDir)/CheckoutViewTests/payButton.1.png"],
                 verdict: .flaky,
-                historyFlaky: FlakySignal(test: "AppSnapshotTests/CheckoutViewTests/payButton()", passes: 3, failures: 4, failingHosts: ["ci-mac"])
+                historyFlaky: FlakySignal(test: "AppSnapshotTests/CheckoutViewTests/payButton()", passes: 3, failures: 4, failingHosts: ["ci-mac"]),
+                timeline: timeline([.passed, .failed, .passed, .passed, .mixed, .failed, .passed, .failed])
             ),
             FailureItem(
                 suite: profileSuite, test: badge,
                 images: [SnapshotFailureImages(testIdentifier: badge.identifier, repetition: 1, index: 0, reference: ref2, failure: act2,
                                                difference: nil, device: "Example Phone")],
                 referencePaths: ["\(snapshotDir)/ProfileViewTests/badge.1.png"],
-                verdict: .alwaysFails, historyFlaky: nil
+                verdict: .alwaysFails, historyFlaky: nil,
+                timeline: timeline([.passed, .passed, .passed, .passed, .failed, .failed])
             ),
         ]
         // Thumbnails and compare pairs are normally decoded in the background; warm the caches
@@ -155,7 +170,8 @@ enum AppFixtures {
 
     static let changes: [(SnapshotChange, Data?, Data?)] = [
         (SnapshotChange(path: "\(snapshotDir)/CheckoutViewTests/payButton.1.png", kind: .committed), reference, actual),
-        (SnapshotChange(path: "\(snapshotDir)/CheckoutViewTests/summary.1.png", kind: .uncommitted), reference, screen(accent: .systemGreen)),
+        // Re-recorded on this machine, but only rendering noise changed.
+        (SnapshotChange(path: "\(snapshotDir)/CheckoutViewTests/summary.1.png", kind: .uncommitted), reference, renderingNoise),
         (SnapshotChange(path: "\(snapshotDir)/ProfileViewTests/badge.1.png", kind: .new), nil, badged),
         (SnapshotChange(path: "\(snapshotDir)/ProfileViewTests/legacyHeader.1.png", kind: .deleted), screen(accent: .systemGray), nil),
     ]
@@ -176,9 +192,16 @@ enum AppFixtures {
 
     // MARK: Models
 
+    /// One home per test process, emptied on first use, so runs don't pile up temp directories.
+    static let home: URL = {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-tests")
+        try? FileManager.default.removeItem(at: home)
+        return home
+    }()
+
     static func store() -> ProjectStore {
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-tests-\(UUID().uuidString)")
         setenv("SNAPSHOTKIT_HOME", home.path, 1)
+        try? FileManager.default.removeItem(at: home.appendingPathComponent("settings.json"))
         let store = ProjectStore(url: home.appendingPathComponent("settings.json"))
         store.update { s in
             s.discovered = ["/work/SampleApp", "/work/design-system", "/work/onboarding-flow", "/work/payments-ui"]
@@ -228,6 +251,8 @@ enum AppFixtures {
             f.log = Array(log.prefix(9))
         case .changes:
             f.tab = .changes
+            // Mid-review: one snapshot already looked at.
+            f.viewedChanges = [changes[3].0.id]
         case .failures:
             f.tab = .failures
         case .missingXcode:

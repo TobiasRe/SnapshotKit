@@ -59,6 +59,31 @@ public struct FlakySignal: Hashable, Sendable, Identifiable {
     }
 }
 
+/// One test's result in one recorded run, for the history strip.
+public struct HistoryPoint: Identifiable, Hashable, Sendable {
+    public enum Result: Hashable, Sendable {
+        case passed, failed
+        /// Repetitions in the same run both passed and failed.
+        case mixed
+    }
+
+    public var id: UUID
+    public var date: Date
+    public var kind: RunKind
+    public var host: String
+    public var commit: String?
+    public var result: Result
+
+    public init(id: UUID = UUID(), date: Date, kind: RunKind, host: String, commit: String?, result: Result) {
+        self.id = id
+        self.date = date
+        self.kind = kind
+        self.host = host
+        self.commit = commit
+        self.result = result
+    }
+}
+
 /// Per-project run history persisted as JSON under the SnapshotKit home directory.
 public final class RunHistory: @unchecked Sendable {
     public static let maxRecords = 100
@@ -75,9 +100,12 @@ public final class RunHistory: @unchecked Sendable {
         lock.withLock { read() }
     }
 
+    /// Adds `record`, unless a record of the same result bundle is already there (importing or
+    /// listing the same bundle twice must not count its results twice).
     public func append(_ record: RunRecord) {
         lock.withLock {
             var records = read()
+            if let bundle = record.resultBundle, records.contains(where: { $0.resultBundle == bundle }) { return }
             records.append(record)
             if records.count > Self.maxRecords { records.removeFirst(records.count - Self.maxRecords) }
             write(records)
@@ -114,6 +142,20 @@ public final class RunHistory: @unchecked Sendable {
             }
         }
         return merged.values.sorted { $0.test < $1.test }
+    }
+
+    /// The most recent `limit` runs that included `test` (`Bundle/Suite/test()`), oldest first.
+    /// Re-record runs are left out: they fail or pass by design, not because of the code.
+    public static func timeline(for test: String, in records: [RunRecord], limit: Int = 12) -> [HistoryPoint] {
+        let points: [HistoryPoint] = records.compactMap { record in
+            guard record.kind != .record, let outcomes = record.outcomes[test] else { return nil }
+            let passed = outcomes.contains(.passed), failed = outcomes.contains(.failed)
+            guard passed || failed else { return nil }
+            let result: HistoryPoint.Result = passed && failed ? .mixed : (failed ? .failed : .passed)
+            return HistoryPoint(id: record.id, date: record.date, kind: record.kind, host: record.host,
+                                commit: record.commit, result: result)
+        }
+        return Array(points.sorted { $0.date < $1.date }.suffix(limit))
     }
 
     private func read() -> [RunRecord] {

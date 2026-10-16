@@ -9,7 +9,7 @@ import Testing
 struct ProjectModelTests {
     /// A repo on `feature` with one committed snapshot change and one uncommitted re-record.
     func makeRepo() throws -> (URL, String) {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-model-\(UUID().uuidString)").resolvingSymlinksInPath()
+        let dir = AppFixtures.home.appendingPathComponent("model-\(UUID().uuidString)").resolvingSymlinksInPath()
         let png = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
         try FileManager.default.createDirectory(at: dir.appendingPathComponent(png).deletingLastPathComponent(), withIntermediateDirectories: true)
         func git(_ args: String...) throws { try Shell.output(["git"] + args, in: dir) }
@@ -42,6 +42,53 @@ struct ProjectModelTests {
         model.discard(change)
         #expect(try Data(contentsOf: repo.appendingPathComponent(png)) == AppFixtures.reference)
         #expect(!model.lastMessageIsError)
+    }
+
+    @Test func viewingMovesOnAndIsRemembered() async throws {
+        let (repo, png) = try makeRepo()
+        let second = png.replacingOccurrences(of: "card.1.png", with: "list.1.png")
+        try AppFixtures.badged.write(to: repo.appendingPathComponent(second))
+        let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+        model.updateSettings { $0.baseBranch = "develop" }
+        await waitForChanges(model)
+        let first = try #require(model.filteredChanges.first)
+        model.selectedChangeID = first.id
+        model.setViewed(true, for: first)
+        #expect(model.selectedChangeID == model.filteredChanges.last?.id)
+
+        // A fresh model reads the marks back.
+        let reopened = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+        reopened.updateSettings { $0.baseBranch = "develop" }
+        await waitForChanges(reopened)
+        #expect(reopened.viewedChanges == [first.id])
+        reopened.hideViewed = true
+        #expect(reopened.filteredChanges.map(\.id) == [model.filteredChanges.last!.id])
+    }
+
+    @Test func discardsOnlyInvisibleReRecords() async throws {
+        let (repo, png) = try makeRepo()
+        let noisy = png.replacingOccurrences(of: "card.1.png", with: "noisy.1.png")
+        let git = Git(root: repo)
+        // Committed on the base branch, then re-recorded with noise on the feature branch.
+        try git.run(["checkout", "-q", "develop"])
+        try AppFixtures.reference.write(to: repo.appendingPathComponent(noisy))
+        try git.run(["add", "--", noisy]); try git.run(["commit", "-qm", "noisy"])
+        try git.run(["checkout", "-q", "feature"]); try git.run(["merge", "-q", "--ff-only", "develop"])
+        try AppFixtures.renderingNoise.write(to: repo.appendingPathComponent(noisy))
+        // card.1.png has a visible uncommitted change and must survive.
+        try AppFixtures.actual.write(to: repo.appendingPathComponent(png))
+
+        let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+        model.updateSettings { $0.baseBranch = "develop" }
+        await waitForChanges(model)
+        for _ in 0..<100 where model.invisibleUncommitted.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(model.invisibleUncommitted.map(\.fileName) == ["noisy.1.png"])
+
+        model.discardInvisibleChanges()
+        for _ in 0..<100 where model.lastMessage == nil { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(try Data(contentsOf: repo.appendingPathComponent(noisy)) == AppFixtures.reference)
+        #expect(try Data(contentsOf: repo.appendingPathComponent(png)) == AppFixtures.actual)
+        #expect(model.lastMessage?.hasPrefix("Discarded 1 re-recorded snapshot") == true)
     }
 
     @Test func committedChangesCannotBeDiscarded() async throws {

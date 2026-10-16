@@ -33,7 +33,7 @@ import Testing
         try repo.commitAll("init")
         try repo.write("Sources/Untracked.swift", "u")
 
-        let remote = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-remote-\(UUID().uuidString)").path
+        let remote = testTemp("remote").path
         try FileManager.default.createDirectory(atPath: remote + "/.build", withIntermediateDirectories: true)
         try "cache".write(toFile: remote + "/.build/keep", atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(atPath: remote + "/Sources", withIntermediateDirectories: true)
@@ -53,7 +53,7 @@ import Testing
         let repo = try TempRepo()
         try repo.write("Tests/AppTests/CardTests.swift", RecordSessionTests.suiteSource)
         try repo.commitAll("init")
-        let remote = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-remote-\(UUID().uuidString)").path
+        let remote = testTemp("remote").path
         let runner = RemoteRunner(repository: repo.url, config: SnapshotConfig(), transport: LocalDirectoryTransport())
         try runner.sync(to: remote)
         let suite = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [], failureFiles: [])
