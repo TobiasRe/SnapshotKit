@@ -133,7 +133,7 @@ struct RunInspector: View {
                 PropertySection("Environment") { environment }
 
                 PropertySection("Scope", footer: "Pick a single test target to run only its snapshot tests.") {
-                    PropertyRow("Test target") {
+                    PropertyRow("Test target", alignment: .center) {
                         Picker("Scope", selection: Binding(
                             get: { project.settings.module ?? "" },
                             set: { value in project.updateSettings { $0.module = value.isEmpty ? nil : value } }
@@ -171,7 +171,7 @@ struct RunInspector: View {
                     PropertySection("Comparison & Remote",
                                     footer: (project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git"). " } ?? "")
                                         + "Remote runs sync the working tree to that Mac over SSH and run the same command there.") {
-                        PropertyRow("Base branch") {
+                        PropertyRow("Base branch", alignment: .center) {
                             TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
                                 .textFieldStyle(.roundedBorder)
                                 // Fixed: a focused field is a point taller, and focus arrives at an
@@ -180,7 +180,7 @@ struct RunInspector: View {
                                 .accessibilityLabel("Base branch")
                                 .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
                         }
-                        PropertyRow("Remote host") {
+                        PropertyRow("Remote host", alignment: .center) {
                             TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
                                 .textFieldStyle(.roundedBorder)
                                 // Fixed: a focused field is a point taller, and focus arrives at an
@@ -272,18 +272,22 @@ struct PropertySection<Content: View>: View {
 struct PropertyRow<Value: View>: View {
     var label: String
     var source: String?
+    /// Text values align on their baseline; controls (fields, pickers) on their centre, as a text
+    /// field's baseline moves when it gains or loses focus.
+    var alignment: VerticalAlignment = .firstTextBaseline
     @ViewBuilder var value: Value
 
     static var labelWidth: CGFloat { 104 }
 
-    init(_ label: String, source: String? = nil, @ViewBuilder value: () -> Value) {
+    init(_ label: String, source: String? = nil, alignment: VerticalAlignment = .firstTextBaseline, @ViewBuilder value: () -> Value) {
         self.label = label
         self.source = source
+        self.alignment = alignment
         self.value = value()
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DS.Space.m) {
+        HStack(alignment: alignment, spacing: DS.Space.m) {
             Text(label)
                 .foregroundStyle(.secondary)
                 .frame(width: Self.labelWidth, alignment: .leading)

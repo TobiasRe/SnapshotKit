@@ -47,7 +47,9 @@ open dist/SnapshotKit.app
 ## Quick start
 
 Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (sidebar **+** › Add Scan
-Folder). A project opens on its snapshot library. The sidebar shows each project's failing count from its
+Folder, or drop a folder that isn't a repository). Scanning looks six folders deep for git repositories with
+`__Snapshots__` images, a `.snapshotkit.yml`, or a dependency on swift-snapshot-testing, and says what it
+found. A project opens on its snapshot library. The sidebar shows each project's failing count from its
 last run.
 
 | | |
@@ -206,7 +208,13 @@ which is handy for trying the workflow out.
 swift test                              # core unit tests + the app's own snapshot tests
 scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view
+scripts/make-samples.sh [dest]          # five sample projects with ~200 recorded snapshots to try the app on
 ```
+
+`make-samples.sh` creates Shop, Weather, Chat, Fitness and DesignKit (Swift packages using
+swift-snapshot-testing, each a git repository) next to this repository, records their references on a
+dedicated simulator, and gives four of them a feature branch with committed and uncommitted changes, a
+failing last run, an orphaned and a new snapshot. Add the folder as a scan folder to try every tab.
 
 The app's UI is covered by snapshot tests (swift-snapshot-testing with Swift Testing) in
 `Tests/SnapshotKitAppTests`. They render real views from fixture state in light and dark. Liquid Glass

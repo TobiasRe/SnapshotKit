@@ -163,9 +163,16 @@ public final class ProjectStore: @unchecked Sendable {
     /// Scans all roots and replaces the discovered list (pins and recents are kept).
     @discardableResult
     public func rescan() -> [Project] {
-        let found = settings.scanRoots.flatMap { ProjectScanner.scan(root: URL(fileURLWithPath: $0)) }
+        rescanReports().flatMap(\.projects)
+    }
+
+    /// Like `rescan()`, with what each folder yielded and whether it could be read.
+    @discardableResult
+    public func rescanReports() -> [ProjectScanner.Report] {
+        let reports = settings.scanRoots.map { ProjectScanner.scanReport(root: URL(fileURLWithPath: $0)) }
+        let found = reports.flatMap(\.projects)
         update { s in s.discovered = Array(Set(found.map(\.path) + s.recents + s.pinned)).sorted() }
-        return found
+        return reports
     }
 
     // MARK: IO
@@ -185,35 +192,69 @@ public final class ProjectStore: @unchecked Sendable {
 
 /// Finds git repositories with snapshot tests below a root folder.
 public enum ProjectScanner {
-    static let skipped: Set<String> = ["node_modules", "Pods", "Carthage", "DerivedData", ".build", "build", "vendor", "Library"]
+    /// Folders that never hold projects but can hold millions of files.
+    static let skipped: Set<String> = ["node_modules", "Pods", "Carthage", "DerivedData", ".build", "build", "vendor", "Library",
+                                       "Applications", "Music", "Movies", "Pictures", "Public"]
+    /// Deep enough for ~/Developer/<org>/<team>/<area>/<repo>, the deepest layout seen in practice.
+    public static let defaultDepth = 6
 
-    public static func scan(root: URL, maxDepth: Int = 4) -> [Project] {
+    public static func scan(root: URL, maxDepth: Int = defaultDepth) -> [Project] {
+        scanReport(root: root, maxDepth: maxDepth).projects
+    }
+
+    /// What a scan of one folder found, and whether the folder could be read at all (macOS asks
+    /// before an app reads Desktop, Documents or Downloads; a "no" makes the folder look empty).
+    public struct Report: Sendable {
+        public var root: URL
+        public var projects: [Project]
+        public var readable: Bool
+
+        public init(root: URL, projects: [Project], readable: Bool) {
+            self.root = root
+            self.projects = projects
+            self.readable = readable
+        }
+    }
+
+    public static func scanReport(root: URL, maxDepth: Int = defaultDepth) -> Report {
         var found: [Project] = []
         let fm = FileManager.default
+        let start = root.standardizedFileURL
+        let readable = (try? fm.contentsOfDirectory(atPath: start.path)) != nil
         func visit(_ dir: URL, depth: Int) {
             if fm.fileExists(atPath: dir.appendingPathComponent(".git").path) {
                 if hasSnapshotTests(dir) { found.append(Project(path: dir.path)) }
                 return // do not descend into nested repositories
             }
             guard depth < maxDepth,
-                  let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles])
+                  let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey],
+                                                            options: [.skipsHiddenFiles, .skipsPackageDescendants])
             else { return }
             for entry in entries {
-                let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                guard values?.isDirectory == true, values?.isSymbolicLink != true, !skipped.contains(entry.lastPathComponent),
+                let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey])
+                // Packages (apps, photo and music libraries, bundles) are files to the user, not folders.
+                guard values?.isDirectory == true, values?.isSymbolicLink != true, values?.isPackage != true,
+                      !skipped.contains(entry.lastPathComponent),
                       entry.pathExtension.isEmpty || !["app", "xcodeproj", "xcworkspace", "xcassets", "bundle", "framework"].contains(entry.pathExtension)
                 else { continue }
                 visit(entry, depth: depth + 1)
             }
         }
-        visit(root.standardizedFileURL, depth: 0)
-        return found.sorted { $0.path < $1.path }
+        visit(start, depth: 0)
+        return Report(root: start, projects: found.sorted { $0.path < $1.path }, readable: readable)
     }
 
-    /// True if the repository tracks a `__Snapshots__` file or has a `.snapshotkit.yml`.
+    /// True if the repository has snapshot images (committed or just recorded), a
+    /// `.snapshotkit.yml`, or depends on swift-snapshot-testing (snapshot tests that haven't
+    /// recorded anything yet).
     public static func hasSnapshotTests(_ repo: URL) -> Bool {
         if FileManager.default.fileExists(atPath: repo.appendingPathComponent(SnapshotConfig.overrideFileName).path) { return true }
-        let result = try? Shell.run(["git", "ls-files", "--", ":(glob)**/__Snapshots__/**"], in: repo)
-        return !(result?.trimmedOutput.isEmpty ?? true)
+        let snapshots = try? Shell.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--",
+                                        ":(glob)**/__Snapshots__/**"], in: repo)
+        if !(snapshots?.trimmedOutput.isEmpty ?? true) { return true }
+        // Package.resolved (SwiftPM, Xcode) or a project file naming the package.
+        let dependency = try? Shell.run(["git", "grep", "-l", "-I", "--untracked", "swift-snapshot-testing", "--",
+                                         "Package.swift", ":(glob)**/Package.resolved", ":(glob)**/project.pbxproj"], in: repo)
+        return !(dependency?.trimmedOutput.isEmpty ?? true)
     }
 }

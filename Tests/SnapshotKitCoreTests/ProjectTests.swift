@@ -88,9 +88,23 @@ import Testing
         try makeRepo("work/configured", snapshots: false, override: true)
         try makeRepo("node_modules/pkg", snapshots: true)
         try makeRepo("a/b/c/d/e/deep", snapshots: true)
+        try makeRepo("a/b/c/d/e/f/g/tooDeep", snapshots: true)
 
-        let found = ProjectScanner.scan(root: root).map { ($0.path as NSString).lastPathComponent }
-        #expect(found == ["app", "configured"])
+        // Recorded but not committed yet.
+        try makeRepo("work/recorded", snapshots: false)
+        let recorded = root.appendingPathComponent("work/recorded/Tests/__Snapshots__/A")
+        try FileManager.default.createDirectory(at: recorded, withIntermediateDirectories: true)
+        try Data([1]).write(to: recorded.appendingPathComponent("a.1.png"))
+
+        // Depends on swift-snapshot-testing, nothing recorded yet.
+        try makeRepo("work/fresh", snapshots: false)
+        try #"{"pins":[{"identity":"swift-snapshot-testing"}]}"#.write(
+            to: root.appendingPathComponent("work/fresh/Package.resolved"), atomically: true, encoding: .utf8)
+
+        let report = ProjectScanner.scanReport(root: root)
+        #expect(report.readable)
+        let found = report.projects.map { ($0.path as NSString).lastPathComponent }
+        #expect(found == ["deep", "app", "configured", "fresh", "recorded"])
     }
 }
 
