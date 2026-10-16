@@ -2,7 +2,7 @@ import AppKit
 import SnapshotKitCore
 import SwiftUI
 
-/// SnapshotKit's tiny design system. See docs/DESIGN.md for the rationale.
+/// SnapshotKit's tiny design system. See docs/design.md for the rationale.
 ///
 /// Rule of thumb: system chrome (toolbar, sidebar) is Liquid Glass by itself; content is solid;
 /// the only custom glass is controls that float over images. One tint — the accent — marks the
@@ -23,6 +23,17 @@ enum DS {
         static let small: CGFloat = 6
         static let medium: CGFloat = 10
         static let large: CGFloat = 16
+    }
+
+    /// Fixed heights for the bars at the top and bottom of every column, so their edges line up
+    /// across the list and the detail (and the sidebar footer) whatever each one holds.
+    enum Bar {
+        /// Title or search, with the pane's actions.
+        static let header: CGFloat = 52
+        /// Filters and view options under the header, or the detail's info row.
+        static let filters: CGFloat = 36
+        /// Counts and bulk actions under a list.
+        static let footer: CGFloat = 32
     }
 
     enum Font {
@@ -189,17 +200,163 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
-/// Small status chip ("Flaky", "3/5 runs failed").
+/// Small status label ("Flaky", "3/5 runs failed"): a coloured dot and neutral text in a hairline
+/// capsule. The dot carries the status, so the text stays readable in any appearance and a row
+/// with several labels doesn't turn into a row of colours.
 struct Chip: View {
     var text: String
     var color: Color
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, DS.Space.s - 2)
-            .padding(.vertical, DS.Space.xxs)
-            .background(Capsule().fill(color.opacity(0.14)))
-            .foregroundStyle(DS.Status.text(color))
+        HStack(spacing: DS.Space.xs) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text)
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.leading, DS.Space.s - 2)
+        .padding(.trailing, DS.Space.s)
+        .padding(.vertical, DS.Space.xxs)
+        .lineLimit(1)
+        .fixedSize()   // never wraps: the text next to it truncates instead
+        .background(Capsule().fill(Color.primary.opacity(0.04)))
+        .overlay(Capsule().strokeBorder(Color(nsColor: .separatorColor)))
+    }
+}
+
+/// A bar of fixed height at the top or bottom of a column (see `DS.Bar`).
+struct PaneBar<Content: View>: View {
+    var height: CGFloat
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: DS.Space.s) { content }
+            .padding(.horizontal, DS.Space.m)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+    }
+}
+
+/// A list's footer: what's shown, and what can be done with all of it.
+struct PaneFooter<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            PaneBar(height: DS.Bar.footer) { content }
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+                .controlSize(.small)
+        }
+    }
+}
+
+/// A list section header: the group's name, and its count in quieter type.
+struct ListSectionHeader: View {
+    var title: String
+    var count: Int
+
+    var body: some View {
+        HStack(spacing: DS.Space.s) {
+            Text(title).lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: DS.Space.s)
+            Text("\(count)").monospacedDigit().foregroundStyle(.tertiary)
+        }
+        .font(DS.Font.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// "12 / 40" with previous and next, at the top of a detail: where you are in the list, and the
+/// way through it without going back to the list.
+struct PositionStepper: View {
+    var position: Int
+    var count: Int
+    var step: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: DS.Space.xxs) {
+            Text("\(position) / \(count)")
+                .font(DS.Font.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.trailing, DS.Space.xs)
+                .accessibilityLabel("\(position) of \(count)")
+            Button { step(-1) } label: { Image(systemName: "chevron.up") }
+                .disabled(position <= 1)
+                .help("Previous (⌥⌘↑)")
+                .accessibilityLabel("Previous")
+            Button { step(1) } label: { Image(systemName: "chevron.down") }
+                .disabled(position >= count)
+                .help("Next (⌥⌘↓)")
+                .accessibilityLabel("Next")
+        }
+        .buttonStyle(.borderless)
+        .fixedSize()
+    }
+}
+
+// MARK: - Selection, surfaces and quiet controls
+
+extension DS {
+    enum Surface {
+        /// The one surface of a column: its bars and its list share it, so only hairlines divide them.
+        static let content = Color(nsColor: .controlBackgroundColor)
+        /// A selected row: a whisper of the text colour, the same in every list and both appearances,
+        /// instead of the system's solid grey or accent block.
+        static let selection = Color.primary.opacity(0.08)
+        /// An opaque hairline, for edges drawn over something else.
+        static let hairline = Color(nsColor: .separatorColor)
+    }
+}
+
+extension View {
+    /// Marks a list row as selected with `DS.Surface.selection`, and turns off the list's own
+    /// highlight (the list keeps its selection, keyboard navigation and accessibility).
+    func selectableRow(_ selected: Bool) -> some View {
+        self
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
+                    .fill(selected ? DS.Surface.selection : .clear)
+                    .padding(.horizontal, DS.Space.s + 2)
+            )
+            .background(NativeHighlightOff())
+    }
+
+    /// A control drawn without a bezel, in a hairline capsule: the header controls' one look.
+    func quietControl() -> some View {
+        self
+            .buttonStyle(.borderless)
+            .menuStyle(.borderlessButton)
+            .padding(.horizontal, DS.Space.s)
+            .padding(.vertical, DS.Space.xxs + 1)
+            .overlay(Capsule().strokeBorder(DS.Surface.hairline))
+            .contentShape(Capsule())
+    }
+}
+
+/// Finds the table behind a SwiftUI `List` and turns off its selection highlight, so rows can draw
+/// `DS.Surface.selection` instead.
+private struct NativeHighlightOff: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.apply() }
+
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+            // A row can join its table after it joins the window (sidebars do).
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            var view = superview
+            while let current = view {
+                if let table = current as? NSTableView {
+                    if table.selectionHighlightStyle != .none { table.selectionHighlightStyle = .none }
+                    return
+                }
+                view = current.superview
+            }
+        }
     }
 }

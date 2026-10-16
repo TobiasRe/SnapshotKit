@@ -18,6 +18,11 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 - **WWDC26 refinements:** Liquid Glass now diffuses busy backgrounds better. Standard components pick up these
   changes for free; custom controls don't, and have to be checked with Increase Contrast, Reduce Transparency
   and Reduce Motion. That is one more reason to keep custom glass to a minimum.
+- **Linear's 2024 redesign:** reduce visual noise and keep things aligned. The chrome around the content (the
+  "inverted L") is quiet and consistent; labels, icons and buttons line up across panes, which you feel more
+  than see. Colour is mostly neutral and comes from a few inputs, not dozens of hand-picked values; status
+  is a small coloured dot on a neutral label. A detail view says where you are in the list ("12 / 40") and
+  steps through it in place.
 - **Practitioner guidance:**
   - Start from standard structure (`NavigationSplitView`, toolbars, inspectors).
   - Add custom glass only where a surface floats over content, and group neighbouring glass in one container.
@@ -43,16 +48,20 @@ can be followed between these views, and re-recording is available wherever a sn
    Status colour as *text* goes through `DS.Status.text(_:)`: system colours are tuned for fills and icons, and
    orange or green text on its own tint drops to about 2:1 in light mode. Never rely on colour alone: the
    history strip uses shape too when Differentiate Without Color is on.
-5. **Identifiers are code.** Paths, commands, suite identifiers and logs use SF Mono. Everything
+5. **Titles carry the row.** Row and sidebar titles are medium weight; everything else in a row is
+   secondary.
+6. **Identifiers are code.** Paths, commands, suite identifiers and logs use SF Mono. Everything
    people read uses SF Pro text styles.
-6. **Calm motion.** 150 ms ease-out (`DS.motion`), no springs and no bounces.
+7. **Calm motion.** 150 ms ease-out (`DS.motion`), no springs and no bounces.
 
 ## Tokens
 
 | Token | Values |
 |---|---|
 | Spacing (`DS.Space`) | 2 · 4 · 8 · 12 · 16 · 24 (4-pt grid) |
+| Bars (`DS.Bar`) | header 52 · filters 36 · footer 32: every column's bars, so edges line up across panes |
 | Radius (`DS.Radius`) | 6 thumbnails/chips · 10 panels · 16 floating bars (concentric with the window) |
+| Surfaces (`DS.Surface`) | content · selection (primary 8%) · hairline (separator) |
 | Type (`DS.Font`) | title (title3 semibold) · heading (headline) · body · secondary (callout) · caption · code (mono caption) · log (mono 11) · count (monospaced digits) |
 | Status (`DS.Status`) | passed · failed · flaky · neutral · changed |
 
@@ -63,7 +72,22 @@ can be followed between these views, and re-recording is available wherever a sn
 - `GlassGroup`: a `GlassEffectContainer` on macOS 26 or later, a plain stack before.
 - `primaryActionStyle()` / `secondaryActionStyle()`: button roles, not looks.
 - `panel()`: a solid content panel with a hairline border. Never glass.
-- `Chip`: a small status label (readable text colour built in).
+- `PaneBar` / `PaneFooter`: the fixed-height bars of a column. A list has a header (search and view options),
+  a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
+  row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window, and the
+  list footers sit level with the sidebar's footer.
+- `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
+- `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
+  selection and the section headers carry the structure.
+- `selectableRow(_:)`: a selected list row is `DS.Surface.selection` (the text colour at 8%), not the
+  system's grey or accent block; the list keeps its selection, keyboard navigation and accessibility. The
+  sidebar keeps the system selection, which on its material is already as quiet.
+- `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
+- `quietControl()`: header and filter controls are borderless in a hairline capsule, one look for buttons
+  and menus alike, so a header reads as a line of text with actions rather than a row of bezels.
+- `ProjectMonogram`: a project's initials in a small neutral tile, telling projects apart without colour.
+- `Chip`: a small status label: a coloured dot and neutral text in a hairline capsule, so several labels in a
+  row stay calm and the text is readable in either appearance.
 - `HistoryStrip`: the signature element. One mark per recent run of a test, green, red or orange. A flaky test
   reads as a broken pattern, a regression as a clean switch to red. It appears in failure rows (compact) and
   the failure detail (regular).
@@ -95,4 +119,5 @@ can be followed between these views, and re-recording is available wherever a sn
 
 - Don't paint behind the sidebar or toolbar, and don't put glass inside lists or forms.
 - Don't use more than one prominent button per region, and don't use decorative colour or gradients.
+- Don't let a bar's height depend on its content: use `DS.Bar`, so neighbouring panes stay aligned.
 - Don't add new spacing or radius values. If one seems necessary, add it here first.

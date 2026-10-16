@@ -46,4 +46,6 @@ snapshot tests built with swift-snapshot-testing.
   and one-click access to failing, pinned and recent projects.
 - The `snapkit` CLI covers the same ground: `snapshots`, `record`, `changes`, `run`, `rerecord`, `flaky`,
   `failures`, `history`, `diff`, `restore`, `config`, `projects`.
-- A small Liquid Glass design system (docs/DESIGN.md), with fallbacks for macOS 14–25.
+- A small Liquid Glass design system (docs/design.md), with fallbacks for macOS 14–25: header, filter and
+  footer bars of fixed heights that line up across panes, a "12 / 40" stepper in every detail, and calm
+  dot-and-hairline status labels.

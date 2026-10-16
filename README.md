@@ -146,7 +146,7 @@ JSON in `~/Library/Application Support/SnapshotKit/` (`SNAPSHOTKIT_HOME` overrid
 
 | | |
 |---|---|
-| ![The library as a grid, dark mode](docs/images/library-grid.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
+| ![The library as a grid](docs/images/library-grid.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
 | The library as a contact sheet: every snapshot at a glance | Changes since the base branch, with *Viewed* marks |
 | ![Failures with triage labels and run-history strips](docs/images/triage.png) | ![The diagnosis for an invisible difference](docs/images/diagnosis.png) |
 | Failures: what kind of difference each one is, and its recent runs | Rendering noise, explained, with the precision that would pass |
@@ -209,15 +209,18 @@ The app's UI is covered by snapshot tests (swift-snapshot-testing with Swift Tes
 `Tests/SnapshotKitAppTests`. They render real views from fixture state in light and dark. Liquid Glass
 can't be composited off-screen, so those renders use an opaque stand-in and leave out the system toolbar
 and sidebar chrome. To update references, delete the PNG or set `record: .all`, or re-record them with
-SnapshotKit itself. Visual guidelines are in [docs/DESIGN.md](docs/DESIGN.md).
+SnapshotKit itself. Visual guidelines are in [docs/design.md](docs/design.md).
 
-Repository layout and naming: Swift package folders follow SwiftPM (`Sources/`, `Tests/`, PascalCase types and
-files); everything else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, and
-`assets/` for source artwork such as the app icon, `assets/app-icon.icon` (an Icon Composer file, compiled by
-`scripts/make-app.sh`).
+Repository layout and naming: the Swift package follows SwiftPM conventions: `Sources/` and `Tests/` with one
+PascalCase folder per target (`SnapshotKitCore`, `SnapshotKit`, `SnapshotKitCLI`, which builds the `snapkit`
+executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects. Everything
+else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, and `assets/` for
+source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by `scripts/make-app.sh`; the
+`Assets/` folder inside it is Icon Composer's format). Root files keep their usual names (`README.md`,
+`LICENSE`, `CHANGELOG.md`, `Package.swift`).
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,
-remote runner and project store. `SnapshotKit` (SwiftUI) and `snapkit` are thin front ends.
+remote runner and project store. `SnapshotKit` (SwiftUI) and `SnapshotKitCLI` (`snapkit`) are thin front ends.
 `SnapshotKit --capture out.png --project <repo> --tab changes --compare slider --zoom 3` renders the window
 off-screen without activating the app.
 

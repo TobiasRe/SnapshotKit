@@ -13,7 +13,9 @@ struct FailuresTab: View {
                 header
                 Divider()
                 list
+                footer
             }
+            .background(DS.Surface.content)
             .frame(minWidth: 280, idealWidth: 340, maxWidth: 480)
 
             Group {
@@ -32,19 +34,23 @@ struct FailuresTab: View {
         }
     }
 
+    /// Where the results come from, then what to do with all failures: level with the detail's
+    /// header and info row.
     private var header: some View {
-        VStack(alignment: .leading, spacing: DS.Space.s) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 0) {
+            PaneBar(height: DS.Bar.header) {
                 VStack(alignment: .leading, spacing: DS.Space.xxs) {
                     Text(project.failureSource?.label ?? "No results yet")
-                        .font(.headline)
+                        .font(DS.Font.heading)
+                        .lineLimit(1)
                     if let source = project.failureSource {
                         (Text("\(source.host) · ") + Text(source.date, format: .dateTime.day().month(.abbreviated).year().hour().minute()))
-                            .font(.caption)
+                            .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                Spacer()
+                Spacer(minLength: DS.Space.s)
                 Menu {
                     Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
                     if let bundle = project.failureSource?.resultBundle {
@@ -57,18 +63,35 @@ struct FailuresTab: View {
                     app.importResultBundleFromPanel()
                 }
                 .fixedSize()
+                .quietControl()
                 .help("Import an .xcresult, for example from a CI job (⇧⌘O)")
                 .accessibilityLabel("Import Result Bundle")
             }
-            HStack(spacing: DS.Space.s) {
+            PaneBar(height: DS.Bar.filters) {
                 Button("Re-record All") { project.reRecordFailed() }
+                    .quietControl()
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
                 Button("Check Flakiness") { project.checkFlakiness() }
+                    .quietControl()
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
             }
+            .padding(.bottom, DS.Space.xs)
         }
         .controlSize(.small)
-        .padding(DS.Space.m)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        if !project.failures.isEmpty {
+            let suites = Set(project.failures.map(\.suite.identifier)).count
+            let flaky = project.failures.filter { $0.verdict == .flaky || $0.historyFlaky != nil }.count
+            PaneFooter {
+                Text("\(project.failures.count) failing test\(project.failures.count == 1 ? "" : "s") in \(suites) suite\(suites == 1 ? "" : "s")"
+                     + (flaky > 0 ? " · \(flaky) flaky" : ""))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     private var list: some View {
@@ -79,14 +102,11 @@ struct FailuresTab: View {
                     ForEach(bySuite[suite] ?? []) { item in
                         FailureRow(item: item, repositoryURL: project.project.url, diagnosis: project.diagnoses[item.id])
                             .tag(item.id)
+                            .selectableRow(project.selectedFailureID == item.id)
                             .contextMenu { actions(for: item) }
                     }
                 } header: {
-                    HStack {
-                        Text(suite)
-                        Spacer()
-                        Text("\(bySuite[suite]?.count ?? 0)").monospacedDigit()
-                    }
+                    ListSectionHeader(title: suite, count: bySuite[suite]?.count ?? 0)
                 }
             }
         }
@@ -105,17 +125,12 @@ struct FailuresTab: View {
         let referenceURL = image?.reference ?? item.referencePaths.first.map { project.project.url.appendingPathComponent($0) }
         let failureURL = image?.failure
 
+        let shown = project.displayedFailures.map(\.id)
         return VStack(spacing: 0) {
-            DetailHeader(title: item.test.name, subtitle: item.referencePaths.first ?? item.suite.identifier) {
+            DetailHeader(title: item.test.name, subtitle: item.referencePaths.first ?? item.suite.identifier,
+                         position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
+                         step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
-                    if let verdict = item.verdict { VerdictTag(verdict: verdict) }
-                    if reps.count > 1 {
-                        Picker("Repetition", selection: $repetition) {
-                            ForEach(reps, id: \.self) { Text("Run \($0) of \(reps.count)").tag($0) }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                    }
                     Menu {
                         Button("Re-record Test") { project.reRecord(failures: [item]) }
                         Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
@@ -125,6 +140,7 @@ struct FailuresTab: View {
                         project.reRecord(failures: [item])
                     }
                     .fixedSize()
+                    .quietControl()
                     .disabled(project.isRunning || project.environment == nil)
                     .help("Record this test's snapshots again, then check that it passes")
                     .accessibilityLabel("Re-record")
@@ -134,11 +150,37 @@ struct FailuresTab: View {
                     .labelStyle(.iconOnly)
                     .menuIndicator(.hidden)
                     .fixedSize()
+                    .quietControl()
                     .help("More actions for this test")
                     .accessibilityLabel("Test Actions")
                 }
                 .controlSize(.small)
             }
+            // Verdict, recent runs and repetition: one row, level with the list's buttons.
+            DetailInfoRow {
+                if let verdict = item.verdict { VerdictTag(verdict: verdict) }
+                if item.timeline.count > 1 {
+                    HistoryStrip(points: item.timeline, size: .regular)
+                    Text(HistoryStrip.summary(item.timeline))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if item.verdict == nil {
+                    Text("No earlier runs recorded").foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: DS.Space.s)
+                if reps.count > 1 {
+                    Picker("Repetition", selection: $repetition) {
+                        ForEach(reps, id: \.self) { Text("Run \($0) of \(reps.count)").tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Repetition")
+                }
+            }
+            .font(DS.Font.caption)
+            .padding(.bottom, DS.Space.xs)
+            .background(DS.Surface.content)
+            Divider()
             if let message = item.test.failureMessages.first {
                 VStack(alignment: .leading, spacing: DS.Space.xs) {
                     Label(firstLine(message), systemImage: "xmark.circle.fill")
@@ -146,22 +188,14 @@ struct FailuresTab: View {
                         .lineLimit(2)
                         .textSelection(.enabled)
                     hint(item)
-                    if item.timeline.count > 1 {
-                        HStack(spacing: DS.Space.s) {
-                            Text("Recent runs").foregroundStyle(.secondary)
-                            HistoryStrip(points: item.timeline, size: .regular)
-                            Text(HistoryStrip.summary(item.timeline)).foregroundStyle(.secondary)
-                        }
-                        .font(DS.Font.caption)
-                        .padding(.top, DS.Space.xxs)
-                    }
                 }
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Space.l)
-                .padding(.bottom, DS.Space.m)
+                .padding(.vertical, DS.Space.m)
+                .background(DS.Surface.content)
+                Divider()
             }
-            Divider()
             if referenceURL != nil || failureURL != nil {
                 CompareView(load: { (referenceURL.flatMap { try? Data(contentsOf: $0) }, failureURL.flatMap { try? Data(contentsOf: $0) }) },
                             beforeLabel: "Reference",
@@ -282,7 +316,7 @@ struct FailureRow: View {
                 (failure ?? reference).flatMap { try? Data(contentsOf: $0) }
             }
             VStack(alignment: .leading, spacing: DS.Space.xs) {
-                Text(item.test.name).lineLimit(1)
+                Text(item.test.name).fontWeight(.medium).lineLimit(1)
                 HStack(spacing: DS.Space.xs) {
                     if let verdict = item.verdict { VerdictTag(verdict: verdict) }
                     if item.test.repetitions.count > 1 {
@@ -308,6 +342,7 @@ struct FailureRow: View {
             }
         }
         .padding(.vertical, DS.Space.xxs)
+        .listRowSeparator(.hidden)
     }
 }
 
