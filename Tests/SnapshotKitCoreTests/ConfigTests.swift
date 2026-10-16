@@ -117,6 +117,64 @@ import Testing
         #expect(p.xcodeSelection(in: "sudo xcode-select -s /Applications/Xcode.app").developerDir == "/Applications/Xcode.app")
     }
 
+    /// The test job lives in a template from another project; only variables are local.
+    static let templated = """
+    include:
+        - project: 'group/ios/ci-templates'
+          ref: 'develop'
+          file: 'module.yml'
+
+    variables:
+        XCODE_PROJECT: "feature-example.xcodeproj"
+        PROJECT_PATH: "$UNDEFINED_DIR/$XCODE_PROJECT"
+        SCHEME: "feature-example"
+        SNAPSHOT_TEST_SCHEME: "FeatureSnapshotTests"
+        XCODE_VERSION: "Xcode-99.5.0"
+        XCODE_VERSION_FOR_TESTS: $XCODE_VERSION
+        SIMULATOR_DEVICE: "Example Phone (99.0.0)"
+    """
+
+    @Test func settingsFromVariablesWhenTheJobIsInARemoteTemplate() {
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: Self.templated)])
+        #expect(x.invocation == nil)
+        #expect(x.config.scheme == "FeatureSnapshotTests")
+        #expect(x.config.project == "feature-example.xcodeproj")
+        #expect(x.config.xcodeVersion == "99.5.0")
+        #expect(x.config.deviceName == "Example Phone")
+        #expect(x.config.osVersion == "99.0.0")
+        #expect(x.config.source(of: .scheme) == ".gitlab-ci.yml · SNAPSHOT_TEST_SCHEME")
+        #expect(x.notes.count == 1)
+        #expect(x.notes[0].contains("group/ios/ci-templates (module.yml)"))
+    }
+
+    @Test func deviceVariableForms() {
+        let parser = CIConfigParser(variables: [:])
+        func device(_ value: String) -> [String] {
+            parser.variableSettings(["SIMULATOR": value]).map { "\($0.0.rawValue)=\($0.1)" }
+        }
+        #expect(device("platform=iOS Simulator,name=Example Phone,OS=99.1") == ["device=Example Phone", "os=99.1"])
+        #expect(device("Example Phone,OS=99.1") == ["device=Example Phone", "os=99.1"])
+        #expect(device("iPhone Example") == ["device=iPhone Example"])
+        #expect(device("something else").isEmpty)
+        #expect(parser.variableSettings(["IOS_VERSION": "99.2"]).map(\.1) == ["99.2"])
+        #expect(parser.variableSettings(["TEST_SCHEME": "A", "SCHEME": "B"]).map(\.1) == ["A"])
+    }
+
+    @Test func theCommandLineWinsOverVariables() {
+        let text = Self.templated + """
+
+        snapshots:
+          script:
+            - xcodebuild test -project Other.xcodeproj -scheme OtherSnapshots -destination 'platform=iOS Simulator,name=Other Phone,OS=98.0'
+        """
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)])
+        #expect(x.config.scheme == "OtherSnapshots")
+        #expect(x.config.project == "Other.xcodeproj")
+        #expect(x.config.deviceName == "Other Phone")
+        #expect(x.config.osVersion == "98.0")
+        #expect(x.notes.isEmpty)
+    }
+
     @Test func githubInlineBranchList() {
         let p = CIConfigParser()
         #expect(p.baseBranch(in: "on:\n  pull_request:\n    branches: [ 'feature/*', trunk ]\n") == "trunk")

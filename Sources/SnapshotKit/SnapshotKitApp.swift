@@ -6,6 +6,8 @@ import SwiftUI
 struct SnapshotKitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel.shared
+    /// Bound by the menu bar scene; a small object of its own rather than a property of `model`.
+    @ObservedObject private var menuBar = AppModel.shared.menuBar
 
     var body: some Scene {
         WindowGroup("SnapshotKit", id: "main") {
@@ -20,6 +22,18 @@ struct SnapshotKitApp: App {
             SettingsView()
                 .environmentObject(model)
         }
+
+        // Optional (Settings > General): run progress and quick access from the menu bar.
+        MenuBarExtra(isInserted: Binding(get: { menuBar.isShown },
+                                         // SwiftUI writes the current value back while updating; publishing
+                                         // that would rebuild the app's scenes again, endlessly.
+                                         set: { if $0 != menuBar.isShown { menuBar.isShown = $0 } })) {
+            MenuBarPanel()
+                .environmentObject(model)
+        } label: {
+            MenuBarLabel(model: model)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -43,7 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { AppModel.shared.applicationWillTerminate() }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// With the menu bar item shown, closing the window keeps SnapshotKit (and its runs) going.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MainActor.assumeIsolated { !AppModel.shared.showMenuBarItem }
+    }
 }
 
 struct SnapshotKitCommands: Commands {

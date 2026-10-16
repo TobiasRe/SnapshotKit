@@ -42,6 +42,8 @@ snapshot tests built with swift-snapshot-testing.
 
 ### Projects and tools
 - Scan folders, pins, recents, per-project base branch and a ⌘K switcher.
+- An optional menu bar item with run progress (a pie and a done/total count), the failing count, Cancel,
+  and one-click access to failing, pinned and recent projects.
 - The `snapkit` CLI covers the same ground: `snapshots`, `record`, `changes`, `run`, `rerecord`, `flaky`,
   `failures`, `history`, `diff`, `restore`, `config`, `projects`.
 - A small Liquid Glass design system (docs/DESIGN.md), with fallbacks for macOS 14–25.

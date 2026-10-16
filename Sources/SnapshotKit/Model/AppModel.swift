@@ -28,8 +28,25 @@ final class AppModel: ObservableObject {
 
     private var models: [String: ProjectModel] = [:]
 
+    /// Whether the menu bar item is shown (its own object; see `MenuBarSetting`).
+    let menuBar: MenuBarSetting
+    var showMenuBarItem: Bool {
+        get { menuBar.isShown }
+        set { menuBar.isShown = newValue }
+    }
+    /// Projects with a run, record or flakiness check going on, for the menu bar.
+    @Published private(set) var runningPaths: [String] = []
+    static let runStarted = Notification.Name("SnapshotKitRunStarted")
+    private var runObservers: [NSObjectProtocol] = []
+
     init(store: ProjectStore = ProjectStore()) {
         self.store = store
+        menuBar = MenuBarSetting(store: store)
+        for name in [Self.runStarted, Self.runFinished] {
+            runObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateRunningPaths() }
+            })
+        }
         restoreLeftoverPatches()
         refreshProjects()
         if let last = store.settings.lastProject, projects.contains(where: { $0.path == last }) {
@@ -100,6 +117,27 @@ final class AppModel: ObservableObject {
         store.remove(project)
         if selectedPath == project.path { selectedPath = nil }
         refreshProjects()
+    }
+
+    /// The loaded model of a project, if it has been opened this session.
+    func projectModel(path: String) -> ProjectModel? { models[path] }
+
+    func updateRunningPaths() {
+        let running = models.values.filter(\.isRunning).map(\.project.path).sorted()
+        if running != runningPaths { runningPaths = running }
+    }
+
+    /// Runs a project's snapshot tests from outside its window (the menu bar), opening it first.
+    func runTests(path: String) {
+        open(path: path)
+        guard let model = models[Project(path: path).path] else { return }
+        // A project opened just now is still checking Xcode and the simulator.
+        Task {
+            for _ in 0..<300 where model.environment == nil && model.environmentError == nil && model.configError == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            model.runTests()
+        }
     }
 
     func open(path: String) {
@@ -192,5 +230,19 @@ final class MenuState: ObservableObject {
             .throttle(for: .milliseconds(200), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in self?.objectWillChange.send() }
         objectWillChange.send()
+    }
+}
+
+/// The menu bar item setting, which the menu bar scene binds to.
+@MainActor
+final class MenuBarSetting: ObservableObject {
+    private let store: ProjectStore
+    @Published var isShown: Bool {
+        didSet { if isShown != store.settings.showMenuBarItem { store.update { $0.showMenuBarItem = isShown } } }
+    }
+
+    init(store: ProjectStore) {
+        self.store = store
+        isShown = store.settings.showMenuBarItem
     }
 }

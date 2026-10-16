@@ -172,6 +172,32 @@ extension AppUITests {
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
         }
 
+        // MARK: Menu bar
+
+        /// A run in progress (12 of 30 done) above recent projects with their failing counts.
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func menuBarPanel(appearance: NSAppearance.Name) {
+            let (app, project) = makeApp(.running)
+            app.failingCounts = ["/work/payments-ui": 3]
+            app.updateRunningPaths()
+            #expect(app.runningPaths == [project.project.path])
+            #expect(project.progressFraction.map { abs($0 - 13.0 / 30) < 0.001 } == true, "\(String(describing: project.progressFraction)) \(project.passed) \(project.failed) \(project.skipped)")
+            let view = MenuBarPanel().environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: appearance), as: Self.strategy,
+                           named: appearance == .darkAqua ? "dark" : "light")
+        }
+
+        /// The menu bar icon: unknown total, then 0, 40, 100 percent.
+        @Test func progressPie() {
+            let view = HStack(spacing: 12) {
+                ForEach([nil, 0, 0.4, 1] as [Double?], id: \.self) { fraction in
+                    Image(nsImage: ProgressPie.image(fraction: fraction))
+                }
+            }
+            .padding(8)
+            assertSnapshot(of: host(view, size: CGSize(width: 120, height: 32), appearance: .aqua), as: Self.strategy)
+        }
+
         // MARK: Compare view
 
         @Test(arguments: [CompareMode.sideBySide, .slider, .difference, .toggle])

@@ -74,6 +74,8 @@ can be followed between these views, and re-recording is available wherever a sn
   and `StatusMarks` at the trailing edge (failing ✕, flaky ⚠, change dot). One row design for every list.
 - `SnapshotViewer`: a single image with the compare view's zoom, pan and readout; the compare view itself
   is reused for versions and variants, so every comparison looks and behaves the same.
+- `MenuBarLabel` / `ProgressPie` / `MenuBarPanel`: the optional menu bar item. The icon is a 16 pt template
+  image (a ring with a pie), so it follows the menu bar's colour; the panel reuses the row and chip styles.
 - Scope controls degrade instead of clipping: segmented with counts, then without, then a menu
   (`ViewThatFits`).
 - `softTopEdge()`: a soft scroll-edge blur under headers.

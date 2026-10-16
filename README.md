@@ -1,3 +1,5 @@
+<img src="docs/images/app-icon.png" width="128" alt="SnapshotKit app icon">
+
 # SnapshotKit
 
 [![CI](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml/badge.svg)](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml)
@@ -72,6 +74,11 @@ snapshots; sort by size or recency; switch between list and grid. A snapshot's d
 and committed versions to compare against, and links to its change or failure. **Re-record Shown** records
 everything the filter shows (say, every `dark` variant).
 
+**Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie
+as tests complete (with a done/total count) and otherwise shows the failing count. Its panel shows live
+progress for every running project with Cancel, and your failing, pinned and recent projects to open or run
+in one click. With it on, SnapshotKit keeps running when you close its window.
+
 Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
 comparison, open or reveal it, or jump to it in another view. Right-click a failing test to check just
 that test for flakiness. The Changes tab picks the base branch from a menu, and you can switch to comparing
@@ -104,6 +111,13 @@ scripts those call. From the `xcodebuild … test` invocation that looks most li
 The Xcode version comes from `xcode-version:`, `Xcode_X.Y.app` paths, `*XCODE*VERSION*` variables,
 `xcodes select`, or image tags. The base branch comes from the MR/PR target branch, or else from `origin/HEAD`
 (falling back to `develop`/`main`/`master`).
+
+When the test command isn't in the repository, for example because the job comes from a template in another
+project (`include: project:`, `remote:`, `template:` or `component:`), SnapshotKit falls back to common CI variable
+names: `SNAPSHOT_TEST_SCHEME`, `TEST_SCHEME` or `SCHEME`; a variable holding a `.xcodeproj` or `.xcworkspace`;
+`TEST_PLAN`; `SIMULATOR_DEVICE`, `DEVICE` or `DESTINATION` written as `iPhone 16 Pro (18.0)`, `iPhone 16 Pro,OS=18.0`
+or a full destination; and `XCODE_VERSION` in forms like `Xcode-26.5.0`. Each setting shows which variable it came
+from, and a note says which template the job comes from.
 
 If Xcode or the simulator is missing, you get an error saying what is required, by which file, what is installed, and how to fix it.
 
@@ -196,6 +210,11 @@ The app's UI is covered by snapshot tests (swift-snapshot-testing with Swift Tes
 can't be composited off-screen, so those renders use an opaque stand-in and leave out the system toolbar
 and sidebar chrome. To update references, delete the PNG or set `record: .all`, or re-record them with
 SnapshotKit itself. Visual guidelines are in [docs/DESIGN.md](docs/DESIGN.md).
+
+Repository layout and naming: Swift package folders follow SwiftPM (`Sources/`, `Tests/`, PascalCase types and
+files); everything else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, and
+`assets/` for source artwork such as the app icon, `assets/app-icon.icon` (an Icon Composer file, compiled by
+`scripts/make-app.sh`).
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,
 remote runner and project store. `SnapshotKit` (SwiftUI) and `snapkit` are thin front ends.
