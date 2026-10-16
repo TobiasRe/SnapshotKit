@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SnapshotKitCore
 
@@ -9,7 +10,11 @@ final class AppModel: ObservableObject {
     @Published var selectedPath: String? {
         didSet { if oldValue != selectedPath { openSelected() } }
     }
-    @Published private(set) var current: ProjectModel?
+    @Published private(set) var current: ProjectModel? {
+        didSet { menuState.follow(current) }
+    }
+    /// What the menu bar observes: the current project's changes, throttled.
+    let menuState = MenuState()
     @Published var showQuickSwitcher = false
     @Published var showProjectSettings = false
     @Published private(set) var isScanning = false
@@ -172,5 +177,20 @@ final class AppModel: ObservableObject {
     /// Called on quit: undo any active record patch.
     func applicationWillTerminate() {
         _ = InterruptGuard.restoreAll()
+    }
+}
+
+/// Relays the current project's changes to the menu bar, at most five times a second, so menu
+/// items (Cancel while running, Re-record Selected Test) are enabled when they should be
+/// without redrawing the menus on every line of test output.
+@MainActor
+final class MenuState: ObservableObject {
+    private var subscription: AnyCancellable?
+
+    func follow(_ project: ProjectModel?) {
+        subscription = project?.objectWillChange
+            .throttle(for: .milliseconds(200), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        objectWillChange.send()
     }
 }

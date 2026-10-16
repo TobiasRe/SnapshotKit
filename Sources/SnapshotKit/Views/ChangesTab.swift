@@ -86,6 +86,11 @@ struct ChangesTab: View {
     @ViewBuilder
     private func actions(for change: SnapshotChange) -> some View {
         if change.kind != .deleted {
+            Button("Re-record \(change.testName)") { project.reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
+                .disabled(project.isRunning || project.environment == nil)
+            Button("Show in Library") { project.showInLibrary(path: change.path) }
+                .disabled(!project.isInLibrary(change.path))
+            Divider()
             Button("Open in Default App") { NSWorkspace.shared.open(project.fileURL(for: change)) }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.fileURL(for: change)]) }
         }

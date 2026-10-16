@@ -49,25 +49,52 @@ struct WelcomeView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(spacing: DS.Space.l) {
-            Image(systemName: "photo.stack")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No project selected")
-                .font(.title2.weight(.semibold))
-            Text("Drop a repository with snapshot tests here, or add a folder to scan for them.")
-                .foregroundStyle(.secondary)
+        VStack(spacing: DS.Space.xl) {
+            VStack(spacing: DS.Space.s) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("All your snapshots in one place")
+                    .font(.title2.weight(.semibold))
+                Text("Add a repository that uses swift-snapshot-testing.")
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: DS.Space.m) {
+                feature("square.grid.2x2", "Browse and inspect", "Every reference image by module and test, with variants and history.")
+                feature("arrow.triangle.branch", "Review changes", "What differs from your base branch, side by side or as a difference.")
+                feature("camera", "Update", "Re-record any test, suite or filtered set; fix failing and flaky ones.")
+            }
+            .frame(maxWidth: 440)
             HStack {
                 Button("Add Project…") { model.addProjectFromPanel() }
+                    .primaryActionStyle()
                 Button("Add Scan Folder…") {
                     model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") { model.addScanRoot($0) }
                 }
+                .secondaryActionStyle()
             }
-            Text("Press ⌘K to switch projects quickly.")
+            Text("Or drop a repository onto this window. ⌘K switches projects.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
+        .padding(DS.Space.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func feature(_ icon: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Space.m) {
+            Image(systemName: icon)
+                .foregroundStyle(.tint)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                Text(title).font(DS.Font.heading)
+                Text(detail).font(DS.Font.secondary).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

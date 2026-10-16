@@ -398,6 +398,19 @@ final class ProjectModel: ObservableObject {
         refreshChanges()
     }
 
+    /// Shows a snapshot in the library, clearing filters that would hide it.
+    func showInLibrary(path: String) {
+        guard library?.files.contains(where: { $0.path == path }) == true else { return }
+        libraryFilter = ""
+        libraryScope = .all
+        selectedSnapshotID = path
+        tab = .snapshots
+    }
+
+    func isInLibrary(_ path: String) -> Bool {
+        library?.files.contains { $0.path == path } ?? false
+    }
+
     /// Opens a snapshot's change on the Changes tab.
     func showChange(path: String) {
         guard changeSet?.changes.contains(where: { $0.path == path }) == true else { return }
@@ -863,6 +876,28 @@ final class ProjectModel: ObservableObject {
             return
         }
         reRecord(suites: targets, onlyTesting: nil, what: targets.map(\.name).joined(separator: ", "))
+    }
+
+    /// The test behind whatever is selected on the current tab, if there is one to record.
+    var canReRecordSelection: Bool {
+        guard !isRunning, environment != nil else { return false }
+        switch tab {
+        case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
+        case .changes: return selectedChange.map { $0.kind != .deleted } ?? false
+        case .failures: return selectedFailure != nil
+        case .run: return false
+        }
+    }
+
+    /// Re-records the test of the selected snapshot, change or failure.
+    func reRecordSelection() {
+        guard canReRecordSelection else { return }
+        switch tab {
+        case .snapshots: if let file = selectedSnapshot { reRecord([file], granularity: .tests) }
+        case .changes: if let change = selectedChange { reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
+        case .failures: if let item = selectedFailure { reRecord(failures: [item]) }
+        case .run: break
+        }
     }
 
     /// Re-records just these failing tests (not their whole suites), then verifies.

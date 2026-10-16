@@ -37,6 +37,11 @@ struct ProjectView: View {
                 .fixedSize()
             }
             ToolbarItem(placement: .primaryAction) {
+                Button("Re-record Selected Test", systemImage: "camera") { project.reRecordSelection() }
+                    .disabled(!project.canReRecordSelection)
+                    .help("Re-record the test of the selected snapshot, change or failure (⇧⌘R)")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 if project.isRunning {
                     Button("Cancel", systemImage: "stop.fill") { project.cancel() }
                         .help("Cancel (⌘.)")

@@ -8,9 +8,14 @@ let usage = """
 usage: snapkit <command> [options]
 
 commands:
+  snapshots  [--repo P] [--filter TEXT] [--orphans] [--sort size|recent]
+                                                 list every snapshot with its state; totals at the end
+  record     [--repo P] TEXT… [--whole-suite] [--no-verify]
+                                                 re-record the tests of the snapshots whose path contains every TEXT
   config     [--repo P]                          show resolved configuration and check Xcode/simulator
   run        [--repo P] [--only ID]... [--module M] [--iterations N] [--remote [HOST]] [--verbose]
   rerecord   [--repo P] [--suite ID]... [--no-verify] [--remote [HOST]] [--verbose]
+                                                 re-record the failing suites of the last run
   flaky      [--repo P] [--iterations N] [--remote [HOST]] [--verbose]
   failures   [--repo P] [--xcresult PATH] [--out DIR]   list failures, diagnose each diff, show recent runs
   changes    [--repo P] [--base BRANCH] [--tip] [--filter TEXT]
@@ -40,7 +45,7 @@ func parse(_ args: [String]) -> Options {
     var o = Options()
     var rest = args[...]
     o.command = rest.popFirst() ?? ""
-    let takesValue: Set<String> = ["--repo", "--only", "--module", "--iterations", "--suite", "--xcresult", "--out", "--base", "--filter", "-o"]
+    let takesValue: Set<String> = ["--repo", "--only", "--module", "--iterations", "--suite", "--xcresult", "--out", "--base", "--filter", "--sort", "-o"]
     let optionalValue: Set<String> = ["--remote"]
     while let arg = rest.popFirst() {
         if takesValue.contains(arg), let v = rest.popFirst() {
@@ -272,6 +277,64 @@ func main() async {
         printSummary(result)
         if !attachments.isEmpty { say("Failure images: \(attachments.count) (see `snapkit failures`)") }
         exit(result.succeeded ? 0 : 1)
+
+    case "snapshots":
+        let repo = repository(o)
+        let library: SnapshotLibrary
+        do { library = try SnapshotLibrary.load(repository: repo) } catch { fail(error.localizedDescription) }
+        var files = SnapshotLibrary.filter(library.files, text: o.value("--filter") ?? "")
+        let orphans = SnapshotLibrary.orphans(library.files, repository: repo)
+        if o.has("--orphans") { files = files.filter { orphans.contains($0.id) } }
+        switch o.value("--sort") {
+        case "size": files.sort { $0.byteSize > $1.byteSize }
+        case "recent": files.sort { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
+        default: break
+        }
+        for file in files {
+            let size = SnapshotLibrary.formatSize(file.byteSize)
+            var marks: [String] = []
+            if file.state == .modified { marks.append(color("33", "modified")) }
+            if file.state == .untracked { marks.append(color("32", "new")) }
+            if orphans.contains(file.id) { marks.append(color("90", "orphaned")) }
+            say("\(file.path)  \(size)" + (marks.isEmpty ? "" : "  " + marks.joined(separator: " ")))
+        }
+        let total = SnapshotLibrary.formatSize(files.reduce(0) { $0 + $1.byteSize })
+        let tests = Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count
+        say("\(files.count) of \(library.files.count) snapshots · \(tests) test\(tests == 1 ? "" : "s") · \(total)"
+            + (orphans.isEmpty ? "" : " · \(orphans.count) orphaned (`--orphans` lists them)"))
+
+    case "record":
+        let ctx = context(o)
+        guard !o.positional.isEmpty else { fail("usage: snapkit record TEXT… (part of a snapshot path, e.g. a test or suite name)") }
+        let library: SnapshotLibrary
+        do { library = try SnapshotLibrary.load(repository: ctx.repository) } catch { fail(error.localizedDescription) }
+        let orphans = SnapshotLibrary.orphans(library.files, repository: ctx.repository)
+        let files = SnapshotLibrary.filter(library.files, text: o.positional.joined(separator: " ")).filter { !orphans.contains($0.id) }
+        guard !files.isEmpty else { fail("No snapshot path contains \(o.positional.map { "'\($0)'" }.joined(separator: " and ")).") }
+        let selection: RecordSelection
+        do {
+            selection = try RecordPlanner.plan(files, granularity: o.has("--whole-suite") ? .suites : .tests, repository: ctx.repository)
+        } catch { fail(error.localizedDescription) }
+        say("snapkit: recording \(selection.onlyTesting.joined(separator: ", "))")
+        let recorder = ReRecorder(runner: TestRunner(repository: ctx.repository, config: ctx.config, environment: environment(ctx.config)))
+        onInterrupt { recorder.cancel() }
+        do {
+            let outcome = try await recorder.reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, verify: !o.has("--no-verify"),
+                                                      onStage: { say(color("36", "▸ \($0.label)")) },
+                                                      onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
+            record(outcome.recordRun, kind: .record, repo: ctx.repository)
+            for conflict in outcome.restore.conflicts { say(color("31", "WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)")) }
+            if let verify = outcome.verifyRun {
+                record(verify, kind: .verify, repo: ctx.repository)
+                say(verify.succeeded ? color("32", "Recorded and verified: \(verify.passed) passed.")
+                                     : color("31", "Recorded, but verification failed: \(verify.failed) still failing (flaky?)."))
+                exit(verify.succeeded ? 0 : 1)
+            }
+            say("Recorded.")
+            exit(outcome.recordRun.cancelled ? 1 : 0)
+        } catch {
+            fail(error.localizedDescription)
+        }
 
     case "rerecord":
         let ctx = context(o)
