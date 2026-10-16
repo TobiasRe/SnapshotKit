@@ -71,6 +71,22 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        @Test func snapshotsBySize() {
+            let (app, project) = makeApp(.library)
+            project.librarySort = .size
+            defer { project.librarySort = .name }
+            project.selectedSnapshotID = project.displayedSnapshots.first?.id
+            #expect(project.displayedSnapshots.map(\.byteSize) == project.displayedSnapshots.map(\.byteSize).sorted(by: >))
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        @Test func orphanedSnapshots() {
+            let (app, project) = makeApp(.library)
+            project.libraryScope = .orphaned
+            project.selectedSnapshotID = project.displayedSnapshots.first?.id
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
         /// A snapshot whose test failed and that is new on this branch links to both views.
         @Test func snapshotWithFailureAndChange() {
             let (app, project) = makeApp(.library)

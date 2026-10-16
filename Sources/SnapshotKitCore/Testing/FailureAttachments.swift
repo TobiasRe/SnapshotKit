@@ -96,7 +96,8 @@ public enum FailureAttachments {
     /// Reference snapshot paths from a swift-snapshot-testing failure message
     /// (`@−\n"file:///…/__Snapshots__/Suite/test.1.png"`), made relative to `repository`.
     public static func referencePaths(in message: String, repository: URL) -> [String] {
-        let regex = try! NSRegularExpression(pattern: #"@\x{2212}\s*\n\s*"file://([^"]+)""#)
+        // `@−` + reference path for a mismatch; `open "file://…"` for a newly recorded reference.
+        let regex = try! NSRegularExpression(pattern: #"(?:@\x{2212}\s*\n\s*|No reference was found on disk[^\n]*\n\s*\n?\s*open )"file://([^"]+)""#)
         let ns = message as NSString
         let root = URL.canonicalPath(repository.path)
         return regex.matches(in: message, range: NSRange(location: 0, length: ns.length)).compactMap { m in
@@ -110,5 +111,11 @@ public enum FailureAttachments {
             }
             return nil
         }
+    }
+
+    /// swift-snapshot-testing's message for a test without a reference: it records one and fails
+    /// once, so the next run passes. Not a mismatch.
+    public static func isNewReference(_ message: String) -> Bool {
+        message.contains("No reference was found on disk")
     }
 }

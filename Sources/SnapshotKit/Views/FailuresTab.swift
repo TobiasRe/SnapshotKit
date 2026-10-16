@@ -116,9 +116,18 @@ struct FailuresTab: View {
                         .labelsHidden()
                         .fixedSize()
                     }
-                    Button("Re-record Suite") { project.reRecordFailed(suites: [item.suite]) }
-                        .secondaryActionStyle()
-                        .disabled(project.isRunning)
+                    Menu {
+                        Button("Re-record Test") { project.reRecord(failures: [item]) }
+                        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                    } label: {
+                        Label("Re-record", systemImage: "camera")
+                    } primaryAction: {
+                        project.reRecord(failures: [item])
+                    }
+                    .fixedSize()
+                    .disabled(project.isRunning || project.environment == nil)
+                    .help("Record this test's snapshots again, then check that it passes")
+                    .accessibilityLabel("Re-record")
                     Menu { actions(for: item) } label: {
                         Label("Test Actions", systemImage: "ellipsis")
                     }
@@ -169,7 +178,9 @@ struct FailuresTab: View {
     private func actions(for item: FailureItem) -> some View {
         Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
             .disabled(project.isRunning || project.environment == nil)
-        Button("Re-record \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+        Button("Re-record \(item.test.name)") { project.reRecord(failures: [item]) }
+            .disabled(project.isRunning || project.environment == nil)
+        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
             .disabled(project.isRunning || project.environment == nil)
         Divider()
         if let reference = item.referencePaths.first {
@@ -181,6 +192,12 @@ struct FailuresTab: View {
             Button("Open Actual Image") { NSWorkspace.shared.open(failure) }
         }
         Divider()
+        if let image = item.images.first {
+            Button("Copy Side-by-Side Image") {
+                let reference = image.reference, failure = image.failure
+                Clipboard.copyComparison { (reference.flatMap { try? Data(contentsOf: $0) }, failure.flatMap { try? Data(contentsOf: $0) }) }
+            }
+        }
         Button("Copy Test Identifier") { copy(item.id) }
         if let message = item.test.failureMessages.first {
             Button("Copy Failure Message") { copy(message) }
@@ -194,6 +211,16 @@ struct FailuresTab: View {
 
     @ViewBuilder
     private func hint(_ item: FailureItem) -> some View {
+        if item.isNewReference {
+            Label("This test had no reference yet, so one was just recorded. Run the tests again to check against it.", systemImage: "sparkles")
+                .foregroundStyle(.secondary)
+        } else {
+            verdictHint(item)
+        }
+    }
+
+    @ViewBuilder
+    private func verdictHint(_ item: FailureItem) -> some View {
         switch item.verdict {
         case .flaky:
             Label("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.", systemImage: "lightbulb")
@@ -262,7 +289,9 @@ struct FailureRow: View {
                     if item.historyFlaky != nil {
                         Chip(text: "Flaky in history", color: DS.Status.flaky)
                     }
-                    if let kind = diagnosis.flatMap(DiagnosisChip.init) {
+                    if item.isNewReference {
+                        Chip(text: "New reference", color: DS.Status.color(for: .new)).help("Recorded on this run; the next run checks it")
+                    } else if let kind = diagnosis.flatMap(DiagnosisChip.init) {
                         kind
                     } else if item.verdict == nil && item.test.repetitions.count <= 1 && item.historyFlaky == nil {
                         Text(item.images.isEmpty ? "No images" : "Snapshot mismatch")

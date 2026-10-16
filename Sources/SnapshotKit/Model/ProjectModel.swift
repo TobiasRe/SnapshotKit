@@ -8,6 +8,16 @@ enum LibraryScope: String, CaseIterable, Identifiable {
     case changed = "Changed"
     case failing = "Failing"
     case uncommitted = "Uncommitted"
+    /// Snapshots whose test no longer exists.
+    case orphaned = "Orphaned"
+    var id: String { rawValue }
+}
+
+/// How the library orders snapshots. Anything but name shows one flat list.
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case name = "Name"
+    case size = "Size"
+    case recent = "Recently Changed"
     var id: String { rawValue }
 }
 
@@ -18,6 +28,8 @@ struct SnapshotStatus: Equatable {
     /// The failing test it is the reference of, from the last run.
     var failureID: String?
     var verdict: FlakeVerdict?
+    /// Its test is gone (renamed or deleted).
+    var orphaned = false
 }
 
 /// The second image in a snapshot's detail.
@@ -52,7 +64,7 @@ enum RunOperation: Equatable {
     var label: String {
         switch self {
         case .run: "Running tests"
-        case .rerecord: "Re-recording failed suites"
+        case .rerecord: "Re-recording snapshots"
         case .flakeCheck: "Checking flakiness"
         case .remoteRun: "Running on remote"
         case .remoteRecord: "Re-recording on remote"
@@ -74,6 +86,8 @@ struct FailureItem: Identifiable, Hashable {
     /// This test's results in recent recorded runs, oldest first.
     var timeline: [HistoryPoint] = []
     var id: String { suite.identifier + "/" + test.name }
+    /// The test had no reference yet: one was just recorded, and the next run checks it.
+    var isNewReference: Bool { test.failureMessages.contains(where: FailureAttachments.isNewReference) }
 }
 
 /// Where the failures on the Failures tab came from.
@@ -105,8 +119,13 @@ final class ProjectModel: ObservableObject {
     // Library
     @Published private(set) var library: SnapshotLibrary?
     @Published private(set) var isLoadingLibrary = false
+    /// Snapshots whose test no longer exists, by id.
+    @Published private(set) var orphanIDs: Set<String> = []
     @Published var libraryFilter = ""
     @Published var libraryScope = LibraryScope.all
+    @Published var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
+        didSet { UserDefaults.standard.set(librarySort.rawValue, forKey: "librarySort") }
+    }
     @Published var selectedSnapshotID: String? {
         didSet {
             guard oldValue != selectedSnapshotID else { return }
@@ -313,9 +332,13 @@ final class ProjectModel: ObservableObject {
         isLoadingLibrary = true
         let repo = project.url
         Task {
-            let loaded = await Task.detached { try? SnapshotLibrary.load(repository: repo) }.value
+            let (loaded, orphans) = await Task.detached { () -> (SnapshotLibrary?, Set<String>) in
+                let library = try? SnapshotLibrary.load(repository: repo)
+                return (library, library.map { SnapshotLibrary.orphans($0.files, repository: repo) } ?? [])
+            }.value
             isLoadingLibrary = false
             library = loaded
+            orphanIDs = orphans
             if selectedSnapshotID == nil || !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
                 selectedSnapshotID = displayedSnapshots.first?.id
             }
@@ -329,6 +352,7 @@ final class ProjectModel: ObservableObject {
         case .changed: return files.filter { status(of: $0).change != nil }
         case .failing: return files.filter { status(of: $0).failureID != nil }
         case .uncommitted: return files.filter { $0.state != .clean }
+        case .orphaned: return files.filter { orphanIDs.contains($0.id) }
         }
     }
 
@@ -336,6 +360,7 @@ final class ProjectModel: ObservableObject {
     func status(of file: SnapshotFile) -> SnapshotStatus {
         var status = SnapshotStatus()
         status.change = changeKindByPath[file.path]
+        status.orphaned = orphanIDs.contains(file.id)
         if let failure = failureByPath[file.path] {
             status.failureID = failure.id
             status.verdict = failure.verdict
@@ -350,7 +375,27 @@ final class ProjectModel: ObservableObject {
         case .changed: return files.filter { status(of: $0).change != nil }.count
         case .failing: return files.filter { status(of: $0).failureID != nil }.count
         case .uncommitted: return files.filter { $0.state != .clean }.count
+        case .orphaned: return orphanIDs.count
         }
+    }
+
+    /// Moves snapshots to the Trash (recoverable there, and git still has committed ones).
+    func moveToTrash(_ files: [SnapshotFile]) {
+        var moved = 0
+        var failed: [String] = []
+        for file in files {
+            do {
+                try FileManager.default.trashItem(at: project.url.appendingPathComponent(file.path), resultingItemURL: nil)
+                moved += 1
+            } catch {
+                failed.append(file.fileName)
+            }
+        }
+        ThumbnailCache.shared.removeAllObjects()
+        lastMessage = "Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash."
+            + (failed.isEmpty ? "" : " Could not move \(failed.joined(separator: ", ")).")
+        lastMessageIsError = !failed.isEmpty
+        refreshChanges()
     }
 
     /// Opens a snapshot's change on the Changes tab.
@@ -363,7 +408,11 @@ final class ProjectModel: ObservableObject {
 
     /// Snapshots in the order the list shows them: module, suite, test, variant.
     var displayedSnapshots: [SnapshotFile] {
-        SnapshotLibrary.tree(filteredSnapshots).flatMap { $0.suites.flatMap { $0.tests.flatMap(\.files) } }
+        switch librarySort {
+        case .name: SnapshotLibrary.tree(filteredSnapshots).flatMap { $0.suites.flatMap { $0.tests.flatMap(\.files) } }
+        case .size: filteredSnapshots.sorted { ($0.byteSize, $1.path) > ($1.byteSize, $0.path) }
+        case .recent: filteredSnapshots.sorted { ($0.modified ?? .distantPast, $1.path) > ($1.modified ?? .distantPast, $0.path) }
+        }
     }
 
     var selectedSnapshot: SnapshotFile? {
@@ -813,6 +862,39 @@ final class ProjectModel: ObservableObject {
             lastMessageIsError = true
             return
         }
+        reRecord(suites: targets, onlyTesting: nil, what: targets.map(\.name).joined(separator: ", "))
+    }
+
+    /// Re-records just these failing tests (not their whole suites), then verifies.
+    func reRecord(failures items: [FailureItem]) {
+        guard !items.isEmpty else { return }
+        var suites: [SuiteResult] = []
+        for item in items where !suites.contains(where: { $0.identifier == item.suite.identifier }) { suites.append(item.suite) }
+        reRecord(suites: suites, onlyTesting: items.map(\.id),
+                 what: items.count == 1 ? items[0].test.name : "\(items.count) tests")
+    }
+
+    /// Re-records the tests behind `files` (or their whole suites), then verifies.
+    func reRecord(_ files: [SnapshotFile], granularity: RecordPlanner.Granularity) {
+        guard !files.isEmpty, !isRunning else { return }
+        let repo = project.url
+        Task {
+            let planned = await Task.detached { Result { try RecordPlanner.plan(files, granularity: granularity, repository: repo) } }.value
+            switch planned {
+            case .success(let selection):
+                let tests = Set(files.map { $0.suite + "/" + $0.testName })
+                let what = granularity == .suites
+                    ? selection.suites.map(\.name).joined(separator: ", ")
+                    : tests.count == 1 ? files[0].testName : "\(tests.count) tests"
+                reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
+            case .failure(let error):
+                lastMessage = "Can't re-record: \(error.localizedDescription)"
+                lastMessageIsError = true
+            }
+        }
+    }
+
+    private func reRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
         guard begin(.rerecord), let (ctx, env) = requireEnvironment() else { return }
         let recorder = ReRecorder(runner: TestRunner(repository: ctx.repository, config: ctx.config, environment: env))
         cancelAction = { recorder.cancel() }
@@ -821,11 +903,11 @@ final class ProjectModel: ObservableObject {
         Task {
             do {
                 let outcome = try await recorder.reRecord(
-                    suites: targets, verify: verify,
+                    suites: targets, onlyTesting: onlyTesting, verify: verify,
                     onStage: { stage in Task { @MainActor in self.stageLabel = stage.label } },
                     onLine: onLine, onEvent: onEvent)
                 RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: outcome.recordRun))
-                var message = "Re-recorded \(targets.map(\.name).joined(separator: ", "))."
+                var message = "Re-recorded \(what)."
                 var isError = false
                 if !outcome.restore.conflicts.isEmpty {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
@@ -1001,6 +1083,7 @@ struct ProjectFixture {
     var tab: ProjectTab = .run
     var library: SnapshotLibrary?
     var snapshotImages: [String: Data] = [:]
+    var orphanIDs: Set<String> = []
     var history: [String: [SnapshotVersion]] = [:]
     /// Keyed "commit:path".
     var versionImages: [String: Data] = [:]
@@ -1067,6 +1150,7 @@ extension ProjectModel {
         isLoadingChanges = false
         fixtureImages = f.changeImages
         library = f.library
+        orphanIDs = f.orphanIDs
         fixtureSnapshotImages = f.snapshotImages
         fixtureHistory = f.history
         fixtureVersionImages = f.versionImages

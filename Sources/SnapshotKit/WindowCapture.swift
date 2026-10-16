@@ -7,7 +7,7 @@ import SwiftUI
 ///     SnapshotKit --capture out.png --project /path/to/repo --tab changes \
 ///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference|toggle]
 ///                 [--zoom 3|change] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
-///                 [--action run|rerecord|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
+///                 [--action run|rerecord|record|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
 ///
 /// The window is placed off-screen and the app does not activate, so it does not disturb
 /// whatever is on screen. Set SNAPSHOTKIT_HOME to keep captures away from real settings.
@@ -98,6 +98,13 @@ enum WindowCapture {
                 case "rerecord": project.reRecordFailed()
                 case "flaky": project.checkFlakiness()
                 case "remote": project.runRemote()
+                case "record":
+                    // Re-records the test of the snapshot given with --select (or the first one).
+                    _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.library != nil ? true : nil }
+                    let file = project.library?.files.first { $0.path == o.select } ?? project.library?.files.first
+                    if let file { project.reRecord([file], granularity: .tests) }
+                    // Planning happens before the run starts.
+                    _ = await waitFor(deadline: Date().addingTimeInterval(20)) { project.isRunning ? true : nil }
                 default: log("unknown action \(action)")
                 }
                 _ = await waitFor(deadline: deadline) { project.isRunning ? nil : true }

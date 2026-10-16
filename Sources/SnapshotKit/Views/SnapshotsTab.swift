@@ -10,6 +10,11 @@ enum LibraryLayout: String {
 struct SnapshotsTab: View {
     @ObservedObject var project: ProjectModel
     @AppStorage("libraryLayout") private var layoutRaw = LibraryLayout.list.rawValue
+    @State private var confirmRecordShown = false
+    @State private var confirmTrashOrphans = false
+
+    /// Above this many tests, re-recording what's shown asks first.
+    static let confirmAbove = 10
 
     private var layout: LibraryLayout { LibraryLayout(rawValue: layoutRaw) ?? .list }
 
@@ -58,6 +63,19 @@ struct SnapshotsTab: View {
         VStack(alignment: .leading, spacing: DS.Space.s) {
             HStack(spacing: DS.Space.s) {
                 SearchField(prompt: "Filter modules, suites and tests", text: $project.libraryFilter)
+                Menu {
+                    Picker("Sort By", selection: $project.librarySort) {
+                        ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                .labelStyle(.iconOnly)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Sort by name (grouped), size or most recently changed")
+                .accessibilityLabel("Sort By")
                 Picker("Layout", selection: $layoutRaw) {
                     Label("List", systemImage: "list.bullet").tag(LibraryLayout.list.rawValue)
                     Label("Grid", systemImage: "square.grid.2x2").tag(LibraryLayout.grid.rawValue)
@@ -69,24 +87,69 @@ struct SnapshotsTab: View {
                 .help("Show snapshots as a list with a large preview, or as a grid")
                 .accessibilityLabel("Layout")
             }
-            Picker("Show", selection: $project.libraryScope) {
-                ForEach(LibraryScope.allCases) { scope in
-                    let n = project.count(in: scope)
-                    Text(scope == .all ? scope.rawValue : "\(scope.rawValue) \(n)").tag(scope)
-                }
+            // Counts when they fit, then without, then a menu: never wraps or clips.
+            ViewThatFits(in: .horizontal) {
+                scopePicker(counts: true).pickerStyle(.segmented)
+                scopePicker(counts: false).pickerStyle(.segmented)
+                scopePicker(counts: true).pickerStyle(.menu).fixedSize()
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
             .accessibilityLabel("Show")
             if let library = project.library {
-                Text(LibraryStats(library).summary)
-                    .font(DS.Font.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: DS.Space.s) {
+                    Text(LibraryStats(library).summary)
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: DS.Space.s)
+                    let shown = project.displayedSnapshots
+                    if project.libraryScope == .orphaned && !shown.isEmpty {
+                        Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                            .disabled(project.isRunning)
+                            .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
+                    } else {
+                    Button(shownTitle(shown)) {
+                        if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .disabled(shown.isEmpty || project.isRunning || project.environment == nil)
+                    .help("Record the tests of every snapshot shown (filter first to narrow it down), then verify")
+                    }
+                }
             }
         }
         .padding(DS.Space.m)
+        .confirmationDialog("Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
+            Button("Move to Trash", role: .destructive) { project.moveToTrash(project.displayedSnapshots) }
+        } message: {
+            Text("No test records or checks them any more. Commit the deletion to remove them from the repository.")
+        }
+        .confirmationDialog("Re-record \(testCount(project.displayedSnapshots)) tests?", isPresented: $confirmRecordShown) {
+            Button("Re-record") { project.reRecord(project.displayedSnapshots, granularity: .tests) }
+        } message: {
+            Text("Their reference images are recorded again and then verified. You can review the result on the Changes tab before committing.")
+        }
+    }
+
+    private func scopePicker(counts: Bool) -> some View {
+        Picker("Show", selection: $project.libraryScope) {
+            ForEach(LibraryScope.allCases.filter { $0 != .orphaned || !project.orphanIDs.isEmpty || project.libraryScope == .orphaned }) { scope in
+                Text(scope == .all || !counts ? scope.rawValue : "\(scope.rawValue) \(project.count(in: scope))").tag(scope)
+            }
+        }
+    }
+
+    private func testCount(_ files: [SnapshotFile]) -> Int {
+        Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count
+    }
+
+    private func shownTitle(_ files: [SnapshotFile]) -> String {
+        let all = files.count == (project.library?.files.count ?? 0)
+        return all ? "Re-record All…" : "Re-record \(testCount(files)) Shown…"
     }
 
     @ViewBuilder
@@ -96,6 +159,17 @@ struct SnapshotsTab: View {
         } else {
             let tree = SnapshotLibrary.tree(project.filteredSnapshots)
             List(selection: $project.selectedSnapshotID) {
+                if project.librarySort != .name {
+                    Section(project.librarySort == .size ? "Largest First" : "Most Recently Changed") {
+                        ForEach(project.displayedSnapshots) { file in
+                            SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
+                                        detail: project.librarySort == .size ? .size : .modified)
+                                .tag(file.id)
+                                .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
+                                .contextMenu { SnapshotActions(project: project, file: file) }
+                        }
+                    }
+                } else {
                 ForEach(tree) { module in
                     ForEach(module.suites) { suite in
                         Section {
@@ -103,6 +177,8 @@ struct SnapshotsTab: View {
                                 ForEach(test.files) { file in
                                     SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file))
                                         .tag(file.id)
+                                        // Drag a snapshot out, e.g. into a pull request comment.
+                                        .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
                                         .contextMenu { SnapshotActions(project: project, file: file) }
                                 }
                             }
@@ -114,6 +190,7 @@ struct SnapshotsTab: View {
                             }
                         }
                     }
+                }
                 }
             }
             .overlay {
@@ -136,30 +213,49 @@ struct LibraryStats {
     var summary: String {
         let modules = Set(library.files.map(\.module)).count
         let size = ByteCountFormatter.string(fromByteCount: Int64(library.totalBytes), countStyle: .file)
-        return "\(library.files.count) snapshot\(library.files.count == 1 ? "" : "s") · \(library.testCount) tests · "
+        return "\(library.files.count) snapshot\(library.files.count == 1 ? "" : "s") · \(library.testCount) test\(library.testCount == 1 ? "" : "s") · "
             + "\(modules) module\(modules == 1 ? "" : "s") · \(size)"
     }
 }
 
 struct SnapshotRow: View {
+    /// Extra information for a flat, sorted list, where the suite header is missing.
+    enum Detail { case none, size, modified }
     var file: SnapshotFile
     var status = SnapshotStatus()
     var load: @Sendable () -> Data?
+    var detail = Detail.none
 
     var body: some View {
         HStack(spacing: DS.Space.m) {
             Thumbnail(id: "snapshot:\(file.path)#\(file.byteSize)", load: load)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(file.testName).lineLimit(1)
+                if detail != .none {
+                    Text(file.suite).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 HStack(spacing: DS.Space.xs) {
                     if !file.variant.isEmpty {
                         Text(file.variant).font(DS.Font.code).foregroundStyle(.secondary).lineLimit(1)
                     }
                     if file.state != .clean { SnapshotStateChip(state: file.state) }
+                    if status.orphaned { Chip(text: "Orphaned", color: DS.Status.neutral).help("Its test no longer exists") }
                 }
             }
             Spacer(minLength: DS.Space.s)
             StatusMarks(status: status)
+            switch detail {
+            case .size:
+                Text(ByteCountFormatter.string(fromByteCount: Int64(file.byteSize), countStyle: .file))
+                    .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
+            case .modified:
+                if let modified = file.modified {
+                    Text(modified, format: .dateTime.day().month(.abbreviated).hour().minute())
+                        .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            case .none:
+                EmptyView()
+            }
         }
         .padding(.vertical, DS.Space.xxs)
         .accessibilityElement(children: .ignore)
@@ -213,9 +309,18 @@ struct SnapshotActions: View {
 
     var body: some View {
         let url = project.project.url.appendingPathComponent(file.path)
+        let disabled = project.isRunning || project.environment == nil || project.orphanIDs.contains(file.id)
+        Button("Re-record \(file.testName)") { project.reRecord([file], granularity: .tests) }
+            .disabled(disabled)
+        Button("Re-record Suite \(file.suite)") { project.reRecord([file], granularity: .suites) }
+            .disabled(disabled)
+        Divider()
         Button("Open in Default App") { NSWorkspace.shared.open(url) }
         Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         Divider()
+        Button("Copy Image") {
+            if let data = try? Data(contentsOf: url) { Clipboard.copyImage(data) }
+        }
         Button("Copy Path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(file.path, forType: .string)
@@ -248,6 +353,18 @@ struct SnapshotDetail: View {
                 HStack(spacing: DS.Space.s) {
                     if file.state != .clean { SnapshotStateChip(state: file.state) }
                     Menu {
+                        Button("Re-record Test") { project.reRecord([file], granularity: .tests) }
+                        Button("Re-record Suite \(file.suite)") { project.reRecord([file], granularity: .suites) }
+                    } label: {
+                        Label("Re-record", systemImage: "camera")
+                    } primaryAction: {
+                        project.reRecord([file], granularity: .tests)
+                    }
+                    .fixedSize()
+                    .disabled(project.isRunning || project.environment == nil || project.orphanIDs.contains(file.id))
+                    .help("Record this test's snapshots again, then check that it passes")
+                    .accessibilityLabel("Re-record")
+                    Menu {
                         SnapshotActions(project: project, file: file)
                     } label: {
                         Label("Snapshot Actions", systemImage: "ellipsis")
@@ -260,6 +377,19 @@ struct SnapshotDetail: View {
                 }
             }
             let status = project.status(of: file)
+            if status.orphaned {
+                HStack(spacing: DS.Space.m) {
+                    Label("Orphaned: no test named \(file.testName) in \(file.suite).swift any more", systemImage: "questionmark.folder")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Button("Move to Trash") { project.moveToTrash([file]) }
+                        .controlSize(.small)
+                    Spacer()
+                }
+                .font(DS.Font.secondary)
+                .padding(.horizontal, DS.Space.l)
+                .padding(.bottom, DS.Space.m)
+            }
             if status.failureID != nil || status.change != nil {
                 HStack(spacing: DS.Space.m) {
                     if let id = status.failureID {
@@ -545,7 +675,14 @@ struct SnapshotGrid: View {
         let tree = SnapshotLibrary.tree(project.filteredSnapshots)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Space.l, pinnedViews: [.sectionHeaders]) {
-                ForEach(tree) { module in
+                if project.librarySort != .name {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width), spacing: DS.Space.l)],
+                              alignment: .leading, spacing: DS.Space.l) {
+                        ForEach(project.displayedSnapshots) { tile($0) }
+                    }
+                    .padding(.horizontal, DS.Space.l)
+                }
+                ForEach(project.librarySort == .name ? tree : []) { module in
                     ForEach(module.suites) { suite in
                         Section {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width), spacing: DS.Space.l)],
@@ -605,6 +742,7 @@ struct SnapshotGrid: View {
         }
         .frame(width: Self.tile.width, alignment: .leading)
         .contentShape(Rectangle())
+        .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
         .onTapGesture(count: 2) { open(file) }
         .onTapGesture { project.selectedSnapshotID = file.id }
         .contextMenu {

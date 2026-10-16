@@ -15,6 +15,8 @@ public struct SnapshotFile: Identifiable, Hashable, Sendable {
     public var path: String
     public var byteSize: Int
     public var state: State
+    /// When the file last changed on disk.
+    public var modified: Date?
 
     public var id: String { path }
     public var fileName: String { (path as NSString).lastPathComponent }
@@ -41,10 +43,11 @@ public struct SnapshotFile: Identifiable, Hashable, Sendable {
         return parts.count > 1 ? String(parts[1]) : ""
     }
 
-    public init(path: String, byteSize: Int, state: State = .clean) {
+    public init(path: String, byteSize: Int, state: State = .clean, modified: Date? = nil) {
         self.path = path
         self.byteSize = byteSize
         self.state = state
+        self.modified = modified
     }
 }
 
@@ -98,7 +101,8 @@ public struct SnapshotLibrary: Sendable {
             guard seen.insert(path).inserted,
                   let attributes = try? FileManager.default.attributesOfItem(atPath: repository.appendingPathComponent(path).path)
             else { return nil } // tracked but deleted in the working tree
-            return SnapshotFile(path: path, byteSize: (attributes[.size] as? Int) ?? 0, state: states[path] ?? .clean)
+            return SnapshotFile(path: path, byteSize: (attributes[.size] as? Int) ?? 0, state: states[path] ?? .clean,
+                                modified: attributes[.modificationDate] as? Date)
         }
         return SnapshotLibrary(files: files)
     }
@@ -129,5 +133,27 @@ public struct SnapshotLibrary: Sendable {
             let haystack = file.path.lowercased()
             return terms.allSatisfy { haystack.contains($0) }
         }
+    }
+
+    /// Snapshots whose test is gone: no `<suite>.swift` test file, or no function with the test's
+    /// name in it. Leftovers of renamed or deleted tests that nothing records or checks any more.
+    public static func orphans(_ files: [SnapshotFile], repository: URL) -> Set<String> {
+        let swiftFiles = Git(root: repository).lsFiles(["*.swift"])
+        var sources: [String: String?] = [:]   // test file path → contents (nil if unreadable)
+        var orphans = Set<String>()
+        for file in files {
+            guard let path = try? RecordPlanner.testFile(for: file, among: swiftFiles, repository: repository) else {
+                orphans.insert(file.id)
+                continue
+            }
+            if sources[path] == nil {
+                sources[path] = .some(try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8))
+            }
+            guard let text = sources[path] ?? nil else { continue }
+            // A parameterized test's snapshots are named "function-label".
+            let function = file.testName.split(separator: "-").first.map(String.init) ?? file.testName
+            if !text.contains("func \(function)(") && !text.contains("func `\(function)`(") { orphans.insert(file.id) }
+        }
+        return orphans
     }
 }

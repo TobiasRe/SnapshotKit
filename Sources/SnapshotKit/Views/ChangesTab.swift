@@ -95,6 +95,7 @@ struct ChangesTab: View {
             }
         }
         Divider()
+        Button("Copy Side-by-Side Image") { Clipboard.copyComparison(project.imageLoader(for: change)) }
         let viewed = project.viewedChanges.contains(change.id)
         Button(viewed ? "Mark as Not Viewed" : "Mark as Viewed") { project.setViewed(!viewed, for: change) }
         Button("Copy Path") {
@@ -351,6 +352,9 @@ struct SearchField: View {
                     .accessibilityLabel("Clear")
             }
         }
+        // A fixed height: a focused field (the field editor) is otherwise a couple of points
+        // taller, and focus arrives at an unpredictable moment, which moved everything below.
+        .frame(height: 16)
         .padding(.horizontal, DS.Space.s)
         .padding(.vertical, DS.Space.xs)
         .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
