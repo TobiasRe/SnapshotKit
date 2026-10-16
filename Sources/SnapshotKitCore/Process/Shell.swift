@@ -37,35 +37,40 @@ public enum Shell {
         if let environment {
             process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         }
-        let out = Pipe(), err = Pipe()
+        let out = Pipe.private(), err = Pipe.private()
         process.standardOutput = out
         process.standardError = err
-        let inPipe = Pipe()
-        process.standardInput = input == nil ? FileHandle.nullDevice : inPipe
+        let inPipe = input == nil ? nil : Pipe.private()
+        process.standardInput = inPipe ?? FileHandle.nullDevice
         let exited = exitSemaphore(for: process)
 
         try process.run()
-        if let input {
+        out.closeWriteEndInParent()
+        err.closeWriteEndInParent()
+        if let input, let inPipe {
+            try? inPipe.fileHandleForReading.close()
             inPipe.fileHandleForWriting.write(input)
             try? inPipe.fileHandleForWriting.close()
         }
 
-        // Drain both pipes concurrently so a full stderr buffer cannot block stdout.
-        var errData = Data()
-        let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global().async {
-            errData = err.fileHandleForReading.readDataToEndOfFile()
-            group.leave()
+        // Drain both pipes concurrently so a full stderr buffer cannot block stdout. A dedicated
+        // thread, not the global queue: that queue has only as many threads as cores, and when
+        // they are all blocked in here (parallel tests, background tasks) the drain never runs.
+        let errData = LockedData()
+        let errDone = DispatchSemaphore(value: 0)
+        let reader = Thread {
+            errData.value = err.fileHandleForReading.readDataToEndOfFile()
+            errDone.signal()
         }
+        reader.start()
         let outData = out.fileHandleForReading.readDataToEndOfFile()
-        group.wait()
-        exited.wait()
+        errDone.wait()
+        waitForExit(process, exited)
 
         return CommandResult(
             status: process.terminationStatus,
             stdout: String(decoding: outData, as: UTF8.self),
-            stderr: String(decoding: errData, as: UTF8.self)
+            stderr: String(decoding: errData.value, as: UTF8.self)
         )
     }
 
@@ -87,14 +92,15 @@ public enum Shell {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
         if let directory { process.currentDirectoryURL = directory }
-        let out = Pipe()
+        let out = Pipe.private()
         process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         let exited = exitSemaphore(for: process)
         try process.run()
+        out.closeWriteEndInParent()
         let data = out.fileHandleForReading.readDataToEndOfFile()
-        exited.wait()
+        waitForExit(process, exited)
         guard process.terminationStatus == 0 else {
             throw CommandError(command: arguments, result: CommandResult(status: process.terminationStatus, stdout: "", stderr: ""))
         }
@@ -109,10 +115,48 @@ public enum Shell {
         return semaphore
     }
 
+    /// Waits for the termination handler, but doesn't rely on it alone: once in a while it is
+    /// never delivered (seen as a test run hanging forever after `git init` had exited).
+    /// `isRunning` doesn't spin the run loop either.
+    private static func waitForExit(_ process: Process, _ exited: DispatchSemaphore) {
+        while exited.wait(timeout: .now() + .milliseconds(500)) == .timedOut {
+            if !process.isRunning { return }
+        }
+    }
+
     /// Quotes an argument for display in a copy-pasteable command line.
     public static func quote(_ argument: String) -> String {
         let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./=:,@+%")
         if !argument.isEmpty, argument.unicodeScalars.allSatisfy(safe.contains) { return argument }
         return "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+}
+
+/// Bytes handed from the reader thread back to the caller.
+private final class LockedData: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    var value: Data {
+        get { lock.withLock { data } }
+        set { lock.withLock { data = newValue } }
+    }
+}
+
+extension Pipe {
+    /// A pipe whose descriptors are close-on-exec, so a child spawned concurrently on another
+    /// thread can't inherit them. (An inherited write end keeps the reader waiting for EOF until
+    /// that unrelated child exits; this hung test runs.) The child this pipe is meant for still
+    /// gets it as stdin/stdout/stderr, since those are set up with dup2, which clears the flag.
+    static func `private`() -> Pipe {
+        let pipe = Pipe()
+        for handle in [pipe.fileHandleForReading, pipe.fileHandleForWriting] {
+            _ = fcntl(handle.fileDescriptor, F_SETFD, FD_CLOEXEC)
+        }
+        return pipe
+    }
+
+    /// The child has its own copy now; ours must go, or reading never sees end-of-file.
+    func closeWriteEndInParent() {
+        try? fileHandleForWriting.close()
     }
 }

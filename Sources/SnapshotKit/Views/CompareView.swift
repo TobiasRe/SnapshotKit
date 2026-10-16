@@ -395,7 +395,7 @@ struct PixelReadout: View {
             if let a, let b {
                 let delta = a.perceptualDistance(to: b)
                 Text(a == b ? "same" : String(format: "ΔE %.1f", delta))
-                    .foregroundStyle(a == b ? Color.secondary : (delta < 2.3 ? DS.Status.flaky : DS.Status.changed))
+                    .foregroundStyle(a == b ? Color.secondary : DS.Status.text(delta < 2.3 ? DS.Status.flaky : DS.Status.changed))
                     .help("CIE94 colour difference. Below 2.3 is invisible to the eye.")
             }
         }

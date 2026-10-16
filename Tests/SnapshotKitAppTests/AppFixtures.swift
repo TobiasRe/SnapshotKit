@@ -1,7 +1,14 @@
 import AppKit
 import SnapshotKitCore
 import SwiftUI
+import Testing
 @testable import SnapshotKit
+
+/// Every app test suite lives in here and runs one after another. Suites run in parallel by
+/// default, and app tests share the main thread, windows and caches: a window opened by the
+/// accessibility audit could shift a snapshot rendered at the same moment by a point or two.
+@Suite(.serialized)
+enum AppUITests {}
 
 /// Deterministic state for rendering the app's views: no git, Xcode, simulator or clock involved.
 @MainActor

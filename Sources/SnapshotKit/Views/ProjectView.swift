@@ -127,7 +127,7 @@ struct RunInspector: View {
                     VStack(alignment: .leading, spacing: DS.Space.xxs) {
                         FormFooter(ctx.resolved.ciFiles.isEmpty ? "No CI files found." : "From " + ctx.resolved.ciFiles.joined(separator: ", ")
                                    + (ctx.resolved.overrideFile.map { " and \($0)" } ?? "") + ".")
-                        ForEach(ctx.resolved.notes, id: \.self) { FormFooter($0).foregroundStyle(DS.Status.flaky) }
+                        ForEach(ctx.resolved.notes, id: \.self) { FormFooter($0).foregroundStyle(DS.Status.text(DS.Status.flaky)) }
                     }
                 }
 
@@ -146,7 +146,7 @@ struct RunInspector: View {
                 }
             } else if let error = project.configError {
                 Section("Configuration") {
-                    Label(error, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                    Label(error, systemImage: "xmark.octagon.fill").foregroundStyle(DS.Status.text(DS.Status.failed))
                 }
             }
         }
@@ -396,7 +396,7 @@ struct LogView: View {
 
     var body: some View {
         let lines = project.visibleLog
-        let suites = project.lastResult?.summary?.suites ?? []
+        let suites = project.resultSuites
         let showResults = !suites.isEmpty && project.runPane == .results
         VStack(spacing: 0) {
             HStack(spacing: DS.Space.m) {
@@ -412,7 +412,8 @@ struct LogView: View {
                     .controlSize(.small)
                     .accessibilityLabel("Show Results or Output")
                 }
-                Text(showResults ? "\(suites.reduce(0) { $0 + $1.tests.count }) tests" : "\(lines.count) lines")
+                let testCount = suites.reduce(0) { $0 + $1.tests.count }
+                Text(showResults ? "\(testCount) test\(testCount == 1 ? "" : "s")" : "\(lines.count) line\(lines.count == 1 ? "" : "s")")
                     .font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
                 SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter)
@@ -514,7 +515,7 @@ struct RunResultsList: View {
                         Text(suite.identifier)
                         Spacer()
                         if suite.failedCount > 0 {
-                            Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.failed)
+                            Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))
                         }
                         Text("\(suite.passedCount) passed").monospacedDigit()
                     }

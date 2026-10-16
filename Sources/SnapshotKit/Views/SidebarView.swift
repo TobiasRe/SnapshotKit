@@ -105,7 +105,8 @@ struct ProjectRow: View {
 
 struct QuickSwitcherView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var query = ""
+    // Starts with a preset query (captures, tests), so the first layout is already the final one.
+    @State private var query = QuickSwitcherQuery.preset ?? ""
     @State private var highlighted = 0
     @FocusState private var focused: Bool
 
@@ -164,10 +165,7 @@ struct QuickSwitcherView: View {
             .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
             .padding(.top, 80)
         }
-        .onAppear {
-            focused = true
-            if let preset = QuickSwitcherQuery.preset { query = preset }
-        }
+        .onAppear { focused = true }
         .onChange(of: query) { _, _ in highlighted = 0 }
         .onKeyPress(.escape) { close(); return .handled }
     }

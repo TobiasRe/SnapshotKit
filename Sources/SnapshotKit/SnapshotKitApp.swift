@@ -88,6 +88,19 @@ struct SnapshotKitCommands: Commands {
                 Button("Failures") { project.tab = .failures }.keyboardShortcut("2", modifiers: [.command, .option])
                 Button("Changes") { project.tab = .changes }.keyboardShortcut("3", modifiers: [.command, .option])
                 Divider()
+                // Step through snapshots even while the image, not the list, has focus.
+                Button("Next Item") { project.selectAdjacent(1) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    .disabled(project.tab == .run)
+                Button("Previous Item") { project.selectAdjacent(-1) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    .disabled(project.tab == .run)
+                Button("Toggle Viewed") {
+                    if let change = project.selectedChange { project.setViewed(!project.viewedChanges.contains(change.id), for: change) }
+                }
+                .keyboardShortcut("v", modifiers: [.command, .option])
+                .disabled(project.tab != .changes || project.selectedChange == nil)
+                Divider()
             }
             Picker("Compare", selection: $compareMode) {
                 Text("Side by Side").tag(CompareMode.sideBySide.rawValue).keyboardShortcut("1")

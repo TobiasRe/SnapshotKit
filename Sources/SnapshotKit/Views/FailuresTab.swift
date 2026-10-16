@@ -133,7 +133,7 @@ struct FailuresTab: View {
             if let message = item.test.failureMessages.first {
                 VStack(alignment: .leading, spacing: DS.Space.xs) {
                     Label(firstLine(message), systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(DS.Status.text(DS.Status.failed))
                         .lineLimit(2)
                         .textSelection(.enabled)
                     hint(item)
@@ -197,10 +197,10 @@ struct FailuresTab: View {
         switch item.verdict {
         case .flaky:
             Label("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.", systemImage: "lightbulb")
-                .foregroundStyle(.orange)
+                .foregroundStyle(DS.Status.text(DS.Status.flaky))
         case .alwaysFails where project.diagnoses[item.id]?.kind == .imperceptible:
             Label("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.", systemImage: "lightbulb")
-                .foregroundStyle(DS.Status.flaky)
+                .foregroundStyle(DS.Status.text(DS.Status.flaky))
         case .alwaysFails:
             Label("Fails every time: re-record if the change is intended, otherwise it is a regression.", systemImage: "lightbulb")
                 .foregroundStyle(.secondary)
@@ -210,7 +210,7 @@ struct FailuresTab: View {
         case nil:
             if item.historyFlaky != nil {
                 Label("Both passed and failed on the same commit in earlier runs.", systemImage: "lightbulb")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(DS.Status.text(DS.Status.flaky))
             }
         }
     }

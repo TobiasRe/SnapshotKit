@@ -105,6 +105,10 @@ final class ProjectModel: ObservableObject {
     /// What kind of difference each failure is (first repetition), computed in the background.
     @Published private(set) var diagnoses: [String: DiffDiagnosis] = [:]
     private var diagnoseTask: Task<Void, Never>?
+    /// All suites of the last run, read back from disk at launch (before any run in this session).
+    @Published private(set) var restoredSuites: [SuiteResult] = []
+    /// The suites the Run tab's results list shows.
+    var resultSuites: [SuiteResult] { lastResult?.summary?.suites ?? restoredSuites }
     /// Output while running, results once there are some.
     @Published var runPane = RunPane.results
     @Published private(set) var history: [RunRecord] = []
@@ -206,6 +210,7 @@ final class ProjectModel: ObservableObject {
     private func loadLastRun() {
         guard let last = LastRun.load(repository: project.url) else { return }
         lastFailingSuites = last.failingSuites
+        restoredSuites = last.suites ?? []
         passed = last.passed
         failed = last.failed
         let attachmentsDir = last.attachmentsDirectory.map { URL(fileURLWithPath: $0) }
@@ -280,6 +285,30 @@ final class ProjectModel: ObservableObject {
         return hideViewed ? changes.filter { !viewedChanges.contains($0.id) } : changes
     }
 
+    /// Changes in the order the list shows them: grouped by suite.
+    var displayedChanges: [SnapshotChange] {
+        SnapshotChangeSet.group(filteredChanges).flatMap(\.changes)
+    }
+
+    /// Failures in the order the list shows them: grouped by suite.
+    var displayedFailures: [FailureItem] {
+        Dictionary(grouping: failures, by: \.suite.identifier).sorted { $0.key < $1.key }.flatMap(\.value)
+    }
+
+    /// Moves the selection in the current tab's list, from anywhere in the window.
+    func selectAdjacent(_ step: Int) {
+        func move(_ ids: [String], _ current: String?) -> String? {
+            guard !ids.isEmpty else { return nil }
+            guard let current, let i = ids.firstIndex(of: current) else { return ids.first }
+            return ids[min(max(i + step, 0), ids.count - 1)]
+        }
+        switch tab {
+        case .failures: selectedFailureID = move(displayedFailures.map(\.id), selectedFailureID)
+        case .changes: selectedChangeID = move(displayedChanges.map(\.id), selectedChangeID)
+        case .run: break
+        }
+    }
+
     /// Shows a test from the run results on the Failures tab.
     func showFailure(_ id: String) {
         guard failures.contains(where: { $0.id == id }) else { return }
@@ -290,7 +319,7 @@ final class ProjectModel: ObservableObject {
     /// Marks a change as viewed (or not). Marking moves on to the next unviewed change, so a
     /// review is one key press per snapshot.
     func setViewed(_ viewed: Bool, for change: SnapshotChange) {
-        let order = filteredChanges
+        let order = displayedChanges
         if viewed { viewedChanges.insert(change.id) } else { viewedChanges.remove(change.id) }
         if fixtureImages == nil {
             ReviewMarks(repository: project.url).set(viewed, for: change, keepingOnly: changeSet?.changes ?? [])

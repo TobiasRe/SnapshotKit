@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Builds SnapshotKit.app (and the snapkit CLI) in release mode into ./dist.
-# The app is ad-hoc signed; for distribution, sign and notarize with your own identity.
+# Builds SnapshotKit.app (and the snapkit CLI) in release mode into ./dist, plus zip archives
+# for a release. The app is ad-hoc signed; for distribution, sign and notarize with your own identity.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-$(sed -n 's/.*current = "\(.*\)".*/\1/p' Sources/SnapshotKitCore/Support/SnapshotKitVersion.swift)}"
 
 swift build -c release --product SnapshotKit
 swift build -c release --product snapkit
@@ -37,4 +37,11 @@ cat > "$APP/Contents/Info.plist" <<EOF
 EOF
 
 codesign --force --sign - "$APP" >/dev/null
-echo "Built $ROOT/$APP and $ROOT/dist/snapkit"
+codesign --force --sign - dist/snapkit >/dev/null
+
+ARCH="$(uname -m)"
+rm -f dist/*.zip
+ditto -c -k --keepParent "$APP" "dist/SnapshotKit-$VERSION-macos-$ARCH.zip"
+ditto -c -k dist/snapkit "dist/snapkit-$VERSION-macos-$ARCH.zip"
+echo "Built $ROOT/$APP and $ROOT/dist/snapkit ($VERSION, $ARCH)"
+ls -1 dist/*.zip

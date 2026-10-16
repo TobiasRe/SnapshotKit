@@ -112,8 +112,8 @@ enum WindowCapture {
         if let zoom = o.zoom { model.viewport = Viewport(scale: zoom, offset: o.pan ?? .zero) }
         else if let pan = o.pan { model.viewport.pan(by: pan) }
         if let query = o.quickSwitcher {
-            model.showQuickSwitcher = true
             if !query.isEmpty { QuickSwitcherQuery.preset = query }
+            model.showQuickSwitcher = true
         }
 
         // Let SwiftUI lay out and the image decode/diff tasks finish.
