@@ -106,7 +106,11 @@ enum WindowCapture {
             }
             _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.isLoadingChanges ? nil : true }
             if let select = o.select {
-                if project.tab == .failures { project.selectedFailureID = select } else { project.selectedChangeID = select }
+                switch project.tab {
+                case .failures: project.selectedFailureID = select
+                case .snapshots: project.selectedSnapshotID = select
+                default: project.selectedChangeID = select
+                }
             }
         }
         if let zoom = o.zoom { model.viewport = Viewport(scale: zoom, offset: o.pan ?? .zero) }

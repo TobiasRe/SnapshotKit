@@ -111,6 +111,21 @@ extension AppUITests {
             #expect(model.selectedFailureID == model.displayedFailures.first?.id)
         }
 
+        @Test func variantComparisonFollowsTheTestNotOtherSelections() {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            let dark = model.displayedSnapshots[0], light = model.displayedSnapshots[1]
+            #expect(model.variants(of: dark).map(\.variant) == ["dark", "light"])
+            model.selectedSnapshotID = dark.id
+            model.comparison = .variant(light)
+            model.selectedSnapshotID = light.id      // stepping through the same test's variants
+            #expect(model.comparison == .variant(light))
+            model.selectedSnapshotID = model.displayedSnapshots[2].id   // another test
+            #expect(model.comparison == nil)
+            model.comparison = .version(AppFixtures.snapshotVersions[0])
+            model.selectedSnapshotID = dark.id
+            #expect(model.comparison == nil)
+        }
+
         @Test func committedChangesCannotBeDiscarded() async throws {
             let (repo, _) = try makeRepo()
             try Shell.output(["git", "commit", "-qam", "re-record"], in: repo)

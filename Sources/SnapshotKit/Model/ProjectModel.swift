@@ -2,6 +2,30 @@ import AppKit
 import Foundation
 import SnapshotKitCore
 
+/// Which snapshots the library shows.
+enum LibraryScope: String, CaseIterable, Identifiable {
+    case all = "All"
+    case changed = "Changed"
+    case failing = "Failing"
+    case uncommitted = "Uncommitted"
+    var id: String { rawValue }
+}
+
+/// What else SnapshotKit knows about one snapshot.
+struct SnapshotStatus: Equatable {
+    /// How it differs from the base branch, if it does.
+    var change: SnapshotChangeKind?
+    /// The failing test it is the reference of, from the last run.
+    var failureID: String?
+    var verdict: FlakeVerdict?
+}
+
+/// The second image in a snapshot's detail.
+enum SnapshotComparison: Equatable {
+    case version(SnapshotVersion)
+    case variant(SnapshotFile)
+}
+
 /// What the Run tab shows under its header.
 enum RunPane: String, CaseIterable, Identifiable {
     case results = "Results"
@@ -10,9 +34,14 @@ enum RunPane: String, CaseIterable, Identifiable {
 }
 
 enum ProjectTab: String, CaseIterable, Identifiable {
-    case run = "Run"
-    case failures = "Failures"
+    /// Every snapshot in the project: browse, inspect, manage.
+    case snapshots = "Snapshots"
+    /// Snapshots that differ from the base branch: review.
     case changes = "Changes"
+    /// Snapshots whose tests failed in the last run: investigate.
+    case failures = "Failures"
+    /// Run and record.
+    case run = "Run"
     var id: String { rawValue }
 }
 
@@ -71,7 +100,24 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var currentBranch: String?
     /// Local branches plus origin's, for choosing the base branch.
     @Published private(set) var branches: [String] = []
-    @Published var tab: ProjectTab = .run
+    @Published var tab: ProjectTab = .snapshots
+
+    // Library
+    @Published private(set) var library: SnapshotLibrary?
+    @Published private(set) var isLoadingLibrary = false
+    @Published var libraryFilter = ""
+    @Published var libraryScope = LibraryScope.all
+    @Published var selectedSnapshotID: String? {
+        didSet {
+            guard oldValue != selectedSnapshotID else { return }
+            // Keep comparing variants while stepping through the same test's variants.
+            if case .variant(let other) = comparison, let now = selectedSnapshot,
+               other.module == now.module, other.suite == now.suite, other.testName == now.testName { return }
+            comparison = nil
+        }
+    }
+    /// What is shown next to the selected snapshot: an earlier version or another variant.
+    @Published var comparison: SnapshotComparison?
 
     // Running
     @Published private(set) var operation: RunOperation?
@@ -97,7 +143,12 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var lastDuration: TimeInterval?
 
     // Failures
-    @Published private(set) var failures: [FailureItem] = []
+    @Published private(set) var failures: [FailureItem] = [] {
+        didSet {
+            failureByPath = [:]
+            for item in failures { for path in item.referencePaths where failureByPath[path] == nil { failureByPath[path] = item } }
+        }
+    }
     @Published private(set) var failureSource: FailureSource?
     @Published var selectedFailureID: String?
     @Published private(set) var flakeResults: [FlakeResult] = []
@@ -114,7 +165,12 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var history: [RunRecord] = []
 
     // Changes
-    @Published private(set) var changeSet: SnapshotChangeSet?
+    @Published private(set) var changeSet: SnapshotChangeSet? {
+        didSet { changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a }) }
+    }
+    /// Lookups for the library's status marks, rebuilt when changes or failures change.
+    private var changeKindByPath: [String: SnapshotChangeKind] = [:]
+    private var failureByPath: [String: FailureItem] = [:]
     @Published private(set) var changesError: String?
     @Published var changeFilter = ""
     @Published var changeKinds = Set(SnapshotChangeKind.allCases)
@@ -134,6 +190,9 @@ final class ProjectModel: ObservableObject {
 
     /// Image bytes for changes, used instead of git when set (previews and snapshot tests).
     private var fixtureImages: [String: (Data?, Data?)]?
+    private var fixtureSnapshotImages: [String: Data]?
+    private var fixtureHistory: [String: [SnapshotVersion]]?
+    private var fixtureVersionImages: [String: Data]?
 
     init(project: Project, store: ProjectStore, autoload: Bool = true) {
         self.project = project
@@ -248,7 +307,98 @@ final class ProjectModel: ObservableObject {
 
     // MARK: Changes
 
+    /// Re-indexes the snapshots in the working tree (off the main thread).
+    func refreshLibrary() {
+        guard fixtureImages == nil else { return }
+        isLoadingLibrary = true
+        let repo = project.url
+        Task {
+            let loaded = await Task.detached { try? SnapshotLibrary.load(repository: repo) }.value
+            isLoadingLibrary = false
+            library = loaded
+            if selectedSnapshotID == nil || !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
+                selectedSnapshotID = displayedSnapshots.first?.id
+            }
+        }
+    }
+
+    var filteredSnapshots: [SnapshotFile] {
+        let files = SnapshotLibrary.filter(library?.files ?? [], text: libraryFilter)
+        switch libraryScope {
+        case .all: return files
+        case .changed: return files.filter { status(of: $0).change != nil }
+        case .failing: return files.filter { status(of: $0).failureID != nil }
+        case .uncommitted: return files.filter { $0.state != .clean }
+        }
+    }
+
+    /// Changes and failures, keyed by snapshot path.
+    func status(of file: SnapshotFile) -> SnapshotStatus {
+        var status = SnapshotStatus()
+        status.change = changeKindByPath[file.path]
+        if let failure = failureByPath[file.path] {
+            status.failureID = failure.id
+            status.verdict = failure.verdict
+        }
+        return status
+    }
+
+    func count(in scope: LibraryScope) -> Int {
+        let files = library?.files ?? []
+        switch scope {
+        case .all: return files.count
+        case .changed: return files.filter { status(of: $0).change != nil }.count
+        case .failing: return files.filter { status(of: $0).failureID != nil }.count
+        case .uncommitted: return files.filter { $0.state != .clean }.count
+        }
+    }
+
+    /// Opens a snapshot's change on the Changes tab.
+    func showChange(path: String) {
+        guard changeSet?.changes.contains(where: { $0.path == path }) == true else { return }
+        changeFilter = ""
+        selectedChangeID = path
+        tab = .changes
+    }
+
+    /// Snapshots in the order the list shows them: module, suite, test, variant.
+    var displayedSnapshots: [SnapshotFile] {
+        SnapshotLibrary.tree(filteredSnapshots).flatMap { $0.suites.flatMap { $0.tests.flatMap(\.files) } }
+    }
+
+    var selectedSnapshot: SnapshotFile? {
+        library?.files.first { $0.id == selectedSnapshotID }
+    }
+
+    /// The other snapshots of the same test (light/dark, devices, named states), in variant order.
+    func variants(of file: SnapshotFile) -> [SnapshotFile] {
+        (library?.files ?? []).filter { $0.module == file.module && $0.suite == file.suite && $0.testName == file.testName }
+            .sorted { $0.variant.localizedStandardCompare($1.variant) == .orderedAscending }
+    }
+
+    /// Committed versions of a snapshot, newest first (git log, off the main thread).
+    func history(of file: SnapshotFile) async -> [SnapshotVersion] {
+        if let versions = fixtureHistory?[file.path] { return versions }
+        let repo = project.url, path = file.path
+        return await Task.detached { Git(root: repo).history(of: path) }.value
+    }
+
+    /// Loader for a snapshot as it was in `commit`; call off the main thread.
+    func versionLoader(for file: SnapshotFile, commit: String) -> @Sendable () -> Data? {
+        if let data = fixtureVersionImages?[commit + ":" + file.path] { return { data } }
+        let git = Git(root: project.url), path = file.path
+        return { git.image(of: path, at: commit) }
+    }
+
+    /// Bytes of a snapshot in the working tree; call off the main thread.
+    func snapshotLoader(for file: SnapshotFile) -> @Sendable () -> Data? {
+        if let data = fixtureSnapshotImages?[file.path] { return { data } }
+        let url = project.url.appendingPathComponent(file.path)
+        return { try? Data(contentsOf: url) }
+    }
+
     func refreshChanges() {
+        refreshLibrary()
         guard let base = baseBranch else {
             changeSet = nil
             changesError = "No base branch. Set one in the project settings."
@@ -305,6 +455,7 @@ final class ProjectModel: ObservableObject {
         switch tab {
         case .failures: selectedFailureID = move(displayedFailures.map(\.id), selectedFailureID)
         case .changes: selectedChangeID = move(displayedChanges.map(\.id), selectedChangeID)
+        case .snapshots: selectedSnapshotID = move(displayedSnapshots.map(\.id), selectedSnapshotID)
         case .run: break
         }
     }
@@ -848,6 +999,11 @@ struct ProjectFixture {
     var currentBranch: String?
     var branches: [String] = ["develop", "main", "feature/checkout-redesign"]
     var tab: ProjectTab = .run
+    var library: SnapshotLibrary?
+    var snapshotImages: [String: Data] = [:]
+    var history: [String: [SnapshotVersion]] = [:]
+    /// Keyed "commit:path".
+    var versionImages: [String: Data] = [:]
     var operation: RunOperation?
     var stageLabel = ""
     var phase: RunPhase = .preparing
@@ -910,6 +1066,11 @@ extension ProjectModel {
         changesError = f.changesError
         isLoadingChanges = false
         fixtureImages = f.changeImages
+        library = f.library
+        fixtureSnapshotImages = f.snapshotImages
+        fixtureHistory = f.history
+        fixtureVersionImages = f.versionImages
+        selectedSnapshotID = displayedSnapshots.first?.id
         viewedChanges = f.viewedChanges
         changeDiagnoses = Dictionary(uniqueKeysWithValues: (f.changeSet?.changes ?? []).compactMap { change -> (String, DiffDiagnosis)? in
             guard let (a, b) = f.changeImages[change.path], let pa = a.flatMap(PixelImage.init(data:)),
