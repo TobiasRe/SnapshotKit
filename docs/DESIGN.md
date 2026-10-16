@@ -11,6 +11,13 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 - **Safari and OpenMark:** the toolbar floats above the document and recedes when you don't need it.
 - **Photos and Preview:** editing and zoom controls float as glass over the image, not in a strip above it.
 - **Calendar:** headers softly blur the content scrolling beneath them.
+- **Kaleidoscope and other image-diff tools:** comparing images needs more than side by side. A one-up *toggle*
+  shows movement, a loupe reads exact pixels, and the tool should take you to the change rather than make you
+  hunt for it.
+- **Code review (GitHub's *Viewed* checkbox):** reviewing many changed files is a checklist. Mark one, move on.
+- **WWDC26 refinements:** Liquid Glass now diffuses busy backgrounds better. Standard components pick up these
+  changes for free; custom controls don't, and have to be checked with Increase Contrast, Reduce Transparency
+  and Reduce Motion. That is one more reason to keep custom glass to a minimum.
 - **Practitioner guidance:**
   - Start from standard structure (`NavigationSplitView`, toolbars, inspectors).
   - Add custom glass only where a surface floats over content, and group neighbouring glass in one container.
@@ -26,6 +33,9 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
    which is `.glassProminent` on macOS 26). Neighbouring actions use `secondaryActionStyle()` (`.glass`).
 4. **Colour means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
    Change kinds use blue (committed), orange (uncommitted), green (new) and red (deleted).
+   Status colour as *text* goes through `DS.Status.text(_:)`: system colours are tuned for fills and icons, and
+   orange or green text on its own tint drops to about 2:1 in light mode. Never rely on colour alone: the
+   history strip uses shape too when Differentiate Without Color is on.
 5. **Identifiers are code.** Paths, commands, suite identifiers and logs use SF Mono. Everything
    people read uses SF Pro text styles.
 6. **Calm motion.** 150 ms ease-out (`DS.motion`), no springs and no bounces.
@@ -46,7 +56,13 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 - `GlassGroup`: a `GlassEffectContainer` on macOS 26 or later, a plain stack before.
 - `primaryActionStyle()` / `secondaryActionStyle()`: button roles, not looks.
 - `panel()`: a solid content panel with a hairline border. Never glass.
-- `Chip`: a small status label.
+- `Chip`: a small status label (readable text colour built in).
+- `HistoryStrip`: the signature element. One mark per recent run of a test, green, red or orange. A flaky test
+  reads as a broken pattern, a regression as a clean switch to red. It appears in failure rows (compact) and
+  the failure detail (regular).
+- `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn't plainly visible
+  (Invisible, Few pixels, Size changed), and offer the precision that would pass.
+- `PixelReadout`: the hover loupe, showing coordinates, both colours and their ΔE.
 - `softTopEdge()`: a soft scroll-edge blur under headers.
 
 ## Enforcement
@@ -57,6 +73,8 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
   Off-screen rendering can't composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
   (headless captures included). Real glass needs a look on screen.
 - **An accessibility audit test** walks each tab's live accessibility tree and fails on unlabeled controls.
+- **Re-record only what you changed.** In a record-mode run of the whole suite, layout can depend on which
+  tests failed earlier in that run. Re-record single tests with `--filter`, then run everything normally.
 
 ## Don'ts
 

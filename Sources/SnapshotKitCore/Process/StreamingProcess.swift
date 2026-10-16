@@ -16,6 +16,7 @@ public final class StreamingProcess: @unchecked Sendable {
     private var continuation: AsyncStream<String>.Continuation?
     private var exitContinuation: CheckedContinuation<Int32, Never>?
     private var exitStatus: Int32?
+    private var finished = false
 
     /// Output lines without trailing newlines. Finishes when the process exits.
     public let lines: AsyncStream<String>
@@ -44,7 +45,7 @@ public final class StreamingProcess: @unchecked Sendable {
         process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         process.standardInput = FileHandle.nullDevice
 
-        let pipe = Pipe()
+        let pipe = Pipe.private()
         process.standardOutput = pipe
         process.standardError = pipe
 
@@ -57,25 +58,50 @@ public final class StreamingProcess: @unchecked Sendable {
                 fh.readabilityHandler = nil
                 for line in buffer.flush() { self?.continuation?.yield(line) }
                 readDone.signal()
+                self?.watchForLostTermination()
                 return
             }
             for line in buffer.append(data) { self?.continuation?.yield(line) }
         }
 
         process.terminationHandler = { [weak self] proc in
-            ChildProcesses.shared.remove(proc.processIdentifier)
             // Wait (briefly) for the reader to drain the pipe before finishing the stream.
             _ = readDone.wait(timeout: .now() + 2)
-            guard let self else { return }
-            self.continuation?.finish()
-            self.lock.withLock {
-                self.exitStatus = proc.terminationStatus
-                self.exitContinuation?.resume(returning: proc.terminationStatus)
-                self.exitContinuation = nil
-            }
+            self?.finish(status: proc.terminationStatus)
         }
         try process.run()
+        pipe.closeWriteEndInParent()
         ChildProcesses.shared.add(process.processIdentifier)
+    }
+
+    /// Delivers the exit once, whichever of the termination handler and the watchdog gets there first.
+    private func finish(status: Int32) {
+        let first = lock.withLock { () -> Bool in
+            guard !finished else { return false }
+            finished = true
+            return true
+        }
+        guard first else { return }
+        ChildProcesses.shared.remove(process.processIdentifier)
+        continuation?.finish()
+        lock.withLock {
+            exitStatus = status
+            exitContinuation?.resume(returning: status)
+            exitContinuation = nil
+        }
+    }
+
+    /// The output closed, so the process is exiting. Foundation occasionally never calls the
+    /// termination handler; don't let a finished run look like it is still going.
+    private func watchForLostTermination() {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, !self.lock.withLock({ self.finished }) else { return }
+            if self.process.isRunning {
+                self.watchForLostTermination()
+            } else {
+                self.finish(status: self.process.terminationStatus)
+            }
+        }
     }
 
     /// Waits for the process to exit and returns its status.

@@ -20,6 +20,7 @@ commands:
   projects   scan ROOT... | list
 
 Every command first restores record patches left behind by an interrupted run.
+`snapkit --version` prints the version.
 """
 
 // MARK: - Argument parsing
@@ -427,6 +428,8 @@ func main() async {
 
     case "", "help", "-h", "--help":
         say(usage)
+    case "version", "--version", "-v":
+        say("snapkit \(SnapshotKitVersion.current)")
     default:
         fail("unknown command '\(o.command)'\n\n" + usage)
     }

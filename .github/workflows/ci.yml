@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    # Building needs the macOS 26 SDK (Liquid Glass APIs); the app itself runs on macOS 14+.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: swift --version
+      - name: Build app and CLI
+        run: swift build
+      # The app's own snapshot tests (SnapshotKitAppTests) compare pixels rendered on the
+      # recording machine, so they run locally rather than on CI hardware.
+      - name: Core tests
+        run: swift test --filter SnapshotKitCoreTests

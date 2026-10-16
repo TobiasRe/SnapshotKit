@@ -54,6 +54,9 @@ public struct LastRun: Codable, Sendable {
     public var failed: Int
     /// Exported failure attachments (folder with manifest.json), if any.
     public var attachmentsDirectory: String?
+    /// Every suite of the run, passing ones included, for the Run tab's results after a
+    /// relaunch. Missing in files written by older versions.
+    public var suites: [SuiteResult]?
 
     public init(result: TestRunResult, attachmentsDirectory: URL? = nil) {
         date = Date()
@@ -61,6 +64,7 @@ public struct LastRun: Codable, Sendable {
         resultBundle = result.resultBundle.path
         self.attachmentsDirectory = attachmentsDirectory?.path
         failingSuites = result.failingSuites
+        suites = result.summary?.suites
         passed = result.passed
         failed = result.failed
     }

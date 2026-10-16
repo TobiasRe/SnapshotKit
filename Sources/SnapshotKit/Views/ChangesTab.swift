@@ -374,7 +374,7 @@ struct KindBadge: View {
                 .padding(.horizontal, DS.Space.s)
                 .padding(.vertical, DS.Space.xs)
                 .background(Capsule().fill(color.opacity(0.15)))
-                .foregroundStyle(color)
+                .foregroundStyle(DS.Status.text(color))
         }
     }
 

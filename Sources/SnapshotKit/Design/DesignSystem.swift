@@ -47,6 +47,23 @@ enum DS {
         static let neutral = Color.secondary
         static let changed = Color(red: 0.92, green: 0.16, blue: 0.86) // matches the diff overlay
 
+        /// A status colour dark enough to read as small text on its own tint: system colours are
+        /// tuned for fills and icons, and orange or green text on a pale tint falls well below 4.5:1
+        /// in light mode. Darker still with Increase Contrast; dark mode keeps the bright colour.
+        static func text(_ color: Color) -> Color {
+            let base = NSColor(color)
+            return Color(nsColor: NSColor(name: nil) { appearance in
+                let resolved = base.usingColorSpace(.sRGB) ?? base
+                let dark = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
+                                                       .accessibilityHighContrastDarkAqua])
+                switch dark {
+                case .darkAqua?, .accessibilityHighContrastDarkAqua?: return resolved
+                case .accessibilityHighContrastAqua?: return resolved.blended(withFraction: 0.55, of: .black) ?? resolved
+                default: return resolved.blended(withFraction: 0.4, of: .black) ?? resolved
+                }
+            })
+        }
+
         static func color(for kind: SnapshotChangeKind) -> Color {
             switch kind {
             case .committed: .blue
@@ -61,6 +78,10 @@ enum DS {
     /// window server composites; they get an opaque stand-in so controls stay legible.
     nonisolated(unsafe) static var solidSurfaces = ProcessInfo.processInfo.environment["SNAPSHOTKIT_SOLID_SURFACES"] == "1"
 
+    static var hasLiquidGlass: Bool {
+        if #available(macOS 26.0, *) { true } else { false }
+    }
+
     /// Short and calm: 150 ms ease-out, no springs — and none at all with Reduce Motion on.
     static var motion: Animation? {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : .easeOut(duration: 0.15)
@@ -71,9 +92,18 @@ enum DS {
 
 extension View {
     /// A control bar floating over content (compare toolbar, captions, slider knob).
-    @ViewBuilder
     func floatingGlass<S: Shape>(in shape: S) -> some View {
-        if DS.solidSurfaces {
+        modifier(FloatingGlass(shape: shape))
+    }
+
+    @ViewBuilder
+    fileprivate func floatingGlassBody<S: Shape>(in shape: S, increasedContrast: Bool) -> some View {
+        if increasedContrast && (DS.solidSurfaces || !DS.hasLiquidGlass) {
+            // Increase Contrast: an opaque surface with a visible edge instead of a hairline.
+            self
+                .background(shape.fill(Color(nsColor: .windowBackgroundColor)))
+                .overlay(shape.stroke(Color.primary.opacity(0.6), lineWidth: 1))
+        } else if DS.solidSurfaces {
             self
                 .background(shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.94)))
                 .overlay(shape.stroke(Color(nsColor: .separatorColor), lineWidth: 0.5))
@@ -135,6 +165,16 @@ extension View {
     }
 }
 
+/// Reads the contrast setting for `floatingGlass` (Liquid Glass adapts by itself; the fallbacks don't).
+private struct FloatingGlass<S: Shape>: ViewModifier {
+    var shape: S
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content.floatingGlassBody(in: shape, increasedContrast: contrast == .increased)
+    }
+}
+
 /// Groups nearby glass elements so they render (and morph) as one material on macOS 26+.
 struct GlassGroup<Content: View>: View {
     var spacing: CGFloat = DS.Space.s
@@ -160,6 +200,6 @@ struct Chip: View {
             .padding(.horizontal, DS.Space.s - 2)
             .padding(.vertical, DS.Space.xxs)
             .background(Capsule().fill(color.opacity(0.14)))
-            .foregroundStyle(color)
+            .foregroundStyle(DS.Status.text(color))
     }
 }
