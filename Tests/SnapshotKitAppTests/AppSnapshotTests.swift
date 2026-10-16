@@ -36,6 +36,50 @@ extension AppUITests {
         // MARK: Project pane (everything below the toolbar)
 
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func snapshotsTab(appearance: NSAppearance.Name) {
+            let (app, project) = makeApp(.library)
+            assertPane(project, app: app, appearance: appearance)
+        }
+
+        @Test func snapshotsGrid() {
+            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
+            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
+            let (app, project) = makeApp(.library)
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        /// Comparing the current snapshot with the version from two months ago.
+        @Test func snapshotComparedWithEarlierVersion() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.library)
+            let file = project.displayedSnapshots[0]
+            let old = AppFixtures.snapshotVersions[2]
+            let pair = ComparePair.make(before: project.versionLoader(for: file, commit: old.commit)(), after: project.snapshotLoader(for: file)())
+            ComparePairCache.store(pair, for: "\(file.path)#\(file.byteSize)@\(old.commit)")
+            project.comparison = .version(old)
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        /// Light next to dark: two variants of the same test.
+        @Test func snapshotComparedWithVariant() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.library)
+            let dark = project.displayedSnapshots[0], light = project.displayedSnapshots[1]
+            ComparePairCache.store(ComparePair.make(before: project.snapshotLoader(for: light)(), after: project.snapshotLoader(for: dark)()),
+                                   for: "\(light.path)#\(light.byteSize)~\(dark.path)#\(dark.byteSize)")
+            project.comparison = .variant(light)
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        /// A snapshot whose test failed and that is new on this branch links to both views.
+        @Test func snapshotWithFailureAndChange() {
+            let (app, project) = makeApp(.library)
+            project.libraryScope = .failing
+            project.selectedSnapshotID = project.displayedSnapshots.first?.id
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func runTabAfterFailedRun(appearance: NSAppearance.Name) {
             let (app, project) = makeApp(.failedRun)
             assertPane(project, app: app, appearance: appearance)

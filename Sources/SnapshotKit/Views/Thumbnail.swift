@@ -11,6 +11,9 @@ struct Thumbnail: View {
     @State private var image: NSImage?
 
     init(id: String, size: CGSize = CGSize(width: 48, height: 34), load: @escaping @Sendable () -> Data?) {
+        // Larger tiles (the library grid) decode at their own resolution under their own key.
+        let maxPixel = ThumbnailCache.maxPixel(for: size)
+        let id = maxPixel == ThumbnailCache.defaultMaxPixel ? id : id + "@\(maxPixel)"
         self.id = id
         self.size = size
         self.load = load
@@ -38,8 +41,8 @@ struct Thumbnail: View {
                 image = cached
                 return
             }
-            let load = load
-            let decoded = await Task.detached { ThumbnailCache.decode(load()) }.value
+            let load = load, maxPixel = ThumbnailCache.maxPixel(for: size)
+            let decoded = await Task.detached { ThumbnailCache.decode(load(), maxPixel: maxPixel) }.value
             if let decoded { ThumbnailCache.shared.setObject(decoded, forKey: id as NSString) }
             image = decoded
         }
@@ -54,15 +57,24 @@ enum ThumbnailCache {
     }()
 
     /// Decodes and caches a thumbnail synchronously (snapshot tests).
-    static func preload(id: String, data: Data?) {
-        if let image = decode(data) { shared.setObject(image, forKey: id as NSString) }
+    static func preload(id: String, data: Data?, size: CGSize? = nil) {
+        let maxPixel = size.map(maxPixel(for:)) ?? defaultMaxPixel
+        let key = maxPixel == defaultMaxPixel ? id : id + "@\(maxPixel)"
+        if let image = decode(data, maxPixel: maxPixel) { shared.setObject(image, forKey: key as NSString) }
     }
 
-    static func decode(_ data: Data?) -> NSImage? {
+    static let defaultMaxPixel = 160
+
+    /// Twice the tile's longer side (Retina), never below the list size.
+    static func maxPixel(for size: CGSize) -> Int {
+        max(defaultMaxPixel, Int(max(size.width, size.height) * 2))
+    }
+
+    static func decode(_ data: Data?, maxPixel: Int = defaultMaxPixel) -> NSImage? {
         guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: 160,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }

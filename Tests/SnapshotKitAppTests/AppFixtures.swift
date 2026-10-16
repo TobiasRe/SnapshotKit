@@ -218,7 +218,28 @@ enum AppFixtures {
         return store
     }
 
-    enum Scenario { case failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
+    enum Scenario { case library, failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
+
+    /// How payButton.dark.png evolved: recorded, restyled, then re-recorded.
+    static let snapshotVersions = [
+        SnapshotVersion(commit: "3f1c2a9d0e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a", author: "Ana", date: date.addingTimeInterval(-2 * 86_400),
+                        subject: "Re-record checkout snapshots"),
+        SnapshotVersion(commit: "9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b", author: "Sam", date: date.addingTimeInterval(-20 * 86_400),
+                        subject: "Use the new button style"),
+        SnapshotVersion(commit: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", author: "Ana", date: date.addingTimeInterval(-60 * 86_400),
+                        subject: "Add checkout snapshot tests"),
+    ]
+
+    /// A small library: two modules, light and dark variants, one re-recorded and one new snapshot.
+    static let libraryImages: [(SnapshotFile, Data)] = [
+        (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/payButton.dark.png", byteSize: 48_210), screen(accent: .systemIndigo)),
+        (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/payButton.light.png", byteSize: 51_870), reference),
+        (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/summary.1.png", byteSize: 39_402, state: .modified), renderingNoise),
+        (SnapshotFile(path: "\(snapshotDir)/ProfileViewTests/badge.1.png", byteSize: 22_118, state: .untracked), badged),
+        (SnapshotFile(path: "\(snapshotDir)/ProfileViewTests/header.1.png", byteSize: 30_664), screen(accent: .systemTeal, titleWidth: 0.8)),
+        (SnapshotFile(path: "Modules/DesignSystem/Tests/DesignSystemSnapshotTests/__Snapshots__/ButtonTests/primary.1.png", byteSize: 12_032),
+         screen(accent: .systemPink, titleWidth: 0.3)),
+    ]
 
     static func project(_ scenario: Scenario, store: ProjectStore) -> ProjectModel {
         let model = ProjectModel(project: Project(path: repository.path), store: store, autoload: false)
@@ -230,6 +251,16 @@ enum AppFixtures {
         f.currentBranch = "feature/checkout-redesign"
         f.changeSet = changeSet
         f.changeImages = Dictionary(uniqueKeysWithValues: changes.map { ($0.0.path, ($0.1, $0.2)) })
+        for (file, data) in libraryImages {
+            f.snapshotImages[file.path] = data
+            ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data)
+            ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data, size: SnapshotGrid.tile)
+            if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: "\(file.path)#\(file.byteSize)") }
+        }
+        f.library = SnapshotLibrary(files: libraryImages.map(\.0))
+        let payButton = libraryImages[0].0.path
+        f.history[payButton] = snapshotVersions
+        f.versionImages[snapshotVersions[2].commit + ":" + payButton] = screen(accent: .systemIndigo, titleWidth: 0.45)
         f.failingSuites = [checkoutSuite, profileSuite]
         f.failures = failures(in: tmp)
         f.failureSource = FailureSource(label: "Last run", date: date, host: "local")
@@ -237,6 +268,8 @@ enum AppFixtures {
         warmChangeCaches()
 
         switch scenario {
+        case .library:
+            f.tab = .snapshots
         case .failedRun:
             f.tab = .run
             f.passed = 1

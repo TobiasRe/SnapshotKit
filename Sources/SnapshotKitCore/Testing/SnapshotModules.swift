@@ -9,17 +9,15 @@ public enum SnapshotModules {
     }
 
     public static func modules(fromSnapshotPaths paths: [String]) -> [String] {
-        var found = Set<String>()
-        for path in paths {
-            let components = path.split(separator: "/").map(String.init)
-            guard let snapIndex = components.firstIndex(of: "__Snapshots__") else { continue }
-            let ancestors = components[..<snapIndex]
-            if let module = ancestors.last(where: { $0.hasSuffix("Tests") }) {
-                found.insert(module)
-            } else if let parent = ancestors.last {
-                found.insert(parent)
-            }
-        }
-        return found.sorted()
+        Set(paths.compactMap(module(forSnapshotPath:))).sorted()
+    }
+
+    /// The test target owning one snapshot path: the nearest ancestor of `__Snapshots__` whose
+    /// name ends in "Tests", else the folder containing `__Snapshots__`.
+    public static func module(forSnapshotPath path: String) -> String? {
+        let components = path.split(separator: "/").map(String.init)
+        guard let snapIndex = components.firstIndex(of: "__Snapshots__") else { return nil }
+        let ancestors = components[..<snapIndex]
+        return ancestors.last(where: { $0.hasSuffix("Tests") }) ?? ancestors.last
     }
 }

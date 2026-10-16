@@ -84,9 +84,10 @@ struct SnapshotKitCommands: Commands {
         }
         CommandGroup(after: .toolbar) {
             if let project = model.current {
-                Button("Run") { project.tab = .run }.keyboardShortcut("1", modifiers: [.command, .option])
-                Button("Failures") { project.tab = .failures }.keyboardShortcut("2", modifiers: [.command, .option])
-                Button("Changes") { project.tab = .changes }.keyboardShortcut("3", modifiers: [.command, .option])
+                Button("Snapshots") { project.tab = .snapshots }.keyboardShortcut("1", modifiers: [.command, .option])
+                Button("Changes") { project.tab = .changes }.keyboardShortcut("2", modifiers: [.command, .option])
+                Button("Failures") { project.tab = .failures }.keyboardShortcut("3", modifiers: [.command, .option])
+                Button("Run") { project.tab = .run }.keyboardShortcut("4", modifiers: [.command, .option])
                 Divider()
                 // Step through snapshots even while the image, not the list, has focus.
                 Button("Next Item") { project.selectAdjacent(1) }

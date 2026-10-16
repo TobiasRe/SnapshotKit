@@ -16,6 +16,7 @@ struct ProjectView: View {
             }
             Group {
                 switch project.tab {
+                case .snapshots: SnapshotsTab(project: project)
                 case .run: RunTab(project: project)
                 case .failures: FailuresTab(project: project)
                 case .changes: ChangesTab(project: project)
@@ -50,6 +51,7 @@ struct ProjectView: View {
 
     private func label(for tab: ProjectTab) -> String {
         switch tab {
+        case .snapshots: (project.library?.files.count).map { "Snapshots (\($0))" } ?? "Snapshots"
         case .run: "Run"
         case .failures: project.failures.isEmpty ? "Failures" : "Failures (\(project.failures.count))"
         case .changes: (project.changeSet?.changes.count).map { "Changes (\($0))" } ?? "Changes"
