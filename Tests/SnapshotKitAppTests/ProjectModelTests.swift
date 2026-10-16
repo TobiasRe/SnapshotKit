@@ -178,6 +178,32 @@ extension AppUITests {
             #expect(model.displayedSnapshots == all)
         }
 
+        /// Scanning a folder finds its projects and says so; nothing found is never silent.
+        @Test func scanningAFolderFindsProjectsAndSaysSo() async throws {
+            let root = AppFixtures.home.appendingPathComponent("scan-\(UUID().uuidString)").resolvingSymlinksInPath()
+            let repo = root.appendingPathComponent("team/app")
+            let snapshots = repo.appendingPathComponent("Tests/__Snapshots__/S")
+            try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true)
+            try Shell.output(["git", "init", "-q"], in: repo)
+            try Data([1]).write(to: snapshots.appendingPathComponent("a.1.png"))   // recorded, not committed
+
+            let app = AppModel(store: AppFixtures.store())
+            app.addDroppedFolders([root])                       // a plain folder becomes a scan folder
+            for _ in 0..<200 where app.startupNotice == nil { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(app.store.settings.scanRoots == [root.path])
+            #expect(app.projects.contains { $0.path == repo.path })
+            #expect(app.startupNotice?.hasPrefix("Found 1 project with snapshot tests in") == true)
+        }
+
+        @Test func scanSummaryExplainsAnEmptyOrUnreadableFolder() {
+            let url = URL(fileURLWithPath: "/work")
+            let none = AppModel.scanSummary([ProjectScanner.Report(root: url, projects: [], readable: true)])
+            #expect(none?.hasPrefix("No git repositories with snapshot tests in /work") == true)
+            let blocked = AppModel.scanSummary([ProjectScanner.Report(root: url, projects: [], readable: false)])
+            #expect(blocked?.contains("Privacy & Security") == true)
+            #expect(AppModel.scanSummary([]) == nil)
+        }
+
         @Test func logMatchesAreMarked() {
             func marked(_ line: String, _ terms: [String]) -> [String] {
                 let text = LogView.highlighted(line, terms: terms)
@@ -272,7 +298,10 @@ extension AppUITests {
             #expect(app.addDroppedFolders([subfolder]))
             #expect(app.current?.project.path == Project(path: repo.path).path)
             #expect(app.projects.contains { $0.path == Project(path: repo.path).path })
-            #expect(!app.addDroppedFolders([FileManager.default.temporaryDirectory]))
+            // A file outside any repository is neither a project nor a scan folder.
+            let file = AppFixtures.home.appendingPathComponent("loose-\(UUID().uuidString).txt")
+            try Data("x".utf8).write(to: file)
+            #expect(!app.addDroppedFolders([file]))
         }
 
         @Test func exportsBaseImageForOpeningElsewhere() async throws {

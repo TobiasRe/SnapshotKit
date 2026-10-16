@@ -96,13 +96,22 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Adds dropped folders that are (inside) git repositories; returns whether any was added.
+    /// Adds dropped folders: a repository (or a folder inside one) opens as a project; any other
+    /// folder becomes a scan folder, so dropping ~/Developer finds the projects in it.
     @discardableResult
     func addDroppedFolders(_ urls: [URL]) -> Bool {
-        let roots = urls.compactMap { Git.repository(containing: $0)?.root }
-        guard let last = roots.last else { return false }
-        for root in roots { store.markOpened(Project(path: root.path)) }
-        open(path: last.path)
+        var repositories: [URL] = [], folders: [URL] = []
+        for url in urls {
+            if let root = Git.repository(containing: url)?.root { repositories.append(root) }
+            else if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { folders.append(url) }
+        }
+        guard !repositories.isEmpty || !folders.isEmpty else { return false }
+        for root in repositories { store.markOpened(Project(path: root.path)) }
+        if let last = repositories.last { open(path: last.path) }
+        if !folders.isEmpty {
+            for folder in folders { store.addScanRoot(folder.path) }
+            rescan()
+        }
         return true
     }
 
@@ -170,14 +179,35 @@ final class AppModel: ObservableObject {
         rescan()
     }
 
+    /// Scans every scan folder and says what came of it, so an empty result is never silent.
     func rescan() {
         isScanning = true
         let store = store
         Task {
-            _ = await Task.detached { store.rescan() }.value
+            let reports = await Task.detached { store.rescanReports() }.value
             isScanning = false
             refreshProjects()
+            startupNotice = Self.scanSummary(reports)
         }
+    }
+
+    /// "Found 3 projects with snapshot tests in ~/Developer." or why there are none.
+    nonisolated static func scanSummary(_ reports: [ProjectScanner.Report]) -> String? {
+        guard !reports.isEmpty else { return nil }
+        let home = NSHomeDirectory()
+        func name(_ url: URL) -> String { url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path }
+        let unreadable = reports.filter { !$0.readable }
+        if !unreadable.isEmpty {
+            return "SnapshotKit can't read \(unreadable.map { name($0.root) }.joined(separator: ", ")). "
+                + "Allow it in System Settings › Privacy & Security › Files and Folders, then rescan."
+        }
+        let count = reports.reduce(0) { $0 + $1.projects.count }
+        let folders = reports.map { name($0.root) }.joined(separator: ", ")
+        if count == 0 {
+            return "No git repositories with snapshot tests in \(folders) (looked \(ProjectScanner.defaultDepth) folders deep). "
+                + "A repository counts when it has __Snapshots__ images, a .snapshotkit.yml or depends on swift-snapshot-testing."
+        }
+        return "Found \(count) project\(count == 1 ? "" : "s") with snapshot tests in \(folders)."
     }
 
     func chooseFolder(message: String, completion: @escaping (URL) -> Void) {

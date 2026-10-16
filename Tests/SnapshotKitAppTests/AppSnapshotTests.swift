@@ -242,7 +242,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = "pay"
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environmentObject(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
+            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
         }
 
         @Test func commandPalette() {
@@ -250,7 +250,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = "rec"
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environmentObject(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
+            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
         }
 
         @Test func commandPaletteDark() {
@@ -258,7 +258,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = ""
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environmentObject(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua), as: Self.strategy)
+            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua, keepFocus: true), as: Self.strategy)
         }
 
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
@@ -421,7 +421,10 @@ extension AppUITests {
                            fileID: fileID, file: file, testName: testName, line: line, column: column)
         }
 
-        private func host<V: View>(_ view: V, size: CGSize, appearance: NSAppearance.Name) -> NSView {
+        /// - Parameter keepFocus: keep whichever field took focus (the ⌘K palette's search field
+        ///   should); otherwise focus is cleared, as a field that took it while the view settled
+        ///   draws a pixel off and the moment it arrives varies from run to run.
+        private func host<V: View>(_ view: V, size: CGSize, appearance: NSAppearance.Name, keepFocus: Bool = false) -> NSView {
             let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = NSAppearance(named: appearance)
             window.isReleasedWhenClosed = false
@@ -432,6 +435,10 @@ extension AppUITests {
             hosting.frame = CGRect(origin: .zero, size: size)
             window.contentView = hosting
             settle(hosting)
+            if !keepFocus {
+                window.makeFirstResponder(nil)
+                settle(hosting)
+            }
             return hosting
         }
 

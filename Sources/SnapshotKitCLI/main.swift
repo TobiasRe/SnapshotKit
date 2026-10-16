@@ -482,9 +482,13 @@ func main() async {
         let store = ProjectStore()
         if o.positional.first == "scan" {
             for root in o.positional.dropFirst() { store.addScanRoot(root) }
-            let found = store.rescan()
+            let reports = store.rescanReports()
+            for report in reports where !report.readable {
+                say("Can't read \(report.root.path): allow access in System Settings › Privacy & Security › Files and Folders.")
+            }
+            let found = reports.flatMap(\.projects)
             for p in found { say(p.path) }
-            say("\(found.count) project(s) with snapshot tests.")
+            say("\(found.count) project(s) with snapshot tests (looked \(ProjectScanner.defaultDepth) folders deep).")
         } else {
             for p in store.allProjects { say((store.isPinned(p) ? "📌 " : "   ") + p.path) }
         }
