@@ -79,3 +79,50 @@ import Testing
         #expect(repo.git.image(of: new, at: versions[1].commit) == data)
     }
 }
+
+@Suite struct OrphanTests {
+    @Test func findsSnapshotsOfRenamedAndDeletedTests() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardTests.swift", """
+            import Testing
+            @Suite struct CardTests {
+                @Test func compact() {}
+                @Test(arguments: [1]) func sized(width: Int) {}
+            }
+            """)
+        let red = png(width: 2, height: 2, rgba: (255, 0, 0, 255))
+        let dir = "Tests/AppTests/__Snapshots__"
+        for name in ["CardTests/compact.1.png", "CardTests/sized-width.1.png", "CardTests/expanded.1.png", "GoneTests/row.1.png"] {
+            try repo.write("\(dir)/\(name)", red)
+        }
+        try repo.commitAll("base")
+        let library = try SnapshotLibrary.load(repository: repo.url)
+        let orphans = SnapshotLibrary.orphans(library.files, repository: repo.url)
+        #expect(orphans == ["\(dir)/CardTests/expanded.1.png", "\(dir)/GoneTests/row.1.png"])
+    }
+
+    /// SnapshotKit's own snapshot tests: every reference belongs to a test.
+    @Test func noFalsePositivesInThisRepository() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: root.appendingPathComponent(".git").path) else { return }
+        let library = try SnapshotLibrary.load(repository: root)
+        #expect(library.files.count > 20)
+        #expect(SnapshotLibrary.orphans(library.files, repository: root).isEmpty)
+    }
+}
+
+@Suite struct NewReferenceTests {
+    @Test func recognisesNewlyRecordedReferences() {
+        let message = """
+            Issue recorded: No reference was found on disk. Automatically recorded snapshot: …
+
+            open "file:///path/to/repo/Tests/AppTests/__Snapshots__/CardTests/card.1.png"
+
+            Re-run "card" to assert against the newly-recorded snapshot.
+            """
+        #expect(FailureAttachments.isNewReference(message))
+        #expect(!FailureAttachments.isNewReference("Snapshot does not match reference."))
+        #expect(FailureAttachments.referencePaths(in: message, repository: URL(fileURLWithPath: "/path/to/repo"))
+                == ["Tests/AppTests/__Snapshots__/CardTests/card.1.png"])
+    }
+}

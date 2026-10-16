@@ -106,3 +106,17 @@ import Testing
         #expect(image.color(x: 0, y: 0)!.perceptualDistance(to: image.color(x: 0, y: 0)!) == 0)
     }
 }
+
+@Suite struct ImageComposerTests {
+    @Test func placesImagesSideBySideWithSpacing() throws {
+        let red = PixelImage(width: 2, height: 3, pixels: Array(repeating: [255, 0, 0, 255], count: 6).flatMap { $0 })
+        let blue = PixelImage(width: 1, height: 1, pixels: [0, 0, 255, 255])
+        let out = try #require(ImageComposer.sideBySide([red, blue], spacing: 1))
+        #expect(out.width == 2 + 1 + 3)   // 1 + red + 1 + blue + 1
+        #expect(out.height == 3 + 2)
+        #expect(out.color(x: 0, y: 0)?.hex == "#FFFFFF")
+        #expect(out.color(x: 1, y: 1)?.hex == "#FF0000")
+        #expect(out.color(x: 4, y: 1)?.hex == "#0000FF")
+        #expect(out.color(x: 4, y: 2)?.hex == "#FFFFFF")   // below the shorter image
+    }
+}

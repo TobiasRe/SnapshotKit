@@ -26,8 +26,8 @@ public struct ReRecordOutcome: Sendable {
     public var verified: Bool { verifyRun?.succeeded == true }
 }
 
-/// Re-records only the given (failing) suites:
-/// patch record mode in → run those suites → restore sources → optionally run again to verify.
+/// Re-records the given suites, or just the tests in `onlyTesting`:
+/// patch record mode in → run them → restore sources → optionally run again to verify.
 public final class ReRecorder: @unchecked Sendable {
     public let runner: TestRunner
     private let lock = NSLock()
@@ -47,6 +47,7 @@ public final class ReRecorder: @unchecked Sendable {
 
     public func reRecord(
         suites: [SuiteResult],
+        onlyTesting: [String]? = nil,
         verify: Bool = true,
         onStage: @escaping @Sendable (ReRecordStage) -> Void = { _ in },
         onLine: @escaping @Sendable (String) -> Void = { _ in },
@@ -61,7 +62,7 @@ public final class ReRecorder: @unchecked Sendable {
         let recordRun: TestRunResult
         do {
             onStage(.recording)
-            recordRun = try await runner.run(onlyTesting: suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
+            recordRun = try await runner.run(onlyTesting: onlyTesting ?? suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
         } catch {
             onStage(.restoring)
             let report = session.restore()
@@ -77,7 +78,7 @@ public final class ReRecorder: @unchecked Sendable {
             onStage(.verifying)
             let verifier = TestRunner(repository: runner.repository, config: runner.config, environment: runner.environment)
             lock.withLock { currentRunner = verifier }
-            verifyRun = try await verifier.run(onlyTesting: suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
+            verifyRun = try await verifier.run(onlyTesting: onlyTesting ?? suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
         }
         onStage(.done)
         return ReRecordOutcome(

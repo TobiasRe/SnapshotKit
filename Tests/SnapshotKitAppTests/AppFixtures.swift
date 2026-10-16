@@ -237,6 +237,8 @@ enum AppFixtures {
         (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/summary.1.png", byteSize: 39_402, state: .modified), renderingNoise),
         (SnapshotFile(path: "\(snapshotDir)/ProfileViewTests/badge.1.png", byteSize: 22_118, state: .untracked), badged),
         (SnapshotFile(path: "\(snapshotDir)/ProfileViewTests/header.1.png", byteSize: 30_664), screen(accent: .systemTeal, titleWidth: 0.8)),
+        // Its test was removed; nothing records or checks it any more.
+        (SnapshotFile(path: "\(snapshotDir)/ProfileViewTests/oldAvatar.1.png", byteSize: 28_930), screen(accent: .systemGray)),
         (SnapshotFile(path: "Modules/DesignSystem/Tests/DesignSystemSnapshotTests/__Snapshots__/ButtonTests/primary.1.png", byteSize: 12_032),
          screen(accent: .systemPink, titleWidth: 0.3)),
     ]
@@ -258,6 +260,7 @@ enum AppFixtures {
             if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: "\(file.path)#\(file.byteSize)") }
         }
         f.library = SnapshotLibrary(files: libraryImages.map(\.0))
+        f.orphanIDs = ["\(snapshotDir)/ProfileViewTests/oldAvatar.1.png"]
         let payButton = libraryImages[0].0.path
         f.history[payButton] = snapshotVersions
         f.versionImages[snapshotVersions[2].commit + ":" + payButton] = screen(accent: .systemIndigo, titleWidth: 0.45)
