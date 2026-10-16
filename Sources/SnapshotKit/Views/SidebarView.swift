@@ -55,7 +55,9 @@ struct SidebarView: View {
                 .buttonStyle(.borderless)
                 .help("Quick switch project (⌘K)")
             }
-            .padding(DS.Space.s)
+            .padding(.horizontal, DS.Space.m)
+            // Level with the lists' footers.
+            .frame(height: DS.Bar.footer)
         }
     }
 
@@ -63,10 +65,12 @@ struct SidebarView: View {
     private func rows(_ projects: [Project]) -> some View {
         ForEach(projects) { project in
             Label {
-                Text(project.name).lineLimit(1)
+                Text(project.name).fontWeight(.medium).lineLimit(1)
             } icon: {
-                Image(systemName: model.isPinned(project) ? "pin.fill" : "folder")
+                ProjectMonogram(name: project.name)
             }
+            // The sidebar keeps the system's selection: on its material it is already as quiet
+            // as the lists' (about +15 levels in dark, like Linear's).
             .badge(model.failingCounts[project.path] ?? 0)
             .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
                   + ((model.failingCounts[project.path]).map { " — \($0) failing in the last run" } ?? ""))
@@ -78,6 +82,28 @@ struct SidebarView: View {
                     Button("Remove from List") { model.remove(project) }
                 }
         }
+    }
+}
+
+/// A project's initials in a small neutral tile: tells projects apart at a glance where identical
+/// folder icons didn't, without spending colour (colour means status).
+struct ProjectMonogram: View {
+    var name: String
+
+    static func initials(_ name: String) -> String {
+        let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        let letters = words.count > 1 ? words.prefix(2).compactMap(\.first) : Array(name.prefix(1))
+        return String(letters).uppercased()
+    }
+
+    var body: some View {
+        Text(Self.initials(name))
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(Color.primary.opacity(0.7))
+            .frame(width: 18, height: 18)
+            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(DS.Surface.hairline))
+            .accessibilityHidden(true)
     }
 }
 
@@ -161,7 +187,7 @@ struct QuickSwitcherView: View {
                 }
             }
             .frame(width: 520)
-            // Floats over content, so it's glass (see docs/DESIGN.md).
+            // Floats over content, so it's glass (see docs/design.md).
             .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
             .padding(.top, 80)
         }

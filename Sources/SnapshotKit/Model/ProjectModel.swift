@@ -440,7 +440,7 @@ final class ProjectModel: ObservableObject {
 
     /// Committed versions of a snapshot, newest first (git log, off the main thread).
     func history(of file: SnapshotFile) async -> [SnapshotVersion] {
-        if let versions = fixtureHistory?[file.path] { return versions }
+        if fixtureSnapshotImages != nil { return fixtureHistory?[file.path] ?? [] }
         let repo = project.url, path = file.path
         return await Task.detached { Git(root: repo).history(of: path) }.value
     }

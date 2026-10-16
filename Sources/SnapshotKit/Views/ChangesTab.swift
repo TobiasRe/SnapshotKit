@@ -15,13 +15,18 @@ struct ChangesTab: View {
                 if !project.invisibleUncommitted.isEmpty { invisibleNotice }
                 list
                     .frame(maxHeight: .infinity)
+                footer
             }
+            .background(DS.Surface.content)
             .frame(minWidth: 280, idealWidth: 330, maxWidth: 460, maxHeight: .infinity, alignment: .top)
 
             Group {
                 if let change = project.selectedChange {
                     VStack(spacing: 0) {
-                        DetailHeader(title: change.testName, subtitle: change.path) {
+                        let shown = project.displayedChanges.map(\.id)
+                        DetailHeader(title: change.testName, subtitle: change.path,
+                                     position: shown.firstIndex(of: change.id).map { ($0 + 1, shown.count) },
+                                     step: { project.selectAdjacent($0) }) {
                             HStack(spacing: DS.Space.s) {
                                 KindBadge(kind: change.kind, style: .label)
                                 Toggle("Viewed", isOn: Binding(
@@ -38,10 +43,12 @@ struct ChangesTab: View {
                                 .labelStyle(.iconOnly)
                                 .menuIndicator(.hidden)
                                 .fixedSize()
+                                .quietControl()
                                 .help("Open, reveal or discard this snapshot")
                                 .accessibilityLabel("Snapshot Actions")
                             }
                         }
+                        infoRow(change)
                         Divider()
                         CompareView(load: project.imageLoader(for: change),
                                     beforeLabel: "\(project.changeSet?.baseBranch ?? "Base") · \(project.diffBase.label.lowercased())",
@@ -113,10 +120,17 @@ struct ChangesTab: View {
         }
     }
 
+    /// Search, then what to compare against: level with the detail's header and info row.
     private var filterBar: some View {
-        VStack(alignment: .leading, spacing: DS.Space.s) {
-            SearchField(prompt: "Filter suites and tests", text: $project.changeFilter)
-            HStack(spacing: DS.Space.s) {
+        VStack(alignment: .leading, spacing: 0) {
+            PaneBar(height: DS.Bar.header) {
+                SearchField(prompt: "Filter suites and tests", text: $project.changeFilter)
+                Button { project.refreshChanges() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless)
+                    .help("Refresh")
+                    .accessibilityLabel("Refresh")
+            }
+            PaneBar(height: DS.Bar.filters) {
                 Menu {
                     ForEach(project.branches, id: \.self) { branch in
                         Button {
@@ -133,14 +147,21 @@ struct ChangesTab: View {
                     Label(project.baseBranch ?? "Base Branch", systemImage: "arrow.triangle.branch")
                 }
                 .fixedSize()
+                .quietControl()
                 .help("The branch to compare against")
                 .accessibilityLabel("Base branch: \(project.baseBranch ?? "none")")
 
-                Picker("Compare with", selection: $project.diffBase) {
-                    ForEach(DiffBase.allCases, id: \.self) { Text($0.label).tag($0) }
+                Menu {
+                    Picker("Compare with", selection: $project.diffBase) {
+                        ForEach(DiffBase.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Text(project.diffBase.label)
                 }
-                .labelsHidden()
                 .fixedSize()
+                .quietControl()
                 .accessibilityLabel("Compare with")
                 .help("Merge-base shows only this branch's changes; branch tip also shows changes made on the base branch since.")
 
@@ -162,36 +183,54 @@ struct ChangesTab: View {
                     Label(kindsLabel, systemImage: "line.3.horizontal.decrease.circle")
                 }
                 .fixedSize()
+                .quietControl()
                 .accessibilityLabel("Show: \(kindsLabel)")
-
-                Spacer()
-                Button { project.refreshChanges() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh")
-                    .accessibilityLabel("Refresh")
             }
             .controlSize(.small)
-            if let set = project.changeSet {
-                HStack(spacing: DS.Space.s) {
-                    Text("\(project.filteredChanges.count) of \(set.changes.count) snapshots · vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: DS.Space.s)
-                    if !set.changes.isEmpty {
-                        let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
-                        Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
-                            .gaugeStyle(.accessoryLinearCapacity)
-                            .tint(DS.Status.passed)
-                            .frame(width: 44)
-                            .accessibilityHidden(true)
-                        Text("\(viewed)/\(set.changes.count) viewed").monospacedDigit().fixedSize()
-                    }
+            .padding(.bottom, DS.Space.xs)
+        }
+    }
+
+    /// How many are shown, what they're compared with, and how far the review has got.
+    @ViewBuilder
+    private var footer: some View {
+        if let set = project.changeSet {
+            PaneFooter {
+                Text("\(project.filteredChanges.count) of \(set.changes.count) · vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: DS.Space.s)
+                if !set.changes.isEmpty {
+                    let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
+                    Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
+                        .gaugeStyle(.accessoryLinearCapacity)
+                        .tint(DS.Status.passed)
+                        .frame(width: 44)
+                        .accessibilityHidden(true)
+                    Text("\(viewed)/\(set.changes.count) viewed").monospacedDigit().fixedSize()
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
-        .padding(DS.Space.m)
+    }
+
+    /// What this change is compared with, what kind of difference it is, and the way to the library.
+    private func infoRow(_ change: SnapshotChange) -> some View {
+        DetailInfoRow {
+            Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).accessibilityHidden(true)
+            Text("\(project.changeSet?.baseBranch ?? "Base") at \(project.diffBase.label.lowercased()) → "
+                 + (change.kind == .uncommitted || change.kind == .new ? "working tree" : "this branch"))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if let chip = project.changeDiagnoses[change.id].flatMap(DiagnosisChip.init) { chip }
+            Spacer(minLength: DS.Space.s)
+            Button("Show in Library") { project.showInLibrary(path: change.path) }
+                .quietControl()
+                .disabled(change.kind == .deleted || !project.isInLibrary(change.path))
+                .help("Open this snapshot in the library, with its variants and history")
+        }
+        .padding(.bottom, DS.Space.xs)
+        .background(DS.Surface.content)
     }
 
     /// Re-records that only picked up rendering noise would add churn to the merge request.
@@ -206,6 +245,7 @@ struct ChangesTab: View {
                 Spacer(minLength: DS.Space.s)
                 Button("Discard…") { confirmDiscardInvisible = true }
                     .controlSize(.small)
+                    .quietControl()
                     .help("Restore them to the committed version, so only real changes get committed")
             }
             .padding(.horizontal, DS.Space.m)
@@ -240,14 +280,11 @@ struct ChangesTab: View {
                             ChangeRow(change: change, viewed: project.viewedChanges.contains(change.id),
                                       diagnosis: project.changeDiagnoses[change.id], load: project.imageLoader(for: change))
                                 .tag(change.id)
+                                .selectableRow(project.selectedChangeID == change.id)
                                 .contextMenu { actions(for: change) }
                         }
                     } header: {
-                        HStack {
-                            Text(group.suite)
-                            Spacer()
-                            Text("\(group.changes.count)").monospacedDigit()
-                        }
+                        ListSectionHeader(title: group.suite, count: group.changes.count)
                     }
                 }
             }
@@ -289,7 +326,7 @@ struct ChangeRow: View {
             }
             .opacity(viewed ? 0.5 : 1)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                Text(change.testName).lineLimit(1)
+                Text(change.testName).fontWeight(.medium).lineLimit(1)
                     .foregroundStyle(viewed ? .secondary : .primary)
                 HStack(spacing: DS.Space.xs) {
                     KindBadge(kind: change.kind, style: .dot)
@@ -308,35 +345,59 @@ struct ChangeRow: View {
             }
         }
         .padding(.vertical, DS.Space.xxs)
+        .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(change.testName), \(change.kind.label), in \(change.suite)\(viewed ? ", viewed" : "")")
     }
 }
 
-/// Title row above a detail pane.
+/// The header bar of a detail pane: what it is, where it lives, where it is in the list, and its
+/// actions. Its height is fixed (`DS.Bar.header`), level with the list's search bar.
 struct DetailHeader<Accessory: View>: View {
     var title: String
     var subtitle: String?
+    /// One-based position in the list and the list's length, for the previous/next stepper.
+    var position: (index: Int, count: Int)?
+    var step: (Int) -> Void = { _ in }
     @ViewBuilder var accessory: Accessory
 
     var body: some View {
         HStack(alignment: .center, spacing: DS.Space.m) {
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                Text(title).font(.headline).lineLimit(1)
+                Text(title).font(DS.Font.heading).lineLimit(1)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(DS.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.head)
                         .textSelection(.enabled)
                 }
             }
-            Spacer()
+            Spacer(minLength: DS.Space.s)
             accessory
+            if let position, position.count > 0 {
+                PositionStepper(position: position.index, count: position.count, step: step)
+            }
         }
         .padding(.horizontal, DS.Space.l)
-        .padding(.vertical, DS.Space.m)
+        .frame(maxWidth: .infinity, minHeight: DS.Bar.header, maxHeight: DS.Bar.header)
+        .background(DS.Surface.content)
+    }
+}
+
+/// The row under a detail header (history, variants, what it's compared with). Fixed height, level
+/// with the list's filter bar, so the image below starts at the same place in every snapshot.
+struct DetailInfoRow<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: DS.Space.m) { content }
+            .controlSize(.small)
+            .font(DS.Font.secondary)
+            .padding(.horizontal, DS.Space.l)
+            .frame(maxWidth: .infinity, minHeight: DS.Bar.filters, maxHeight: DS.Bar.filters, alignment: .leading)
+            .background(DS.Surface.content)
     }
 }
 
@@ -378,12 +439,7 @@ struct KindBadge: View {
             Circle().fill(color).frame(width: 7, height: 7)
                 .help(kind.label)
         case .label:
-            Text(kind.label)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, DS.Space.s)
-                .padding(.vertical, DS.Space.xs)
-                .background(Capsule().fill(color.opacity(0.15)))
-                .foregroundStyle(DS.Status.text(color))
+            Chip(text: kind.label, color: color)
         }
     }
 

@@ -48,6 +48,8 @@ capture() {
   "$APP" --capture "$OUT/$name.png" "$@" 2>&1 | grep '^capture:' || true
 }
 
+capture 00-snapshots --project "$REPO" --tab snapshots
+capture 00-snapshots-dark --project "$REPO" --tab snapshots --appearance dark
 if [ "$WITH_RUN" = 1 ]; then
   capture 01-run-after-run --project "$REPO" --tab run --action run --timeout 900
 else

@@ -30,7 +30,9 @@ struct SnapshotsTab: View {
                     project.selectedSnapshotID = file.id
                     layoutRaw = LibraryLayout.list.rawValue
                 }
+                footer
             }
+            .background(DS.Surface.content)
         }
     }
 
@@ -41,7 +43,9 @@ struct SnapshotsTab: View {
                 Divider()
                 list
                     .frame(maxHeight: .infinity)
+                footer
             }
+            .background(DS.Surface.content)
             .frame(minWidth: 280, idealWidth: 330, maxWidth: 460, maxHeight: .infinity, alignment: .top)
 
             Group {
@@ -59,9 +63,10 @@ struct SnapshotsTab: View {
         }
     }
 
+    /// Search and view options, then the scope: the same two bars as the detail's header and info row.
     private var header: some View {
-        VStack(alignment: .leading, spacing: DS.Space.s) {
-            HStack(spacing: DS.Space.s) {
+        VStack(alignment: .leading, spacing: 0) {
+            PaneBar(height: DS.Bar.header) {
                 SearchField(prompt: "Filter modules, suites and tests", text: $project.libraryFilter)
                 Menu {
                     Picker("Sort By", selection: $project.librarySort) {
@@ -74,6 +79,7 @@ struct SnapshotsTab: View {
                 .labelStyle(.iconOnly)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .quietControl()
                 .help("Sort by name (grouped), size or most recently changed")
                 .accessibilityLabel("Sort By")
                 Picker("Layout", selection: $layoutRaw) {
@@ -87,44 +93,21 @@ struct SnapshotsTab: View {
                 .help("Show snapshots as a list with a large preview, or as a grid")
                 .accessibilityLabel("Layout")
             }
-            // Counts when they fit, then without, then a menu: never wraps or clips.
-            ViewThatFits(in: .horizontal) {
-                scopePicker(counts: true).pickerStyle(.segmented)
-                scopePicker(counts: false).pickerStyle(.segmented)
-                scopePicker(counts: true).pickerStyle(.menu).fixedSize()
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            // In the full-width grid, segments stretched across the window; keep them compact.
-            .frame(maxWidth: 480, alignment: .leading)
-            .accessibilityLabel("Show")
-            if let library = project.library {
-                HStack(spacing: DS.Space.s) {
-                    Text(LibraryStats(library).summary)
-                        .font(DS.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: DS.Space.s)
-                    let shown = project.displayedSnapshots
-                    if project.libraryScope == .orphaned && !shown.isEmpty {
-                        Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
-                            .buttonStyle(.borderless)
-                            .controlSize(.small)
-                            .disabled(project.isRunning)
-                            .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
-                    } else {
-                    Button(shownTitle(shown)) {
-                        if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
-                    }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .disabled(shown.isEmpty || project.isRunning || project.environment == nil)
-                    .help("Record the tests of every snapshot shown (filter first to narrow it down), then verify")
-                    }
+            PaneBar(height: DS.Bar.filters) {
+                // Counts when they fit, then without, then a menu: never wraps or clips.
+                ViewThatFits(in: .horizontal) {
+                    scopePicker(counts: true).pickerStyle(.segmented)
+                    scopePicker(counts: false).pickerStyle(.segmented)
+                    scopePicker(counts: true).pickerStyle(.menu).fixedSize()
                 }
+                .labelsHidden()
+                .controlSize(.small)
+                // In the full-width grid, segments stretched across the window; keep them compact.
+                .frame(maxWidth: 480, alignment: .leading)
+                .accessibilityLabel("Show")
             }
+            .padding(.bottom, DS.Space.xs)
         }
-        .padding(DS.Space.m)
         .confirmationDialog("Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
             Button("Move to Trash", role: .destructive) { project.moveToTrash(project.displayedSnapshots) }
         } message: {
@@ -134,6 +117,31 @@ struct SnapshotsTab: View {
             Button("Re-record") { project.reRecord(project.displayedSnapshots, granularity: .tests) }
         } message: {
             Text("Their reference images are recorded again and then verified. You can review the result on the Changes tab before committing.")
+        }
+    }
+
+    /// What the library holds, and the bulk action for what's shown.
+    @ViewBuilder
+    private var footer: some View {
+        if let library = project.library {
+            PaneFooter {
+                Text(LibraryStats(library).summary).lineLimit(1)
+                Spacer(minLength: DS.Space.s)
+                let shown = project.displayedSnapshots
+                if project.libraryScope == .orphaned && !shown.isEmpty {
+                    Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
+                        .buttonStyle(.borderless)
+                        .disabled(project.isRunning)
+                        .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
+                } else {
+                    Button(shownTitle(shown)) {
+                        if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(shown.isEmpty || project.isRunning || project.environment == nil)
+                    .help("Record the tests of every snapshot shown (filter first to narrow it down), then verify")
+                }
+            }
         }
     }
 
@@ -162,14 +170,18 @@ struct SnapshotsTab: View {
             let tree = SnapshotLibrary.tree(project.filteredSnapshots)
             List(selection: $project.selectedSnapshotID) {
                 if project.librarySort != .name {
-                    Section(project.librarySort == .size ? "Largest First" : "Most Recently Changed") {
+                    Section {
                         ForEach(project.displayedSnapshots) { file in
                             SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
                                         detail: project.librarySort == .size ? .size : .modified)
                                 .tag(file.id)
+                                .selectableRow(project.selectedSnapshotID == file.id)
                                 .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
                                 .contextMenu { SnapshotActions(project: project, file: file) }
                         }
+                    } header: {
+                        ListSectionHeader(title: project.librarySort == .size ? "Largest First" : "Most Recently Changed",
+                                          count: project.displayedSnapshots.count)
                     }
                 } else {
                 ForEach(tree) { module in
@@ -179,17 +191,14 @@ struct SnapshotsTab: View {
                                 ForEach(test.files) { file in
                                     SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file))
                                         .tag(file.id)
+                                        .selectableRow(project.selectedSnapshotID == file.id)
                                         // Drag a snapshot out, e.g. into a pull request comment.
                                         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
                                         .contextMenu { SnapshotActions(project: project, file: file) }
                                 }
                             }
                         } header: {
-                            HStack {
-                                Text(tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name)
-                                Spacer()
-                                Text("\(suite.fileCount)").monospacedDigit()
-                            }
+                            ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
                         }
                     }
                 }
@@ -232,7 +241,7 @@ struct SnapshotRow: View {
         HStack(spacing: DS.Space.m) {
             Thumbnail(id: "snapshot:\(file.path)#\(file.byteSize)", load: load)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                Text(file.testName).lineLimit(1)
+                Text(file.testName).fontWeight(.medium).lineLimit(1)
                 if detail != .none {
                     Text(file.suite).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -260,6 +269,7 @@ struct SnapshotRow: View {
             }
         }
         .padding(.vertical, DS.Space.xxs)
+        .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(file.testName) \(file.variant), in \(file.suite)"
                             + (file.state == .clean ? "" : ", \(SnapshotStateChip.label(file.state))")
@@ -330,6 +340,12 @@ struct SnapshotActions: View {
     }
 }
 
+/// Where the image area starts in a snapshot's detail; it must not move between snapshots.
+struct SnapshotCanvasTopKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 /// One snapshot, large: zoom, pan and read pixels, with what it is and where it lives.
 struct SnapshotDetail: View {
     @ObservedObject var project: ProjectModel
@@ -350,9 +366,14 @@ struct SnapshotDetail: View {
     }
 
     var body: some View {
+        let status = project.status(of: file)
         VStack(spacing: 0) {
-            DetailHeader(title: file.variant.isEmpty ? file.testName : "\(file.testName) · \(file.variant)", subtitle: file.path) {
+            let shown = project.displayedSnapshots.map(\.id)
+            DetailHeader(title: file.variant.isEmpty ? file.testName : "\(file.testName) · \(file.variant)", subtitle: file.path,
+                         position: shown.firstIndex(of: file.id).map { ($0 + 1, shown.count) },
+                         step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
+                    statusChips(status)
                     if file.state != .clean { SnapshotStateChip(state: file.state) }
                     Menu {
                         Button("Re-record Test") { project.reRecord([file], granularity: .tests) }
@@ -363,64 +384,32 @@ struct SnapshotDetail: View {
                         project.reRecord([file], granularity: .tests)
                     }
                     .fixedSize()
-                    .disabled(project.isRunning || project.environment == nil || project.orphanIDs.contains(file.id))
-                    .help("Record this test's snapshots again, then check that it passes")
+                    .quietControl()
+                    .disabled(project.isRunning || project.environment == nil || status.orphaned)
+                    .help(status.orphaned ? "Its test no longer exists" : "Record this test's snapshots again, then check that it passes")
                     .accessibilityLabel("Re-record")
                     Menu {
                         SnapshotActions(project: project, file: file)
+                        if status.orphaned {
+                            Divider()
+                            Button("Move to Trash") { project.moveToTrash([file]) }
+                        }
                     } label: {
                         Label("Snapshot Actions", systemImage: "ellipsis")
                     }
                     .labelStyle(.iconOnly)
                     .menuIndicator(.hidden)
                     .fixedSize()
+                    .quietControl()
                     .help("Open, reveal or copy the path of this snapshot")
                     .accessibilityLabel("Snapshot Actions")
                 }
             }
-            let status = project.status(of: file)
-            if status.orphaned {
-                HStack(spacing: DS.Space.m) {
-                    Label("Orphaned: no test named \(file.testName) in \(file.suite).swift any more", systemImage: "questionmark.folder")
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Button("Move to Trash") { project.moveToTrash([file]) }
-                        .controlSize(.small)
-                    Spacer()
-                }
-                .font(DS.Font.secondary)
-                .padding(.horizontal, DS.Space.l)
-                .padding(.bottom, DS.Space.m)
-            }
-            if status.failureID != nil || status.change != nil {
-                HStack(spacing: DS.Space.m) {
-                    if let id = status.failureID {
-                        Label(status.verdict == .flaky ? "Flaky" : "Failed in the last run",
-                              systemImage: status.verdict == .flaky ? "exclamationmark.triangle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(DS.Status.text(status.verdict == .flaky ? DS.Status.flaky : DS.Status.failed))
-                            .lineLimit(1)
-                            .fixedSize()
-                        Button("Compare with Actual") { project.showFailure(id) }
-                            .controlSize(.small)
-                    }
-                    if let change = status.change {
-                        Label("\(change.label) vs \(project.baseBranch ?? "base")", systemImage: "arrow.triangle.branch")
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .fixedSize()
-                        Button("Review Change") { project.showChange(path: file.path) }
-                            .controlSize(.small)
-                    }
-                    Spacer()
-                }
-                .font(DS.Font.secondary)
-                .padding(.horizontal, DS.Space.l)
-                .padding(.bottom, DS.Space.m)
-            }
-            historyBar
-            let variants = project.variants(of: file)
-            if variants.count > 1 { variantBar(variants) }
+            infoRow
             Divider()
+                .background(GeometryReader { geo in
+                    Color.clear.preference(key: SnapshotCanvasTopKey.self, value: geo.frame(in: .global).maxY)
+                })
             if let other = comparedVariant {
                 CompareView(load: { [a = project.snapshotLoader(for: other), b = project.snapshotLoader(for: file)] in (a(), b()) },
                             beforeLabel: other.variant, afterLabel: file.variant,
@@ -442,76 +431,103 @@ struct SnapshotDetail: View {
         }
     }
 
-    /// The test's variants as a row of choices: pick one to show it.
-    private func variantBar(_ variants: [SnapshotFile]) -> some View {
-        HStack(spacing: DS.Space.s) {
-            Image(systemName: "square.stack").foregroundStyle(.secondary).accessibilityHidden(true)
-            Text("Variants").foregroundStyle(.secondary)
-            Picker("Variant", selection: Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 })) {
-                ForEach(variants) { Text($0.variant.isEmpty ? "default" : $0.variant).tag($0.id) }
+    /// Failing, changed or orphaned, as small chips in the header (which keeps its height);
+    /// failing and changed open the snapshot in the view that explains it.
+    @ViewBuilder
+    private func statusChips(_ status: SnapshotStatus) -> some View {
+        if let id = status.failureID {
+            Button { project.showFailure(id) } label: {
+                Chip(text: status.verdict == .flaky ? "Flaky" : "Failing", color: status.verdict == .flaky ? DS.Status.flaky : DS.Status.failed)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .controlSize(.small)
-            .accessibilityLabel("Variant")
-            Spacer()
+            .buttonStyle(.plain)
+            .help("Its test failed in the last run. Click to compare with the actual image.")
+            .accessibilityLabel(status.verdict == .flaky ? "Flaky, compare with actual" : "Failing, compare with actual")
         }
-        .font(DS.Font.secondary)
-        .padding(.horizontal, DS.Space.l)
-        .padding(.bottom, DS.Space.m)
+        if let change = status.change {
+            Button { project.showChange(path: file.path) } label: {
+                Chip(text: "Changed", color: DS.Status.color(for: change))
+            }
+            .buttonStyle(.plain)
+            .help("\(change.label) change against \(project.baseBranch ?? "the base branch"). Click to review it.")
+            .accessibilityLabel("Changed against the base branch, review change")
+        }
+        if status.orphaned {
+            Chip(text: "Orphaned", color: DS.Status.neutral)
+                .help("No test named \(file.testName) in \(file.suite).swift any more. Move it to the Trash from the actions menu.")
+        }
     }
 
-    /// "3 versions · last changed Oct 12 by Ana in 3f1c2a9 “Re-record cards”", and what to compare with.
-    @ViewBuilder
-    private var historyBar: some View {
-        if let versions {
-            HStack(spacing: DS.Space.m) {
-                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).accessibilityHidden(true)
-                Group {
-                    if let last = versions.first {
-                        Text("\(versions.count) version\(versions.count == 1 ? "" : "s") · last committed \(day(last.date)) by \(last.author) in ")
-                            + Text(last.shortCommit).font(DS.Font.code)
-                            + Text(" “\(last.subject)”")
-                    } else {
-                        Text(file.state == .untracked ? "Not committed yet" : "No committed versions")
-                    }
-                }
+    /// History, the test's variants and what to compare with, in one row of fixed height that is
+    /// always there; while the history loads it says so instead of collapsing.
+    private var infoRow: some View {
+        let variants = project.variants(of: file)
+        return DetailInfoRow {
+            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary).accessibilityHidden(true)
+            historyText
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                Spacer(minLength: DS.Space.s)
-                if !versions.isEmpty || project.variants(of: file).count > 1 {
-                    Menu {
-                        Button("Nothing (Show Current Only)") { project.comparison = nil }
-                        let others = project.variants(of: file).filter { $0.id != file.id }
-                        if !others.isEmpty {
-                            Section("Variants") {
-                                ForEach(others) { other in
-                                    Button(other.variant) { project.comparison = .variant(other) }
-                                }
-                            }
-                        }
-                        Divider()
-                        ForEach(versions) { version in
-                            Button("\(version.shortCommit) · \(day(version.date)) · \(version.subject)") {
-                                project.comparison = .version(version)
-                            }
-                        }
-                    } label: {
-                        Text(comparedVariant.map { "Comparing with \($0.variant)" }
-                             ?? comparing.map { "Comparing with \($0.shortCommit)" } ?? "Compare with…")
+            Spacer(minLength: DS.Space.s)
+            if variants.count > 1 {
+                Picker("Variant", selection: Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 })) {
+                    ForEach(variants) { Text($0.variant.isEmpty ? "default" : $0.variant).tag($0.id) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("This test's variants")
+                .accessibilityLabel("Variant")
+            }
+            compareMenu(variants: variants)
+        }
+        .padding(.bottom, DS.Space.xs)
+        .background(DS.Surface.content)
+    }
+
+    @ViewBuilder
+    private var historyText: some View {
+        if let versions {
+            if let last = versions.first {
+                Text("\(versions.count) version\(versions.count == 1 ? "" : "s") · last committed \(day(last.date)) by \(last.author) in ")
+                    + Text(last.shortCommit).font(DS.Font.code)
+                    + Text(" “\(last.subject)”")
+            } else {
+                Text(file.state == .untracked ? "Not committed yet" : "No committed versions")
+            }
+        } else {
+            Text("Reading history…")
+        }
+    }
+
+    private func compareMenu(variants: [SnapshotFile]) -> some View {
+        let others = variants.filter { $0.id != file.id }
+        return Menu {
+            Button("Nothing (Show Current Only)") { project.comparison = nil }
+            if !others.isEmpty {
+                Section("Variants") {
+                    ForEach(others) { other in
+                        Button(other.variant) { project.comparison = .variant(other) }
                     }
-                    .fixedSize()
-                    .controlSize(.small)
-                    .help("Compare this snapshot with another variant of its test or an earlier committed version")
-                    .accessibilityLabel("Compare With")
                 }
             }
-            .font(DS.Font.secondary)
-            .padding(.horizontal, DS.Space.l)
-            .padding(.bottom, DS.Space.m)
+            if let versions, !versions.isEmpty {
+                Section("Committed Versions") {
+                    ForEach(versions) { version in
+                        Button("\(version.shortCommit) · \(day(version.date)) · \(version.subject)") {
+                            project.comparison = .version(version)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(comparedVariant.map { "Comparing with \($0.variant)" }
+                 ?? comparing.map { "Comparing with \($0.shortCommit)" } ?? "Compare with…")
         }
+        .fixedSize()
+        .quietControl()
+        .disabled(others.isEmpty && (versions ?? []).isEmpty)
+        .help("Compare this snapshot with another variant of its test or an earlier committed version")
+        .accessibilityLabel("Compare With")
     }
 }
 
@@ -695,12 +711,7 @@ struct SnapshotGrid: View {
                             }
                             .padding(.horizontal, DS.Space.l)
                         } header: {
-                            HStack {
-                                Text(tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name)
-                                    .font(DS.Font.heading)
-                                Spacer()
-                                Text("\(suite.fileCount)").monospacedDigit().foregroundStyle(.secondary)
-                            }
+                            ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
                             .padding(.horizontal, DS.Space.l)
                             .padding(.vertical, DS.Space.s)
                             .background(Color(nsColor: .windowBackgroundColor))

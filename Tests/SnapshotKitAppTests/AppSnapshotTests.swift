@@ -80,6 +80,25 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        /// Stepping through snapshots must not move the image: snapshots with and without variants,
+        /// failing, changed, orphaned, with history loaded or still loading all start the canvas
+        /// at the same height.
+        @Test func canvasStaysPutBetweenSnapshots() {
+            let (app, project) = makeApp(.library)
+            final class Tops { var values: [String: CGFloat] = [:] }
+            let tops = Tops()
+            for file in project.displayedSnapshots {
+                project.selectedSnapshotID = file.id
+                let view = SnapshotDetail(project: project, file: file)
+                    .environmentObject(app)
+                    .onPreferenceChange(SnapshotCanvasTopKey.self) { tops.values[file.testName + "." + file.variant] = $0 }
+                // Narrow, as the detail pane often is: crowded headers must not grow either.
+                _ = host(view, size: CGSize(width: 560, height: 600), appearance: .aqua)
+            }
+            #expect(tops.values.count == project.displayedSnapshots.count)
+            #expect(Set(tops.values.values).count == 1, "canvas tops differ: \(tops.values)")
+        }
+
         @Test func orphanedSnapshots() {
             let (app, project) = makeApp(.library)
             project.libraryScope = .orphaned

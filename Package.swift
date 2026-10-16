@@ -7,7 +7,7 @@ let package = Package(
     products: [
         .library(name: "SnapshotKitCore", targets: ["SnapshotKitCore"]),
         .executable(name: "SnapshotKit", targets: ["SnapshotKit"]),
-        .executable(name: "snapkit", targets: ["snapkit"]),
+        .executable(name: "snapkit", targets: ["SnapshotKitCLI"]),
     ],
     dependencies: [
         // Only used by the app's own snapshot tests.
@@ -16,7 +16,7 @@ let package = Package(
     targets: [
         .target(name: "SnapshotKitCore"),
         .executableTarget(name: "SnapshotKit", dependencies: ["SnapshotKitCore"]),
-        .executableTarget(name: "snapkit", dependencies: ["SnapshotKitCore"]),
+        .executableTarget(name: "SnapshotKitCLI", dependencies: ["SnapshotKitCore"]),
         .testTarget(
             name: "SnapshotKitCoreTests",
             dependencies: ["SnapshotKitCore"],
