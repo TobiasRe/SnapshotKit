@@ -48,6 +48,30 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        @Test func snapshotsGridDark() {
+            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
+            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
+            let (app, project) = makeApp(.library)
+            assertPane(project, app: app, appearance: .darkAqua)
+        }
+
+        /// A filter that matches nothing says so in the list; the selection stays in the detail.
+        @Test func libraryFilterWithoutMatches() {
+            let (app, project) = makeApp(.library)
+            project.libraryFilter = "nothing like this"
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        /// The end of a review: every change viewed and viewed ones hidden.
+        @Test func reviewFinished() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.changes)
+            project.setAllViewed(true)
+            project.hideViewed = true
+            project.selectedChangeID = nil
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
         /// Comparing the current snapshot with the version from two months ago.
         @Test func snapshotComparedWithEarlierVersion() {
             UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
@@ -139,13 +163,25 @@ extension AppUITests {
             assertPane(project, app: app, appearance: appearance)
         }
 
-        /// The outcome of the last run floats under the bars of another tab, without moving them.
+        /// The outcome of the last run floats over another tab, with the way to its failures.
         @Test func noticeAfterAFailedRun() {
             UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.failedRun)
-            project.tab = .failures
+            project.tab = .changes
             let view = ProjectView(project: project).environmentObject(app)
             assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy)
+        }
+
+        /// The narrowest pane the window allows (980 points less the sidebar): header buttons keep
+        /// their labels and the titles beside them give way.
+        @Test(arguments: [ProjectTab.changes, .run])
+        func narrowPane(tab: ProjectTab) {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(tab == .run ? .failedRun : .changes)
+            project.tab = tab
+            let view = ProjectView(project: project).environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 740, height: 520), appearance: .aqua), as: Self.strategy,
+                           named: tab.rawValue.lowercased())
         }
 
         /// Increase Contrast: the selection, hairlines and labels must stay visible.
@@ -179,6 +215,13 @@ extension AppUITests {
         @Test func nothingChangedOrFailing() {
             let (app, project) = makeApp(.empty)
             project.tab = .changes
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
+        /// A project whose tests haven't recorded anything yet: one message, and the way to record.
+        @Test func noSnapshotsYet() {
+            let (app, project) = makeApp(.empty)
+            project.tab = .snapshots
             assertPane(project, app: app, appearance: .aqua)
         }
 
@@ -240,6 +283,15 @@ extension AppUITests {
                            named: appearance == .darkAqua ? "dark" : "light")
         }
 
+        /// Nothing running: the projects, the failing ones marked.
+        @Test func menuBarPanelIdle() {
+            let (app, _) = makeApp(.failedRun)
+            app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
+            app.updateRunningPaths()
+            let view = MenuBarPanel().environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: .aqua), as: Self.strategy)
+        }
+
         /// The menu bar icon: unknown total, then 0, 40, 100 percent.
         @Test func progressPie() {
             let view = HStack(spacing: 12) {
@@ -262,6 +314,17 @@ extension AppUITests {
                 .environmentObject(app)
             let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference"; case .toggle: "toggle" }
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy, named: name)
+        }
+
+        /// A size change shows both sizes, the difference that matters.
+        @Test func compareSizeChanged() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let app = AppModel(store: AppFixtures.store())
+            let taller = AppFixtures.screen(accent: .systemBlue, height: 280)
+            ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: taller), for: "compare-size")
+            let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-size")
+                .environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
         }
 
         /// The floating bar drops stats and size instead of wrapping.

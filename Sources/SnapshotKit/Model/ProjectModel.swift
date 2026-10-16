@@ -155,6 +155,8 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var lastResult: TestRunResult?
     @Published private(set) var lastMessage: String?
     @Published private(set) var lastMessageIsError = false
+    /// Where the last message leads (the notice offers it as a button).
+    @Published private(set) var lastMessageAction: NoticeAction?
     @Published var showFullLog = false { didSet { recomputeVisibleLog() } }
     @Published var logFilter = "" { didSet { recomputeVisibleLog() } }
     /// The log lines currently shown, kept up to date incrementally instead of re-filtering
@@ -232,7 +234,22 @@ final class ProjectModel: ObservableObject {
         self.project = project
         self.store = store
         lineBuffer.onFlush = { [weak self] lines in self?.appendLog(lines) }
-        if autoload { reload() }
+        if autoload {
+            reload()
+            watchSnapshots()
+        }
+    }
+
+    /// Picks up snapshots written outside the app (a re-record from Xcode or the CLI) while the
+    /// window is open. Runs of our own refresh when they finish instead.
+    private var watcher: SnapshotWatcher?
+    private func watchSnapshots() {
+        watcher = SnapshotWatcher(repository: project.url) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.fixtureImages == nil, !self.isRunning else { return }
+                self.refreshChanges()
+            }
+        }
     }
 
     var settings: ProjectSettings { store.settings(for: project) }
@@ -583,6 +600,16 @@ final class ProjectModel: ObservableObject {
         if let next { selectedChangeID = next.id } else if hideViewed { selectedChangeID = nil }
     }
 
+    /// Marks every change shown (after filters) as viewed or not, in one go.
+    func setAllViewed(_ viewed: Bool) {
+        let shown = displayedChanges
+        guard !shown.isEmpty else { return }
+        if viewed { viewedChanges.formUnion(shown.map(\.id)) } else { viewedChanges.subtract(shown.map(\.id)) }
+        if fixtureImages == nil {
+            ReviewMarks(repository: project.url).set(viewed, for: shown, keepingOnly: changeSet?.changes ?? [])
+        }
+    }
+
     var selectedChange: SnapshotChange? {
         changeSet?.changes.first { $0.id == selectedChangeID }
     }
@@ -810,7 +837,7 @@ final class ProjectModel: ObservableObject {
         return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
-    private func finish(message: String?, isError: Bool = false) {
+    private func finish(message: String?, isError: Bool = false, action: NoticeAction? = nil) {
         lineBuffer.flushNow()
         lastDuration = startedAt.map { Date().timeIntervalSince($0) }
         startedAt = nil
@@ -819,6 +846,7 @@ final class ProjectModel: ObservableObject {
         stageLabel = ""
         lastMessage = message
         lastMessageIsError = isError
+        lastMessageAction = action
         if lastResult?.summary?.suites.isEmpty == false { runPane = .results }
         setHistory(RunHistory(repository: project.url).load())
         currentBranch = Git(root: project.url).currentBranch()
@@ -912,7 +940,8 @@ final class ProjectModel: ObservableObject {
         else if !result.buildErrors.isEmpty && result.summary == nil { message = "Build failed: \(result.buildErrors.first ?? "")" }
         else if result.failed > 0 { message = Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) }
         else { message = "All \(result.passed) tests passed." }
-        finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled))
+        finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled),
+               action: result.failed > 0 && !result.cancelled ? .showFailures : nil)
     }
 
     func reRecordFailed(suites: [SuiteResult]? = nil) {
@@ -1008,7 +1037,8 @@ final class ProjectModel: ObservableObject {
                     }
                 }
                 lastResult = outcome.verifyRun ?? outcome.recordRun
-                finish(message: message, isError: isError)
+                // New references are working-tree changes: the next step is to look at them.
+                finish(message: message, isError: isError, action: .reviewChanges)
             } catch {
                 finish(message: error.localizedDescription, isError: true)
             }
@@ -1181,6 +1211,7 @@ struct ProjectFixture {
     var lastResult: TestRunResult?
     var lastMessage: String?
     var lastMessageIsError = false
+    var lastMessageAction: NoticeAction?
     var startedAt: Date?
     var lastDuration: TimeInterval?
     var failingSuites: [SuiteResult] = []
@@ -1218,6 +1249,7 @@ extension ProjectModel {
         runPane = f.operation == nil ? .results : .output
         lastMessage = f.lastMessage
         lastMessageIsError = f.lastMessageIsError
+        lastMessageAction = f.lastMessageAction
         startedAt = f.startedAt
         lastDuration = f.lastDuration
         lastFailingSuites = f.failingSuites
@@ -1274,5 +1306,24 @@ final class LineBatcher: @unchecked Sendable {
         scheduled = false
         lock.unlock()
         if !lines.isEmpty { onFlush?(lines) }
+    }
+}
+
+/// Where a notice can take you next.
+enum NoticeAction: Equatable {
+    case reviewChanges, showFailures
+
+    var title: String {
+        switch self {
+        case .reviewChanges: "Review Changes"
+        case .showFailures: "Show Failures"
+        }
+    }
+
+    var tab: ProjectTab {
+        switch self {
+        case .reviewChanges: .changes
+        case .showFailures: .failures
+        }
     }
 }

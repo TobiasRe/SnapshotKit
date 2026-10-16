@@ -1,4 +1,5 @@
 import AppKit
+import QuickLook
 import SnapshotKitCore
 import SwiftUI
 
@@ -6,6 +7,8 @@ struct ChangesTab: View {
     @ObservedObject var project: ProjectModel
     @State private var pendingDiscard: SnapshotChange?
     @State private var confirmDiscardInvisible = false
+    /// The changed snapshot shown in Quick Look (Space in the list, as in Finder).
+    @State private var quickLookURL: URL?
 
     var body: some View {
         ListDetailSplit {
@@ -24,30 +27,27 @@ struct ChangesTab: View {
                 if let change = project.selectedChange {
                     VStack(spacing: 0) {
                         let shown = project.displayedChanges.map(\.id)
-                        DetailHeader(title: change.testName,
+                        DetailHeader(title: project.showsVariant(change.file) ? "\(change.file.testName) · \(change.file.variant)" : change.file.testName,
                                      subtitle: Breadcrumb.of(module: SnapshotModules.module(forSnapshotPath: change.path), suite: change.suite),
                                      path: change.path,
                                      position: shown.firstIndex(of: change.id).map { ($0 + 1, shown.count) },
                                      step: { project.selectAdjacent($0) }) {
                             HStack(spacing: DS.Space.s) {
                                 KindBadge(kind: change.kind, style: .label)
-                                Toggle("Viewed", isOn: Binding(
-                                    get: { project.viewedChanges.contains(change.id) },
-                                    set: { project.setViewed($0, for: change) }
-                                ))
-                                .toggleStyle(.checkbox)
-                                .help("Mark as reviewed and go to the next snapshot (V in the list)")
-                                Menu {
-                                    actions(for: change)
-                                } label: {
-                                    Label("Snapshot Actions", systemImage: "ellipsis")
+                                let viewed = project.viewedChanges.contains(change.id)
+                                Button { project.setViewed(!viewed, for: change) } label: {
+                                    Label("Viewed", systemImage: viewed ? "checkmark.circle.fill" : "circle")
                                 }
-                                .labelStyle(.iconOnly)
-                                .menuIndicator(.hidden)
+                                .foregroundStyle(viewed ? .primary : .secondary)
                                 .fixedSize()
                                 .quietControl()
-                                .help("Open, reveal or discard this snapshot")
-                                .accessibilityLabel("Snapshot Actions")
+                                .help("Mark as reviewed and go to the next snapshot (V in the list)")
+                                .accessibilityLabel("Viewed")
+                                .accessibilityValue(viewed ? "On" : "Off")
+                                .accessibilityAddTraits(viewed ? .isSelected : [])
+                                GlassIconMenu(title: "Snapshot Actions", symbol: "ellipsis", help: "Open, reveal or discard this snapshot") {
+                                    actions(for: change)
+                                }
                             }
                             .controlSize(.small)
                         }
@@ -61,8 +61,9 @@ struct ChangesTab: View {
                 } else if project.changesError != nil {
                     ContentUnavailableView("Choose a Base Branch", systemImage: "arrow.triangle.branch",
                                            description: Text("Pick the branch your merge requests target from the base branch menu above the list."))
-                } else if let set = project.changeSet, !set.changes.isEmpty {
-                    // Only when there is something to select; an empty list says why on its own.
+                } else if !project.displayedChanges.isEmpty {
+                    // Only when there is something to select; an empty list (nothing changed, all
+                    // viewed and hidden, nothing matching) says why on its own.
                     ContentUnavailableView("No Snapshot Selected", systemImage: "photo.on.rectangle",
                                            description: Text("Select a changed snapshot to compare it with \(project.baseBranch ?? "the base branch")."))
                 } else {
@@ -88,16 +89,12 @@ struct ChangesTab: View {
                  ? "The new, untracked file is deleted."
                  : "The snapshot is restored to the committed version. Uncommitted edits to it are lost.")
         }
-        // Pick up re-records or edits made outside the app.
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            project.refreshChanges()
-        }
     }
 
     @ViewBuilder
     private func actions(for change: SnapshotChange) -> some View {
         if change.kind != .deleted {
-            Button("Re-record \(change.testName)") { project.reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
+            Button("Re-record \(change.file.testName)") { project.reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
                 .disabled(project.isRunning || project.environment == nil)
             Button("Show in Library") { project.showInLibrary(path: change.path) }
                 .disabled(!project.isInLibrary(change.path))
@@ -129,10 +126,9 @@ struct ChangesTab: View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
                 SearchField(prompt: "Filter suites and tests", text: $project.changeFilter)
-                Button { project.refreshChanges() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh")
-                    .accessibilityLabel("Refresh")
+                GlassIconButton(title: "Refresh", symbol: "arrow.clockwise", help: "Compare again (also happens when you come back to the app)") {
+                    project.refreshChanges()
+                }
             }
             PaneBar(height: DS.Bar.filters) {
                 Menu {
@@ -182,6 +178,10 @@ struct ChangesTab: View {
                     }
                     Divider()
                     Toggle("Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
+                    Button("Mark All as Viewed") { project.setAllViewed(true) }
+                        .disabled(project.displayedChanges.allSatisfy { project.viewedChanges.contains($0.id) })
+                    Button("Mark All as Not Viewed") { project.setAllViewed(false) }
+                        .disabled(!project.displayedChanges.contains { project.viewedChanges.contains($0.id) })
                     Divider()
                     Button("Show All") {
                         project.changeKinds = Set(SnapshotChangeKind.allCases)
@@ -282,7 +282,8 @@ struct ChangesTab: View {
                 ForEach(groups) { group in
                     Section {
                         ForEach(group.changes) { change in
-                            ChangeRow(change: change, viewed: project.viewedChanges.contains(change.id),
+                            ChangeRow(change: change, variant: project.showsVariant(change.file) ? change.file.variant : nil,
+                                      viewed: project.viewedChanges.contains(change.id),
                                       diagnosis: project.changeDiagnoses[change.id], load: project.imageLoader(for: change))
                                 .tag(change.id)
                                 .selectableRow(project.selectedChangeID == change.id)
@@ -293,6 +294,12 @@ struct ChangesTab: View {
                     }
                 }
             }
+            .onKeyPress(.space) {
+                guard let change = project.selectedChange, change.kind != .deleted else { return .ignored }
+                quickLookURL = project.fileURL(for: change)
+                return .handled
+            }
+            .quickLookPreview($quickLookURL)
             .onKeyPress("v") {
                 guard let change = project.selectedChange else { return .ignored }
                 project.setViewed(!project.viewedChanges.contains(change.id), for: change)
@@ -355,9 +362,16 @@ struct ChangeOrigin: View {
     }
 }
 
+extension SnapshotChange {
+    /// The change read as a library file, for its test name and variant ("payButton", "dark").
+    var file: SnapshotFile { SnapshotFile(path: path, byteSize: 0) }
+}
+
 struct ChangeRow: View {
     // Read as one element: "payButton, Committed".
     var change: SnapshotChange
+    /// The variant to show ("dark"), or nil when it says nothing (see `ProjectModel.showsVariant`).
+    var variant: String?
     var viewed = false
     var diagnosis: DiffDiagnosis?
     var load: @Sendable () -> (Data?, Data?)
@@ -371,12 +385,14 @@ struct ChangeRow: View {
             }
             .opacity(viewed ? 0.5 : 1)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                Text(change.testName).fontWeight(.medium).lineLimit(1)
+                Text(change.file.testName).fontWeight(.medium).lineLimit(1)
                     .foregroundStyle(viewed ? .secondary : .primary)
                 HStack(spacing: DS.Space.xs) {
                     KindBadge(kind: change.kind, style: .dot)
-                    Text("\(change.kind.label) · \(change.fileName)")
-                        .font(.caption)
+                    // Named like the library: the variant in code type, not the file name.
+                    (Text(change.kind.label) + Text(variant == nil ? "" : " · ")
+                        + Text(variant ?? "").font(DS.Font.code))
+                        .font(DS.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     if let chip = diagnosis.flatMap(DiagnosisChip.init) { chip }
@@ -392,7 +408,7 @@ struct ChangeRow: View {
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(change.testName), \(change.kind.label), in \(change.suite)\(viewed ? ", viewed" : "")")
+        .accessibilityLabel("\(change.file.testName) \(variant ?? ""), \(change.kind.label), in \(change.suite)\(viewed ? ", viewed" : "")")
     }
 }
 

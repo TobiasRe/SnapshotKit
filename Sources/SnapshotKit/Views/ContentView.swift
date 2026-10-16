@@ -38,7 +38,7 @@ struct ContentView: View {
         }
         .overlay(alignment: .bottom) {
             if let notice = model.startupNotice {
-                NoticeBanner(text: notice, isError: false) { model.dismissStartupNotice() }
+                NoticeBanner(text: notice, isError: false, onClose: { model.dismissStartupNotice() })
                     .frame(maxWidth: 520)
                     .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
                     .padding()
@@ -53,10 +53,19 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: DS.Space.xl) {
             VStack(spacing: DS.Space.s) {
-                Image(systemName: "photo.stack")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+                // The app icon in the built app (compiled into its asset catalog); a symbol in
+                // debug builds and tests, which have none.
+                if let icon = NSImage(named: "app-icon") {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 96, height: 96)
+                        .accessibilityHidden(true)
+                } else {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
                 Text("All your snapshots in one place")
                     .font(.title2.weight(.semibold))
                 Text("Add a repository that uses swift-snapshot-testing.")
@@ -77,7 +86,7 @@ struct WelcomeView: View {
                 .secondaryActionStyle()
             }
             Text("Or drop a repository onto this window. ⌘K finds projects and commands.")
-                .font(.caption)
+                .font(DS.Font.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding(DS.Space.xl)
@@ -103,6 +112,8 @@ struct WelcomeView: View {
 struct NoticeBanner: View {
     var text: String
     var isError: Bool
+    /// A next step, e.g. ("Review Changes", go there).
+    var action: (title: String, run: () -> Void)?
     var onClose: (() -> Void)?
 
     var body: some View {
@@ -110,10 +121,16 @@ struct NoticeBanner: View {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? DS.Status.failed : Color.secondary)
             Text(text)
-                .font(.callout)
+                .font(DS.Font.secondary)
                 .lineLimit(3)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let action {
+                Button(action.title, action: action.run)
+                    .quietControl()
+                    .controlSize(.small)
+                    .fixedSize()
+            }
             if let onClose {
                 Button { onClose() } label: { Image(systemName: "xmark") }
                     .buttonStyle(.borderless)

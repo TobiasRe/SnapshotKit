@@ -65,7 +65,7 @@ last run.
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
 | ⇧⌘0 | Zoom to the changed pixels |
 | ← / → | Move the slider divider (or drag its knob) |
-| Space | Flip between the images in toggle mode |
+| Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous failure or change, wherever the focus is |
 | V (in the list), ⌥⌘V | Mark a change as viewed and go to the next one |
 

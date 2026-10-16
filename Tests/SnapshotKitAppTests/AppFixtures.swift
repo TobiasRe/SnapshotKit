@@ -20,8 +20,8 @@ enum AppFixtures {
     // MARK: Images
 
     /// A small mock of an app screen: card, title bar, text lines and a button in `accent`.
-    static func screen(accent: NSColor, titleWidth: CGFloat = 0.6, badge: Bool = false) -> Data {
-        let size = CGSize(width: 360, height: 240)
+    static func screen(accent: NSColor, titleWidth: CGFloat = 0.6, badge: Bool = false, height: CGFloat = 240) -> Data {
+        let size = CGSize(width: 360, height: height)
         let image = NSImage(size: size, flipped: true) { rect in
             NSColor.white.setFill(); rect.fill()
             let card = NSBezierPath(roundedRect: rect.insetBy(dx: 20, dy: 20), xRadius: 14, yRadius: 14)
@@ -281,6 +281,7 @@ enum AppFixtures {
             f.lastResult = lastResult
             f.lastMessage = ProjectModel.failureTitle(tests: 2, suites: 2)
             f.lastMessageIsError = true
+            f.lastMessageAction = .showFailures
             f.lastDuration = 94
         case .running:
             f.tab = .run
@@ -324,6 +325,7 @@ enum AppFixtures {
             f.historyFlaky = []
         case .empty:
             f.tab = .run
+            f.library = SnapshotLibrary(files: [])
             f.failingSuites = []
             f.failures = []
             f.failureSource = nil

@@ -47,9 +47,14 @@ public struct ReviewMarks: Sendable {
 
     /// Marks or unmarks `change`, dropping marks for snapshots that are no longer changed.
     public func set(_ viewed: Bool, for change: SnapshotChange, keepingOnly changes: [SnapshotChange]) {
+        set(viewed, for: [change], keepingOnly: changes)
+    }
+
+    /// Marks or unmarks several changes in one write.
+    public func set(_ viewed: Bool, for marked: [SnapshotChange], keepingOnly changes: [SnapshotChange]) {
         let current = Set(changes.map(\.path))
         var marks = load().filter { current.contains($0.key) }
-        marks[change.path] = viewed ? fingerprint(of: change) : nil
+        for change in marked { marks[change.path] = viewed ? fingerprint(of: change) : nil }
         save(marks)
     }
 }

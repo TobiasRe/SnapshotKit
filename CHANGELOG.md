@@ -41,6 +41,8 @@ snapshot tests built with swift-snapshot-testing.
 - Streams output with live counts; a results list by suite afterwards. Runs on a remote Mac over SSH too.
 
 ### Projects and tools
+- Snapshots written outside the app (a re-record from Xcode or the CLI) appear while the window is open; Space
+  opens the selected snapshot in Quick Look.
 - Scan folders, pins, recents, per-project base branch, and a ⌘K palette for projects and commands.
 - An optional menu bar item with run progress (a pie and a done/total count), the failing count, Cancel,
   and one-click access to failing, pinned and recent projects.
