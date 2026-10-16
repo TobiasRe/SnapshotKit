@@ -117,10 +117,14 @@ final class ProjectModel: ObservableObject {
     @Published var tab: ProjectTab = .snapshots
 
     // Library
-    @Published private(set) var library: SnapshotLibrary?
+    @Published private(set) var library: SnapshotLibrary? {
+        didSet { libraryRevision &+= 1 }
+    }
     @Published private(set) var isLoadingLibrary = false
     /// Snapshots whose test no longer exists, by id.
-    @Published private(set) var orphanIDs: Set<String> = []
+    @Published private(set) var orphanIDs: Set<String> = [] {
+        didSet { libraryRevision &+= 1 }
+    }
     @Published var libraryFilter = ""
     @Published var libraryScope = LibraryScope.all
     @Published var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
@@ -188,8 +192,19 @@ final class ProjectModel: ObservableObject {
         didSet { changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a }) }
     }
     /// Lookups for the library's status marks, rebuilt when changes or failures change.
-    private var changeKindByPath: [String: SnapshotChangeKind] = [:]
-    private var failureByPath: [String: FailureItem] = [:]
+    private var changeKindByPath: [String: SnapshotChangeKind] = [:] {
+        didSet { libraryRevision &+= 1 }
+    }
+    private var failureByPath: [String: FailureItem] = [:] {
+        didSet { libraryRevision &+= 1 }
+    }
+    /// Bumped whenever anything the library's list order depends on changes (files, statuses,
+    /// orphans), so the order is computed once per change instead of on every redraw.
+    private var libraryRevision = 0
+    private struct LibraryOrderKey: Equatable {
+        var revision: Int, filter: String, scope: LibraryScope, sort: LibrarySort
+    }
+    private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
     @Published private(set) var changesError: String?
     @Published var changeFilter = ""
     @Published var changeKinds = Set(SnapshotChangeKind.allCases)
@@ -420,17 +435,42 @@ final class ProjectModel: ObservableObject {
     }
 
     /// Snapshots in the order the list shows them: module, suite, test, variant.
-    var displayedSnapshots: [SnapshotFile] {
-        switch librarySort {
-        case .name: SnapshotLibrary.tree(filteredSnapshots).flatMap { $0.suites.flatMap { $0.tests.flatMap(\.files) } }
-        case .size: filteredSnapshots.sorted { ($0.byteSize, $1.path) > ($1.byteSize, $0.path) }
-        case .recent: filteredSnapshots.sorted { ($0.modified ?? .distantPast, $1.path) > ($1.modified ?? .distantPast, $0.path) }
+    var displayedSnapshots: [SnapshotFile] { libraryOrder.files }
+
+    /// The filtered library as module › suite › test, as the list groups it.
+    var displayedTree: [SnapshotModule] { libraryOrder.tree }
+
+    private var libraryOrder: (tree: [SnapshotModule], files: [SnapshotFile]) {
+        let key = LibraryOrderKey(revision: libraryRevision, filter: libraryFilter, scope: libraryScope, sort: librarySort)
+        if let cache = libraryOrderCache, cache.key == key { return (cache.tree, cache.files) }
+        let filtered = filteredSnapshots
+        let tree = SnapshotLibrary.tree(filtered)
+        let files: [SnapshotFile] = switch librarySort {
+        case .name: tree.flatMap { $0.suites.flatMap { $0.tests.flatMap(\.files) } }
+        case .size: filtered.sorted { ($0.byteSize, $1.path) > ($1.byteSize, $0.path) }
+        case .recent: filtered.sorted { ($0.modified ?? .distantPast, $1.path) > ($1.modified ?? .distantPast, $0.path) }
         }
+        libraryOrderCache = (key, tree, files)
+        return (tree, files)
     }
 
     var selectedSnapshot: SnapshotFile? {
         library?.files.first { $0.id == selectedSnapshotID }
     }
+
+    /// Whether a snapshot's variant is worth showing: a name ("dark") always, a counter ("1") only
+    /// when its test has more than one snapshot.
+    func showsVariant(_ file: SnapshotFile) -> Bool {
+        guard !file.variant.isEmpty else { return false }
+        guard file.variant.allSatisfy(\.isNumber) else { return true }
+        if multiSnapshotTests?.revision != libraryRevision {
+            var counts: [String: Int] = [:]
+            for f in library?.files ?? [] { counts[f.module + "/" + f.suite + "/" + f.testName, default: 0] += 1 }
+            multiSnapshotTests = (libraryRevision, Set(counts.filter { $0.value > 1 }.keys))
+        }
+        return multiSnapshotTests?.tests.contains(file.module + "/" + file.suite + "/" + file.testName) ?? true
+    }
+    private var multiSnapshotTests: (revision: Int, tests: Set<String>)?
 
     /// The other snapshots of the same test (light/dark, devices, named states), in variant order.
     func variants(of file: SnapshotFile) -> [SnapshotFile] {

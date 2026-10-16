@@ -5,6 +5,7 @@
 #   REPO       a git repository with snapshot tests, e.g. the sample kept by `scripts/e2e.sh --keep`
 #   OUT_DIR    where PNGs go (default: ./build/ui-captures)
 #   --with-run run the snapshot tests from the UI first (needs Xcode + simulator)
+#   APPEARANCE=dark (environment) captures every view in dark mode
 #
 # Uses a throwaway SNAPSHOTKIT_HOME so your real settings are untouched; the repository's
 # last-run state (.git/snapshotkit) is reused if present.
@@ -45,7 +46,7 @@ EOF
 
 capture() {
   local name="$1"; shift
-  "$APP" --capture "$OUT/$name.png" "$@" 2>&1 | grep '^capture:' || true
+  "$APP" --capture "$OUT/$name.png" "$@" ${APPEARANCE:+--appearance "$APPEARANCE"} 2>&1 | grep '^capture:' || true
 }
 
 capture 00-snapshots --project "$REPO" --tab snapshots

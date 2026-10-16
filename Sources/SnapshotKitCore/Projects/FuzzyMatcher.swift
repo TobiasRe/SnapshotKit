@@ -23,6 +23,14 @@ public enum FuzzyMatcher {
             qi += 1
         }
         guard qi == q.count else { return nil }
+        // Typed letters that appear together ("rec" in "Re-record") beat ones scattered across
+        // words ("Re… C…" in "Refresh Changes"), more so at the start of a word.
+        if q.count > 1, q.count <= c.count,
+           let start = (0...(c.count - q.count)).first(where: { c[$0..<($0 + q.count)].elementsEqual(q) }) {
+            let atWordStart = start == 0 || "/-_ .".contains(original[start - 1])
+                || (original[start].isUppercase && original[start - 1].isLowercase)
+            score += q.count * (atWordStart ? 4 : 2)
+        }
         return score - c.count / 10
     }
 

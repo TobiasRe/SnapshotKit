@@ -139,6 +139,23 @@ extension AppUITests {
             assertPane(project, app: app, appearance: appearance)
         }
 
+        /// The outcome of the last run floats under the bars of another tab, without moving them.
+        @Test func noticeAfterAFailedRun() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.failedRun)
+            project.tab = .failures
+            let view = ProjectView(project: project).environmentObject(app)
+            assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy)
+        }
+
+        /// Increase Contrast: the selection, hairlines and labels must stay visible.
+        @Test func changesTabWithIncreasedContrast() {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.changes)
+            let view = ProjectView(project: project).environmentObject(app)
+            assertSnapshot(of: host(view, size: Self.paneSize, appearance: .accessibilityHighContrastAqua), as: Self.strategy)
+        }
+
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func failuresTab(appearance: NSAppearance.Name) {
             UserDefaults.standard.set(CompareMode.slider.rawValue, forKey: "compareMode")
@@ -183,6 +200,23 @@ extension AppUITests {
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environmentObject(app)
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
+        }
+
+        @Test func commandPalette() {
+            let (app, _) = makeApp(.failedRun)
+            QuickSwitcherQuery.preset = "rec"
+            defer { QuickSwitcherQuery.preset = nil }
+            let view = QuickSwitcherView().environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
+        }
+
+        @Test func settings() {
+            let store = AppFixtures.store()
+            store.addScanRoot("/work")
+            store.addScanRoot("/Volumes/Projects/ios")
+            let app = AppModel(store: store)
+            let view = SettingsView().environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 520, height: 500), appearance: .aqua), as: Self.strategy)
         }
 
         @Test func welcome() {

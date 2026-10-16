@@ -1,3 +1,4 @@
+import AppKit
 import SnapshotKitCore
 import SwiftUI
 
@@ -16,45 +17,75 @@ struct SettingsView: View {
             } header: {
                 Text("General")
             } footer: {
-                Text("Run progress and quick access to recent projects. SnapshotKit keeps running when its window is closed.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                FormFooter("Run progress and quick access to recent projects. SnapshotKit keeps running when its window is closed.")
             }
-            Section("Scan folders") {
-                List {
-                    ForEach(roots, id: \.self) { root in
-                        HStack {
-                            Text(root).lineLimit(1).truncationMode(.middle)
-                            Spacer()
-                            Button { model.store.removeScanRoot(root); reload() } label: { Image(systemName: "minus.circle") }
-                                .buttonStyle(.borderless)
+
+            Section {
+                if roots.isEmpty {
+                    Text("No folders yet")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(roots, id: \.self) { root in
+                    LabeledContent {
+                        Button { model.store.removeScanRoot(root); reload() } label: {
+                            Image(systemName: "minus.circle")
                         }
+                        .buttonStyle(.borderless)
+                        .help("Stop scanning this folder")
+                        .accessibilityLabel("Remove \(Self.abbreviated(root))")
+                    } label: {
+                        Label(Self.abbreviated(root), systemImage: "folder")
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(root)
                     }
                 }
-                .frame(minHeight: 80)
+            } header: {
                 HStack {
+                    Text("Scan Folders")
+                    Spacer()
+                    Button("Rescan") { model.rescan() }
+                        .disabled(roots.isEmpty)
                     Button("Add Folder…") {
                         model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") {
                             model.addScanRoot($0)
                             reload()
                         }
                     }
-                    Button("Rescan") { model.rescan() }
                 }
+                .controlSize(.small)
+            } footer: {
+                FormFooter("Git repositories with snapshot tests in these folders appear in the sidebar.")
             }
+
             Section("Testing") {
-                Stepper("Flakiness check runs: \(iterations)", value: $iterations, in: 2...50)
-                    .onChange(of: iterations) { _, v in model.store.update { $0.flakeIterations = v } }
+                LabeledContent("Flakiness check runs") {
+                    HStack(spacing: DS.Space.s) {
+                        Text("\(iterations)").monospacedDigit()
+                        Stepper("Flakiness check runs", value: $iterations, in: 2...50).labelsHidden()
+                    }
+                }
+                .onChange(of: iterations) { _, v in model.store.update { $0.flakeIterations = v } }
                 Toggle("Verify after re-recording", isOn: $verify)
                     .onChange(of: verify) { _, v in model.store.update { $0.verifyAfterRecord = v } }
             }
+
             Section {
-                Text("Settings are stored in \(model.store.url.path)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                LabeledContent("Settings file") {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.store.url]) }
+                        .help(model.store.url.path)
+                }
             }
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 500)
         .onAppear(perform: reload)
+    }
+
+    /// A folder as people say it: the home folder as "~".
+    static func abbreviated(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 
     private func reload() {

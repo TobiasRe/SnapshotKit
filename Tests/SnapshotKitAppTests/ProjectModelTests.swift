@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SnapshotKitCore
+import SwiftUI
 import Testing
 @testable import SnapshotKit
 
@@ -140,6 +141,67 @@ extension AppUITests {
             #expect(model.canReRecordSelection)
             model.tab = .run
             #expect(!model.canReRecordSelection)
+        }
+
+        @Test func listOrderFollowsFilterScopeAndSort() {
+            // The order is cached between redraws; every input has to invalidate it.
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            let all = model.displayedSnapshots
+            #expect(all.count == AppFixtures.libraryImages.count)
+            model.libraryFilter = "payButton"
+            #expect(model.displayedSnapshots.allSatisfy { $0.testName == "payButton" })
+            #expect(model.displayedTree.flatMap(\.suites).map(\.name) == ["CheckoutViewTests"])
+            model.libraryFilter = ""
+            model.libraryScope = .failing
+            #expect(model.displayedSnapshots.map(\.testName) == ["badge"])
+            model.libraryScope = .all
+            model.librarySort = .size
+            #expect(model.displayedSnapshots.map(\.byteSize) == all.map(\.byteSize).sorted(by: >))
+            model.librarySort = .name
+            #expect(model.displayedSnapshots == all)
+        }
+
+        @Test func countersShowOnlyWhenATestHasSeveralSnapshots() {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            let files = model.library?.files ?? []
+            let named = files.first { $0.variant == "dark" }!
+            let lone = files.first { $0.testName == "summary" }!
+            #expect(model.showsVariant(named))
+            #expect(lone.variant == "1" && !model.showsVariant(lone))
+            #expect(!model.showsVariant(SnapshotFile(path: "T/__Snapshots__/S/plain.png", byteSize: 0)))
+        }
+
+        @Test func paletteRanksProjectsAndCommandsTogether() {
+            let projects = [Project(path: "/work/payments-ui"), Project(path: "/work/design-system")]
+            let commands = [PaletteCommand(title: "Run Snapshot Tests", symbol: "play", shortcut: "⌘R") {},
+                            PaletteCommand(title: "Show Changes", symbol: "arrow.triangle.branch", shortcut: nil) {}]
+            let ids = { (query: String) in PaletteItem.ranked(projects: projects, commands: commands, query: query).map(\.id) }
+            // Nothing typed: projects first, then commands, in their own order.
+            #expect(ids("") == ["project:/work/payments-ui", "project:/work/design-system",
+                                "command:Run Snapshot Tests", "command:Show Changes"])
+            #expect(ids("run") == ["command:Run Snapshot Tests"])
+            #expect(ids("changes") == ["command:Show Changes"])
+            #expect(ids("pay") == ["project:/work/payments-ui"])
+            #expect(ids("work").allSatisfy { $0.hasPrefix("project:") })   // path matches still find projects
+        }
+
+        @Test func paletteOffersOnlyWhatCanBeDoneNow() {
+            let app = AppModel(store: AppFixtures.store())
+            #expect(PaletteCommand.available(app: app).map(\.title) == ["Add Project…"])   // no project open
+            let model = AppFixtures.project(.failedRun, store: app.store)
+            app.show(model)
+            let titles = PaletteCommand.available(app: app).map(\.title)
+            #expect(titles.contains("Re-record Failing Tests"))
+            #expect(!titles.contains("Cancel Run"))
+        }
+
+        @Test func listWidthStaysWithinItsBoundsAndLeavesTheDetailRoom() {
+            typealias Split = ListDetailSplit<SwiftUI.EmptyView, SwiftUI.EmptyView>
+            #expect(Split.clamp(400, min: 280, available: 1100) == 400)
+            #expect(Split.clamp(100, min: 280, available: 1100) == 280)     // never narrower than its minimum
+            #expect(Split.clamp(900, min: 280, available: 1400) == 520)     // never wider than its maximum
+            #expect(Split.clamp(500, min: 280, available: 800) == 360)      // the detail keeps 440 points
+            #expect(Split.clamp(500, min: 300, available: 600) == 300)      // a tiny window: the list's minimum wins
         }
 
         @Test func showInLibraryClearsFiltersThatHideTheSnapshot() {

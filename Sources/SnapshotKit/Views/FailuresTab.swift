@@ -8,7 +8,7 @@ struct FailuresTab: View {
     @State private var repetition = 1
 
     var body: some View {
-        HSplitView {
+        ListDetailSplit {
             VStack(spacing: 0) {
                 header
                 Divider()
@@ -16,18 +16,19 @@ struct FailuresTab: View {
                 footer
             }
             .background(DS.Surface.content)
-            .frame(minWidth: 280, idealWidth: 340, maxWidth: 480)
-
+            .frame(maxHeight: .infinity, alignment: .top)
+        } detail: {
             Group {
                 if let item = project.selectedFailure {
                     detail(item)
                 } else if !project.historyFlaky.isEmpty {
                     flakyHistory
-                } else {
+                } else if !project.failures.isEmpty {
+                    // Only when there is something to select; an empty list says why on its own.
                     ContentUnavailableView("No Failure Selected", systemImage: "rectangle.on.rectangle.slash",
-                                           description: Text(project.failures.isEmpty
-                                                             ? "Failing snapshot tests from the last run appear here."
-                                                             : "Select a failing test to compare it with its reference."))
+                                           description: Text("Select a failing test to compare it with its reference."))
+                } else {
+                    DS.Surface.content
                 }
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
@@ -106,7 +107,7 @@ struct FailuresTab: View {
                             .contextMenu { actions(for: item) }
                     }
                 } header: {
-                    ListSectionHeader(title: suite, count: bySuite[suite]?.count ?? 0)
+                    ListSectionHeader(title: suite.split(separator: "/").joined(separator: " › "), count: bySuite[suite]?.count ?? 0)
                 }
             }
         }
@@ -127,7 +128,9 @@ struct FailuresTab: View {
 
         let shown = project.displayedFailures.map(\.id)
         return VStack(spacing: 0) {
-            DetailHeader(title: item.test.name, subtitle: item.referencePaths.first ?? item.suite.identifier,
+            DetailHeader(title: item.test.name,
+                         subtitle: item.suite.identifier.split(separator: "/").joined(separator: " › "),
+                         path: item.referencePaths.first,
                          position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
@@ -298,8 +301,11 @@ struct FailuresTab: View {
         .formStyle(.grouped)
     }
 
+    /// The message's first line, without Swift Testing's "Issue recorded:" boilerplate.
     private func firstLine(_ message: String) -> String {
-        message.split(separator: "\n").first.map(String.init) ?? message
+        let line = message.split(separator: "\n").first.map(String.init) ?? message
+        let prefix = "Issue recorded: "
+        return line.hasPrefix(prefix) ? String(line.dropFirst(prefix.count)) : line
     }
 }
 
@@ -318,11 +324,16 @@ struct FailureRow: View {
             VStack(alignment: .leading, spacing: DS.Space.xs) {
                 Text(item.test.name).fontWeight(.medium).lineLimit(1)
                 HStack(spacing: DS.Space.xs) {
-                    if let verdict = item.verdict { VerdictTag(verdict: verdict) }
-                    if item.test.repetitions.count > 1 {
-                        Chip(text: "\(item.test.failedRepetitions)/\(item.test.repetitions.count) runs failed", color: .secondary)
+                    // One label for what's known about its flakiness: the verdict with the runs
+                    // behind it, else the runs, else what earlier runs showed.
+                    let runs = item.test.repetitions.count > 1
+                        ? "\(item.test.failedRepetitions)/\(item.test.repetitions.count) runs failed" : nil
+                    if let verdict = item.verdict {
+                        VerdictTag(verdict: verdict, detail: runs)
+                    } else if let runs {
+                        Chip(text: runs, color: DS.Status.neutral)
                     }
-                    if item.historyFlaky != nil {
+                    if item.historyFlaky != nil && item.verdict != .flaky {
                         Chip(text: "Flaky in history", color: DS.Status.flaky)
                     }
                     if item.isNewReference {
@@ -444,12 +455,15 @@ struct HistoryStrip: View {
 
 struct VerdictTag: View {
     var verdict: FlakeVerdict
+    /// What the verdict rests on, e.g. "3/5 runs failed".
+    var detail: String?
 
     var body: some View {
+        let text = detail.map { "\(verdict.label) · \($0)" } ?? verdict.label
         switch verdict {
-        case .alwaysFails: Chip(text: verdict.label, color: DS.Status.failed)
-        case .flaky: Chip(text: verdict.label, color: DS.Status.flaky)
-        case .passes: Chip(text: verdict.label, color: DS.Status.passed)
+        case .alwaysFails: Chip(text: text, color: DS.Status.failed)
+        case .flaky: Chip(text: text, color: DS.Status.flaky)
+        case .passes: Chip(text: text, color: DS.Status.passed)
         }
     }
 }

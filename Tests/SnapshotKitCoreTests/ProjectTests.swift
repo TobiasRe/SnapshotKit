@@ -7,6 +7,9 @@ import Testing
         let names = ["payments-ios", "SnapshotKit", "snap-old", "Settings"]
         #expect(FuzzyMatcher.rank(names, query: "snk", key: { $0 }) == ["SnapshotKit"])
         #expect(FuzzyMatcher.rank(names, query: "snap", key: { $0 }).first == "snap-old")
+        // Letters typed together win over letters scattered across words.
+        #expect(FuzzyMatcher.rank(["Refresh Changes", "Re-record Failing Tests"], query: "rec", key: { $0 }).first
+                == "Re-record Failing Tests")
         #expect(FuzzyMatcher.score("xyz", in: "SnapshotKit") == nil)
         #expect(FuzzyMatcher.rank(names, query: "  ", key: { $0 }) == names)
     }

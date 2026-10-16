@@ -8,7 +8,7 @@ struct ChangesTab: View {
     @State private var confirmDiscardInvisible = false
 
     var body: some View {
-        HSplitView {
+        ListDetailSplit {
             VStack(spacing: 0) {
                 filterBar
                 Divider()
@@ -18,13 +18,15 @@ struct ChangesTab: View {
                 footer
             }
             .background(DS.Surface.content)
-            .frame(minWidth: 280, idealWidth: 330, maxWidth: 460, maxHeight: .infinity, alignment: .top)
-
+            .frame(maxHeight: .infinity, alignment: .top)
+        } detail: {
             Group {
                 if let change = project.selectedChange {
                     VStack(spacing: 0) {
                         let shown = project.displayedChanges.map(\.id)
-                        DetailHeader(title: change.testName, subtitle: change.path,
+                        DetailHeader(title: change.testName,
+                                     subtitle: Breadcrumb.of(module: SnapshotModules.module(forSnapshotPath: change.path), suite: change.suite),
+                                     path: change.path,
                                      position: shown.firstIndex(of: change.id).map { ($0 + 1, shown.count) },
                                      step: { project.selectAdjacent($0) }) {
                             HStack(spacing: DS.Space.s) {
@@ -47,6 +49,7 @@ struct ChangesTab: View {
                                 .help("Open, reveal or discard this snapshot")
                                 .accessibilityLabel("Snapshot Actions")
                             }
+                            .controlSize(.small)
                         }
                         infoRow(change)
                         Divider()
@@ -58,11 +61,12 @@ struct ChangesTab: View {
                 } else if project.changesError != nil {
                     ContentUnavailableView("Choose a Base Branch", systemImage: "arrow.triangle.branch",
                                            description: Text("Pick the branch your merge requests target from the base branch menu above the list."))
-                } else if project.changeSet != nil {
+                } else if let set = project.changeSet, !set.changes.isEmpty {
+                    // Only when there is something to select; an empty list says why on its own.
                     ContentUnavailableView("No Snapshot Selected", systemImage: "photo.on.rectangle",
                                            description: Text("Select a changed snapshot to compare it with \(project.baseBranch ?? "the base branch")."))
                 } else {
-                    Color.clear
+                    DS.Surface.content
                 }
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
@@ -145,8 +149,12 @@ struct ChangesTab: View {
                     }
                 } label: {
                     Label(project.baseBranch ?? "Base Branch", systemImage: "arrow.triangle.branch")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .fixedSize()
+                // The one control here that gives way: branch names can be long.
+                .frame(minWidth: 60)
+                .layoutPriority(-1)
                 .quietControl()
                 .help("The branch to compare against")
                 .accessibilityLabel("Base branch: \(project.baseBranch ?? "none")")
@@ -184,7 +192,8 @@ struct ChangesTab: View {
                 }
                 .fixedSize()
                 .quietControl()
-                .accessibilityLabel("Show: \(kindsLabel)")
+                .help("Which kinds of change to show: committed, uncommitted, new, deleted; and whether to hide viewed ones")
+                .accessibilityLabel("Change kinds: \(kindsLabel)")
             }
             .controlSize(.small)
             .padding(.bottom, DS.Space.xs)
@@ -196,7 +205,8 @@ struct ChangesTab: View {
     private var footer: some View {
         if let set = project.changeSet {
             PaneFooter {
-                Text("\(project.filteredChanges.count) of \(set.changes.count) · vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
+                Text((set.changes.isEmpty ? "" : "\(project.filteredChanges.count) of \(set.changes.count) · ")
+                     + "vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: DS.Space.s)
@@ -216,12 +226,7 @@ struct ChangesTab: View {
     /// What this change is compared with, what kind of difference it is, and the way to the library.
     private func infoRow(_ change: SnapshotChange) -> some View {
         DetailInfoRow {
-            Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary).accessibilityHidden(true)
-            Text("\(project.changeSet?.baseBranch ?? "Base") at \(project.diffBase.label.lowercased()) → "
-                 + (change.kind == .uncommitted || change.kind == .new ? "working tree" : "this branch"))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            ChangeOrigin(project: project, change: change)
             if let chip = project.changeDiagnoses[change.id].flatMap(DiagnosisChip.init) { chip }
             Spacer(minLength: DS.Space.s)
             Button("Show in Library") { project.showInLibrary(path: change.path) }
@@ -260,8 +265,8 @@ struct ChangesTab: View {
 
     private var kindsLabel: String {
         let kinds = project.changeKinds.count == SnapshotChangeKind.allCases.count
-            ? "All Changes"
-            : "\(project.changeKinds.count) of \(SnapshotChangeKind.allCases.count) Kinds"
+            ? "All"
+            : "\(project.changeKinds.count) of \(SnapshotChangeKind.allCases.count)"
         return project.hideViewed ? kinds + ", Unviewed" : kinds
     }
 
@@ -310,6 +315,46 @@ struct ChangesTab: View {
     }
 }
 
+/// Where a change comes from: the commit that last touched the snapshot on this branch (who,
+/// when, why), or that it isn't committed yet. Until the history is read, and when there is none,
+/// it says what is compared instead.
+struct ChangeOrigin: View {
+    @ObservedObject var project: ProjectModel
+    var change: SnapshotChange
+    @State private var last: SnapshotVersion?
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(spacing: DS.Space.s) {
+            Image(systemName: last == nil ? "arrow.triangle.branch" : "clock.arrow.circlepath")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            text
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .task(id: change.id) {
+            last = nil
+            // A deletion may not be committed yet, so its last commit could predate it.
+            guard change.kind == .committed else { return }
+            last = await project.history(of: SnapshotFile(path: change.path, byteSize: 0)).first
+        }
+    }
+
+    private var text: Text {
+        if change.kind == .uncommitted || change.kind == .new {
+            return Text("Not committed yet · compared with \(project.changeSet?.baseBranch ?? "the base branch")")
+        }
+        guard let last else {
+            return Text("\(project.changeSet?.baseBranch ?? "Base") at \(project.diffBase.label.lowercased()) → this branch")
+        }
+        return Text("Changed \(last.date.formatted(.dateTime.day().month(.abbreviated).locale(locale))) by \(last.author) in ")
+            + Text(last.shortCommit).font(DS.Font.code)
+            + Text(" “\(last.subject)”")
+    }
+}
+
 struct ChangeRow: View {
     // Read as one element: "payButton, Committed".
     var change: SnapshotChange
@@ -355,7 +400,10 @@ struct ChangeRow: View {
 /// actions. Its height is fixed (`DS.Bar.header`), level with the list's search bar.
 struct DetailHeader<Accessory: View>: View {
     var title: String
+    /// Where it lives, as a breadcrumb ("Module › Suite").
     var subtitle: String?
+    /// The full file path, shown on hover (and copied from the actions menu).
+    var path: String?
     /// One-based position in the list and the list's length, for the previous/next stepper.
     var position: (index: Int, count: Int)?
     var step: (Int) -> Void = { _ in }
@@ -370,8 +418,8 @@ struct DetailHeader<Accessory: View>: View {
                         .font(DS.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .truncationMode(.head)
-                        .textSelection(.enabled)
+                        .truncationMode(.middle)
+                        .help(path ?? subtitle)
                 }
             }
             Spacer(minLength: DS.Space.s)

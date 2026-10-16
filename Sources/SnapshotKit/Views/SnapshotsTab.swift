@@ -37,7 +37,7 @@ struct SnapshotsTab: View {
     }
 
     private var split: some View {
-        HSplitView {
+        ListDetailSplit {
             VStack(spacing: 0) {
                 header
                 Divider()
@@ -46,8 +46,8 @@ struct SnapshotsTab: View {
                 footer
             }
             .background(DS.Surface.content)
-            .frame(minWidth: 280, idealWidth: 330, maxWidth: 460, maxHeight: .infinity, alignment: .top)
-
+            .frame(maxHeight: .infinity, alignment: .top)
+        } detail: {
             Group {
                 if let file = project.selectedSnapshot {
                     SnapshotDetail(project: project, file: file)
@@ -67,7 +67,11 @@ struct SnapshotsTab: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
-                SearchField(prompt: "Filter modules, suites and tests", text: $project.libraryFilter)
+                SearchField(prompt: "Filter snapshots", text: $project.libraryFilter)
+                    .help("Filter by module, suite, test or variant; every word must match")
+                    // In the full-width grid a window-wide field reads as a page title.
+                    .frame(maxWidth: 420)
+                Spacer(minLength: 0)
                 Menu {
                     Picker("Sort By", selection: $project.librarySort) {
                         ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
@@ -98,7 +102,13 @@ struct SnapshotsTab: View {
                 ViewThatFits(in: .horizontal) {
                     scopePicker(counts: true).pickerStyle(.segmented)
                     scopePicker(counts: false).pickerStyle(.segmented)
-                    scopePicker(counts: true).pickerStyle(.menu).fixedSize()
+                    Menu {
+                        scopePicker(counts: true).pickerStyle(.inline)
+                    } label: {
+                        Label(scopeMenuTitle, systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .fixedSize()
+                    .quietControl()
                 }
                 .labelsHidden()
                 .controlSize(.small)
@@ -148,9 +158,17 @@ struct SnapshotsTab: View {
     private func scopePicker(counts: Bool) -> some View {
         Picker("Show", selection: $project.libraryScope) {
             ForEach(LibraryScope.allCases.filter { $0 != .orphaned || !project.orphanIDs.isEmpty || project.libraryScope == .orphaned }) { scope in
-                Text(scope == .all || !counts ? scope.rawValue : "\(scope.rawValue) \(project.count(in: scope))").tag(scope)
+                let count = project.count(in: scope)
+                Text(scope == .all || !counts || count == 0 ? scope.rawValue : "\(scope.rawValue) \(count)").tag(scope)
             }
         }
+    }
+
+    /// "Show: All", "Show: Failing 1": the narrow column's stand-in for the segmented control.
+    private var scopeMenuTitle: String {
+        let scope = project.libraryScope
+        let count = project.count(in: scope)
+        return scope == .all || count == 0 ? "Show: \(scope.rawValue)" : "Show: \(scope.rawValue) \(count)"
     }
 
     private func testCount(_ files: [SnapshotFile]) -> Int {
@@ -167,13 +185,14 @@ struct SnapshotsTab: View {
         if project.library == nil && project.isLoadingLibrary {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            let tree = SnapshotLibrary.tree(project.filteredSnapshots)
+            let tree = project.displayedTree
             List(selection: $project.selectedSnapshotID) {
                 if project.librarySort != .name {
                     Section {
                         ForEach(project.displayedSnapshots) { file in
                             SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
-                                        detail: project.librarySort == .size ? .size : .modified)
+                                        detail: project.librarySort == .size ? .size : .modified,
+                                        showVariant: project.showsVariant(file))
                                 .tag(file.id)
                                 .selectableRow(project.selectedSnapshotID == file.id)
                                 .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
@@ -189,7 +208,8 @@ struct SnapshotsTab: View {
                         Section {
                             ForEach(suite.tests) { test in
                                 ForEach(test.files) { file in
-                                    SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file))
+                                    SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
+                                                showVariant: project.showsVariant(file))
                                         .tag(file.id)
                                         .selectableRow(project.selectedSnapshotID == file.id)
                                         // Drag a snapshot out, e.g. into a pull request comment.
@@ -236,6 +256,8 @@ struct SnapshotRow: View {
     var status = SnapshotStatus()
     var load: @Sendable () -> Data?
     var detail = Detail.none
+    /// Whether the variant says anything (see `ProjectModel.showsVariant`).
+    var showVariant = true
 
     var body: some View {
         HStack(spacing: DS.Space.m) {
@@ -246,7 +268,7 @@ struct SnapshotRow: View {
                     Text(file.suite).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 HStack(spacing: DS.Space.xs) {
-                    if !file.variant.isEmpty {
+                    if showVariant && !file.variant.isEmpty {
                         Text(file.variant).font(DS.Font.code).foregroundStyle(.secondary).lineLimit(1)
                     }
                     if file.state != .clean { SnapshotStateChip(state: file.state) }
@@ -369,12 +391,12 @@ struct SnapshotDetail: View {
         let status = project.status(of: file)
         VStack(spacing: 0) {
             let shown = project.displayedSnapshots.map(\.id)
-            DetailHeader(title: file.variant.isEmpty ? file.testName : "\(file.testName) · \(file.variant)", subtitle: file.path,
+            DetailHeader(title: project.showsVariant(file) ? "\(file.testName) · \(file.variant)" : file.testName,
+                         subtitle: Breadcrumb.of(module: file.module, suite: file.suite), path: file.path,
                          position: shown.firstIndex(of: file.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
                     statusChips(status)
-                    if file.state != .clean { SnapshotStateChip(state: file.state) }
                     Menu {
                         Button("Re-record Test") { project.reRecord([file], granularity: .tests) }
                         Button("Re-record Suite \(file.suite)") { project.reRecord([file], granularity: .suites) }
@@ -404,6 +426,7 @@ struct SnapshotDetail: View {
                     .help("Open, reveal or copy the path of this snapshot")
                     .accessibilityLabel("Snapshot Actions")
                 }
+                .controlSize(.small)
             }
             infoRow
             Divider()
@@ -422,7 +445,7 @@ struct SnapshotDetail: View {
                             identity: "\(file.path)#\(file.byteSize)@\(comparing.commit)")
             } else {
                 SnapshotViewer(load: project.snapshotLoader(for: file), identity: "\(file.path)#\(file.byteSize)",
-                               caption: "\(file.module) › \(file.suite)", fileSize: file.byteSize)
+                               fileSize: file.byteSize)
             }
         }
         .task(id: file.id) {
@@ -443,13 +466,21 @@ struct SnapshotDetail: View {
             .help("Its test failed in the last run. Click to compare with the actual image.")
             .accessibilityLabel(status.verdict == .flaky ? "Flaky, compare with actual" : "Failing, compare with actual")
         }
+        // One chip for what changed: an uncommitted file says New or Modified, a committed change
+        // says Changed; either opens the change for review when there is one.
         if let change = status.change {
             Button { project.showChange(path: file.path) } label: {
-                Chip(text: "Changed", color: DS.Status.color(for: change))
+                if file.state == .clean {
+                    Chip(text: "Changed", color: DS.Status.color(for: change))
+                } else {
+                    SnapshotStateChip(state: file.state)
+                }
             }
             .buttonStyle(.plain)
             .help("\(change.label) change against \(project.baseBranch ?? "the base branch"). Click to review it.")
-            .accessibilityLabel("Changed against the base branch, review change")
+            .accessibilityLabel("\(file.state == .clean ? "Changed" : SnapshotStateChip.label(file.state)) against the base branch, review change")
+        } else if file.state != .clean {
+            SnapshotStateChip(state: file.state)
         }
         if status.orphaned {
             Chip(text: "Orphaned", color: DS.Status.neutral)
@@ -536,17 +567,15 @@ struct SnapshotViewer: View {
     @EnvironmentObject private var app: AppModel
     var load: @Sendable () -> Data?
     var identity: String
-    var caption: String
     var fileSize: Int
 
     @State private var image: PixelImage?
     @State private var nsImage: NSImage?
     @State private var probe: PixelProbe?
 
-    init(load: @escaping @Sendable () -> Data?, identity: String, caption: String, fileSize: Int) {
+    init(load: @escaping @Sendable () -> Data?, identity: String, fileSize: Int) {
         self.load = load
         self.identity = identity
-        self.caption = caption
         self.fileSize = fileSize
         let cached = SnapshotImageCache.shared.object(forKey: identity as NSString)
         _image = State(initialValue: cached?.pixels)
@@ -566,15 +595,6 @@ struct SnapshotViewer: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(CheckerboardBackground())
-            .overlay(alignment: .topLeading) {
-                Text(caption)
-                    .font(DS.Font.caption.weight(.medium))
-                    .lineLimit(1)
-                    .padding(.horizontal, DS.Space.s)
-                    .padding(.vertical, DS.Space.xs)
-                    .floatingGlassCapsule()
-                    .padding(DS.Space.m)
-            }
 
             VStack(spacing: DS.Space.s) {
                 if let probe, let color = image?.color(x: probe.x, y: probe.y) {
@@ -690,26 +710,28 @@ struct SnapshotGrid: View {
     static let tile = CGSize(width: 180, height: 124)
 
     var body: some View {
-        let tree = SnapshotLibrary.tree(project.filteredSnapshots)
+        let tree = project.displayedTree
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Space.l, pinnedViews: [.sectionHeaders]) {
                 if project.librarySort != .name {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width), spacing: DS.Space.l)],
-                              alignment: .leading, spacing: DS.Space.l) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)],
+                              alignment: .leading, spacing: DS.Space.xs) {
                         ForEach(project.displayedSnapshots) { tile($0) }
                     }
-                    .padding(.horizontal, DS.Space.l)
+                    .padding(.horizontal, DS.Space.s)
                 }
                 ForEach(project.librarySort == .name ? tree : []) { module in
                     ForEach(module.suites) { suite in
                         Section {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width), spacing: DS.Space.l)],
-                                      alignment: .leading, spacing: DS.Space.l) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)],
+                                      alignment: .leading, spacing: DS.Space.xs) {
                                 ForEach(suite.tests.flatMap(\.files)) { file in
                                     tile(file)
                                 }
                             }
-                            .padding(.horizontal, DS.Space.l)
+                            // Tiles bring their own padding (the selection fill); the grid edge lines up
+                            // with the section header's text.
+                            .padding(.horizontal, DS.Space.s)
                         } header: {
                             ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
                             .padding(.horizontal, DS.Space.l)
@@ -743,17 +765,19 @@ struct SnapshotGrid: View {
                             .padding(DS.Space.xs)
                     }
                 }
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
-                    .strokeBorder(Color.accentColor, lineWidth: selected ? 2 : 0))
             HStack(spacing: DS.Space.xs) {
-                Text(file.testName).font(DS.Font.secondary).lineLimit(1)
+                Text(file.testName).font(DS.Font.secondary).fontWeight(.medium).lineLimit(1)
                 if file.state != .clean { SnapshotStateChip(state: file.state) }
             }
-            if !file.variant.isEmpty {
+            if project.showsVariant(file) {
                 Text(file.variant).font(DS.Font.code).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .frame(width: Self.tile.width, alignment: .leading)
+        // Selected like a list row: a quiet fill behind the whole tile, not an accent frame.
+        .padding(DS.Space.s)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
+            .fill(selected ? DS.Surface.selection : .clear))
         .contentShape(Rectangle())
         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
         .onTapGesture(count: 2) { open(file) }

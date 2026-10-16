@@ -209,8 +209,8 @@ struct QuickProjectRow: View {
         HStack(spacing: DS.Space.s) {
             Button(action: open) {
                 HStack(spacing: DS.Space.s) {
-                    Image(systemName: "folder").foregroundStyle(.secondary).accessibilityHidden(true)
-                    Text(project.name).lineLimit(1)
+                    ProjectMonogram(name: project.name)
+                    Text(project.name).fontWeight(.medium).lineLimit(1)
                     Spacer()
                     if failing > 0 {
                         Chip(text: "\(failing) failing", color: DS.Status.failed)
