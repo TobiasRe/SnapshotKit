@@ -95,6 +95,8 @@ struct SnapshotsTab: View {
             }
             .labelsHidden()
             .controlSize(.small)
+            // In the full-width grid, segments stretched across the window; keep them compact.
+            .frame(maxWidth: 480, alignment: .leading)
             .accessibilityLabel("Show")
             if let library = project.library {
                 HStack(spacing: DS.Space.s) {
@@ -212,7 +214,7 @@ struct LibraryStats {
 
     var summary: String {
         let modules = Set(library.files.map(\.module)).count
-        let size = ByteCountFormatter.string(fromByteCount: Int64(library.totalBytes), countStyle: .file)
+        let size = SnapshotLibrary.formatSize(library.totalBytes)
         return "\(library.files.count) snapshot\(library.files.count == 1 ? "" : "s") · \(library.testCount) test\(library.testCount == 1 ? "" : "s") · "
             + "\(modules) module\(modules == 1 ? "" : "s") · \(size)"
     }
@@ -246,7 +248,7 @@ struct SnapshotRow: View {
             StatusMarks(status: status)
             switch detail {
             case .size:
-                Text(ByteCountFormatter.string(fromByteCount: Int64(file.byteSize), countStyle: .file))
+                Text(SnapshotLibrary.formatSize(file.byteSize))
                     .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
             case .modified:
                 if let modified = file.modified {
@@ -602,7 +604,7 @@ struct SnapshotViewer: View {
                         .font(DS.Font.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                Text(ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file))
+                Text(SnapshotLibrary.formatSize(fileSize))
                     .font(DS.Font.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
                 ControlGroup {

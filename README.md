@@ -3,22 +3,25 @@
 [![CI](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml/badge.svg)](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![SnapshotKit comparing a failing snapshot with its reference](docs/images/failures.png)
+![The SnapshotKit library: every snapshot of a project by test, with a large preview](docs/images/library.png)
 
-A macOS app (and `snapkit` CLI) for dealing with failing and flaky iOS snapshot tests built with
-[swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing):
+A macOS app (and `snapkit` CLI) for inspecting, managing and updating the reference images of iOS snapshot
+tests built with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing):
 
-- **Run** a module's snapshot tests with exactly the configuration your CI uses, with live output and pass/fail counts.
-- **Re-record** only the failing suites, then verify the new references.
-- **Investigate failures**: reference vs. actual vs. difference, also for a `.xcresult` downloaded from CI.
-- **Tell noise from real changes**: each difference is diagnosed (invisible, a few pixels, size changed, visible),
-  with the `precision`/`perceptualPrecision` that would pass, a pixel inspector and zoom to the change.
-- **Tell flaky from broken**: rerun failing tests N times; each test shows a strip of its recent runs, and run
-  history flags tests that both passed and failed on the same commit.
-- **Run on a CI machine** over SSH, to reproduce failures that only happen there.
-- **Review changes**: every PNG that differs from the base branch, grouped by suite, with side-by-side, slider,
-  difference and toggle views, *Viewed* marks like a code review, and a one-click discard for re-records that only
-  picked up rendering noise.
+- **Browse and inspect** every snapshot in a project by module, test file and test, as a list with a large
+  preview or as a grid. See variants (light/dark, devices, named states) side by side, a snapshot's history
+  across commits, its size, and the pixel under the pointer.
+- **Review changes**: every snapshot that differs from the base branch, with side-by-side, slider, difference
+  and toggle views, *Viewed* marks like a code review, and one-step discard of re-records that only picked up
+  rendering noise.
+- **Update**: re-record any test, suite or filtered set of snapshots (not just failing ones), with the source
+  patch always restored and the result verified.
+- **Manage**: find orphaned snapshots whose test is gone, the largest images, what's new or modified; copy or
+  drag snapshots and side-by-side comparisons into a review.
+- **Failing and flaky tests** are part of the same picture: reference vs. actual vs. difference (also for an
+  `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
+  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test's recent runs.
+- **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 
 Runs on macOS 14 or later and needs Xcode 16 or later for the projects it tests (for
 `xcresulttool get test-results`). Building SnapshotKit itself needs Xcode 26 or later.
@@ -42,18 +45,20 @@ open dist/SnapshotKit.app
 ## Quick start
 
 Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (sidebar **+** › Add Scan
-Folder). The sidebar shows each project's failing count from its last run. Then:
+Folder). A project opens on its snapshot library. The sidebar shows each project's failing count from its
+last run.
 
 | | |
 |---|---|
 | ⌘R | Run snapshot tests |
-| ⇧⌘R | Re-record failed suites |
-| ⌥⌘R | Check flakiness of failed tests |
+| ⇧⌘R | Re-record the selected test (snapshot, change or failure) |
+| ⌥⇧⌘R | Re-record all failing tests |
+| ⌥⌘R | Check flakiness of failing tests |
 | ⌃⌘R | Run on the remote machine |
 | ⌘. | Cancel |
 | ⇧⌘O | Import an `.xcresult` (e.g. a CI artifact) |
 | ⌘K | Quick switch project |
-| ⌥⌘1 / ⌥⌘2 / ⌥⌘3 | Run / Failures / Changes |
+| ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
 | ⇧⌘0 | Zoom to the changed pixels |
@@ -62,15 +67,23 @@ Folder). The sidebar shows each project's failing count from its last run. Then:
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous failure or change, wherever the focus is |
 | V (in the list), ⌥⌘V | Mark a change as viewed and go to the next one |
 
-Right-click a failing test to check just that test for flakiness, re-record its suite, reveal the
-reference or copy its identifier and failure message. Right-click a changed snapshot to open or reveal it,
-open the base branch version, or discard an unwanted working-tree change. The Changes tab picks the base
-branch from a menu, and you can switch to comparing against the branch tip. The dock icon shows the
-failing count, and bounces when a run finishes in the background.
+In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
+snapshots; sort by size or recency; switch between list and grid. A snapshot's detail lists its variants
+and committed versions to compare against, and links to its change or failure. **Re-record Shown** records
+everything the filter shows (say, every `dark` variant).
+
+Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
+comparison, open or reveal it, or jump to it in another view. Right-click a failing test to check just
+that test for flakiness. The Changes tab picks the base branch from a menu, and you can switch to comparing
+against the branch tip. The dock icon shows the failing count, and bounces when a run finishes in the
+background.
 
 The same features are on the command line:
 
 ```bash
+snapkit snapshots --sort size             # every snapshot with size and state, plus totals
+snapkit snapshots --orphans               # snapshots whose test no longer exists
+snapkit record CardTests dark             # re-record the tests of matching snapshots, then verify
 snapkit config            # show the resolved configuration and where each value came from
 snapkit run               # run like CI; exits 1 on failures and names failing suites
 snapkit rerecord          # re-record the last run's failing suites and verify
@@ -119,10 +132,10 @@ JSON in `~/Library/Application Support/SnapshotKit/` (`SNAPSHOTKIT_HOME` overrid
 
 | | |
 |---|---|
-| ![Failures with triage labels and run-history strips](docs/images/triage.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
-| Failures: what kind of difference each one is, and a strip of its recent runs | Changes since the base branch, with *Viewed* marks |
-| ![The diagnosis for an invisible difference](docs/images/diagnosis.png) | ![The Run tab with results by suite](docs/images/run.png) |
-| Rendering noise, explained, with the precision that would pass | The configuration CI uses, and the last run's results |
+| ![The library as a grid, dark mode](docs/images/library-grid.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
+| The library as a contact sheet: every snapshot at a glance | Changes since the base branch, with *Viewed* marks |
+| ![Failures with triage labels and run-history strips](docs/images/triage.png) | ![The diagnosis for an invisible difference](docs/images/diagnosis.png) |
+| Failures: what kind of difference each one is, and its recent runs | Rendering noise, explained, with the precision that would pass |
 
 ## Noise or a real change?
 
@@ -140,15 +153,17 @@ orange when repetitions disagreed). A flaky test reads as a broken pattern, a re
 
 ## How re-record works
 
-1. The failing suites come from the last run (`.git/snapshotkit/last-run.json`, shared by the app and CLI).
-   If there is no last run, the tests run first.
+1. **What to record.** For failing tests, the suites come from the last run (`.git/snapshotkit/last-run.json`,
+   shared by the app and CLI). For snapshots picked in the library, SnapshotKit reads the test file named after
+   the snapshot's folder to find the suite type and the test (`Suite/test()` for Swift Testing, `Suite/test` for
+   XCTest; a parameterized test records its whole suite).
 2. SnapshotKit finds each suite's source file (from the failure location, or by searching for its declaration).
    It **refuses** to continue if any of those files has uncommitted changes.
 3. It writes a journal with the original contents to `.git/snapshotkit/record-patch.json`, then patches the record trait:
    - Swift Testing: `@Suite(.snapshots(record: .all))` (it adds the attribute or trait, or replaces an existing `record:` value).
    - XCTest: an `invokeTest()` override wrapping the test in `withSnapshotTesting(record: .all)`.
-4. It runs only those suites (`-only-testing:Target/Suite`), then restores the files. It then runs the suites again
-   without the patch to verify the new references.
+4. It runs only those suites or tests (`-only-testing:Target/Suite[/test()]`), then restores the files. It then
+   runs them again without the patch to verify the new references.
 
 The patch is always undone: on success, error, cancel, Ctrl-C, `SIGTERM`/`SIGHUP` (child `xcodebuild` is stopped
 first), and app quit. If the process is killed outright, the next launch of the app or any `snapkit` command restores it.

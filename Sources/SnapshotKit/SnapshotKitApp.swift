@@ -14,7 +14,7 @@ struct SnapshotKitApp: App {
                 .frame(minWidth: 980, minHeight: 620)
         }
         .defaultSize(width: 1400, height: 880)
-        .commands { SnapshotKitCommands(model: model) }
+        .commands { SnapshotKitCommands(model: model, menuState: model.menuState) }
 
         Settings {
             SettingsView()
@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct SnapshotKitCommands: Commands {
     @ObservedObject var model: AppModel
+    @ObservedObject var menuState: MenuState
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
 
     var body: some Commands {
@@ -61,14 +62,18 @@ struct SnapshotKitCommands: Commands {
             Button("Quick Switch Project…") { model.showQuickSwitcher.toggle() }
                 .keyboardShortcut("k")
         }
-        CommandMenu("Tests") {
+        CommandMenu("Snapshots") {
             let project = model.current
             let busy = project?.isRunning ?? true
             Button("Run Snapshot Tests") { project?.runTests() }
                 .keyboardShortcut("r")
                 .disabled(busy)
-            Button("Re-record Failed Suites") { project?.reRecordFailed() }
+            Divider()
+            Button("Re-record Selected Test") { project?.reRecordSelection() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(!(project?.canReRecordSelection ?? false))
+            Button("Re-record Failing Tests") { project?.reRecordFailed() }
+                .keyboardShortcut("r", modifiers: [.command, .shift, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
             Button("Check Flakiness of Failed Tests") { project?.checkFlakiness() }
                 .keyboardShortcut("r", modifiers: [.command, .option])

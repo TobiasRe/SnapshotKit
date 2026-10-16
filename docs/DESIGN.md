@@ -23,6 +23,13 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
   - Add custom glass only where a surface floats over content, and group neighbouring glass in one container.
   - Don't tint every surface or stack glass on glass.
 
+## What the app is for
+
+SnapshotKit is for **inspecting, managing and updating snapshots**; failing and flaky tests are one part of
+that. The structure follows: the library (every snapshot) is the first tab and the home of a project, Changes
+and Failures are focused views of the same snapshots, and Run is where tests run and record. Every snapshot
+can be followed between these views, and re-recording is available wherever a snapshot is shown.
+
 ## Principles
 
 1. **Chrome is glass, content is solid.** Use the system toolbar and sidebar as they are. Lists, forms,
@@ -63,6 +70,12 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 - `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn't plainly visible
   (Invisible, Few pixels, Size changed), and offer the precision that would pass.
 - `PixelReadout`: the hover loupe, showing coordinates, both colours and their ΔE.
+- `SnapshotRow` / grid tile: thumbnail, test name, variant in code type, state chip (New, Modified, Orphaned)
+  and `StatusMarks` at the trailing edge (failing ✕, flaky ⚠, change dot). One row design for every list.
+- `SnapshotViewer`: a single image with the compare view's zoom, pan and readout; the compare view itself
+  is reused for versions and variants, so every comparison looks and behaves the same.
+- Scope controls degrade instead of clipping: segmented with counts, then without, then a menu
+  (`ViewThatFits`).
 - `softTopEdge()`: a soft scroll-edge blur under headers.
 
 ## Enforcement

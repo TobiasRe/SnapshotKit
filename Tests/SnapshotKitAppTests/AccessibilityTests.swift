@@ -92,6 +92,22 @@ extension AppUITests {
         }
 
         @Test(.enabled(if: AXIsProcessTrusted()))
+        func snapshotsTab() {
+            let result = audit(render(.library, tab: .snapshots))
+            #expect(result.interactive.count >= 5)
+            #expect(result.unlabeled == [])
+        }
+
+        @Test(.enabled(if: AXIsProcessTrusted()))
+        func snapshotsGrid() {
+            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
+            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
+            let result = audit(render(.library, tab: .snapshots))
+            #expect(result.interactive.count >= 5)
+            #expect(result.unlabeled == [])
+        }
+
+        @Test(.enabled(if: AXIsProcessTrusted()))
         func changesTab() {
             let result = audit(render(.changes, tab: .changes))
             #expect(result.interactive.count >= 5)

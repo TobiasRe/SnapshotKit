@@ -193,6 +193,22 @@ check "change list shows the uncommitted PNG under its suite" "grep -q 'Uncommit
 sk changes > "$LOGS/changes-committed.log"
 check "after commit it is listed as committed" "grep -q 'Committed    $PNG' '$LOGS/changes-committed.log'"
 
+step "Library: list snapshots, find orphans, re-record one test"
+sk snapshots > "$LOGS/snapshots.log"
+cat "$LOGS/snapshots.log"
+check "library lists the reference with totals" "grep -q '^$PNG ' '$LOGS/snapshots.log' && grep -q '1 of 1 snapshots · 1 test ·' '$LOGS/snapshots.log'"
+ORPHAN="$(dirname "$PNG")/removedTest.1.png"
+cp "$SAMPLE/$PNG" "$SAMPLE/$ORPHAN"
+sk snapshots --orphans > "$LOGS/orphans.log"
+check "a snapshot without a test is orphaned" "grep -q '^$ORPHAN .*orphaned' '$LOGS/orphans.log' && ! grep -q '^$PNG ' '$LOGS/orphans.log'"
+rm "$SAMPLE/$ORPHAN"
+set +e; sk record greeting > "$LOGS/record-one.log" 2>&1; status=$?; set -e
+grep -E "snapkit:|Recorded" "$LOGS/record-one.log" || true
+check "record targets the single test" "grep -q 'recording SampleUITests/GreetingViewTests/greeting()' '$LOGS/record-one.log'"
+check "record verified" "[ $status -eq 0 ] && grep -q 'Recorded and verified' '$LOGS/record-one.log'"
+check "test source byte-identical after record" "(cd '$SAMPLE' && git diff --quiet HEAD -- '$TEST_FILE')"
+(cd "$SAMPLE" && git checkout -q -- "$PNG")
+
 if [ "$SKIP_INTERRUPT" = 0 ]; then
   step "Interrupt a re-record (SIGINT) — the patch must be restored"
   (cd "$SAMPLE" && sed -i '' 's/Color.orange/Color.green/' Sources/SampleUI/GreetingView.swift && git commit -qam "Green")

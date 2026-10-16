@@ -184,6 +184,8 @@ struct FailuresTab: View {
             .disabled(project.isRunning || project.environment == nil)
         Divider()
         if let reference = item.referencePaths.first {
+            Button("Show Reference in Library") { project.showInLibrary(path: reference) }
+                .disabled(!project.isInLibrary(reference))
             Button("Reveal Reference in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([project.project.url.appendingPathComponent(reference)])
             }

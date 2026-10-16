@@ -157,3 +157,13 @@ public struct SnapshotLibrary: Sendable {
         return orphans
     }
 }
+
+extension SnapshotLibrary {
+    /// "48.2 MB", and "0 KB" rather than "Zero KB".
+    public static func formatSize(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+}

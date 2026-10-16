@@ -126,6 +126,36 @@ extension AppUITests {
             #expect(model.comparison == nil)
         }
 
+        @Test func reRecordSelectionFollowsTheTab() {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            model.tab = .snapshots
+            model.selectedSnapshotID = model.displayedSnapshots.first?.id
+            #expect(model.canReRecordSelection)
+            model.selectedSnapshotID = AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }?.0.id
+            #expect(!model.canReRecordSelection)   // orphaned: its test is gone
+            model.tab = .changes
+            model.selectedChangeID = AppFixtures.changes.first { $0.0.kind == .deleted }?.0.id
+            #expect(!model.canReRecordSelection)   // nothing to record for a deleted snapshot
+            model.selectedChangeID = AppFixtures.changes[0].0.id
+            #expect(model.canReRecordSelection)
+            model.tab = .run
+            #expect(!model.canReRecordSelection)
+        }
+
+        @Test func showInLibraryClearsFiltersThatHideTheSnapshot() {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            let header = AppFixtures.libraryImages.first { $0.0.testName == "header" }!.0
+            model.libraryScope = .failing
+            model.libraryFilter = "payButton"
+            model.tab = .changes
+            model.showInLibrary(path: header.path)
+            #expect(model.tab == .snapshots)
+            #expect(model.selectedSnapshotID == header.id)
+            #expect(model.displayedSnapshots.contains(header))
+            model.showInLibrary(path: "not/a/snapshot.png")
+            #expect(model.selectedSnapshotID == header.id)
+        }
+
         @Test func committedChangesCannotBeDiscarded() async throws {
             let (repo, _) = try makeRepo()
             try Shell.output(["git", "commit", "-qam", "re-record"], in: repo)
