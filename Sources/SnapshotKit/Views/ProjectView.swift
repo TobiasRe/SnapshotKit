@@ -95,7 +95,9 @@ struct ProjectView: View {
 
     private var subtitle: String {
         let branch = project.currentBranch ?? "detached HEAD"
-        return project.baseBranch.map { "\(branch) → \($0)" } ?? branch
+        // "feature → develop" says what Changes compares; on the base branch itself just its name.
+        guard let base = project.baseBranch, base != branch else { return branch }
+        return "\(branch) → \(base)"
     }
 }
 
@@ -172,12 +174,18 @@ struct RunInspector: View {
                         PropertyRow("Base branch") {
                             TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
                                 .textFieldStyle(.roundedBorder)
+                                // Fixed: a focused field is a point taller, and focus arrives at an
+                                // unpredictable moment, which moved the rows below.
+                                .frame(height: 22)
                                 .accessibilityLabel("Base branch")
                                 .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
                         }
                         PropertyRow("Remote host") {
                             TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
                                 .textFieldStyle(.roundedBorder)
+                                // Fixed: a focused field is a point taller, and focus arrives at an
+                                // unpredictable moment, which moved the rows below.
+                                .frame(height: 22)
                                 .accessibilityLabel("Remote host")
                                 .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
                         }
@@ -534,26 +542,31 @@ struct LogView: View {
                 Text(showResults ? "\(testCount) test\(testCount == 1 ? "" : "s")" : "\(lines.count) line\(lines.count == 1 ? "" : "s")")
                     .font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
-                SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter)
+                SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter,
+                            focusRequest: project.focusFilterRequest)
                     .frame(maxWidth: 220)
                     .controlSize(.small)
                 if !showResults {
-                    Toggle("Build output", isOn: $project.showFullLog)
-                        .toggleStyle(.checkbox)
-                        .controlSize(.small)
-                        .help("Include compiler and linker output")
+                    // A glass toggle like Viewed, not a checkbox among glass controls.
+                    Button { project.showFullLog.toggle() } label: {
+                        Label("Build output", systemImage: project.showFullLog ? "checkmark.circle.fill" : "circle")
+                    }
+                    .foregroundStyle(project.showFullLog ? .primary : .secondary)
+                    .fixedSize()
+                    .quietControl()
+                    .controlSize(.small)
+                    .help("Include compiler and linker output")
+                    .accessibilityLabel("Build output")
+                    .accessibilityValue(project.showFullLog ? "On" : "Off")
+                    .accessibilityAddTraits(project.showFullLog ? .isSelected : [])
                 }
-                Button {
+                GlassIconButton(title: showResults ? "Copy Results" : "Copy Output", symbol: "doc.on.doc",
+                                help: showResults ? "Copy the results as text, e.g. for a merge request" : "Copy the visible output") {
                     let text = showResults ? RunResultsList.plainText(suites) : lines.joined(separator: "\n")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
-                } label: {
-                    Label(showResults ? "Copy Results" : "Copy Output", systemImage: "doc.on.doc").labelStyle(.iconOnly)
                 }
-                .buttonStyle(.borderless)
                 .disabled(showResults ? false : lines.isEmpty)
-                .help(showResults ? "Copy the results as text, e.g. for a merge request" : "Copy the visible output")
-                .accessibilityLabel(showResults ? "Copy Results" : "Copy Output")
             }
             .padding(.horizontal, DS.Space.l)
             .frame(maxWidth: .infinity, minHeight: DS.Bar.filters, maxHeight: DS.Bar.filters)
@@ -571,9 +584,10 @@ struct LogView: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: DS.Space.xxs) {
+                        let terms = project.logFilter.lowercased().split(separator: " ").map(String.init)
                         ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                            Text(line)
-                                .font(.system(size: 11, design: .monospaced))
+                            Text(Self.highlighted(line, terms: terms))
+                                .font(DS.Font.log)
                                 .foregroundStyle(color(for: line))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -597,6 +611,26 @@ struct LogView: View {
                     if count > 0 { proxy.scrollTo(count - 1, anchor: .bottomLeading) }
                 }
             }
+    }
+
+    /// The line with what the filter matched marked, as find does.
+    static func highlighted(_ line: String, terms: [String]) -> AttributedString {
+        var text = AttributedString(line)
+        let lower = line.lowercased()
+        // Offsets are counted in the lowercased line; skip the rare line whose length lowercasing changes.
+        guard !terms.isEmpty, lower.count == line.count else { return text }
+        for term in terms where !term.isEmpty {
+            var search = lower.startIndex
+            while let range = lower.range(of: term, range: search..<lower.endIndex) {
+                let start = lower.distance(from: lower.startIndex, to: range.lowerBound)
+                let length = lower.distance(from: range.lowerBound, to: range.upperBound)
+                let from = text.index(text.startIndex, offsetByCharacters: start)
+                let to = text.index(from, offsetByCharacters: length)
+                text[from..<to].backgroundColor = Color.yellow.opacity(0.35)
+                search = range.upperBound
+            }
+        }
+        return text
     }
 
     private func color(for line: String) -> Color {
@@ -631,7 +665,7 @@ struct RunResultsList: View {
                     }
                 } header: {
                     HStack(spacing: DS.Space.s) {
-                        Text(suite.identifier).lineLimit(1).truncationMode(.middle)
+                        Text(suite.identifier.split(separator: "/").joined(separator: " › ")).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: DS.Space.s)
                         if suite.failedCount > 0 {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))

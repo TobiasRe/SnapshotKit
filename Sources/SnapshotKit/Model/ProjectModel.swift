@@ -126,6 +126,8 @@ final class ProjectModel: ObservableObject {
         didSet { libraryRevision &+= 1 }
     }
     @Published var libraryFilter = ""
+    /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
+    @Published var focusFilterRequest = 0
     @Published var libraryScope = LibraryScope.all
     @Published var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.standard.set(librarySort.rawValue, forKey: "librarySort") }
@@ -600,6 +602,30 @@ final class ProjectModel: ObservableObject {
         if let next { selectedChangeID = next.id } else if hideViewed { selectedChangeID = nil }
     }
 
+    /// Opens the test that records a snapshot in Xcode, at its function (via `xed`), or says why not.
+    func openTestInXcode(_ file: SnapshotFile) {
+        let repo = project.url
+        Task {
+            let location = await Task.detached { TestSourceLocator.locate(file, in: repo) }.value
+            guard let location else {
+                lastMessage = "No test file found for \(file.testName) (\(file.suite).swift)."
+                lastMessageIsError = true
+                lastMessageAction = nil
+                return
+            }
+            let url = repo.appendingPathComponent(location.path)
+            let opened = await Task.detached { () -> Bool in
+                let xed = Process()
+                xed.executableURL = URL(fileURLWithPath: "/usr/bin/xed")
+                xed.arguments = (location.line.map { ["--line", String($0)] } ?? []) + [url.path]
+                guard (try? xed.run()) != nil else { return false }
+                xed.waitUntilExit()
+                return xed.terminationStatus == 0
+            }.value
+            if !opened { NSWorkspace.shared.open(url) }
+        }
+    }
+
     /// Marks every change shown (after filters) as viewed or not, in one go.
     func setAllViewed(_ viewed: Bool) {
         let shown = displayedChanges
@@ -955,6 +981,16 @@ final class ProjectModel: ObservableObject {
     }
 
     /// The test behind whatever is selected on the current tab, if there is one to record.
+    /// The snapshot behind the current tab's selection (a library file, a change, a failure's reference).
+    var selectedSnapshotFile: SnapshotFile? {
+        switch tab {
+        case .snapshots: selectedSnapshot
+        case .changes: selectedChange?.file
+        case .failures: selectedFailure?.referencePaths.first.map { SnapshotFile(path: $0, byteSize: 0) }
+        case .run: nil
+        }
+    }
+
     var canReRecordSelection: Bool {
         guard !isRunning, environment != nil else { return false }
         switch tab {

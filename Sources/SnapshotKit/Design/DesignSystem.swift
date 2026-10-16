@@ -315,6 +315,8 @@ extension DS {
                                                             .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
             return NSColor.labelColor.withAlphaComponent(highContrast ? 0.2 : 0.08)
         })
+        /// A row under the pointer: half the selection.
+        static let hover = Color.primary.opacity(0.04)
         /// An opaque hairline, for edges drawn over something else.
         static let hairline = Color(nsColor: .separatorColor)
     }
@@ -324,13 +326,12 @@ extension View {
     /// Marks a list row as selected with `DS.Surface.selection`, and turns off the list's own
     /// highlight (the list keeps its selection, keyboard navigation and accessibility).
     func selectableRow(_ selected: Bool) -> some View {
-        self
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
-                    .fill(selected ? DS.Surface.selection : .clear)
-                    .padding(.horizontal, DS.Space.s + 2)
-            )
-            .background(NativeHighlightOff())
+        modifier(SelectableRow(selected: selected))
+    }
+
+    /// The same selection and hover fills for something that isn't a list row (a grid tile).
+    func selectableTile(_ selected: Bool) -> some View {
+        modifier(SelectableTile(selected: selected))
     }
 
     /// A control drawn without a bezel in a glass capsule: the look of every text control in the
@@ -350,6 +351,36 @@ extension View {
     /// renders, where glass can't be composited.
     func glassChrome<S: InsettableShape>(_ shape: S) -> some View {
         modifier(GlassChrome(shape: shape))
+    }
+}
+
+/// The row background: the selection fill, or a fainter one under the pointer, so you see what a
+/// click will select.
+private struct SelectableRow: ViewModifier {
+    var selected: Bool
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering = $0 }
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
+                    .fill(selected ? DS.Surface.selection : hovering ? DS.Surface.hover : .clear)
+                    .padding(.horizontal, DS.Space.s + 2)
+            )
+            .background(NativeHighlightOff())
+    }
+}
+
+private struct SelectableTile: ViewModifier {
+    var selected: Bool
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
+                .fill(selected ? DS.Surface.selection : hovering ? DS.Surface.hover : .clear))
+            .onHover { hovering = $0 }
     }
 }
 

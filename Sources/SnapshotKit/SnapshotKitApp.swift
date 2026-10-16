@@ -89,6 +89,9 @@ struct SnapshotKitCommands: Commands {
             Button("Re-record Selected Test") { project?.reRecordSelection() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(!(project?.canReRecordSelection ?? false))
+            Button("Open Test in Xcode") { if let file = project?.selectedSnapshotFile { project?.openTestInXcode(file) } }
+                .keyboardShortcut("o", modifiers: [.command, .option])
+                .disabled(project?.selectedSnapshotFile == nil)
             Button("Re-record Failing Tests") { project?.reRecordFailed() }
                 .keyboardShortcut("r", modifiers: [.command, .shift, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
@@ -106,6 +109,8 @@ struct SnapshotKitCommands: Commands {
         }
         CommandGroup(after: .toolbar) {
             if let project = model.current {
+                Button("Filter…") { project.focusFilterRequest += 1 }.keyboardShortcut("f")
+                Divider()
                 Button("Snapshots") { project.tab = .snapshots }.keyboardShortcut("1", modifiers: [.command, .option])
                 Button("Changes") { project.tab = .changes }.keyboardShortcut("2", modifiers: [.command, .option])
                 Button("Failures") { project.tab = .failures }.keyboardShortcut("3", modifiers: [.command, .option])

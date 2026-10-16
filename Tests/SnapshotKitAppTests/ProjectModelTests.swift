@@ -178,6 +178,17 @@ extension AppUITests {
             #expect(model.displayedSnapshots == all)
         }
 
+        @Test func logMatchesAreMarked() {
+            func marked(_ line: String, _ terms: [String]) -> [String] {
+                let text = LogView.highlighted(line, terms: terms)
+                return text.runs.filter { $0.backgroundColor != nil }.map { String(text[$0.range].characters) }
+            }
+            #expect(marked("✘ Test payButton() failed", ["paybutton"]) == ["payButton"])
+            #expect(marked("a b a", ["a"]) == ["a", "a"])
+            #expect(marked("nothing here", []).isEmpty)
+            #expect(marked("İstanbul paybutton", ["pay"]) == ["pay"])   // "İ" lowercases to one character too
+        }
+
         @Test func marksEveryShownChangeViewedAndBack() {
             let model = AppFixtures.project(.changes, store: AppFixtures.store())
             model.setAllViewed(true)

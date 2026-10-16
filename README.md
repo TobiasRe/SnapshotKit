@@ -60,12 +60,15 @@ last run.
 | ⌘. | Cancel |
 | ⇧⌘O | Import an `.xcresult` (e.g. a CI artifact) |
 | ⌘K | Go to a project or run a command |
+| ⌘F | Filter the list (Escape clears the filter, then leaves the field) |
 | ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
 | ⇧⌘0 | Zoom to the changed pixels |
 | ← / → | Move the slider divider (or drag its knob) |
 | Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
+| ⌘C | Copy the selected snapshot (in a list) |
+| ⌥⌘O | Open the selected snapshot's test in Xcode, at its function |
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous failure or change, wherever the focus is |
 | V (in the list), ⌥⌘V | Mark a change as viewed and go to the next one |
 
