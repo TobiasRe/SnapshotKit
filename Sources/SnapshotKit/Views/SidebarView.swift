@@ -50,7 +50,7 @@ struct SidebarView: View {
                 Button { model.showQuickSwitcher = true } label: {
                     Label("⌘K", systemImage: "magnifyingglass")
                         .labelStyle(.titleAndIcon)
-                        .font(.caption)
+                        .font(DS.Font.caption)
                 }
                 .buttonStyle(.borderless)
                 .help("Projects and commands (⌘K)")

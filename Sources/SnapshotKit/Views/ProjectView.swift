@@ -17,11 +17,24 @@ struct ProjectView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Snapshot files are watched; commits and branch switches made elsewhere are picked up
+        // when you come back to the app, on any tab.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if !project.isRunning { project.refreshChanges() }
+        }
         // The outcome of the last action floats over the image area (above the compare toolbar)
         // instead of pushing every pane down. The Run tab says it in its own header.
         .overlay(alignment: .bottomTrailing) {
             if let message = project.lastMessage, message != dismissedMessage, !project.isRunning, project.tab != .run {
-                NoticeBanner(text: message, isError: project.lastMessageIsError) { dismissedMessage = message }
+                NoticeBanner(text: message, isError: project.lastMessageIsError,
+                             action: project.lastMessageAction.flatMap { action in
+                                 // No need to offer the tab you're on.
+                                 action.tab == project.tab ? nil : (action.title, {
+                                     dismissedMessage = message
+                                     project.tab = action.tab
+                                 })
+                             },
+                             onClose: { dismissedMessage = message })
                     .frame(maxWidth: 420)
                     .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
                     .padding(.bottom, 64)
@@ -105,76 +118,84 @@ struct RunTab: View {
     }
 }
 
-/// Settings-style column: what will run, where, and how it was configured.
+/// What will run, where, and how it was configured: a compact property list, labels in one
+/// column and values in the next, like an inspector.
 struct RunInspector: View {
     @ObservedObject var project: ProjectModel
     @State private var baseBranch = ""
     @State private var remoteHost = ""
 
     var body: some View {
-        Form {
-            Section("Environment") { environment }
+        ScrollView {
+            VStack(alignment: .leading, spacing: DS.Space.xl) {
+                PropertySection("Environment") { environment }
 
-            Section {
-                Picker("Scope", selection: Binding(
-                    get: { project.settings.module ?? "" },
-                    set: { value in project.updateSettings { $0.module = value.isEmpty ? nil : value } }
-                )) {
-                    Text("What CI runs").tag("")
-                    if !project.modules.isEmpty { Divider() }
-                    ForEach(project.modules, id: \.self) { Text($0).tag($0) }
-                }
-                .disabled(project.isRunning)
-            } footer: {
-                FormFooter("Pick a single test target to run only its snapshot tests.")
-            }
-
-            if let ctx = project.context {
-                let c = project.config ?? ctx.config
-                let row = { (name: String, value: String?, source: String?) in
-                    // The footer names the CI files; only values from elsewhere (an override,
-                    // a script) say where they came from.
-                    self.row(name, value, source.flatMap { ctx.resolved.ciFiles.contains($0) ? nil : $0 })
-                }
-                Section {
-                    row("Scheme", c.scheme, c.source(of: .scheme))
-                    if let ws = c.workspace { row("Workspace", ws, c.source(of: .workspace)) }
-                    if let p = c.project { row("Project", p, c.source(of: .project)) }
-                    if let plan = c.testPlan { row("Test plan", plan, c.source(of: .testPlan)) }
-                    if !c.onlyTesting.isEmpty { row("Only testing", c.onlyTesting.joined(separator: ", "), c.source(of: .onlyTesting)) }
-                    row("Xcode", c.xcodeVersion ?? c.developerDir ?? "Selected Xcode", c.source(of: .xcodeVersion) ?? c.source(of: .developerDir))
-                    row("Device", c.deviceName.map { $0 + (c.osVersion.map { " · \($0)" } ?? "") }, c.source(of: .deviceName))
-                    if let wd = c.workingDirectory { row("Directory", wd, c.source(of: .workingDirectory)) }
-                } header: {
-                    Text("Configuration")
-                } footer: {
-                    VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                        FormFooter(ctx.resolved.ciFiles.isEmpty ? "No CI files found." : "From " + ctx.resolved.ciFiles.joined(separator: ", ")
-                                   + (ctx.resolved.overrideFile.map { " and \($0)" } ?? "") + ".")
-                        ForEach(ctx.resolved.notes, id: \.self) { FormFooter($0).foregroundStyle(DS.Status.text(DS.Status.flaky)) }
+                PropertySection("Scope", footer: "Pick a single test target to run only its snapshot tests.") {
+                    PropertyRow("Test target") {
+                        Picker("Scope", selection: Binding(
+                            get: { project.settings.module ?? "" },
+                            set: { value in project.updateSettings { $0.module = value.isEmpty ? nil : value } }
+                        )) {
+                            Text("What CI runs").tag("")
+                            if !project.modules.isEmpty { Divider() }
+                            ForEach(project.modules, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .disabled(project.isRunning)
                     }
                 }
 
-                Section {
-                    TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
-                        .accessibilityLabel("Base branch")
-                        .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
-                    TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
-                        .accessibilityLabel("Remote host")
-                        .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
-                } header: {
-                    Text("Comparison & Remote")
-                } footer: {
-                    FormFooter((project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git"). " } ?? "")
-                               + "Remote runs sync the working tree to that Mac over SSH and run the same command there.")
-                }
-            } else if let error = project.configError {
-                Section("Configuration") {
-                    Label(error, systemImage: "xmark.octagon.fill").foregroundStyle(DS.Status.text(DS.Status.failed))
+                if let ctx = project.context {
+                    let c = project.config ?? ctx.config
+                    let source = { (field: SnapshotConfig.Field) in
+                        // The footer names the CI files; only values from elsewhere (an override,
+                        // a script) say where they came from.
+                        c.source(of: field).flatMap { ctx.resolved.ciFiles.contains($0) ? nil : $0 }
+                    }
+                    PropertySection("Configuration", footer: (ctx.resolved.ciFiles.isEmpty ? "No CI files found." : "From " + ctx.resolved.ciFiles.joined(separator: ", ")
+                                                              + (ctx.resolved.overrideFile.map { " and \($0)" } ?? "") + "."),
+                                    notes: ctx.resolved.notes) {
+                        PropertyRow("Scheme", value: c.scheme, source: source(.scheme))
+                        if let ws = c.workspace { PropertyRow("Workspace", value: ws, source: source(.workspace)) }
+                        if let p = c.project { PropertyRow("Project", value: p, source: source(.project)) }
+                        if let plan = c.testPlan { PropertyRow("Test plan", value: plan, source: source(.testPlan)) }
+                        if !c.onlyTesting.isEmpty { PropertyRow("Only testing", value: c.onlyTesting.joined(separator: ", "), source: source(.onlyTesting)) }
+                        PropertyRow("Xcode", value: c.xcodeVersion ?? c.developerDir ?? "Selected Xcode", source: source(.xcodeVersion) ?? source(.developerDir))
+                        PropertyRow("Device", value: c.deviceName.map { $0 + (c.osVersion.map { " · \($0)" } ?? "") }, source: source(.deviceName))
+                        if let wd = c.workingDirectory { PropertyRow("Directory", value: wd, source: source(.workingDirectory)) }
+                    }
+
+                    PropertySection("Comparison & Remote",
+                                    footer: (project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git"). " } ?? "")
+                                        + "Remote runs sync the working tree to that Mac over SSH and run the same command there.") {
+                        PropertyRow("Base branch") {
+                            TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityLabel("Base branch")
+                                .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
+                        }
+                        PropertyRow("Remote host") {
+                            TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityLabel("Remote host")
+                                .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
+                        }
+                    }
+                } else if let error = project.configError {
+                    PropertySection("Configuration") {
+                        Label(error, systemImage: "xmark.octagon.fill")
+                            .foregroundStyle(DS.Status.text(DS.Status.failed))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .padding(DS.Space.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
+        .controlSize(.small)
+        .background(DS.Surface.content)
         .onAppear {
             baseBranch = project.settings.baseBranch ?? ""
             remoteHost = project.settings.remoteHost ?? ""
@@ -184,26 +205,19 @@ struct RunInspector: View {
     @ViewBuilder
     private var environment: some View {
         if let env = project.environment {
-            LabeledContent {
-                Text(env.xcode.version + (env.xcode.build.map { " (\($0))" } ?? ""))
-            } label: {
-                Label("Xcode", systemImage: "hammer")
-                if env.xcodeIsDefault { Text("Not pinned by CI") }
-            }
-            LabeledContent {
-                Text("\(env.simulator.name) · \(env.simulator.platform) \(env.simulator.osVersion)")
-            } label: {
-                Label("Simulator", systemImage: "iphone")
-                Text(env.simulator.state)
-            }
+            PropertyRow("Xcode", value: env.xcode.version + (env.xcode.build.map { " (\($0))" } ?? ""),
+                        source: env.xcodeIsDefault ? "Not pinned by CI" : nil)
+            PropertyRow("Simulator", value: "\(env.simulator.name) · \(env.simulator.platform) \(env.simulator.osVersion)",
+                        source: env.simulator.state)
         } else if let error = project.environmentError {
             VStack(alignment: .leading, spacing: DS.Space.s) {
                 Label {
-                    Text(error).textSelection(.enabled)
+                    Text(error).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
                 }
                 Button("Check Again") { project.validateEnvironment() }
+                    .quietControl()
             }
         } else if project.configError != nil {
             Text("Fix the configuration to check Xcode and the simulator.")
@@ -215,17 +229,78 @@ struct RunInspector: View {
             }
         }
     }
+}
 
-    private func row(_ name: String, _ value: String?, _ source: String?) -> some View {
-        LabeledContent {
-            Text(value ?? "—")
-                .textSelection(.enabled)
-                .multilineTextAlignment(.trailing)
-        } label: {
-            Text(name)
-            if let source, value != nil { Text(source) }
-        }
+/// A group of properties under a small header, with an optional note below.
+struct PropertySection<Content: View>: View {
+    var title: String
+    var footer: String?
+    var notes: [String] = []
+    @ViewBuilder var content: Content
+
+    init(_ title: String, footer: String? = nil, notes: [String] = [], @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.footer = footer
+        self.notes = notes
+        self.content = content()
     }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Space.s) {
+            Text(title)
+                .font(DS.Font.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: DS.Space.xs) { content }
+            if let footer { FormFooter(footer).padding(.top, DS.Space.xxs) }
+            ForEach(notes, id: \.self) { FormFooter($0).foregroundStyle(DS.Status.text(DS.Status.flaky)) }
+        }
+        .font(DS.Font.secondary)
+    }
+}
+
+/// One property: a label in a fixed column, its value beside it, and where the value came from
+/// in quieter type when that isn't obvious.
+struct PropertyRow<Value: View>: View {
+    var label: String
+    var source: String?
+    @ViewBuilder var value: Value
+
+    static var labelWidth: CGFloat { 104 }
+
+    init(_ label: String, source: String? = nil, @ViewBuilder value: () -> Value) {
+        self.label = label
+        self.source = source
+        self.value = value()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Space.m) {
+            Text(label)
+                .foregroundStyle(.secondary)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                value
+                if let source {
+                    Text(source).font(DS.Font.caption).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 24)
+    }
+}
+
+extension PropertyRow where Value == PropertyValue {
+    init(_ label: String, value: String?, source: String? = nil) {
+        self.init(label, source: value == nil ? nil : source) { PropertyValue(text: value ?? "—") }
+    }
+}
+
+/// A property's value as text people can select and copy.
+struct PropertyValue: View {
+    var text: String
+    var body: some View { Text(text).textSelection(.enabled) }
 }
 
 /// Outcome first, then the actions that act on it.
@@ -361,9 +436,10 @@ struct RunStatusHeader: View {
             if project.isRunning {
                 Button("Cancel", role: .cancel) { project.cancel() }
                     .secondaryActionStyle()
+                    .fixedSize()
                     .keyboardShortcut(".")
             } else {
-                Menu {
+                GlassIconMenu(title: "More Actions", symbol: "ellipsis", help: "Flakiness check and remote runs") {
                     Button("Check Flakiness (\(project.store.settings.flakeIterations)×)") { project.checkFlakiness() }
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
                     Divider()
@@ -375,27 +451,22 @@ struct RunStatusHeader: View {
                             .disabled(project.failingSuites.isEmpty)
                     }
                     .disabled(!project.hasRemote)
-                } label: {
-                    Label("More Actions", systemImage: "ellipsis")
                 }
-                .labelStyle(.iconOnly)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .quietControl()
-                .help("Flakiness check and remote runs")
-                .accessibilityLabel("More Actions")
 
                 if project.environmentError != nil || project.configError != nil {
                     // Nothing can run; offer the one action that can help.
                     Button("Check Again") { project.reload() }
                         .primaryActionStyle()
+                        .fixedSize()
                 } else {
                     Button("Re-record Failed") { project.reRecordFailed() }
+                        .fixedSize()
                         .quietControl()
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
                         .help("Re-record only the failing suites, then verify (⇧⌘R)")
                     Button("Run Tests") { project.runTests() }
                         .primaryActionStyle()
+                        .fixedSize()
                         .keyboardShortcut("r")
                         .disabled(project.environment == nil)
                 }

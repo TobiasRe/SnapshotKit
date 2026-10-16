@@ -26,10 +26,27 @@ extension AppUITests {
             return (dir, png)
         }
 
+        /// Waits for the changes to load: up to ten seconds, as git is slow while the rest of the
+        /// suite runs in parallel (two and a half seconds was not always enough).
         func waitForChanges(_ model: ProjectModel) async {
-            for _ in 0..<50 where model.isLoadingChanges || model.changeSet == nil {
+            for _ in 0..<200 where model.isLoadingChanges || model.changeSet == nil {
                 try? await Task.sleep(for: .milliseconds(50))
             }
+        }
+
+        /// A snapshot recorded outside the app (Xcode, the CLI) appears without a manual refresh.
+        @Test func picksUpSnapshotsWrittenElsewhere() async throws {
+            let (repo, _) = try makeRepo()
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            for _ in 0..<200 where model.library == nil { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(model.library?.files.count == 1)
+
+            let added = "Tests/AppTests/__Snapshots__/CardTests/card.2.png"
+            try AppFixtures.actual.write(to: repo.appendingPathComponent(added))
+            for _ in 0..<200 where model.library?.files.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(model.library?.files.map(\.path).contains(added) == true)
         }
 
         @Test func discardRestoresUncommittedSnapshot() async throws {
@@ -83,11 +100,11 @@ extension AppUITests {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
             await waitForChanges(model)
-            for _ in 0..<100 where model.invisibleUncommitted.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+            for _ in 0..<500 where model.invisibleUncommitted.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
             #expect(model.invisibleUncommitted.map(\.fileName) == ["noisy.1.png"])
 
             model.discardInvisibleChanges()
-            for _ in 0..<100 where model.lastMessage == nil { try await Task.sleep(for: .milliseconds(20)) }
+            for _ in 0..<500 where model.lastMessage == nil { try await Task.sleep(for: .milliseconds(20)) }
             #expect(try Data(contentsOf: repo.appendingPathComponent(noisy)) == AppFixtures.reference)
             #expect(try Data(contentsOf: repo.appendingPathComponent(png)) == AppFixtures.actual)
             #expect(model.lastMessage?.hasPrefix("Discarded 1 re-recorded snapshot") == true)
@@ -159,6 +176,14 @@ extension AppUITests {
             #expect(model.displayedSnapshots.map(\.byteSize) == all.map(\.byteSize).sorted(by: >))
             model.librarySort = .name
             #expect(model.displayedSnapshots == all)
+        }
+
+        @Test func marksEveryShownChangeViewedAndBack() {
+            let model = AppFixtures.project(.changes, store: AppFixtures.store())
+            model.setAllViewed(true)
+            #expect(model.displayedChanges.allSatisfy { model.viewedChanges.contains($0.id) })
+            model.setAllViewed(false)
+            #expect(model.viewedChanges.isEmpty)
         }
 
         @Test func countersShowOnlyWhenATestHasSeveralSnapshots() {
@@ -272,7 +297,7 @@ extension AppUITests {
         @Test func reloadIsAsynchronousAndLoadsConfiguration() async throws {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
-            for _ in 0..<100 where model.context == nil { try await Task.sleep(for: .milliseconds(20)) }
+            for _ in 0..<500 where model.context == nil { try await Task.sleep(for: .milliseconds(20)) }
             #expect(model.context?.repository.path == repo.path)
             #expect(model.currentBranch == "feature")
             #expect(model.branches.prefix(1) == ["develop"])

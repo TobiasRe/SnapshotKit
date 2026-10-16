@@ -36,6 +36,12 @@ enum DS {
         static let footer: CGFloat = 32
     }
 
+    /// Header controls: icon buttons are circles of this size, text controls capsules of this height.
+    enum Control {
+        static let height: CGFloat = 28
+        static let icon: CGFloat = 13
+    }
+
     enum Font {
         /// Pane titles ("1 failing test in the last run").
         static let title = SwiftUI.Font.title3.weight(.semibold)
@@ -327,15 +333,23 @@ extension View {
             .background(NativeHighlightOff())
     }
 
-    /// A control drawn without a bezel, in a hairline capsule: the header controls' one look.
+    /// A control drawn without a bezel in a glass capsule: the look of every text control in the
+    /// pane headers and filter bars (see `glassChrome`).
     func quietControl() -> some View {
         self
             .buttonStyle(.borderless)
             .menuStyle(.borderlessButton)
-            .padding(.horizontal, DS.Space.s)
-            .padding(.vertical, DS.Space.xxs + 1)
-            .overlay(Capsule().strokeBorder(DS.Surface.hairline))
+            .padding(.horizontal, DS.Space.s + 2)
+            .frame(height: DS.Control.height)
+            .glassChrome(Capsule())
             .contentShape(Capsule())
+    }
+
+    /// Liquid Glass around a header control, the way Linear rings its toolbar icons: interactive
+    /// glass on macOS 26 and later; a whisper of fill and a hairline before that and in off-screen
+    /// renders, where glass can't be composited.
+    func glassChrome<S: InsettableShape>(_ shape: S) -> some View {
+        modifier(GlassChrome(shape: shape))
     }
 }
 
@@ -420,5 +434,105 @@ struct ListDetailSplit<List: View, Detail: View>: View {
     static func clamp(_ width: Double, min minWidth: Double, available: Double) -> Double {
         let upper = Swift.max(minWidth, Swift.min(maxWidth, available - minDetailWidth))
         return Swift.min(Swift.max(width, minWidth), upper)
+    }
+}
+
+private struct GlassChrome<S: InsettableShape>: ViewModifier {
+    var shape: S
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        if DS.solidSurfaces || !DS.hasLiquidGlass || contrast == .increased {
+            content
+                .background(shape.fill(Color.primary.opacity(0.04)))
+                .overlay(shape.strokeBorder(DS.Surface.hairline))
+        } else if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: shape)
+        }
+    }
+}
+
+/// An icon-only header button in a glass circle; its name is the tooltip and the accessibility label.
+struct GlassIconButton: View {
+    var title: String
+    var symbol: String
+    /// The tooltip, when it should say more than the name.
+    var help: String?
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: DS.Control.icon, weight: .medium))
+                .frame(width: DS.Control.height, height: DS.Control.height)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .glassChrome(Circle())
+        .help(help ?? title)
+        .accessibilityLabel(title)
+    }
+}
+
+/// An icon-only header menu in a glass circle ("···", sort).
+struct GlassIconMenu<Content: View>: View {
+    var title: String
+    var symbol: String
+    var help: String?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Menu { content } label: {
+            Image(systemName: symbol)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: DS.Control.height, height: DS.Control.height)
+        .glassChrome(Circle())
+        .contentShape(Circle())
+        .help(help ?? title)
+        .accessibilityLabel(title)
+    }
+}
+
+/// An action with a menu of variations, as one glass pill: the icon does the common thing, the
+/// chevron offers the rest (Re-record: this test, or its whole suite).
+struct GlassSplitButton<Content: View>: View {
+    var title: String
+    var symbol: String
+    var help: String?
+    var action: () -> Void
+    @ViewBuilder var menu: Content
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: action) {
+                Image(systemName: symbol)
+                    .font(.system(size: DS.Control.icon, weight: .medium))
+                    .frame(width: DS.Control.height + 4, height: DS.Control.height)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // Primary, like the menus beside it (a native menu label can't be tinted secondary).
+            .foregroundStyle(.primary)
+            .help(help ?? title)
+            .accessibilityLabel(title)
+            Rectangle()
+                .fill(DS.Surface.hairline)
+                .frame(width: 1, height: DS.Control.height - 12)
+                .accessibilityHidden(true)
+            Menu { menu } label: {
+                Image(systemName: "chevron.down")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .frame(width: DS.Control.height - 2, height: DS.Control.height)
+            .help("More ways to \(title.lowercased())")
+            .accessibilityLabel("\(title) Options")
+        }
+        .glassChrome(Capsule())
     }
 }

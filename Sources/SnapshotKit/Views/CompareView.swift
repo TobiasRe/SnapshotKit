@@ -185,7 +185,7 @@ struct CompareView: View {
                         .frame(width: 7, height: 7)
                     Text(stats.isIdentical
                          ? "Identical"
-                         : String(format: "%.2f%% changed", stats.changedFraction * 100) + (stats.sizeChanged ? " · size differs" : ""))
+                         : String(format: "%.2f%% changed", stats.changedFraction * 100))
                         .monospacedDigit()
                 }
                 .font(DS.Font.caption)
@@ -195,10 +195,19 @@ struct CompareView: View {
             }
 
             if showSize, let size = pair?.pixelSize, size.width > 0 {
-                Text("\(Int(size.width))×\(Int(size.height))")
-                    .font(DS.Font.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .fixedSize()
+                // When the sizes differ, both: that is the difference worth reading.
+                if let a = pair?.beforePixels, let b = pair?.afterPixels, a.width != b.width || a.height != b.height {
+                    Text("\(a.width)×\(a.height) → \(b.width)×\(b.height)")
+                        .font(DS.Font.caption.monospacedDigit())
+                        .foregroundStyle(DS.Status.text(DS.Status.changed))
+                        .fixedSize()
+                        .help("The image size changed: a different device, scale or layout")
+                } else {
+                    Text("\(Int(size.width))×\(Int(size.height))")
+                        .font(DS.Font.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                        .fixedSize()
+                }
             }
 
             if pair?.stats?.changedBounds != nil {

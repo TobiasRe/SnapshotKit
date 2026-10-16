@@ -52,21 +52,16 @@ struct FailuresTab: View {
                     }
                 }
                 Spacer(minLength: DS.Space.s)
-                Menu {
+                GlassSplitButton(title: "Import Result Bundle", symbol: "square.and.arrow.down",
+                                 help: "Import an .xcresult, for example from a CI job (⇧⌘O)") {
+                    app.importResultBundleFromPanel()
+                } menu: {
                     Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
                     if let bundle = project.failureSource?.resultBundle {
                         Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
                         Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
                     }
-                } label: {
-                    Label("Import", systemImage: "square.and.arrow.down")
-                } primaryAction: {
-                    app.importResultBundleFromPanel()
                 }
-                .fixedSize()
-                .quietControl()
-                .help("Import an .xcresult, for example from a CI job (⇧⌘O)")
-                .accessibilityLabel("Import Result Bundle")
             }
             PaneBar(height: DS.Bar.filters) {
                 Button("Re-record All") { project.reRecordFailed() }
@@ -134,28 +129,17 @@ struct FailuresTab: View {
                          position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
-                    Menu {
+                    GlassSplitButton(title: "Re-record", symbol: "camera",
+                                     help: "Record this test's snapshots again, then check that it passes (⇧⌘R)") {
+                        project.reRecord(failures: [item])
+                    } menu: {
                         Button("Re-record Test") { project.reRecord(failures: [item]) }
                         Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
-                    } label: {
-                        Label("Re-record", systemImage: "camera")
-                    } primaryAction: {
-                        project.reRecord(failures: [item])
                     }
-                    .fixedSize()
-                    .quietControl()
                     .disabled(project.isRunning || project.environment == nil)
-                    .help("Record this test's snapshots again, then check that it passes")
-                    .accessibilityLabel("Re-record")
-                    Menu { actions(for: item) } label: {
-                        Label("Test Actions", systemImage: "ellipsis")
+                    GlassIconMenu(title: "Test Actions", symbol: "ellipsis", help: "More actions for this test") {
+                        actions(for: item)
                     }
-                    .labelStyle(.iconOnly)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .quietControl()
-                    .help("More actions for this test")
-                    .accessibilityLabel("Test Actions")
                 }
                 .controlSize(.small)
             }
@@ -167,8 +151,15 @@ struct FailuresTab: View {
                     Text(HistoryStrip.summary(item.timeline))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                } else if let diagnosis = project.diagnoses[item.id], diagnosis.kind != .identical {
+                    // No run history to show yet: say what kind of difference this is instead.
+                    Text(diagnosis.summary)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(diagnosis.summary)
                 } else if item.verdict == nil {
-                    Text("No earlier runs recorded").foregroundStyle(.secondary).lineLimit(1)
+                    Text("First failure on record").foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: DS.Space.s)
                 if reps.count > 1 {
@@ -192,7 +183,7 @@ struct FailuresTab: View {
                         .textSelection(.enabled)
                     hint(item)
                 }
-                .font(.callout)
+                .font(DS.Font.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, DS.Space.l)
                 .padding(.vertical, DS.Space.m)
@@ -288,7 +279,7 @@ struct FailuresTab: View {
                     LabeledContent {
                         Text("\(signal.passes) passed · \(signal.failures) failed")
                     } label: {
-                        Text(signal.test).font(.callout.monospaced())
+                        Text(signal.test).font(DS.Font.secondary.monospaced())
                         Text("Failing on \(signal.failingHosts.joined(separator: ", "))")
                     }
                 }
@@ -342,7 +333,7 @@ struct FailureRow: View {
                         kind
                     } else if item.verdict == nil && item.test.repetitions.count <= 1 && item.historyFlaky == nil {
                         Text(item.images.isEmpty ? "No images" : "Snapshot mismatch")
-                            .font(.caption)
+                            .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

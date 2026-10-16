@@ -145,6 +145,18 @@ func png(width: Int, height: Int, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Data {
         marks.set(true, for: card, keepingOnly: [card])
         #expect(marks.load().keys.sorted() == [path])
     }
+
+    @Test func marksSeveralInOneGo() throws {
+        let repo = try TempRepo()
+        let paths = (1...3).map { "Tests/AppTests/__Snapshots__/CardTests/card.\($0).png" }
+        for p in paths { try repo.write(p, png(width: 2, height: 2, rgba: (255, 0, 0, 255))) }
+        let changes = paths.map { SnapshotChange(path: $0, kind: .new) }
+        let marks = ReviewMarks(repository: repo.url)
+        marks.set(true, for: changes, keepingOnly: changes)
+        #expect(marks.viewed(in: changes) == Set(changes.map(\.id)))
+        marks.set(false, for: Array(changes.prefix(2)), keepingOnly: changes)
+        #expect(marks.viewed(in: changes) == [changes[2].id])
+    }
 }
 
 @Suite struct InvisibleChangesTests {

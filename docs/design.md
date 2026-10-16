@@ -39,8 +39,11 @@ can be followed between these views, and re-recording is available wherever a sn
 
 1. **Chrome is glass, content is solid.** Use the system toolbar and sidebar as they are. Lists, forms,
    logs and images sit on solid backgrounds.
-2. **Glass only floats over images.** The compare controls (mode, zoom, captions, slider knob) are the only
-   custom glass. They're grouped with `GlassGroup`, so they render and morph as one material.
+2. **Glass for controls, never for content.** Controls that float over images (compare mode, zoom, captions,
+   the slider knob) and the controls in pane headers are Liquid Glass, as Linear rings its toolbar icons:
+   icon actions are glass circles (`GlassIconButton`, `GlassIconMenu`), an action with variations is a
+   glass pill with a chevron (`GlassSplitButton`), and text controls are glass capsules (`quietControl()`).
+   Lists, forms, logs and images stay solid. Neighbouring floating glass is grouped with `GlassGroup`.
 3. **One tint.** The accent colour marks the single primary action in a region (`primaryActionStyle()`,
    which is `.glassProminent` on macOS 26). Neighbouring actions use `secondaryActionStyle()` (`.glass`).
 4. **Colour means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
@@ -79,6 +82,9 @@ can be followed between these views, and re-recording is available wherever a sn
 - `ListDetailSplit`: the list beside its detail (400 points by default, 280–520), with one divider position
   for every tab, kept across launches; dragging it on one tab sets it everywhere, and switching tabs never moves it. Content too wide
   for the column gives way (a long branch name truncates) instead of spilling over.
+- `PropertySection` / `PropertyRow`: an inspector's properties (the Run tab's configuration): small section
+  headers, grey labels in a 104-point column, values beside them, and where a value came from in quieter
+  type under it.
 - `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
 - `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
   selection and the section headers carry the structure.
@@ -86,8 +92,10 @@ can be followed between these views, and re-recording is available wherever a sn
   system's grey or accent block; the list keeps its selection, keyboard navigation and accessibility. The
   sidebar keeps the system selection, which on its material is already as quiet.
 - `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
-- `quietControl()`: header and filter controls are borderless in a hairline capsule, one look for buttons
-  and menus alike, so a header reads as a line of text with actions rather than a row of bezels.
+- `glassChrome(_:)`, `GlassIconButton`, `GlassIconMenu`, `GlassSplitButton`, `quietControl()`: the header
+  controls, 28 points tall (`DS.Control`). Interactive Liquid Glass on macOS 26 and later; a faint fill with a
+  hairline before that, with Increase Contrast, and in off-screen renders. Icon-only controls name
+  themselves in the tooltip and to VoiceOver.
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
   ranked list, one line each, a command's shortcut where a project shows its folder, so the palette also
   teaches the keyboard.

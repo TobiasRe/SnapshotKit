@@ -75,6 +75,10 @@ extension PaletteCommand {
             .init(title: "Show Run", symbol: "terminal", shortcut: "⌥⌘4") { project.tab = .run },
             .init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() },
             .init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() },
+            .init(title: "Mark All Changes as Viewed", symbol: "checkmark.circle", shortcut: nil) {
+                project.tab = .changes
+                project.setAllViewed(true)
+            },
             .init(title: "Add Project…", symbol: "plus", shortcut: "⌘O") { app.addProjectFromPanel() },
         ]
         return commands

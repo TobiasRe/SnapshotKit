@@ -1,4 +1,5 @@
 import AppKit
+import QuickLook
 import SnapshotKitCore
 import SwiftUI
 
@@ -12,6 +13,8 @@ struct SnapshotsTab: View {
     @AppStorage("libraryLayout") private var layoutRaw = LibraryLayout.list.rawValue
     @State private var confirmRecordShown = false
     @State private var confirmTrashOrphans = false
+    /// The snapshot shown in Quick Look (Space in the list, as in Finder).
+    @State private var quickLookURL: URL?
 
     /// Above this many tests, re-recording what's shown asks first.
     static let confirmAbove = 10
@@ -52,8 +55,16 @@ struct SnapshotsTab: View {
                 if let file = project.selectedSnapshot {
                     SnapshotDetail(project: project, file: file)
                 } else if project.library?.files.isEmpty == true {
-                    ContentUnavailableView("No Snapshots Yet", systemImage: "photo.on.rectangle.angled",
-                                           description: Text("Reference images appear here once a snapshot test records them."))
+                    // A first run records the references (swift-snapshot-testing writes missing ones).
+                    ContentUnavailableView {
+                        Label("No Snapshots Yet", systemImage: "photo.on.rectangle.angled")
+                    } description: {
+                        Text("Reference images appear here once a snapshot test records them. Run the tests to record the first ones.")
+                    } actions: {
+                        Button("Run Tests") { project.runTests() }
+                            .primaryActionStyle()
+                            .disabled(project.isRunning || project.environment == nil)
+                    }
                 } else {
                     ContentUnavailableView("No Snapshot Selected", systemImage: "photo.on.rectangle",
                                            description: Text("Select a snapshot to inspect it."))
@@ -72,20 +83,12 @@ struct SnapshotsTab: View {
                     // In the full-width grid a window-wide field reads as a page title.
                     .frame(maxWidth: 420)
                 Spacer(minLength: 0)
-                Menu {
+                GlassIconMenu(title: "Sort By", symbol: "arrow.up.arrow.down", help: "Sort by name (grouped), size or most recently changed") {
                     Picker("Sort By", selection: $project.librarySort) {
                         ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.inline)
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
-                .labelStyle(.iconOnly)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .quietControl()
-                .help("Sort by name (grouped), size or most recently changed")
-                .accessibilityLabel("Sort By")
                 Picker("Layout", selection: $layoutRaw) {
                     Label("List", systemImage: "list.bullet").tag(LibraryLayout.list.rawValue)
                     Label("Grid", systemImage: "square.grid.2x2").tag(LibraryLayout.grid.rawValue)
@@ -133,7 +136,8 @@ struct SnapshotsTab: View {
     /// What the library holds, and the bulk action for what's shown.
     @ViewBuilder
     private var footer: some View {
-        if let library = project.library {
+        // Nothing to count or record yet: no footer of zeros.
+        if let library = project.library, !library.files.isEmpty {
             PaneFooter {
                 Text(LibraryStats(library).summary).lineLimit(1)
                 Spacer(minLength: DS.Space.s)
@@ -143,7 +147,7 @@ struct SnapshotsTab: View {
                         .buttonStyle(.borderless)
                         .disabled(project.isRunning)
                         .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
-                } else {
+                } else if !shown.isEmpty {
                     Button(shownTitle(shown)) {
                         if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
                     }
@@ -224,6 +228,12 @@ struct SnapshotsTab: View {
                 }
                 }
             }
+            .onKeyPress(.space) {
+                guard let file = project.selectedSnapshot else { return .ignored }
+                quickLookURL = project.project.url.appendingPathComponent(file.path)
+                return .handled
+            }
+            .quickLookPreview($quickLookURL)
             .overlay {
                 if tree.isEmpty && !project.libraryFilter.isEmpty {
                     ContentUnavailableView.search(text: project.libraryFilter)
@@ -397,34 +407,22 @@ struct SnapshotDetail: View {
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
                     statusChips(status)
-                    Menu {
+                    GlassSplitButton(title: "Re-record", symbol: "camera",
+                                     help: status.orphaned ? "Its test no longer exists"
+                                         : "Record this test's snapshots again, then check that it passes (⇧⌘R)") {
+                        project.reRecord([file], granularity: .tests)
+                    } menu: {
                         Button("Re-record Test") { project.reRecord([file], granularity: .tests) }
                         Button("Re-record Suite \(file.suite)") { project.reRecord([file], granularity: .suites) }
-                    } label: {
-                        Label("Re-record", systemImage: "camera")
-                    } primaryAction: {
-                        project.reRecord([file], granularity: .tests)
                     }
-                    .fixedSize()
-                    .quietControl()
                     .disabled(project.isRunning || project.environment == nil || status.orphaned)
-                    .help(status.orphaned ? "Its test no longer exists" : "Record this test's snapshots again, then check that it passes")
-                    .accessibilityLabel("Re-record")
-                    Menu {
+                    GlassIconMenu(title: "Snapshot Actions", symbol: "ellipsis", help: "Open, reveal or copy the path of this snapshot") {
                         SnapshotActions(project: project, file: file)
                         if status.orphaned {
                             Divider()
                             Button("Move to Trash") { project.moveToTrash([file]) }
                         }
-                    } label: {
-                        Label("Snapshot Actions", systemImage: "ellipsis")
                     }
-                    .labelStyle(.iconOnly)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .quietControl()
-                    .help("Open, reveal or copy the path of this snapshot")
-                    .accessibilityLabel("Snapshot Actions")
                 }
                 .controlSize(.small)
             }
