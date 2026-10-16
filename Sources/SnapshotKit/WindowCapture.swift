@@ -5,8 +5,8 @@ import SwiftUI
 /// Headless screenshots of the full window, for automated UI verification:
 ///
 ///     SnapshotKit --capture out.png --project /path/to/repo --tab changes \
-///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference]
-///                 [--zoom 3] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
+///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference|toggle]
+///                 [--zoom 3|change] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
 ///                 [--action run|rerecord|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
 ///
 /// The window is placed off-screen and the app does not activate, so it does not disturb
@@ -18,6 +18,7 @@ struct CaptureOptions: Equatable {
     var select: String?
     var compare: CompareMode?
     var zoom: CGFloat?
+    var zoomToChange = false
     var pan: CGSize?
     var quickSwitcher: String?
     var importBundle: String?
@@ -41,10 +42,12 @@ struct CaptureOptions: Equatable {
             case "side-by-side", "sidebyside": .sideBySide
             case "slider": .slider
             case "difference", "diff": .difference
+            case "toggle": .toggle
             default: nil
             }
         }
         o.zoom = value("--zoom").flatMap(Double.init).map { CGFloat($0) }
+        o.zoomToChange = value("--zoom") == "change"
         if let pan = value("--pan")?.split(separator: ","), pan.count == 2, let x = Double(pan[0]), let y = Double(pan[1]) {
             o.pan = CGSize(width: x, height: y)
         }
@@ -115,6 +118,10 @@ enum WindowCapture {
 
         // Let SwiftUI lay out and the image decode/diff tasks finish.
         try? await Task.sleep(for: .seconds(2.5))
+        if o.zoomToChange {
+            model.zoomToChangeRequest += 1
+            try? await Task.sleep(for: .seconds(1))
+        }
         guard let png = render(window) else { log("render failed"); exit(4) }
         do {
             try png.write(to: URL(fileURLWithPath: o.output))

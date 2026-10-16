@@ -12,11 +12,11 @@ commands:
   run        [--repo P] [--only ID]... [--module M] [--iterations N] [--remote [HOST]] [--verbose]
   rerecord   [--repo P] [--suite ID]... [--no-verify] [--remote [HOST]] [--verbose]
   flaky      [--repo P] [--iterations N] [--remote [HOST]] [--verbose]
-  failures   [--repo P] [--xcresult PATH] [--out DIR]
+  failures   [--repo P] [--xcresult PATH] [--out DIR]   list failures, diagnose each diff, show recent runs
   changes    [--repo P] [--base BRANCH] [--tip] [--filter TEXT]
-  history    [--repo P]
+  history    [--repo P] [TEST]                   recent runs and flaky tests; TEST = Bundle/Suite/test()
   restore    [--repo P]                          undo a leftover record patch
-  diff       A.png B.png [-o OUT.png]
+  diff       A.png B.png [-o OUT.png]             pixel and perceptual difference, with a precision that passes
   projects   scan ROOT... | list
 
 Every command first restores record patches left behind by an interrupted run.
@@ -59,6 +59,17 @@ func parse(_ args: [String]) -> Options {
 
 let isTTY = isatty(STDOUT_FILENO) != 0
 func color(_ code: String, _ text: String) -> String { isTTY ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text }
+/// ✔ ✘ ◐ per run, oldest first, as on the app's Failures tab.
+func historyStrip(_ points: [HistoryPoint]) -> String {
+    points.map { p in
+        switch p.result {
+        case .passed: color("32", "✔")
+        case .failed: color("31", "✘")
+        case .mixed: color("33", "◐")
+        }
+    }.joined(separator: " ")
+}
+
 func say(_ text: String) { print(text); fflush(stdout) }
 func fail(_ text: String, code: Int32 = 1) -> Never {
     FileHandle.standardError.write(Data((color("31", "error: ") + text + "\n").utf8))
@@ -335,7 +346,14 @@ func main() async {
                     }
                     for img in images where img.testIdentifier == test.identifier && img.repetition == 1 {
                         say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
+                        if let ref = img.reference.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)),
+                           let act = img.failure.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)) {
+                            let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))
+                            say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
+                        }
                     }
+                    let timeline = RunHistory.timeline(for: suite.identifier + "/" + test.name, in: RunHistory(repository: ctx.repository).load())
+                    if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
                 }
             }
             if summary.failingSuites.isEmpty { say("No failing tests in \(bundle.lastPathComponent).") }
@@ -364,7 +382,17 @@ func main() async {
         }
         let flaky = RunHistory.flakySignals(records)
         say(flaky.isEmpty ? "No flaky signals." : color("33", "Flaky (passed and failed on the same commit):"))
-        for f in flaky { say("  \(f.test)  \(f.passes)✔ \(f.failures)✘  failing on: \(f.failingHosts.joined(separator: ", "))") }
+        for f in flaky {
+            say("  \(f.test)  \(f.passes)✔ \(f.failures)✘  failing on: \(f.failingHosts.joined(separator: ", "))")
+            say("    " + historyStrip(RunHistory.timeline(for: f.test, in: records)))
+        }
+        if let test = o.positional.first {
+            let timeline = RunHistory.timeline(for: test, in: records, limit: 30)
+            say(timeline.isEmpty ? "No runs of \(test) recorded." : "\(test): " + historyStrip(timeline))
+            for p in timeline {
+                say("  \(p.date.formatted(date: .numeric, time: .shortened))  \(p.result)  \(p.kind.rawValue)  \(p.host)  \(p.commit?.prefix(8) ?? "")")
+            }
+        }
 
     case "restore":
         let repo = repository(o)
@@ -373,11 +401,16 @@ func main() async {
         } catch { fail(error.localizedDescription) }
 
     case "diff":
+        // Explains what kind of difference it is and which precision would pass.
         guard o.positional.count == 2,
               let a = FileManager.default.contents(atPath: o.positional[0]).flatMap(PixelImage.init(data:)),
               let b = FileManager.default.contents(atPath: o.positional[1]).flatMap(PixelImage.init(data:)) else { fail("usage: snapkit diff A.png B.png [-o OUT.png]") }
         let diff = ImageDiff.compare(a, b)
-        say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@", diff.changedPixels, diff.changedFraction * 100, diff.sizeChanged ? ", size changed" : ""))
+        say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@, largest ΔE %.1f", diff.changedPixels, diff.changedFraction * 100,
+                                                    diff.sizeChanged ? ", size changed" : "", diff.maxPerceptualDelta))
+        let diagnosis = DiffDiagnosis(diff)
+        if !diff.isIdentical { say(diagnosis.summary) }
+        if let suggestion = diagnosis.suggestion { say("Would pass with: \(suggestion)") }
         if let out = o.value("-o") { try? diff.image.pngData()?.write(to: URL(fileURLWithPath: out)) }
         exit(diff.isIdentical ? 0 : 1)
 

@@ -151,13 +151,50 @@ import Testing
         #expect(signals[0].failingHosts == ["ci-mac"])
     }
 
+    @Test func timelineSkipsRecordRunsAndMarksMixedRepetitions() {
+        var runs: [RunRecord] = []
+        for (i, outcomes) in [[TestOutcome.passed], [.failed], [.passed, .failed, .passed], [.skipped]].enumerated() {
+            var r = record("c1", .passed)
+            r.date = Date(timeIntervalSince1970: Double(i))
+            r.outcomes = ["B/S/a()": outcomes]
+            runs.append(r)
+        }
+        var recording = record("c1", .failed)
+        recording.kind = .record
+        recording.date = Date(timeIntervalSince1970: 10)
+        runs.append(recording)
+        runs.append(record("c1", .passed).with { $0.outcomes = ["B/S/other()": [.failed]] })
+
+        let points = RunHistory.timeline(for: "B/S/a()", in: runs.reversed())
+        #expect(points.map(\.result) == [.passed, .failed, .mixed])
+        #expect(RunHistory.timeline(for: "B/S/a()", in: runs, limit: 2).map(\.result) == [.failed, .mixed])
+    }
+
+    @Test func sameResultBundleIsRecordedOnce() {
+        let history = RunHistory(repository: URL(fileURLWithPath: "/some/repo"), home: testTemp("history"))
+        var r = record("c1", .failed)
+        r.resultBundle = "/results/a.xcresult"
+        history.append(r)
+        history.append(r.with { $0.id = UUID() })
+        history.append(record("c1", .passed))
+        #expect(history.load().count == 2)
+    }
+
     @Test func persistsAndCaps() throws {
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-history-\(UUID().uuidString)")
+        let home = testTemp("history")
         let history = RunHistory(repository: URL(fileURLWithPath: "/some/repo"), home: home)
         for i in 0..<(RunHistory.maxRecords + 5) { history.append(record("c\(i)", .passed)) }
         let loaded = history.load()
         #expect(loaded.count == RunHistory.maxRecords)
         #expect(loaded.last?.commit == "c\(RunHistory.maxRecords + 4)")
+    }
+}
+
+extension RunRecord {
+    func with(_ change: (inout RunRecord) -> Void) -> RunRecord {
+        var copy = self
+        change(&copy)
+        return copy
     }
 }
 

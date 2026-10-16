@@ -5,12 +5,14 @@ import SwiftUI
 struct ChangesTab: View {
     @ObservedObject var project: ProjectModel
     @State private var pendingDiscard: SnapshotChange?
+    @State private var confirmDiscardInvisible = false
 
     var body: some View {
         HSplitView {
             VStack(spacing: 0) {
                 filterBar
                 Divider()
+                if !project.invisibleUncommitted.isEmpty { invisibleNotice }
                 list
                     .frame(maxHeight: .infinity)
             }
@@ -22,6 +24,12 @@ struct ChangesTab: View {
                         DetailHeader(title: change.testName, subtitle: change.path) {
                             HStack(spacing: DS.Space.s) {
                                 KindBadge(kind: change.kind, style: .label)
+                                Toggle("Viewed", isOn: Binding(
+                                    get: { project.viewedChanges.contains(change.id) },
+                                    set: { project.setViewed($0, for: change) }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .help("Mark as reviewed and go to the next snapshot (V in the list)")
                                 Menu {
                                     actions(for: change)
                                 } label: {
@@ -52,6 +60,12 @@ struct ChangesTab: View {
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .confirmationDialog("Discard \(project.invisibleUncommitted.count) re-recorded snapshots with no visible change?",
+                            isPresented: $confirmDiscardInvisible) {
+            Button("Discard", role: .destructive) { project.discardInvisibleChanges() }
+        } message: {
+            Text("They are restored to the committed version. Only uncommitted snapshots that look the same as before are touched.")
+        }
         .confirmationDialog(
             "Discard the change to \(pendingDiscard?.fileName ?? "this snapshot")?",
             isPresented: Binding(get: { pendingDiscard != nil }, set: { if !$0 { pendingDiscard = nil } }),
@@ -81,6 +95,8 @@ struct ChangesTab: View {
             }
         }
         Divider()
+        let viewed = project.viewedChanges.contains(change.id)
+        Button(viewed ? "Mark as Not Viewed" : "Mark as Viewed") { project.setViewed(!viewed, for: change) }
         Button("Copy Path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(change.path, forType: .string)
@@ -130,7 +146,12 @@ struct ChangesTab: View {
                         ))
                     }
                     Divider()
-                    Button("Show All") { project.changeKinds = Set(SnapshotChangeKind.allCases) }
+                    Toggle("Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
+                    Divider()
+                    Button("Show All") {
+                        project.changeKinds = Set(SnapshotChangeKind.allCases)
+                        project.hideViewed = false
+                    }
                 } label: {
                     Label(kindsLabel, systemImage: "line.3.horizontal.decrease.circle")
                 }
@@ -145,12 +166,46 @@ struct ChangesTab: View {
             }
             .controlSize(.small)
             if let set = project.changeSet {
-                Text("\(project.filteredChanges.count) of \(set.changes.count) snapshots · vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: DS.Space.s) {
+                    Text("\(project.filteredChanges.count) of \(set.changes.count) snapshots · vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: DS.Space.s)
+                    if !set.changes.isEmpty {
+                        let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
+                        Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
+                            .gaugeStyle(.accessoryLinearCapacity)
+                            .tint(DS.Status.passed)
+                            .frame(width: 44)
+                            .accessibilityHidden(true)
+                        Text("\(viewed)/\(set.changes.count) viewed").monospacedDigit().fixedSize()
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(DS.Space.m)
+    }
+
+    /// Re-records that only picked up rendering noise would add churn to the merge request.
+    private var invisibleNotice: some View {
+        let count = project.invisibleUncommitted.count
+        return VStack(spacing: 0) {
+            HStack(spacing: DS.Space.s) {
+                Image(systemName: "eye.slash").foregroundStyle(DS.Status.flaky).accessibilityHidden(true)
+                Text("\(count) uncommitted snapshot\(count == 1 ? " has" : "s have") no visible change.")
+                    .font(DS.Font.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: DS.Space.s)
+                Button("Discard…") { confirmDiscardInvisible = true }
+                    .controlSize(.small)
+                    .help("Restore them to the committed version, so only real changes get committed")
+            }
+            .padding(.horizontal, DS.Space.m)
+            .padding(.vertical, DS.Space.s)
+            Divider()
+        }
     }
 
     private func count(_ kind: SnapshotChangeKind) -> Int {
@@ -158,9 +213,10 @@ struct ChangesTab: View {
     }
 
     private var kindsLabel: String {
-        project.changeKinds.count == SnapshotChangeKind.allCases.count
+        let kinds = project.changeKinds.count == SnapshotChangeKind.allCases.count
             ? "All Changes"
             : "\(project.changeKinds.count) of \(SnapshotChangeKind.allCases.count) Kinds"
+        return project.hideViewed ? kinds + ", Unviewed" : kinds
     }
 
     @ViewBuilder
@@ -175,7 +231,8 @@ struct ChangesTab: View {
                 ForEach(groups) { group in
                     Section {
                         ForEach(group.changes) { change in
-                            ChangeRow(change: change, load: project.imageLoader(for: change))
+                            ChangeRow(change: change, viewed: project.viewedChanges.contains(change.id),
+                                      diagnosis: project.changeDiagnoses[change.id], load: project.imageLoader(for: change))
                                 .tag(change.id)
                                 .contextMenu { actions(for: change) }
                         }
@@ -188,9 +245,17 @@ struct ChangesTab: View {
                     }
                 }
             }
+            .onKeyPress("v") {
+                guard let change = project.selectedChange else { return .ignored }
+                project.setViewed(!project.viewedChanges.contains(change.id), for: change)
+                return .handled
+            }
             .overlay {
                 if groups.isEmpty {
-                    if project.changeSet?.changes.isEmpty == true {
+                    if project.hideViewed && !(project.changeSet?.changes.isEmpty ?? true) && project.changeFilter.isEmpty {
+                        ContentUnavailableView("All Snapshots Viewed", systemImage: "checkmark.circle",
+                                               description: Text("Turn off Hide Viewed to see them again."))
+                    } else if project.changeSet?.changes.isEmpty == true {
                         ContentUnavailableView("No Changed Snapshots", systemImage: "checkmark.circle",
                                                description: Text("Every PNG matches \(project.baseBranch ?? "the base branch")."))
                     } else {
@@ -205,6 +270,8 @@ struct ChangesTab: View {
 struct ChangeRow: View {
     // Read as one element: "payButton, Committed".
     var change: SnapshotChange
+    var viewed = false
+    var diagnosis: DiffDiagnosis?
     var load: @Sendable () -> (Data?, Data?)
 
     var body: some View {
@@ -214,20 +281,29 @@ struct ChangeRow: View {
                 let (base, current) = load()
                 return current ?? base
             }
+            .opacity(viewed ? 0.5 : 1)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(change.testName).lineLimit(1)
+                    .foregroundStyle(viewed ? .secondary : .primary)
                 HStack(spacing: DS.Space.xs) {
                     KindBadge(kind: change.kind, style: .dot)
                     Text("\(change.kind.label) · \(change.fileName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    if let chip = diagnosis.flatMap(DiagnosisChip.init) { chip }
                 }
+            }
+            Spacer(minLength: DS.Space.s)
+            if viewed {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .help("Viewed")
             }
         }
         .padding(.vertical, DS.Space.xxs)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(change.testName), \(change.kind.label), in \(change.suite)")
+        .accessibilityLabel("\(change.testName), \(change.kind.label), in \(change.suite)\(viewed ? ", viewed" : "")")
     }
 }
 

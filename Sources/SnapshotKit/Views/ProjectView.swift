@@ -107,6 +107,11 @@ struct RunInspector: View {
 
             if let ctx = project.context {
                 let c = project.config ?? ctx.config
+                let row = { (name: String, value: String?, source: String?) in
+                    // The footer names the CI files; only values from elsewhere (an override,
+                    // a script) say where they came from.
+                    self.row(name, value, source.flatMap { ctx.resolved.ciFiles.contains($0) ? nil : $0 })
+                }
                 Section {
                     row("Scheme", c.scheme, c.source(of: .scheme))
                     if let ws = c.workspace { row("Workspace", ws, c.source(of: .workspace)) }
@@ -391,32 +396,58 @@ struct LogView: View {
 
     var body: some View {
         let lines = project.visibleLog
+        let suites = project.lastResult?.summary?.suites ?? []
+        let showResults = !suites.isEmpty && project.runPane == .results
         VStack(spacing: 0) {
             HStack(spacing: DS.Space.m) {
-                Text("Output").font(.subheadline.weight(.semibold))
-                Text("\(lines.count) lines").font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                if suites.isEmpty {
+                    Text("Output").font(.subheadline.weight(.semibold))
+                } else {
+                    Picker("Show", selection: $project.runPane) {
+                        ForEach(RunPane.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .controlSize(.small)
+                    .accessibilityLabel("Show Results or Output")
+                }
+                Text(showResults ? "\(suites.reduce(0) { $0 + $1.tests.count }) tests" : "\(lines.count) lines")
+                    .font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
                 Spacer()
-                SearchField(prompt: "Filter output", text: $project.logFilter)
+                SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter)
                     .frame(maxWidth: 220)
                     .controlSize(.small)
-                Toggle("Build output", isOn: $project.showFullLog)
-                    .toggleStyle(.checkbox)
-                    .controlSize(.small)
-                    .help("Include compiler and linker output")
+                if !showResults {
+                    Toggle("Build output", isOn: $project.showFullLog)
+                        .toggleStyle(.checkbox)
+                        .controlSize(.small)
+                        .help("Include compiler and linker output")
+                }
                 Button {
+                    let text = showResults ? RunResultsList.plainText(suites) : lines.joined(separator: "\n")
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+                    NSPasteboard.general.setString(text, forType: .string)
                 } label: {
-                    Label("Copy Output", systemImage: "doc.on.doc").labelStyle(.iconOnly)
+                    Label(showResults ? "Copy Results" : "Copy Output", systemImage: "doc.on.doc").labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
-                .disabled(lines.isEmpty)
-                .help("Copy the visible output")
-                .accessibilityLabel("Copy Output")
+                .disabled(showResults ? false : lines.isEmpty)
+                .help(showResults ? "Copy the results as text, e.g. for a merge request" : "Copy the visible output")
+                .accessibilityLabel(showResults ? "Copy Results" : "Copy Output")
             }
             .padding(.horizontal, DS.Space.l)
             .padding(.vertical, DS.Space.s)
             Divider()
+            if showResults {
+                RunResultsList(project: project, suites: suites)
+            } else {
+                output(lines)
+            }
+        }
+    }
+
+    private func output(_ lines: [String]) -> some View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: DS.Space.xxs) {
@@ -446,7 +477,6 @@ struct LogView: View {
                     if count > 0 { proxy.scrollTo(count - 1, anchor: .bottomLeading) }
                 }
             }
-        }
     }
 
     private func color(for line: String) -> Color {
@@ -455,5 +485,104 @@ struct LogView: View {
         if line.hasPrefix("$ ") || line.hasPrefix("snapkit:") { return .accentColor }
         if line.hasPrefix("◇") || line.hasPrefix("↳") { return .primary }
         return .secondary
+    }
+}
+
+/// The last run's tests by suite, failing suites first. Failed tests open on the Failures tab.
+struct RunResultsList: View {
+    @ObservedObject var project: ProjectModel
+    var suites: [SuiteResult]
+
+    var body: some View {
+        let query = project.logFilter.trimmingCharacters(in: .whitespaces)
+        let shown = suites
+            .map { suite in
+                (suite, query.isEmpty ? suite.tests : suite.tests.filter {
+                    $0.name.localizedCaseInsensitiveContains(query) || suite.identifier.localizedCaseInsensitiveContains(query)
+                })
+            }
+            .filter { !$0.1.isEmpty }
+            .sorted { ($0.0.isFailing ? 0 : 1, $0.0.identifier) < ($1.0.isFailing ? 0 : 1, $1.0.identifier) }
+        List {
+            ForEach(shown, id: \.0.id) { suite, tests in
+                Section {
+                    ForEach(tests, id: \.identifier) { test in
+                        row(test, suite: suite)
+                    }
+                } header: {
+                    HStack {
+                        Text(suite.identifier)
+                        Spacer()
+                        if suite.failedCount > 0 {
+                            Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.failed)
+                        }
+                        Text("\(suite.passedCount) passed").monospacedDigit()
+                    }
+                }
+            }
+        }
+        .overlay {
+            if shown.isEmpty { ContentUnavailableView.search(text: query) }
+        }
+    }
+
+    /// One line per test, failures first, for pasting into a merge request or chat.
+    static func plainText(_ suites: [SuiteResult]) -> String {
+        suites.sorted { ($0.isFailing ? 0 : 1, $0.identifier) < ($1.isFailing ? 0 : 1, $1.identifier) }
+            .flatMap { suite in
+                suite.tests.map { test in
+                    let mark = switch test.outcome { case .passed: "✔"; case .failed: "✘"; default: "–" }
+                    let reps = test.repetitions.count > 1 ? " (\(test.passedRepetitions)/\(test.repetitions.count) passed)" : ""
+                    return "\(mark) \(suite.identifier)/\(test.name)\(reps)"
+                }
+            }
+            .joined(separator: "\n")
+    }
+
+    private func row(_ test: TestCaseResult, suite: SuiteResult) -> some View {
+        let id = suite.identifier + "/" + test.name
+        let canOpen = project.failures.contains { $0.id == id }
+        return HStack(spacing: DS.Space.s) {
+            Image(systemName: icon(test.outcome))
+                .foregroundStyle(color(test.outcome))
+                .accessibilityLabel(test.outcome.rawValue)
+            Text(test.name).lineLimit(1)
+            if test.repetitions.count > 1 {
+                Chip(text: "\(test.passedRepetitions)/\(test.repetitions.count) passed",
+                     color: test.failedRepetitions > 0 && test.passedRepetitions > 0 ? DS.Status.flaky : DS.Status.neutral)
+            }
+            Spacer()
+            if let duration = test.duration {
+                Text(Duration.seconds(duration).formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow, maximumUnitCount: 1)))
+                    .font(DS.Font.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            if canOpen {
+                Button { project.showFailure(id) } label: { Image(systemName: "arrow.forward.circle") }
+                    .buttonStyle(.borderless)
+                    .help("Compare on the Failures tab")
+                    .accessibilityLabel("Show Failure")
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { if canOpen { project.showFailure(id) } }
+    }
+
+    private func icon(_ outcome: TestOutcome) -> String {
+        switch outcome {
+        case .passed: "checkmark.circle.fill"
+        case .failed: "xmark.circle.fill"
+        case .skipped: "minus.circle.fill"
+        case .expectedFailure: "checkmark.circle.badge.xmark"
+        case .unknown: "questionmark.circle"
+        }
+    }
+
+    private func color(_ outcome: TestOutcome) -> Color {
+        switch outcome {
+        case .passed: DS.Status.passed
+        case .failed: DS.Status.failed
+        case .skipped, .expectedFailure, .unknown: DS.Status.neutral
+        }
     }
 }

@@ -42,6 +42,7 @@ struct AppSnapshotTests {
 
     @Test func runTabFilteredOutput() {
         let (app, project) = makeApp(.failedRun)
+        project.runPane = .output
         project.logFilter = "payButton"
         assertPane(project, app: app, appearance: .aqua)
     }
@@ -112,14 +113,14 @@ struct AppSnapshotTests {
 
     // MARK: Compare view
 
-    @Test(arguments: [CompareMode.sideBySide, .slider, .difference])
+    @Test(arguments: [CompareMode.sideBySide, .slider, .difference, .toggle])
     func compareModes(mode: CompareMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: "compareMode")
         let app = AppModel(store: AppFixtures.store())
         ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-test")
         let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-test")
             .environmentObject(app)
-        let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference" }
+        let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference"; case .toggle: "toggle" }
         assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy, named: name)
     }
 
@@ -131,6 +132,51 @@ struct AppSnapshotTests {
         let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-narrow")
             .environmentObject(app)
         assertSnapshot(of: host(view, size: CGSize(width: 440, height: 360), appearance: .aqua), as: Self.strategy, named: "440pt")
+    }
+
+    /// Rendering noise gets a note explaining it and the precision that would pass.
+    @Test func compareImperceptibleDifference() {
+        UserDefaults.standard.set(CompareMode.difference.rawValue, forKey: "compareMode")
+        let app = AppModel(store: AppFixtures.store())
+        ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.renderingNoise), for: "compare-noise")
+        let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-noise")
+            .environmentObject(app)
+        assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
+    }
+
+    /// ⇧⌘0 frames the changed pixels (here: only the button changed colour).
+    @Test func compareZoomToChange() {
+        UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+        let app = AppModel(store: AppFixtures.store())
+        ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.badged), for: "compare-zoom-change")
+        let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom-change")
+            .environmentObject(app)
+        let hosted = host(view, size: CGSize(width: 820, height: 480), appearance: .aqua)
+        app.zoomToChangeRequest += 1
+        settle(hosted)
+        #expect(app.viewport.scale > 2)
+        assertSnapshot(of: hosted, as: Self.strategy)
+    }
+
+    /// The readout shown while hovering: a pixel of the button that changed colour.
+    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+    func pixelReadout(appearance: NSAppearance.Name) {
+        let view = PixelReadout(probe: PixelProbe(x: 60, y: 175),
+                                before: PixelImage(data: AppFixtures.reference), after: PixelImage(data: AppFixtures.actual),
+                                beforeLabel: "Reference", afterLabel: "Actual")
+            .padding()
+        assertSnapshot(of: host(view, size: CGSize(width: 480, height: 64), appearance: appearance), as: Self.strategy,
+                       named: appearance == .darkAqua ? "dark" : "light")
+    }
+
+    /// Flaky pattern, then the same with Differentiate Without Color: failures hollow, mixed half filled.
+    @Test(arguments: [false, true])
+    func historyStrip(withoutColor: Bool) {
+        let points = AppFixtures.timeline([.passed, .failed, .passed, .mixed, .failed, .passed])
+        let view = HistoryStrip(points: points, size: .regular, differentiateWithoutColor: withoutColor)
+            .padding()
+        assertSnapshot(of: host(view, size: CGSize(width: 120, height: 48), appearance: .aqua), as: Self.strategy,
+                       named: withoutColor ? "shapes" : "color")
     }
 
     @Test func compareZoomedIn() {

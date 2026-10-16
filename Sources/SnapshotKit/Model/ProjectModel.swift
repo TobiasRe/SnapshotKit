@@ -2,6 +2,13 @@ import AppKit
 import Foundation
 import SnapshotKitCore
 
+/// What the Run tab shows under its header.
+enum RunPane: String, CaseIterable, Identifiable {
+    case results = "Results"
+    case output = "Output"
+    var id: String { rawValue }
+}
+
 enum ProjectTab: String, CaseIterable, Identifiable {
     case run = "Run"
     case failures = "Failures"
@@ -35,6 +42,8 @@ struct FailureItem: Identifiable, Hashable {
     var referencePaths: [String]
     var verdict: FlakeVerdict?
     var historyFlaky: FlakySignal?
+    /// This test's results in recent recorded runs, oldest first.
+    var timeline: [HistoryPoint] = []
     var id: String { suite.identifier + "/" + test.name }
 }
 
@@ -93,6 +102,12 @@ final class ProjectModel: ObservableObject {
     @Published var selectedFailureID: String?
     @Published private(set) var flakeResults: [FlakeResult] = []
     @Published private(set) var historyFlaky: [FlakySignal] = []
+    /// What kind of difference each failure is (first repetition), computed in the background.
+    @Published private(set) var diagnoses: [String: DiffDiagnosis] = [:]
+    private var diagnoseTask: Task<Void, Never>?
+    /// Output while running, results once there are some.
+    @Published var runPane = RunPane.results
+    @Published private(set) var history: [RunRecord] = []
 
     // Changes
     @Published private(set) var changeSet: SnapshotChangeSet?
@@ -101,6 +116,12 @@ final class ProjectModel: ObservableObject {
     @Published var changeKinds = Set(SnapshotChangeKind.allCases)
     @Published var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
     @Published var selectedChangeID: String?
+    /// Changes marked as viewed whose file hasn't changed since.
+    @Published private(set) var viewedChanges: Set<String> = []
+    @Published var hideViewed = false
+    /// What kind of difference each change is (base vs working tree), computed in the background.
+    @Published private(set) var changeDiagnoses: [String: DiffDiagnosis] = [:]
+    private var changeDiagnoseTask: Task<Void, Never>?
     @Published private(set) var isLoadingChanges = false
 
     private var cancelAction: (() -> Void)?
@@ -143,7 +164,7 @@ final class ProjectModel: ObservableObject {
                     branches: ProjectModel.branchList(git),
                     context: context,
                     modules: (try? context.get())?.modules() ?? [],
-                    flaky: RunHistory.flakySignals(RunHistory(repository: url).load())
+                    history: RunHistory(repository: url).load()
                 )
             }.value
             // A newer reload (e.g. a quick second settings change) wins.
@@ -151,7 +172,7 @@ final class ProjectModel: ObservableObject {
             currentBranch = loaded.branch
             branches = loaded.branches
             modules = loaded.modules
-            historyFlaky = loaded.flaky
+            setHistory(loaded.history)
             switch loaded.context {
             case .success(let ctx):
                 context = ctx
@@ -231,11 +252,18 @@ final class ProjectModel: ObservableObject {
         isLoadingChanges = true
         let repo = project.url, against = diffBase
         Task {
-            let result = await Task.detached { Result { try Git(root: repo).snapshotChanges(baseBranch: base, against: against) } }.value
+            let result = await Task.detached {
+                Result {
+                    let set = try Git(root: repo).snapshotChanges(baseBranch: base, against: against)
+                    return (set, ReviewMarks(repository: repo).viewed(in: set.changes))
+                }
+            }.value
             isLoadingChanges = false
             switch result {
-            case .success(let set):
+            case .success(let (set, viewed)):
                 changeSet = set
+                viewedChanges = viewed
+                diagnoseChanges(set)
                 changesError = nil
                 if selectedChangeID == nil || !set.changes.contains(where: { $0.id == selectedChangeID }) {
                     selectedChangeID = filteredChanges.first?.id
@@ -248,7 +276,29 @@ final class ProjectModel: ObservableObject {
     }
 
     var filteredChanges: [SnapshotChange] {
-        SnapshotChangeSet.filter(changeSet?.changes ?? [], text: changeFilter, kinds: changeKinds)
+        let changes = SnapshotChangeSet.filter(changeSet?.changes ?? [], text: changeFilter, kinds: changeKinds)
+        return hideViewed ? changes.filter { !viewedChanges.contains($0.id) } : changes
+    }
+
+    /// Shows a test from the run results on the Failures tab.
+    func showFailure(_ id: String) {
+        guard failures.contains(where: { $0.id == id }) else { return }
+        selectedFailureID = id
+        tab = .failures
+    }
+
+    /// Marks a change as viewed (or not). Marking moves on to the next unviewed change, so a
+    /// review is one key press per snapshot.
+    func setViewed(_ viewed: Bool, for change: SnapshotChange) {
+        let order = filteredChanges
+        if viewed { viewedChanges.insert(change.id) } else { viewedChanges.remove(change.id) }
+        if fixtureImages == nil {
+            ReviewMarks(repository: project.url).set(viewed, for: change, keepingOnly: changeSet?.changes ?? [])
+        }
+        guard viewed, selectedChangeID == change.id else { return }
+        let start = order.firstIndex(of: change) ?? 0
+        let next = (order[(start + 1)...] + order[..<start]).first { !viewedChanges.contains($0.id) }
+        if let next { selectedChangeID = next.id } else if hideViewed { selectedChangeID = nil }
     }
 
     var selectedChange: SnapshotChange? {
@@ -291,6 +341,57 @@ final class ProjectModel: ObservableObject {
         refreshChanges()
     }
 
+    /// Uncommitted re-records with no visible difference to the base, per the diagnosis.
+    var invisibleUncommitted: [SnapshotChange] {
+        (changeSet?.changes ?? []).filter { $0.kind == .uncommitted && changeDiagnoses[$0.id]?.kind == .imperceptible }
+    }
+
+    /// Restores every uncommitted snapshot that looks the same as its committed version.
+    func discardInvisibleChanges() {
+        let repo = project.url, changes = changeSet?.changes ?? []
+        Task {
+            let result = await Task.detached { () -> Result<Int, Error> in
+                let git = Git(root: repo)
+                let invisible = git.invisibleUncommittedChanges(changes)
+                guard !invisible.isEmpty else { return .success(0) }
+                return Result {
+                    try git.run(["restore", "--source=HEAD", "--staged", "--worktree", "--"] + invisible.map(\.path))
+                    return invisible.count
+                }
+            }.value
+            ThumbnailCache.shared.removeAllObjects()
+            ComparePairCache.shared.removeAllObjects()
+            switch result {
+            case .success(let count):
+                lastMessage = count == 0 ? "No invisible re-records to discard."
+                    : "Discarded \(count) re-recorded snapshot\(count == 1 ? "" : "s") with no visible change."
+                lastMessageIsError = false
+            case .failure(let error):
+                lastMessage = "Could not discard: \(error.localizedDescription)"
+                lastMessageIsError = true
+            }
+            refreshChanges()
+        }
+    }
+
+    private func diagnoseChanges(_ set: SnapshotChangeSet) {
+        changeDiagnoseTask?.cancel()
+        let loaders = set.changes.prefix(300).filter { $0.kind != .new && $0.kind != .deleted }.map { ($0.id, imageLoader(for: $0)) }
+        changeDiagnoseTask = Task {
+            let result = await Task.detached {
+                var out: [String: DiffDiagnosis] = [:]
+                for (id, load) in loaders {
+                    let (base, current) = load()
+                    guard let a = base.flatMap(PixelImage.init(data:)), let b = current.flatMap(PixelImage.init(data:)) else { continue }
+                    out[id] = DiffDiagnosis(ImageDiff.compare(a, b))
+                }
+                return out
+            }.value
+            guard !Task.isCancelled else { return }
+            changeDiagnoses = result
+        }
+    }
+
     /// Whether `discard` applies: uncommitted edits and untracked new files only — never committed work.
     func canDiscard(_ change: SnapshotChange) -> Bool {
         switch change.kind {
@@ -312,6 +413,41 @@ final class ProjectModel: ObservableObject {
 
     var selectedFailure: FailureItem? { failures.first { $0.id == selectedFailureID } }
 
+    /// Diagnoses every failure's reference/actual pair off the main thread.
+    private func diagnoseFailures() {
+        diagnoseTask?.cancel()
+        let items = failures
+        diagnoseTask = Task {
+            let result = await Task.detached { Self.diagnose(items) }.value
+            guard !Task.isCancelled else { return }
+            diagnoses = result
+        }
+    }
+
+    nonisolated static func diagnose(_ items: [FailureItem]) -> [String: DiffDiagnosis] {
+        var out: [String: DiffDiagnosis] = [:]
+        for item in items {
+            guard let image = item.images.min(by: { $0.repetition < $1.repetition }),
+                  let ref = image.reference.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)),
+                  let act = image.failure.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)) else { continue }
+            out[item.id] = DiffDiagnosis(ImageDiff.compare(ref, act))
+        }
+        return out
+    }
+
+    /// Updates everything derived from the run history, including the failures' strips.
+    private func setHistory(_ records: [RunRecord]) {
+        history = records
+        historyFlaky = RunHistory.flakySignals(records)
+        let flaky = Dictionary(historyFlaky.map { ($0.test, $0) }, uniquingKeysWith: { a, _ in a })
+        failures = failures.map { item in
+            var item = item
+            item.historyFlaky = flaky[item.id]
+            item.timeline = RunHistory.timeline(for: item.id, in: records)
+            return item
+        }
+    }
+
     private func setFailures(suites: [SuiteResult], images: [SnapshotFailureImages], source: FailureSource) {
         let flaky = Dictionary(historyFlaky.map { ($0.test, $0) }, uniquingKeysWith: { a, _ in a })
         let verdicts = Dictionary(flakeResults.map { ($0.id, $0.verdict) }, uniquingKeysWith: { a, _ in a })
@@ -323,11 +459,13 @@ final class ProjectModel: ObservableObject {
                     images: images.filter { $0.testIdentifier == test.identifier },
                     referencePaths: test.failureMessages.flatMap { FailureAttachments.referencePaths(in: $0, repository: project.url) },
                     verdict: verdicts[suite.identifier + "/" + test.name],
-                    historyFlaky: flaky[suite.identifier + "/" + test.name]
+                    historyFlaky: flaky[suite.identifier + "/" + test.name],
+                    timeline: RunHistory.timeline(for: suite.identifier + "/" + test.name, in: history)
                 )
             }
         }
         failureSource = source
+        diagnoseFailures()
         if selectedFailureID == nil || !failures.contains(where: { $0.id == selectedFailureID }) {
             selectedFailureID = failures.first?.id
         }
@@ -372,6 +510,7 @@ final class ProjectModel: ObservableObject {
         operation = op
         startedAt = Date()
         stageLabel = op.label
+        runPane = .output
         phase = .preparing
         passed = 0; failed = 0; skipped = 0
         currentTest = nil
@@ -391,7 +530,8 @@ final class ProjectModel: ObservableObject {
         stageLabel = ""
         lastMessage = message
         lastMessageIsError = isError
-        historyFlaky = RunHistory.flakySignals(RunHistory(repository: project.url).load())
+        if lastResult?.summary?.suites.isEmpty == false { runPane = .results }
+        setHistory(RunHistory(repository: project.url).load())
         currentBranch = Git(root: project.url).currentBranch()
         refreshChanges()
         announce(isError: isError)
@@ -469,7 +609,7 @@ final class ProjectModel: ObservableObject {
         failed = result.failed
         skipped = result.skipped
         RunHistory(repository: project.url).append(RunRecord.make(kind: kind, host: result.host, repository: project.url, result: result))
-        historyFlaky = RunHistory.flakySignals(RunHistory(repository: project.url).load())
+        setHistory(RunHistory(repository: project.url).load())
         if kind == .run {
             LastRun(result: result, attachmentsDirectory: attachmentsDirectory).save(repository: project.url)
             lastFailingSuites = result.failingSuites
@@ -562,7 +702,7 @@ final class ProjectModel: ObservableObject {
 
     private func applyFlakeResult(_ result: TestRunResult, iterations: Int) {
         RunHistory(repository: project.url).append(RunRecord.make(kind: .flakeCheck, host: result.host, repository: project.url, result: result))
-        historyFlaky = RunHistory.flakySignals(RunHistory(repository: project.url).load())
+        setHistory(RunHistory(repository: project.url).load())
         guard let summary = result.summary else {
             finish(message: result.cancelled ? "Cancelled." : "Flakiness check produced no results.", isError: !result.cancelled)
             return
@@ -700,6 +840,7 @@ struct ProjectFixture {
     var historyFlaky: [FlakySignal] = []
     var changeSet: SnapshotChangeSet?
     var changeImages: [String: (Data?, Data?)] = [:]
+    var viewedChanges: Set<String> = []
 }
 
 extension ProjectModel {
@@ -724,6 +865,7 @@ extension ProjectModel {
         log = f.log
         recomputeVisibleLog()
         lastResult = f.lastResult
+        runPane = f.operation == nil ? .results : .output
         lastMessage = f.lastMessage
         lastMessageIsError = f.lastMessageIsError
         startedAt = f.startedAt
@@ -732,12 +874,19 @@ extension ProjectModel {
         flakeResults = f.flakeResults
         historyFlaky = f.historyFlaky
         failures = f.failures
+        diagnoses = Self.diagnose(f.failures)
         failureSource = f.failureSource
         selectedFailureID = f.failures.first?.id
         changeSet = f.changeSet
         changesError = f.changesError
         isLoadingChanges = false
         fixtureImages = f.changeImages
+        viewedChanges = f.viewedChanges
+        changeDiagnoses = Dictionary(uniqueKeysWithValues: (f.changeSet?.changes ?? []).compactMap { change -> (String, DiffDiagnosis)? in
+            guard let (a, b) = f.changeImages[change.path], let pa = a.flatMap(PixelImage.init(data:)),
+                  let pb = b.flatMap(PixelImage.init(data:)) else { return nil }
+            return (change.id, DiffDiagnosis(ImageDiff.compare(pa, pb)))
+        })
         selectedChangeID = filteredChanges.first?.id
     }
 }

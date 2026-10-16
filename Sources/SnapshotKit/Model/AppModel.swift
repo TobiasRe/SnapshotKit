@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var startupNotice: String?
     /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
     @Published var viewport = Viewport()
+    /// Bumped by View ▸ Zoom to Change; the visible compare view frames the changed pixels.
+    @Published var zoomToChangeRequest = 0
     /// Failing test count per project path, from each repository's last run.
     @Published var failingCounts: [String: Int] = [:]
 

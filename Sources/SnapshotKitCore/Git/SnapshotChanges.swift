@@ -159,4 +159,16 @@ extension Git {
     public func currentImage(for change: SnapshotChange) -> Data? {
         change.kind == .deleted ? nil : try? Data(contentsOf: root.appendingPathComponent(change.path))
     }
+
+    /// Uncommitted snapshot edits that look the same as the committed version: re-records that
+    /// only picked up rendering noise. Discarding them keeps a merge request free of churn.
+    public func invisibleUncommittedChanges(_ changes: [SnapshotChange]) -> [SnapshotChange] {
+        changes.filter { change in
+            guard change.kind == .uncommitted,
+                  let committed = show(revision: "HEAD", path: change.path).flatMap(PixelImage.init(data:)),
+                  let current = currentImage(for: change).flatMap(PixelImage.init(data:)) else { return false }
+            let kind = DiffDiagnosis(ImageDiff.compare(committed, current)).kind
+            return kind == .imperceptible || kind == .identical
+        }
+    }
 }

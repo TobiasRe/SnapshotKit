@@ -119,3 +119,47 @@ func png(width: Int, height: Int, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Data {
     for _ in 0..<(width * height) { pixels += [rgba.0, rgba.1, rgba.2, rgba.3] }
     return PixelImage(width: width, height: height, pixels: pixels).pngData()!
 }
+
+@Suite struct ReviewMarksTests {
+    @Test func marksSurviveUntilTheSnapshotChangesAgain() throws {
+        let repo = try TempRepo()
+        let path = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
+        try repo.write(path, png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        let card = SnapshotChange(path: path, kind: .new)
+        let gone = SnapshotChange(path: "Tests/AppTests/__Snapshots__/CardTests/old.1.png", kind: .deleted)
+        let marks = ReviewMarks(repository: repo.url)
+
+        #expect(marks.viewed(in: [card, gone]).isEmpty)
+        marks.set(true, for: card, keepingOnly: [card, gone])
+        marks.set(true, for: gone, keepingOnly: [card, gone])
+        #expect(marks.viewed(in: [card, gone]) == [card.id, gone.id])
+
+        // Re-recorded with different pixels: needs another look.
+        try repo.write(path, png(width: 2, height: 2, rgba: (0, 0, 255, 255)))
+        #expect(marks.viewed(in: [card, gone]) == [gone.id])
+
+        marks.set(false, for: gone, keepingOnly: [card, gone])
+        #expect(marks.viewed(in: [card, gone]).isEmpty)
+
+        // Marks for snapshots that are no longer changed are dropped.
+        marks.set(true, for: card, keepingOnly: [card])
+        #expect(marks.load().keys.sorted() == [path])
+    }
+}
+
+@Suite struct InvisibleChangesTests {
+    @Test func findsReRecordsThatOnlyPickedUpNoise() throws {
+        let repo = try TempRepo()
+        let dir = "Tests/AppTests/__Snapshots__/CardTests"
+        try repo.write("\(dir)/noise.1.png", png(width: 8, height: 8, rgba: (200, 200, 200, 255)))
+        try repo.write("\(dir)/real.1.png", png(width: 8, height: 8, rgba: (200, 200, 200, 255)))
+        try repo.commitAll("base")
+        try repo.write("\(dir)/noise.1.png", png(width: 8, height: 8, rgba: (201, 200, 199, 255)))
+        try repo.write("\(dir)/real.1.png", png(width: 8, height: 8, rgba: (255, 0, 0, 255)))
+
+        let changes = [SnapshotChange(path: "\(dir)/noise.1.png", kind: .uncommitted),
+                       SnapshotChange(path: "\(dir)/real.1.png", kind: .uncommitted),
+                       SnapshotChange(path: "\(dir)/added.1.png", kind: .new)]
+        #expect(repo.git.invisibleUncommittedChanges(changes).map(\.fileName) == ["noise.1.png"])
+    }
+}

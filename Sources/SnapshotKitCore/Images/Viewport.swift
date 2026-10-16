@@ -37,6 +37,46 @@ public struct Viewport: Equatable, Sendable {
 
     public mutating func reset() { self = Viewport() }
 
+    // MARK: Placing an image in a canvas
+
+    /// Room kept free around a fitted image for the floating captions and control bar.
+    public static let fitInsets = CGSize(width: 48, height: 120)
+    /// The image is centred above the control bar rather than in the whole canvas.
+    public static let bottomBias: CGFloat = 40
+
+    /// Where an image of `imageSize` pixels is drawn in a canvas of `canvas` points.
+    public func imageRect(imageSize: CGSize, canvas: CGSize) -> CGRect {
+        let fit = Self.fitScale(image: imageSize, in: CGSize(width: canvas.width - Self.fitInsets.width,
+                                                             height: canvas.height - Self.fitInsets.height))
+        let s = fit * scale
+        let drawn = CGSize(width: imageSize.width * s, height: imageSize.height * s)
+        return CGRect(x: canvas.width / 2 + offset.width - drawn.width / 2,
+                      y: (canvas.height - Self.bottomBias) / 2 + offset.height - drawn.height / 2,
+                      width: drawn.width, height: drawn.height)
+    }
+
+    /// The image pixel under `point` (canvas points, top-left origin), or nil outside the image.
+    public func pixel(at point: CGPoint, imageSize: CGSize, canvas: CGSize) -> (x: Int, y: Int)? {
+        let rect = imageRect(imageSize: imageSize, canvas: canvas)
+        guard rect.width > 0, rect.contains(point) else { return nil }
+        let x = Int((point.x - rect.minX) / rect.width * imageSize.width)
+        let y = Int((point.y - rect.minY) / rect.height * imageSize.height)
+        return (min(x, Int(imageSize.width) - 1), min(y, Int(imageSize.height) - 1))
+    }
+
+    /// A viewport that centres `region` (image pixels) and zooms so it fills about `fill` of the
+    /// canvas. Never zooms out below fit: a change spanning the whole image just fits.
+    public static func focusing(on region: CGRect, imageSize: CGSize, canvas: CGSize, fill: CGFloat = 0.5) -> Viewport {
+        let fit = fitScale(image: imageSize, in: CGSize(width: canvas.width - fitInsets.width,
+                                                        height: canvas.height - fitInsets.height))
+        let available = CGSize(width: canvas.width - fitInsets.width, height: canvas.height - fitInsets.height)
+        let regionScale = min(available.width * fill / max(region.width, 1), available.height * fill / max(region.height, 1))
+        let zoom = min(max(regionScale / fit, 1), maxScale)
+        let s = fit * zoom
+        return Viewport(scale: zoom, offset: CGSize(width: s * (imageSize.width / 2 - region.midX),
+                                                    height: s * (imageSize.height / 2 - region.midY)))
+    }
+
     /// Scale at which an image of `imageSize` fits entirely in `viewSize`.
     public static func fitScale(image imageSize: CGSize, in viewSize: CGSize) -> CGFloat {
         guard imageSize.width > 0, imageSize.height > 0, viewSize.width > 0, viewSize.height > 0 else { return 1 }

@@ -77,7 +77,7 @@ struct FailuresTab: View {
             ForEach(bySuite.keys.sorted(), id: \.self) { suite in
                 Section {
                     ForEach(bySuite[suite] ?? []) { item in
-                        FailureRow(item: item, repositoryURL: project.project.url)
+                        FailureRow(item: item, repositoryURL: project.project.url, diagnosis: project.diagnoses[item.id])
                             .tag(item.id)
                             .contextMenu { actions(for: item) }
                     }
@@ -137,6 +137,15 @@ struct FailuresTab: View {
                         .lineLimit(2)
                         .textSelection(.enabled)
                     hint(item)
+                    if item.timeline.count > 1 {
+                        HStack(spacing: DS.Space.s) {
+                            Text("Recent runs").foregroundStyle(.secondary)
+                            HistoryStrip(points: item.timeline, size: .regular)
+                            Text(HistoryStrip.summary(item.timeline)).foregroundStyle(.secondary)
+                        }
+                        .font(DS.Font.caption)
+                        .padding(.top, DS.Space.xxs)
+                    }
                 }
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,6 +198,9 @@ struct FailuresTab: View {
         case .flaky:
             Label("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.", systemImage: "lightbulb")
                 .foregroundStyle(.orange)
+        case .alwaysFails where project.diagnoses[item.id]?.kind == .imperceptible:
+            Label("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.", systemImage: "lightbulb")
+                .foregroundStyle(DS.Status.flaky)
         case .alwaysFails:
             Label("Fails every time: re-record if the change is intended, otherwise it is a regression.", systemImage: "lightbulb")
                 .foregroundStyle(.secondary)
@@ -231,6 +243,7 @@ struct FailuresTab: View {
 struct FailureRow: View {
     var item: FailureItem
     var repositoryURL: URL
+    var diagnosis: DiffDiagnosis?
 
     var body: some View {
         let failure = item.images.first?.failure
@@ -246,18 +259,120 @@ struct FailureRow: View {
                     if item.test.repetitions.count > 1 {
                         Chip(text: "\(item.test.failedRepetitions)/\(item.test.repetitions.count) runs failed", color: .secondary)
                     }
-                    if let flaky = item.historyFlaky {
-                        Chip(text: "Flaky in history · \(flaky.passes)/\(flaky.passes + flaky.failures) passed", color: .orange)
+                    if item.historyFlaky != nil {
+                        Chip(text: "Flaky in history", color: DS.Status.flaky)
                     }
-                    if item.verdict == nil && item.test.repetitions.count <= 1 && item.historyFlaky == nil {
+                    if let kind = diagnosis.flatMap(DiagnosisChip.init) {
+                        kind
+                    } else if item.verdict == nil && item.test.repetitions.count <= 1 && item.historyFlaky == nil {
                         Text(item.images.isEmpty ? "No images" : "Snapshot mismatch")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
+            Spacer(minLength: DS.Space.s)
+            if item.timeline.count > 1 {
+                HistoryStrip(points: Array(item.timeline.suffix(8)), size: .compact)
+            }
         }
         .padding(.vertical, DS.Space.xxs)
+    }
+}
+
+/// The kind of difference, for the ones that aren't plainly visible.
+struct DiagnosisChip: View {
+    var label: String
+    var help: String
+
+    init?(_ diagnosis: DiffDiagnosis) {
+        switch diagnosis.kind {
+        case .imperceptible: label = "Invisible"
+        case .tiny: label = "Few pixels"
+        case .sizeChanged: label = "Size changed"
+        case .identical, .visible: return nil
+        }
+        help = diagnosis.summary
+    }
+
+    var body: some View {
+        Chip(text: label, color: DS.Status.changed).help(help)
+    }
+}
+
+/// One mark per recent run of a test, oldest on the left: passed, failed, or both (repetitions
+/// disagreed). A flaky test reads as a broken pattern; a regression as a clean switch to red.
+struct HistoryStrip: View {
+    enum Size { case compact, regular }
+    var points: [HistoryPoint]
+    var size: Size
+    /// Overrides the system setting (for tests).
+    var differentiateWithoutColor: Bool?
+
+    var body: some View {
+        let d: CGFloat = size == .compact ? 6 : 9
+        HStack(spacing: size == .compact ? 2 : 3) {
+            ForEach(points) { point in
+                mark(point.result, width: d, height: d * (size == .compact ? 2 : 1.6))
+                    .help(Self.describe(point))
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Recent runs")
+        .accessibilityValue(Self.summary(points))
+    }
+
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
+
+    /// Filled for passed. With Differentiate Without Color on, failures are hollow and mixed
+    /// runs half filled, so the pattern doesn't depend on telling red from green.
+    @ViewBuilder
+    private func mark(_ result: HistoryPoint.Result, width: CGFloat, height: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: width / 3, style: .continuous)
+        let c = color(result)
+        let withoutColor = differentiateWithoutColor ?? self.withoutColor
+        if withoutColor && result == .failed {
+            shape.strokeBorder(c, lineWidth: 1.5).frame(width: width, height: height)
+        } else if withoutColor && result == .mixed {
+            shape.strokeBorder(c, lineWidth: 1.5)
+                .background(alignment: .bottom) { c.frame(height: height / 2) }
+                .clipShape(shape)
+                .frame(width: width, height: height)
+        } else {
+            shape.fill(c).frame(width: width, height: height)
+        }
+    }
+
+    private func color(_ result: HistoryPoint.Result) -> Color {
+        switch result {
+        case .passed: DS.Status.passed
+        case .failed: DS.Status.failed
+        case .mixed: DS.Status.flaky
+        }
+    }
+
+    static func summary(_ points: [HistoryPoint]) -> String {
+        let passed = points.filter { $0.result == .passed }.count
+        let mixed = points.filter { $0.result == .mixed }.count
+        var text = "\(passed) of \(points.count) passed"
+        if mixed > 0 { text += ", \(mixed) mixed" }
+        return text
+    }
+
+    static func describe(_ point: HistoryPoint) -> String {
+        let result = switch point.result {
+        case .passed: "Passed"
+        case .failed: "Failed"
+        case .mixed: "Passed and failed"
+        }
+        let kind = switch point.kind {
+        case .flakeCheck: " (flakiness check)"
+        case .verify: " (verify)"
+        case .imported: " (imported)"
+        case .run, .record: ""
+        }
+        let commit = point.commit.map { " · " + $0.prefix(7) } ?? ""
+        return "\(result)\(kind) · \(point.host)\(commit) · \(point.date.formatted(date: .abbreviated, time: .shortened))"
     }
 }
 

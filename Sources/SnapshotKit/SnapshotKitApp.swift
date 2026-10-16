@@ -93,6 +93,7 @@ struct SnapshotKitCommands: Commands {
                 Text("Side by Side").tag(CompareMode.sideBySide.rawValue).keyboardShortcut("1")
                 Text("Slider").tag(CompareMode.slider.rawValue).keyboardShortcut("2")
                 Text("Difference").tag(CompareMode.difference.rawValue).keyboardShortcut("3")
+                Text("Toggle").tag(CompareMode.toggle.rawValue).keyboardShortcut("4")
             }
             .pickerStyle(.inline)
             Divider()
@@ -102,6 +103,8 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("-")
             Button("Actual Size / Fit") { model.viewport.reset() }
                 .keyboardShortcut("0")
+            Button("Zoom to Change") { model.zoomToChangeRequest += 1 }
+                .keyboardShortcut("0", modifiers: [.command, .shift])
             Divider()
         }
     }
