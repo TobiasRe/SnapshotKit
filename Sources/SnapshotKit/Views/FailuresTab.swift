@@ -212,6 +212,7 @@ struct FailuresTab: View {
             .disabled(project.isRunning || project.environment == nil)
         Divider()
         if let reference = item.referencePaths.first {
+            Button("Open Test in Xcode") { project.openTestInXcode(SnapshotFile(path: reference, byteSize: 0)) }
             Button("Show Reference in Library") { project.showInLibrary(path: reference) }
                 .disabled(!project.isInLibrary(reference))
             Button("Reveal Reference in Finder") {

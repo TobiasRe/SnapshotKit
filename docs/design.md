@@ -56,6 +56,13 @@ can be followed between these views, and re-recording is available wherever a sn
 6. **Identifiers are code.** Paths, commands, suite identifiers and logs use SF Mono. Everything
    people read uses SF Pro text styles.
 7. **Calm motion.** 150 ms ease-out (`DS.motion`), no springs and no bounces.
+8. **Say it once, then offer the next step.** An empty list explains itself; the pane beside it stays blank
+   rather than repeating it, and offers the one action that helps (Run Tests to record the first
+   snapshots). The outcome of a run floats as a notice over the image area, with the next step as a
+   button (Review Changes, Show Failures); information fades, errors stay until closed. Zero counts and
+   footers of zeros are left out.
+9. **Always current.** Snapshot files are watched, so a re-record from Xcode or the CLI shows up without
+   a refresh; commits and branch switches are picked up when the app becomes active.
 
 ## Tokens
 
@@ -88,7 +95,8 @@ can be followed between these views, and re-recording is available wherever a sn
 - `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
 - `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
   selection and the section headers carry the structure.
-- `selectableRow(_:)`: a selected list row is `DS.Surface.selection` (the text colour at 8%), not the
+- `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%); a selected list row is
+  `DS.Surface.selection` (the text colour at 8%), not the
   system's grey or accent block; the list keeps its selection, keyboard navigation and accessibility. The
   sidebar keeps the system selection, which on its material is already as quiet.
 - `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
@@ -134,4 +142,6 @@ can be followed between these views, and re-recording is available wherever a sn
 - Don't paint behind the sidebar or toolbar, and don't put glass inside lists or forms.
 - Don't use more than one prominent button per region, and don't use decorative colour or gradients.
 - Don't let a bar's height depend on its content: use `DS.Bar`, so neighbouring panes stay aligned.
+- Don't let a control give way to a title: buttons keep their size (`fixedSize`) and titles truncate.
+- Don't show the same empty state twice, or a count of zero.
 - Don't add new spacing or radius values. If one seems necessary, add it here first.

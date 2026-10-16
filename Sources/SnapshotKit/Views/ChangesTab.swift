@@ -98,6 +98,7 @@ struct ChangesTab: View {
                 .disabled(project.isRunning || project.environment == nil)
             Button("Show in Library") { project.showInLibrary(path: change.path) }
                 .disabled(!project.isInLibrary(change.path))
+            Button("Open Test in Xcode") { project.openTestInXcode(change.file) }
             Divider()
             Button("Open in Default App") { NSWorkspace.shared.open(project.fileURL(for: change)) }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.fileURL(for: change)]) }
@@ -125,7 +126,7 @@ struct ChangesTab: View {
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
-                SearchField(prompt: "Filter suites and tests", text: $project.changeFilter)
+                SearchField(prompt: "Filter suites and tests", text: $project.changeFilter, focusRequest: project.focusFilterRequest)
                 GlassIconButton(title: "Refresh", symbol: "arrow.clockwise", help: "Compare again (also happens when you come back to the app)") {
                     project.refreshChanges()
                 }
@@ -300,6 +301,13 @@ struct ChangesTab: View {
                 return .handled
             }
             .quickLookPreview($quickLookURL)
+            // ⌘C copies the selected snapshot as it is now (a deleted one as it was).
+            .onCopyCommand {
+                guard let change = project.selectedChange else { return [] }
+                if change.kind != .deleted, let item = NSItemProvider(contentsOf: project.fileURL(for: change)) { return [item] }
+                guard let data = project.imageLoader(for: change)().0 else { return [] }
+                return [NSItemProvider(item: data as NSData, typeIdentifier: "public.png")]
+            }
             .onKeyPress("v") {
                 guard let change = project.selectedChange else { return .ignored }
                 project.setViewed(!project.viewedChanges.contains(change.id), for: change)
@@ -468,12 +476,22 @@ struct DetailInfoRow<Content: View>: View {
 struct SearchField: View {
     var prompt: String
     @Binding var text: String
+    /// Bumped by ⌘F (Filter…) to put the cursor here.
+    var focusRequest = 0
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
             TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
+                .focused($focused)
+                .onChange(of: focusRequest) { _, _ in focused = true }
+                .onKeyPress(.escape) {
+                    // Escape clears the filter first, then leaves the field.
+                    if text.isEmpty { focused = false } else { text = "" }
+                    return .handled
+                }
                 .accessibilityLabel(prompt)
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }

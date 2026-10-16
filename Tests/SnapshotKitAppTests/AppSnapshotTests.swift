@@ -253,13 +253,23 @@ extension AppUITests {
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
         }
 
-        @Test func settings() {
+        @Test func commandPaletteDark() {
+            let (app, _) = makeApp(.failedRun)
+            QuickSwitcherQuery.preset = ""
+            defer { QuickSwitcherQuery.preset = nil }
+            let view = QuickSwitcherView().environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua), as: Self.strategy)
+        }
+
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func settings(appearance: NSAppearance.Name) {
             let store = AppFixtures.store()
             store.addScanRoot("/work")
             store.addScanRoot("/Volumes/Projects/ios")
             let app = AppModel(store: store)
             let view = SettingsView().environmentObject(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 520, height: 500), appearance: .aqua), as: Self.strategy)
+            assertSnapshot(of: host(view, size: CGSize(width: 520, height: 500), appearance: appearance), as: Self.strategy,
+                           named: appearance == .darkAqua ? "dark" : "light")
         }
 
         @Test func welcome() {

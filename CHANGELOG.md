@@ -16,7 +16,8 @@ snapshot tests built with swift-snapshot-testing.
 ### Review
 - Every snapshot PNG that differs from the base branch (committed, uncommitted, new, deleted), against the
   merge-base or the branch tip, with side-by-side, slider, difference and toggle views.
-- *Viewed* marks like a code review, and one-step discard of re-records that only picked up rendering noise.
+- *Viewed* marks like a code review (one at a time with V, or all at once), and one-step discard of re-records
+  that only picked up rendering noise. Each change names the commit that last touched it.
 
 ### Update
 - Re-record any test, suite or filtered set of snapshots, or all failing tests. The record trait is patched
@@ -26,7 +27,8 @@ snapshot tests built with swift-snapshot-testing.
 
 ### Manage and share
 - Orphaned snapshots (their test no longer exists) are found and can be moved to the Trash.
-- Copy a snapshot, or a side-by-side image of before, after and the difference; drag snapshots out.
+- Copy a snapshot (⌘C), or a side-by-side image of before, after and the difference; drag snapshots out;
+  Quick Look with Space.
 
 ### Failing and flaky tests
 - Reference vs. actual vs. difference for the last run or an `.xcresult` from CI.
@@ -41,8 +43,7 @@ snapshot tests built with swift-snapshot-testing.
 - Streams output with live counts; a results list by suite afterwards. Runs on a remote Mac over SSH too.
 
 ### Projects and tools
-- Snapshots written outside the app (a re-record from Xcode or the CLI) appear while the window is open; Space
-  opens the selected snapshot in Quick Look.
+- Snapshots written outside the app (a re-record from Xcode or the CLI) appear while the window is open.
 - Scan folders, pins, recents, per-project base branch, and a ⌘K palette for projects and commands.
 - An optional menu bar item with run progress (a pie and a done/total count), the failing count, Cancel,
   and one-click access to failing, pinned and recent projects.

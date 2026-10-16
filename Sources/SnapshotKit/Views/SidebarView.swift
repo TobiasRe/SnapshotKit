@@ -65,13 +65,27 @@ struct SidebarView: View {
     private func rows(_ projects: [Project]) -> some View {
         ForEach(projects) { project in
             Label {
-                Text(project.name).fontWeight(.medium).lineLimit(1)
+                HStack(spacing: DS.Space.s) {
+                    Text(project.name).fontWeight(.medium).lineLimit(1)
+                    Spacer(minLength: DS.Space.xs)
+                    // A failing count is status, so it carries the failed colour (the system
+                    // badge would be a plain grey number).
+                    if let failing = model.failingCounts[project.path], failing > 0 {
+                        HStack(spacing: DS.Space.xs) {
+                            Circle().fill(DS.Status.failed).frame(width: 6, height: 6)
+                            Text("\(failing)").monospacedDigit()
+                        }
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(failing) failing")
+                    }
+                }
             } icon: {
                 ProjectMonogram(name: project.name)
             }
             // The sidebar keeps the system's selection: on its material it is already as quiet
             // as the lists' (about +15 levels in dark, like Linear's).
-            .badge(model.failingCounts[project.path] ?? 0)
             .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
                   + ((model.failingCounts[project.path]).map { " — \($0) failing in the last run" } ?? ""))
             .tag(project.path)

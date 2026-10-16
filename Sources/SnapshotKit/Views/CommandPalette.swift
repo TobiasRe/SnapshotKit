@@ -61,6 +61,9 @@ extension PaletteCommand {
         if project.canReRecordSelection {
             commands.append(.init(title: "Re-record Selected Test", symbol: "camera", shortcut: "⇧⌘R") { project.reRecordSelection() })
         }
+        if let file = project.selectedSnapshotFile {
+            commands.append(.init(title: "Open Test in Xcode", symbol: "hammer", shortcut: "⌥⌘O") { project.openTestInXcode(file) })
+        }
         if idle && !project.failingSuites.isEmpty {
             commands.append(.init(title: "Re-record Failing Tests", symbol: "camera.badge.ellipsis", shortcut: "⌥⇧⌘R") { project.reRecordFailed() })
             commands.append(.init(title: "Check Flakiness of Failed Tests", symbol: "waveform.path.ecg", shortcut: "⌥⌘R") { project.checkFlakiness() })

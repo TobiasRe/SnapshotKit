@@ -78,7 +78,7 @@ struct SnapshotsTab: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
-                SearchField(prompt: "Filter snapshots", text: $project.libraryFilter)
+                SearchField(prompt: "Filter snapshots", text: $project.libraryFilter, focusRequest: project.focusFilterRequest)
                     .help("Filter by module, suite, test or variant; every word must match")
                     // In the full-width grid a window-wide field reads as a page title.
                     .frame(maxWidth: 420)
@@ -234,6 +234,12 @@ struct SnapshotsTab: View {
                 return .handled
             }
             .quickLookPreview($quickLookURL)
+            // ⌘C copies the selected snapshot (image and file), as in Finder.
+            .onCopyCommand {
+                guard let file = project.selectedSnapshot,
+                      let item = NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) else { return [] }
+                return [item]
+            }
             .overlay {
                 if tree.isEmpty && !project.libraryFilter.isEmpty {
                     ContentUnavailableView.search(text: project.libraryFilter)
@@ -359,6 +365,8 @@ struct SnapshotActions: View {
         Button("Re-record Suite \(file.suite)") { project.reRecord([file], granularity: .suites) }
             .disabled(disabled)
         Divider()
+        Button("Open Test in Xcode") { project.openTestInXcode(file) }
+            .disabled(project.orphanIDs.contains(file.id))
         Button("Open in Default App") { NSWorkspace.shared.open(url) }
         Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         Divider()
@@ -774,8 +782,7 @@ struct SnapshotGrid: View {
         .frame(width: Self.tile.width, alignment: .leading)
         // Selected like a list row: a quiet fill behind the whole tile, not an accent frame.
         .padding(DS.Space.s)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
-            .fill(selected ? DS.Surface.selection : .clear))
+        .selectableTile(selected)
         .contentShape(Rectangle())
         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
         .onTapGesture(count: 2) { open(file) }
