@@ -37,6 +37,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var lastProject: String?
     public var flakeIterations: Int = 5
     public var verifyAfterRecord: Bool = true
+    /// Show SnapshotKit in the menu bar, for run progress and quick access. Off unless chosen.
+    public var showMenuBarItem: Bool = false
 
     public init() {}
 
@@ -52,6 +54,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         lastProject = try c.decodeIfPresent(String.self, forKey: .lastProject)
         flakeIterations = try c.decodeIfPresent(Int.self, forKey: .flakeIterations) ?? d.flakeIterations
         verifyAfterRecord = try c.decodeIfPresent(Bool.self, forKey: .verifyAfterRecord) ?? d.verifyAfterRecord
+        showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? d.showMenuBarItem
     }
 }
 

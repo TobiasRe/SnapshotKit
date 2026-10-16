@@ -760,7 +760,14 @@ final class ProjectModel: ObservableObject {
         visibleLog = []
         lastMessage = nil
         lastMessageIsError = false
+        NotificationCenter.default.post(name: AppModel.runStarted, object: nil)
         return true
+    }
+
+    /// Completed share of the tests, when the total is known (from the last run of the same scope).
+    var progressFraction: Double? {
+        guard isRunning, phase == .testing, let total = expectedTotal, total > 0 else { return nil }
+        return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
     private func finish(message: String?, isError: Bool = false) {

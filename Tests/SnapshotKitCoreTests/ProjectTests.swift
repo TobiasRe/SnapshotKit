@@ -118,3 +118,15 @@ import Testing
         #expect(LastRun.load(repository: repo.url)?.failed == 1)
     }
 }
+
+@Suite struct MenuBarSettingTests {
+    @Test func offUnlessChosenAndKeptWhenSaved() throws {
+        let decoder = JSONDecoder()
+        #expect(try decoder.decode(AppSettings.self, from: Data("{}".utf8)).showMenuBarItem == false)
+        var settings = try decoder.decode(AppSettings.self, from: Data(#"{"showMenuBarItem": true}"#.utf8))
+        #expect(settings.showMenuBarItem)
+        settings.showMenuBarItem = false
+        let roundTrip = try decoder.decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        #expect(roundTrip.showMenuBarItem == false)
+    }
+}

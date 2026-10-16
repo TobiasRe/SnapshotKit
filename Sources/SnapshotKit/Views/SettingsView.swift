@@ -6,9 +6,20 @@ struct SettingsView: View {
     @State private var roots: [String] = []
     @State private var iterations = 5
     @State private var verify = true
+    @State private var menuBar = false
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Show in menu bar", isOn: $menuBar)
+                    .onChange(of: menuBar) { _, v in model.showMenuBarItem = v }
+            } header: {
+                Text("General")
+            } footer: {
+                Text("Run progress and quick access to recent projects. SnapshotKit keeps running when its window is closed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("Scan folders") {
                 List {
                     ForEach(roots, id: \.self) { root in
@@ -42,7 +53,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 420)
+        .frame(width: 520, height: 500)
         .onAppear(perform: reload)
     }
 
@@ -50,5 +61,6 @@ struct SettingsView: View {
         roots = model.store.settings.scanRoots
         iterations = model.store.settings.flakeIterations
         verify = model.store.settings.verifyAfterRecord
+        menuBar = model.showMenuBarItem
     }
 }

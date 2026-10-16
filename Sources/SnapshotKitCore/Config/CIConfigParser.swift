@@ -234,7 +234,7 @@ public struct CIConfigParser {
         let patterns = [
             #"xcode-version:\s*['"]?([0-9]+(?:\.[0-9]+)*)"#,
             #"Xcode[_-]?([0-9]+(?:\.[0-9]+)*)\.app"#,
-            #"\b[A-Z_]*XCODE[A-Z_]*VERSION[A-Z_]*\s*[:=]\s*['"]?([0-9]+(?:\.[0-9]+)*)"#,
+            #"\b[A-Z_]*XCODE[A-Z_]*VERSION[A-Z_]*\s*[:=]\s*['"]?(?:Xcode[_ -]?)?([0-9]+(?:\.[0-9]+)*)"#,
             #"\bxcodes\s+(?:select|use|install)\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
             #"\bxcversion\s+select\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
             #"image:\s*\S*xcode[:_-]([0-9]+(?:\.[0-9]+)*)"#,
@@ -347,7 +347,31 @@ public struct CIConfigParser {
                 config.sources[SnapshotConfig.Field.skipTesting.rawValue] = source
             }
         } else if !documents.isEmpty {
-            out.notes.append("No xcodebuild invocation found in \(documents.map(\.name).joined(separator: ", ")).")
+            let remote = documents.flatMap { remoteIncludes(in: $0.text) }
+            if remote.isEmpty {
+                out.notes.append("No xcodebuild invocation found in \(documents.map(\.name).joined(separator: ", ")).")
+            } else {
+                out.notes.append("The test job comes from \(remote.joined(separator: ", ")), which SnapshotKit can't read. "
+                                 + "Settings were taken from CI variables; set anything missing in .snapshotkit.yml.")
+            }
+        }
+
+        // Settings the command line didn't give (or there was none): common CI variable names.
+        for (field, value, name) in parser.variableSettings(variables) {
+            let key = field.rawValue
+            guard config.sources[key] == nil else { continue }
+            let source = (documents.first { $0.text.range(of: #"\b"# + name + #"\s*[:=]"#, options: .regularExpression) != nil }?.name
+                          ?? documents.first?.name ?? "CI") + " · " + name
+            switch field {
+            case .scheme: config.scheme = value
+            case .project: config.project = value
+            case .workspace: config.workspace = value
+            case .testPlan: config.testPlan = value
+            case .deviceName: config.deviceName = value
+            case .osVersion: config.osVersion = value
+            default: continue
+            }
+            config.sources[key] = source
         }
 
         // Xcode selection: prefer the document that holds the chosen invocation.
@@ -372,6 +396,89 @@ public struct CIConfigParser {
             }
         }
         out.config = config
+        return out
+    }
+
+    // MARK: - CI variables
+
+    /// Includes from elsewhere (another project, a URL, a template or component): their jobs,
+    /// often the actual test command, aren't in this repository.
+    public static func remoteIncludes(in text: String) -> [String] {
+        var found: [String] = []
+        let lines = text.components(separatedBy: .newlines)
+        for (i, line) in lines.enumerated() {
+            let t = line.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "- ", with: "")
+            for key in ["project:", "remote:", "template:", "component:"] where t.hasPrefix(key) {
+                var item = MiniYAML.unquote(String(t.dropFirst(key.count)).trimmingCharacters(in: .whitespaces))
+                if key == "project:" {
+                    // The file usually follows within the same list item.
+                    for next in lines.dropFirst(i + 1).prefix(4) {
+                        let n = next.trimmingCharacters(in: .whitespaces)
+                        if n.hasPrefix("- ") { break }
+                        if n.hasPrefix("file:") {
+                            item += " (" + MiniYAML.unquote(String(n.dropFirst(5)).trimmingCharacters(in: .whitespaces)) + ")"
+                        }
+                    }
+                }
+                if !item.isEmpty { found.append(item) }
+            }
+        }
+        return found
+    }
+
+    /// Settings taken from conventional variable names, for when the `xcodebuild` command is out of
+    /// sight (in a shared template) or leaves something out. Only fully resolved values count.
+    /// Returns (field, value, variable name), most specific variable first per field.
+    public func variableSettings(_ variables: [String: String]) -> [(SnapshotConfig.Field, String, String)] {
+        let resolved = variables.compactMap { name, raw -> (String, String)? in
+            let value = MiniYAML.unquote(expand(raw)).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty || !Self.isResolved(value) ? nil : (name.uppercased(), value)
+        }
+        .sorted { $0.0 < $1.0 }
+        func first(_ match: (String, String) -> Bool) -> (String, String)? { resolved.first { match($0.0, $0.1) } }
+        var out: [(SnapshotConfig.Field, String, String)] = []
+
+        // Scheme: one named for snapshot tests, then for tests, then the plain scheme.
+        if let (name, value) = first({ n, _ in n.contains("SNAPSHOT") && n.contains("SCHEME") })
+            ?? first({ n, _ in n.contains("TEST") && n.contains("SCHEME") })
+            ?? first({ n, _ in n == "SCHEME" || n.hasSuffix("_SCHEME") }) {
+            out.append((.scheme, value, name))
+        }
+        if let (name, value) = first({ _, v in v.hasSuffix(".xcworkspace") && !v.contains("/") })
+            ?? first({ _, v in v.hasSuffix(".xcworkspace") }) {
+            out.append((.workspace, value, name))
+        }
+        if let (name, value) = first({ n, v in v.hasSuffix(".xcodeproj") && n.contains("PROJECT") && !v.contains("/") })
+            ?? first({ _, v in v.hasSuffix(".xcodeproj") }) {
+            out.append((.project, value, name))
+        }
+        if let (name, value) = first({ n, _ in n.contains("TEST_PLAN") || n.contains("TESTPLAN") }) {
+            out.append((.testPlan, value, name))
+        }
+        // Device: "iPhone 16 Pro (18.0)", "iPhone 16 Pro,OS=18.0", a full destination, or a name.
+        if let (name, value) = first({ n, _ in (n.contains("SIMULATOR") || n.contains("DEVICE") || n.contains("DESTINATION"))
+            && !n.contains("DEVELOPER") && !n.contains("OS_VERSION") }) {
+            if value.contains("name=") {
+                let d = Destination.parse(value)
+                if let device = d.name { out.append((.deviceName, device, name)) }
+                if let os = d.os { out.append((.osVersion, os, name)) }
+            } else if let m = value.range(of: #"^(.+?)\s*\(([0-9]+(?:\.[0-9]+)*)\)$"#, options: .regularExpression) {
+                let text = String(value[m])
+                let open = text.lastIndex(of: "(")!
+                out.append((.deviceName, text[..<open].trimmingCharacters(in: .whitespaces), name))
+                out.append((.osVersion, String(text[text.index(after: open)...].dropLast()), name))
+            } else if let comma = value.range(of: ",OS=", options: .caseInsensitive) {
+                out.append((.deviceName, String(value[..<comma.lowerBound]), name))
+                out.append((.osVersion, String(value[comma.upperBound...]), name))
+            } else if value.range(of: #"^(iPhone|iPad|Apple TV|Apple Watch|Apple Vision)"#, options: .regularExpression) != nil {
+                out.append((.deviceName, value, name))
+            }
+        }
+        if !out.contains(where: { $0.0 == .osVersion }),
+           let (name, value) = first({ n, v in (n.contains("OS_VERSION") || n.contains("SIMULATOR_OS") || n.contains("RUNTIME"))
+               && !n.contains("XCODE") && v.range(of: #"^[0-9]+(\.[0-9]+)*$"#, options: .regularExpression) != nil }) {
+            out.append((.osVersion, value, name))
+        }
         return out
     }
 
