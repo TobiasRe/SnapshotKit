@@ -12,42 +12,66 @@ public struct SnapshotFile: Identifiable, Hashable, Sendable {
         case untracked
     }
 
-    public var path: String
+    public var path: String {
+        didSet { if path != oldValue { parts = Parts(path) } }
+    }
     public var byteSize: Int
     public var state: State
     /// When the file last changed on disk.
     public var modified: Date?
 
+    /// Module, suite, test and variant, parsed once: the library groups and sorts thousands of
+    /// files by them on every redraw.
+    private var parts: Parts
+
     public var id: String { path }
-    public var fileName: String { (path as NSString).lastPathComponent }
+    public var fileName: String { parts.fileName }
 
     /// The test target, e.g. `FeatureSnapshotTests`.
-    public var module: String { SnapshotModules.module(forSnapshotPath: path) ?? "(no module)" }
+    public var module: String { parts.module }
 
     /// The test file the snapshot belongs to (the folder under `__Snapshots__`).
-    public var suite: String {
-        let parent = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
-        return parent.isEmpty ? "(root)" : parent
-    }
+    public var suite: String { parts.suite }
 
     /// The test name: the file name up to the first dot.
-    public var testName: String {
-        let base = (fileName as NSString).deletingPathExtension
-        return base.split(separator: ".", maxSplits: 1).first.map(String.init) ?? base
-    }
+    public var testName: String { parts.testName }
 
     /// What tells this test's snapshots apart: a counter ("1") or a `named:` value ("dark").
-    public var variant: String {
-        let base = (fileName as NSString).deletingPathExtension
-        let parts = base.split(separator: ".", maxSplits: 1)
-        return parts.count > 1 ? String(parts[1]) : ""
-    }
+    public var variant: String { parts.variant }
 
     public init(path: String, byteSize: Int, state: State = .clean, modified: Date? = nil) {
         self.path = path
         self.byteSize = byteSize
         self.state = state
         self.modified = modified
+        self.parts = Parts(path)
+    }
+
+    private struct Parts: Hashable, Sendable {
+        var fileName, module, suite, testName, variant: String
+
+        init(_ path: String) {
+            fileName = (path as NSString).lastPathComponent
+            module = SnapshotModules.module(forSnapshotPath: path) ?? "(no module)"
+            let parent = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+            suite = parent.isEmpty ? "(root)" : parent
+            let base = (fileName as NSString).deletingPathExtension
+            let split = base.split(separator: ".", maxSplits: 1)
+            testName = split.first.map(String.init) ?? base
+            variant = split.count > 1 ? String(split[1]) : ""
+        }
+    }
+
+    // Identity is the file and what's known about it; the parsed parts follow from the path.
+    public static func == (a: SnapshotFile, b: SnapshotFile) -> Bool {
+        a.path == b.path && a.byteSize == b.byteSize && a.state == b.state && a.modified == b.modified
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+        hasher.combine(byteSize)
+        hasher.combine(state)
+        hasher.combine(modified)
     }
 }
 
@@ -110,19 +134,26 @@ public struct SnapshotLibrary: Sendable {
     public var totalBytes: Int { files.reduce(0) { $0 + $1.byteSize } }
     public var testCount: Int { Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count }
 
-    /// Module › suite › test › files, each level sorted by name.
+    /// Module › suite › test › files, each level sorted by name (numbers in natural order, so
+    /// `test2` before `test10`).
     public static func tree(_ files: [SnapshotFile]) -> [SnapshotModule] {
         Dictionary(grouping: files, by: \.module).map { module, moduleFiles in
             let suites = Dictionary(grouping: moduleFiles, by: \.suite).map { suite, suiteFiles in
                 let tests = Dictionary(grouping: suiteFiles, by: \.testName).map { name, testFiles in
                     SnapshotTest(module: module, suite: suite, name: name,
-                                 files: testFiles.sorted { $0.variant.localizedStandardCompare($1.variant) == .orderedAscending })
+                                 files: testFiles.count < 2 ? testFiles : testFiles.sorted { ordered($0.variant, $1.variant) })
                 }
-                return SnapshotSuite(module: module, name: suite, tests: tests.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+                return SnapshotSuite(module: module, name: suite, tests: tests.sorted { ordered($0.name, $1.name) })
             }
-            return SnapshotModule(name: module, suites: suites.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+            return SnapshotModule(name: module, suites: suites.sorted { ordered($0.name, $1.name) })
         }
-        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        .sorted { ordered($0.name, $1.name) }
+    }
+
+    /// Finder-like order: case-insensitive, numbers by value (measured faster than a plain
+    /// `compare(options: [.caseInsensitive, .numeric])` here).
+    static func ordered(_ a: String, _ b: String) -> Bool {
+        a.localizedStandardCompare(b) == .orderedAscending
     }
 
     /// Case-insensitive, all words must appear in the path.

@@ -303,7 +303,12 @@ extension DS {
         static let content = Color(nsColor: .controlBackgroundColor)
         /// A selected row: a whisper of the text colour, the same in every list and both appearances,
         /// instead of the system's solid grey or accent block.
-        static let selection = Color.primary.opacity(0.08)
+        /// Stronger with Increase Contrast, where a whisper would not be seen.
+        static let selection = Color(nsColor: NSColor(name: nil) { appearance in
+            let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
+                                                            .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
+            return NSColor.labelColor.withAlphaComponent(highContrast ? 0.2 : 0.08)
+        })
         /// An opaque hairline, for edges drawn over something else.
         static let hairline = Color(nsColor: .separatorColor)
     }
@@ -358,5 +363,62 @@ private struct NativeHighlightOff: NSViewRepresentable {
                 view = current.superview
             }
         }
+    }
+}
+
+/// "Module › Suite": where a snapshot lives, the way a detail header says it.
+enum Breadcrumb {
+    static func of(module: String?, suite: String) -> String {
+        [module, suite].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
+    }
+}
+
+/// A list beside its detail, with one divider position shared by every tab and kept across
+/// launches: switching tabs never moves the divider, and dragging it sets it everywhere.
+struct ListDetailSplit<List: View, Detail: View>: View {
+    @AppStorage("listColumnWidth") private var width = Self.idealWidth
+    @State private var dragStart: Double?
+    var minWidth: Double = 280
+    @ViewBuilder var list: List
+    @ViewBuilder var detail: Detail
+
+    static var idealWidth: Double { 400 }
+    static var maxWidth: Double { 520 }
+    /// The detail never gets narrower than this; the list gives way first.
+    static var minDetailWidth: Double { 440 }
+
+    var body: some View {
+        GeometryReader { geo in
+            let shown = Self.clamp(width, min: minWidth, available: geo.size.width)
+            HStack(spacing: 0) {
+                // Leading and clipped: content wider than the column (a long branch name) is cut
+                // at its end rather than spilling over both edges.
+                list.frame(width: shown, alignment: .leading).clipped()
+                Divider()
+                    .overlay {
+                        // A wider grab area than the hairline, with the resize cursor.
+                        Color.clear
+                            .frame(width: 9)
+                            .contentShape(Rectangle())
+                            .onHover { inside in
+                                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                            }
+                            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                                .onChanged { value in
+                                    let start = dragStart ?? shown
+                                    dragStart = start
+                                    width = Self.clamp(start + value.translation.width, min: minWidth, available: geo.size.width)
+                                }
+                                .onEnded { _ in dragStart = nil })
+                            .accessibilityHidden(true)
+                    }
+                detail.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    static func clamp(_ width: Double, min minWidth: Double, available: Double) -> Double {
+        let upper = Swift.max(minWidth, Swift.min(maxWidth, available - minDetailWidth))
+        return Swift.min(Swift.max(width, minWidth), upper)
     }
 }

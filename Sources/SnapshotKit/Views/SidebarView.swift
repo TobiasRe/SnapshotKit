@@ -53,7 +53,7 @@ struct SidebarView: View {
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help("Quick switch project (⌘K)")
+                .help("Projects and commands (⌘K)")
             }
             .padding(.horizontal, DS.Space.m)
             // Level with the lists' footers.
@@ -107,25 +107,40 @@ struct ProjectMonogram: View {
     }
 }
 
-struct ProjectRow: View {
+/// One line per project, like a command palette: monogram, name, where it lives, and a quiet
+/// highlight that follows the arrow keys.
+struct QuickSwitcherRow: View {
     var project: Project
     var pinned: Bool
+    var current: Bool
+    var highlighted: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Space.xxs) {
-            HStack(spacing: DS.Space.xs) {
-                Text(project.name).lineLimit(1)
-                if pinned {
-                    Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
-                }
+        HStack(spacing: DS.Space.s) {
+            ProjectMonogram(name: project.name)
+            Text(project.name).fontWeight(.medium).lineLimit(1).layoutPriority(1)
+            if pinned {
+                Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("Pinned")
             }
-            Text((project.path as NSString).deletingLastPathComponent.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Spacer(minLength: DS.Space.m)
+            Text(current ? "Current" : Self.location(project.path))
+                .font(DS.Font.caption)
+                .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.head)
         }
-        .padding(.vertical, DS.Space.xxs)
+        .padding(.horizontal, DS.Space.s)
+        .frame(height: QuickSwitcherView.rowHeight)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
+            .fill(highlighted ? DS.Surface.selection : .clear))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(highlighted ? .isSelected : [])
+    }
+
+    /// The folder that holds the project, with the home folder as "~".
+    static func location(_ path: String) -> String {
+        (path as NSString).deletingLastPathComponent.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 }
 
@@ -136,9 +151,11 @@ struct QuickSwitcherView: View {
     @State private var highlighted = 0
     @FocusState private var focused: Bool
 
-    private var results: [Project] {
-        FuzzyMatcher.rank(model.projects, query: query, primary: \.name, secondary: \.path)
+    private var results: [PaletteItem] {
+        PaletteItem.ranked(projects: model.projects, commands: PaletteCommand.available(app: model), query: query)
     }
+    private var shown: [PaletteItem] { Array(results.prefix(50)) }
+    static let rowHeight: CGFloat = 36
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -148,7 +165,7 @@ struct QuickSwitcherView: View {
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Switch to project…", text: $query)
+                    TextField("Go to a project or run a command…", text: $query)
                         .textFieldStyle(.plain)
                         .font(.title3)
                         .focused($focused)
@@ -157,32 +174,35 @@ struct QuickSwitcherView: View {
                         .onKeyPress(.upArrow) { move(-1); return .handled }
                         .onKeyPress(.escape) { close(); return .handled }
                 }
-                .padding(DS.Space.m)
+                .padding(.horizontal, DS.Space.l)
+                .frame(height: DS.Bar.header)
                 Divider()
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
-                            ForEach(Array(results.prefix(50).enumerated()), id: \.element.id) { index, project in
-                                HStack {
-                                    ProjectRow(project: project, pinned: model.isPinned(project))
-                                    Spacer()
-                                    if project.path == model.selectedPath {
-                                        Text("current").font(.caption).foregroundStyle(.secondary)
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
+                                Group {
+                                    switch item {
+                                    case .project(let project):
+                                        QuickSwitcherRow(project: project, pinned: model.isPinned(project),
+                                                         current: project.path == model.selectedPath, highlighted: index == highlighted)
+                                    case .command(let command):
+                                        PaletteCommandRow(command: command, highlighted: index == highlighted)
                                     }
                                 }
-                                .padding(.horizontal, DS.Space.m)
-                                .padding(.vertical, DS.Space.s)
-                                .background(index == highlighted ? Color.accentColor.opacity(0.2) : Color.clear)
-                                .contentShape(Rectangle())
                                 .onTapGesture { choose(at: index) }
                                 .id(index)
                             }
                             if results.isEmpty {
-                                Text("No matching projects").foregroundStyle(.secondary).padding()
+                                Text("No matching projects or commands")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight)
                             }
                         }
+                        .padding(DS.Space.xs)
                     }
-                    .frame(maxHeight: 320)
+                    // As tall as its results, up to nine rows: no empty panel under two matches.
+                    .frame(height: CGFloat(min(max(shown.count, 1), 9)) * Self.rowHeight + DS.Space.s)
                     .onChange(of: highlighted) { _, value in proxy.scrollTo(value) }
                 }
             }
@@ -197,14 +217,18 @@ struct QuickSwitcherView: View {
     }
 
     private func move(_ delta: Int) {
-        guard !results.isEmpty else { return }
-        highlighted = (highlighted + delta + min(results.count, 50)) % min(results.count, 50)
+        guard !shown.isEmpty else { return }
+        highlighted = (highlighted + delta + shown.count) % shown.count
     }
 
     private func choose(at index: Int) {
-        guard results.indices.contains(index) else { return }
-        model.open(path: results[index].path)
+        guard shown.indices.contains(index) else { return }
+        let item = shown[index]
         close()
+        switch item {
+        case .project(let project): model.open(path: project.path)
+        case .command(let command): command.run()
+        }
     }
 
     private func close() {

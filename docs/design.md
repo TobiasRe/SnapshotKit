@@ -76,6 +76,9 @@ can be followed between these views, and re-recording is available wherever a sn
   a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
   row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window, and the
   list footers sit level with the sidebar's footer.
+- `ListDetailSplit`: the list beside its detail (400 points by default, 280–520), with one divider position
+  for every tab, kept across launches; dragging it on one tab sets it everywhere, and switching tabs never moves it. Content too wide
+  for the column gives way (a long branch name truncates) instead of spilling over.
 - `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
 - `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
   selection and the section headers carry the structure.
@@ -85,6 +88,9 @@ can be followed between these views, and re-recording is available wherever a sn
 - `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
 - `quietControl()`: header and filter controls are borderless in a hairline capsule, one look for buttons
   and menus alike, so a header reads as a line of text with actions rather than a row of bezels.
+- The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
+  ranked list, one line each, a command's shortcut where a project shows its folder, so the palette also
+  teaches the keyboard.
 - `ProjectMonogram`: a project's initials in a small neutral tile, telling projects apart without colour.
 - `Chip`: a small status label: a coloured dot and neutral text in a hairline capsule, so several labels in a
   row stay calm and the text is readable in either appearance.

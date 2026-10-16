@@ -4,25 +4,36 @@ import SwiftUI
 
 struct ProjectView: View {
     @ObservedObject var project: ProjectModel
+    /// The message the user closed (or that timed out); a new message shows again.
+    @State private var dismissedMessage: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The Run tab shows the outcome in its own header; other tabs get a compact banner.
-            if let message = project.lastMessage, !project.isRunning, project.tab != .run {
-                NoticeBanner(text: message, isError: project.lastMessageIsError)
-                    .padding(.horizontal, DS.Space.m)
-                    .padding(.vertical, DS.Space.s)
-                Divider()
+        Group {
+            switch project.tab {
+            case .snapshots: SnapshotsTab(project: project)
+            case .run: RunTab(project: project)
+            case .failures: FailuresTab(project: project)
+            case .changes: ChangesTab(project: project)
             }
-            Group {
-                switch project.tab {
-                case .snapshots: SnapshotsTab(project: project)
-                case .run: RunTab(project: project)
-                case .failures: FailuresTab(project: project)
-                case .changes: ChangesTab(project: project)
-                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The outcome of the last action floats over the image area (above the compare toolbar)
+        // instead of pushing every pane down. The Run tab says it in its own header.
+        .overlay(alignment: .bottomTrailing) {
+            if let message = project.lastMessage, message != dismissedMessage, !project.isRunning, project.tab != .run {
+                NoticeBanner(text: message, isError: project.lastMessageIsError) { dismissedMessage = message }
+                    .frame(maxWidth: 420)
+                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
+                    .padding(.bottom, 64)
+                    .padding(.trailing, DS.Space.l)
+                    .transition(.opacity)
+                    .task(id: message) {
+                        // Information fades; an error stays until it is closed.
+                        guard !project.lastMessageIsError, !DS.solidSurfaces else { return }
+                        try? await Task.sleep(for: .seconds(8))
+                        withAnimation(DS.motion) { dismissedMessage = message }
+                    }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(project.project.name)
         .navigationSubtitle(subtitle)
@@ -56,11 +67,17 @@ struct ProjectView: View {
 
     private func label(for tab: ProjectTab) -> String {
         switch tab {
-        case .snapshots: (project.library?.files.count).map { "Snapshots (\($0))" } ?? "Snapshots"
+        // A count only when there is something to count: "Changes (0)" is noise.
+        case .snapshots: Self.counted("Snapshots", project.library?.files.count)
         case .run: "Run"
-        case .failures: project.failures.isEmpty ? "Failures" : "Failures (\(project.failures.count))"
-        case .changes: (project.changeSet?.changes.count).map { "Changes (\($0))" } ?? "Changes"
+        case .failures: Self.counted("Failures", project.failures.count)
+        case .changes: Self.counted("Changes", project.changeSet?.changes.count)
         }
+    }
+
+    static func counted(_ title: String, _ count: Int?) -> String {
+        guard let count, count > 0 else { return title }
+        return "\(title) (\(count))"
     }
 
     private var subtitle: String {
@@ -75,9 +92,9 @@ struct RunTab: View {
     @ObservedObject var project: ProjectModel
 
     var body: some View {
-        HSplitView {
+        ListDetailSplit(minWidth: 300) {
             RunInspector(project: project)
-                .frame(minWidth: 300, idealWidth: 340, maxWidth: 420)
+        } detail: {
             VStack(spacing: 0) {
                 RunStatusHeader(project: project)
                 Divider()
@@ -216,58 +233,80 @@ struct RunStatusHeader: View {
     @ObservedObject var project: ProjectModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Space.m) {
+        VStack(alignment: .leading, spacing: 0) {
+            // The outcome and what to do about it, in the same header bar as every other pane.
             HStack(alignment: .center, spacing: DS.Space.m) {
                 statusIcon
-                    .font(.title2)
-                    .frame(width: 28)
+                    .font(.title3)
+                    .frame(width: 22)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Space.xxs) {
                     Text(title)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(2)
-                    if let started = project.startedAt, project.isRunning {
-                        TimelineView(.periodic(from: started, by: 1)) { context in
-                            Text("\(project.phase.label)… · \(Self.elapsed(context.date.timeIntervalSince(started)))")
-                                .monospacedDigit()
+                        .font(DS.Font.heading)
+                        .lineLimit(1)
+                    Group {
+                        if let started = project.startedAt, project.isRunning {
+                            TimelineView(.periodic(from: started, by: 1)) { context in
+                                Text("\(project.phase.label)… · \(Self.elapsed(context.date.timeIntervalSince(started)))")
+                                    .monospacedDigit()
+                            }
+                        } else {
+                            Text(subtitle)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    } else {
-                        Text(subtitle)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
                     }
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
+                Spacer(minLength: DS.Space.m)
                 actions
             }
-
-            if project.isRunning {
-                if let total = project.expectedTotal, total > 0, project.phase == .testing {
-                    ProgressView(value: Double(min(project.passed + project.failed + project.skipped, total)), total: Double(total))
-                } else {
-                    ProgressView().progressViewStyle(.linear)
+            .padding(.horizontal, DS.Space.l)
+            .frame(maxWidth: .infinity, minHeight: DS.Bar.header, maxHeight: DS.Bar.header)
+            // Progress runs along the bar's bottom edge, so starting a run moves nothing.
+            .overlay(alignment: .bottom) {
+                if project.isRunning {
+                    Group {
+                        if let total = project.expectedTotal, total > 0, project.phase == .testing {
+                            ProgressView(value: Double(min(project.passed + project.failed + project.skipped, total)), total: Double(total))
+                        } else {
+                            ProgressView().progressViewStyle(.linear)
+                        }
+                    }
+                    .controlSize(.mini)
+                    .padding(.horizontal, DS.Space.l)
                 }
             }
 
             HStack(spacing: DS.Space.l) {
-                Count(value: project.passed, label: "passed", symbol: "checkmark.circle.fill", color: .green)
-                Count(value: project.failed, label: "failed", symbol: "xmark.circle.fill", color: .red)
-                Count(value: project.skipped, label: "skipped", symbol: "minus.circle.fill", color: .secondary)
-                Spacer()
+                if hasCounts {
+                    Count(value: project.passed, label: "passed", symbol: "checkmark.circle.fill", color: DS.Status.passed)
+                    Count(value: project.failed, label: "failed", symbol: "xmark.circle.fill", color: DS.Status.failed)
+                    Count(value: project.skipped, label: "skipped", symbol: "minus.circle.fill", color: DS.Status.neutral)
+                } else {
+                    // Three zeros say nothing; say that instead, in the same place.
+                    Text("No results yet").foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: DS.Space.s)
                 if let test = project.currentTest, project.isRunning {
                     Text(test)
-                        .font(.caption.monospaced())
+                        .font(DS.Font.code)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
             }
+            .font(DS.Font.secondary)
+            .padding(.horizontal, DS.Space.l)
+            .frame(maxWidth: .infinity, minHeight: DS.Bar.filters, maxHeight: DS.Bar.filters)
+            .padding(.bottom, DS.Space.xs)
         }
-        .padding(DS.Space.l)
+        .background(DS.Surface.content)
+    }
+
+    private var hasCounts: Bool {
+        project.isRunning || project.passed + project.failed + project.skipped > 0 || project.lastResult != nil
     }
 
     @ViewBuilder
@@ -342,6 +381,7 @@ struct RunStatusHeader: View {
                 .labelStyle(.iconOnly)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .quietControl()
                 .help("Flakiness check and remote runs")
                 .accessibilityLabel("More Actions")
 
@@ -351,7 +391,7 @@ struct RunStatusHeader: View {
                         .primaryActionStyle()
                 } else {
                     Button("Re-record Failed") { project.reRecordFailed() }
-                        .secondaryActionStyle()
+                        .quietControl()
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
                         .help("Re-record only the failing suites, then verify (⇧⌘R)")
                     Button("Run Tests") { project.runTests() }
@@ -361,7 +401,7 @@ struct RunStatusHeader: View {
                 }
             }
         }
-        .controlSize(.regular)
+        .controlSize(.small)
     }
 }
 
@@ -390,7 +430,7 @@ struct Count: View {
         HStack(spacing: DS.Space.xs) {
             Image(systemName: symbol)
                 .foregroundStyle(value > 0 ? color : Color.secondary.opacity(0.5))
-            Text("\(value)").font(.body.monospacedDigit().weight(.medium))
+            Text("\(value)").monospacedDigit().fontWeight(.medium)
             Text(label).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .ignore)
@@ -408,7 +448,7 @@ struct LogView: View {
         VStack(spacing: 0) {
             HStack(spacing: DS.Space.m) {
                 if suites.isEmpty {
-                    Text("Output").font(.subheadline.weight(.semibold))
+                    Text("Output").font(DS.Font.caption.weight(.semibold)).foregroundStyle(.secondary)
                 } else {
                     Picker("Show", selection: $project.runPane) {
                         ForEach(RunPane.allCases) { Text($0.rawValue).tag($0) }
@@ -445,7 +485,8 @@ struct LogView: View {
                 .accessibilityLabel(showResults ? "Copy Results" : "Copy Output")
             }
             .padding(.horizontal, DS.Space.l)
-            .padding(.vertical, DS.Space.s)
+            .frame(maxWidth: .infinity, minHeight: DS.Bar.filters, maxHeight: DS.Bar.filters)
+            .background(DS.Surface.content)
             Divider()
             if showResults {
                 RunResultsList(project: project, suites: suites)
@@ -518,14 +559,17 @@ struct RunResultsList: View {
                         row(test, suite: suite)
                     }
                 } header: {
-                    HStack {
-                        Text(suite.identifier)
-                        Spacer()
+                    HStack(spacing: DS.Space.s) {
+                        Text(suite.identifier).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: DS.Space.s)
                         if suite.failedCount > 0 {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))
                         }
-                        Text("\(suite.passedCount) passed").monospacedDigit()
+                        Text("\(suite.passedCount) passed").foregroundStyle(.tertiary)
                     }
+                    .monospacedDigit()
+                    .font(DS.Font.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
             }
         }
@@ -572,6 +616,7 @@ struct RunResultsList: View {
                     .accessibilityLabel("Show Failure")
             }
         }
+        .listRowSeparator(.hidden)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { if canOpen { project.showFailure(id) } }
     }

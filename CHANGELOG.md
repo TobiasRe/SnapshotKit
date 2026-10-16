@@ -41,7 +41,7 @@ snapshot tests built with swift-snapshot-testing.
 - Streams output with live counts; a results list by suite afterwards. Runs on a remote Mac over SSH too.
 
 ### Projects and tools
-- Scan folders, pins, recents, per-project base branch and a ⌘K switcher.
+- Scan folders, pins, recents, per-project base branch, and a ⌘K palette for projects and commands.
 - An optional menu bar item with run progress (a pie and a done/total count), the failing count, Cancel,
   and one-click access to failing, pinned and recent projects.
 - The `snapkit` CLI covers the same ground: `snapshots`, `record`, `changes`, `run`, `rerecord`, `flaky`,

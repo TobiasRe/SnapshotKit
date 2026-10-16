@@ -39,6 +39,8 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if let notice = model.startupNotice {
                 NoticeBanner(text: notice, isError: false) { model.dismissStartupNotice() }
+                    .frame(maxWidth: 520)
+                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
                     .padding()
             }
         }
@@ -74,7 +76,7 @@ struct WelcomeView: View {
                 }
                 .secondaryActionStyle()
             }
-            Text("Or drop a repository onto this window. ⌘K switches projects.")
+            Text("Or drop a repository onto this window. ⌘K finds projects and commands.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -85,7 +87,7 @@ struct WelcomeView: View {
     private func feature(_ icon: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Space.m) {
             Image(systemName: icon)
-                .foregroundStyle(.tint)
+                .foregroundStyle(.secondary)
                 .frame(width: 20)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
@@ -106,7 +108,7 @@ struct NoticeBanner: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Space.s) {
             Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                .foregroundStyle(isError ? .red : .accentColor)
+                .foregroundStyle(isError ? DS.Status.failed : Color.secondary)
             Text(text)
                 .font(.callout)
                 .lineLimit(3)
@@ -115,11 +117,11 @@ struct NoticeBanner: View {
             if let onClose {
                 Button { onClose() } label: { Image(systemName: "xmark") }
                     .buttonStyle(.borderless)
+                    .help("Close")
+                    .accessibilityLabel("Close")
             }
         }
         .padding(.horizontal, DS.Space.m)
         .padding(.vertical, DS.Space.s)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill((isError ? Color.red : Color.accentColor).opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).strokeBorder((isError ? Color.red : Color.accentColor).opacity(0.2)))
     }
 }

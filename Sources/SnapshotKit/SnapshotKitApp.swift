@@ -76,7 +76,7 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(model.current == nil)
             Divider()
-            Button("Quick Switch Project…") { model.showQuickSwitcher.toggle() }
+            Button("Go to Project or Command…") { model.showQuickSwitcher.toggle() }
                 .keyboardShortcut("k")
         }
         CommandMenu("Snapshots") {

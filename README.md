@@ -59,7 +59,7 @@ last run.
 | ⌃⌘R | Run on the remote machine |
 | ⌘. | Cancel |
 | ⇧⌘O | Import an `.xcresult` (e.g. a CI artifact) |
-| ⌘K | Quick switch project |
+| ⌘K | Go to a project or run a command |
 | ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
