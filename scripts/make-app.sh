@@ -42,6 +42,13 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>org.snapshotkit.SnapshotKit.compare</string>
+      <key>CFBundleURLSchemes</key><array><string>snapshotkit</string></array>
+    </dict>
+  </array>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 SnapshotKit contributors. MIT License.</string>
 </dict>
 </plist>
