@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SnapshotKit · Review and re-run every snapshot test in one app</title>
-<meta name="description" content="A native Mac app, menu bar item and CLI for the reference images of swift-snapshot-testing: browse them, review what changed, and re-record what should. Free and open source.">
+<title>SnapshotKit · The companion app for swift-snapshot-testing</title>
+<meta name="description" content="The companion app for projects that test with swift-snapshot-testing: a native Mac app, menu bar item and CLI to browse reference images, review what changed, run the tests like CI and re-record what should change. Free and open source.">
 <meta property="og:title" content="SnapshotKit">
-<meta property="og:description" content="Review and re-run every snapshot test in one app. A native Mac app, menu bar item and CLI for swift-snapshot-testing.">
+<meta property="og:description" content="The companion app for swift-snapshot-testing: review and re-run every snapshot test in one app.">
 <meta property="og:image" content="https://tobiasre.github.io/SnapshotKit/images/library.png">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/png" href="images/app-icon.png">
@@ -105,6 +105,30 @@
   .meta { font-size: 13px; color: var(--ink-2); }
   .shot { border-radius: 14px; border: 1px solid var(--line); box-shadow: var(--shadow); }
   .hero-shot { padding-block: 24px 96px; }
+
+  /* The companion badge above the headline */
+  .companion {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 14px;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--ink-2); text-decoration: none; font-size: 14px;
+  }
+  .companion strong { color: var(--ink); font-weight: 600; }
+  .companion svg { color: var(--accent); }
+  .companion:hover { border-color: var(--accent); }
+
+  /* How it fits in */
+  .fits { padding-block: 0 96px; display: flex; flex-direction: column; gap: 32px; }
+  .fits h2 { font-size: clamp(28px, 3.4vw, 40px); line-height: 1.1; text-align: center; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .steps > li { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 28px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); }
+  .steps .num { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); font-size: 14px; font-weight: 600; }
+  .steps h3 { font-size: 19px; }
+  .steps p { font-size: 15px; color: var(--ink-2); }
+  .steps pre { margin: 6px 0 0; overflow-x: auto; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
+  .steps .k { color: var(--accent); }
+  .ticks.small li { font-size: 15px; color: var(--ink-2); }
+  .ticks.small li::before { content: "✓"; color: var(--accent); font-weight: 600; }
+  .fits-note { text-align: center; font-size: 15px; color: var(--ink-2); }
 
   /* Three pillars */
   .pillars { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -232,8 +256,12 @@
 <main id="top">
   <section class="wrap hero">
     <img class="icon" src="images/app-icon.png" alt="SnapshotKit app icon">
+    <a class="companion" href="https://github.com/pointfreeco/swift-snapshot-testing">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>
+      Companion app for <strong>swift-snapshot-testing</strong>
+    </a>
     <h1>Review and re-run every snapshot test in one app.</h1>
-    <p class="lead">SnapshotKit is a native Mac app, menu bar item and command-line tool for the reference images of swift-snapshot-testing. Browse them, review what your branch changed, and re-record what should change.</p>
+    <p class="lead">Your tests already record reference images with swift-snapshot-testing. SnapshotKit is the Mac app, menu bar item and command-line tool that works with them: browse every image, review what your branch changed, run the tests like CI and re-record what should change. Nothing to add to your project.</p>
     <div class="actions">
       <a class="button" href="https://github.com/TobiasRe/SnapshotKit/releases/latest">Download for Mac</a>
       <a class="button quiet" href="https://github.com/TobiasRe/SnapshotKit"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>View on GitHub</a>
@@ -243,6 +271,41 @@
 
   <section class="wide hero-shot">
     <img class="shot" src="images/library.png" width="2800" height="1760" alt="The SnapshotKit library: every snapshot of a project by test, with a large preview of the selected one and its variants">
+  </section>
+
+  <section id="how" class="wrap fits">
+    <h2>How it fits in</h2>
+    <ol class="steps">
+      <li>
+        <span class="num">1</span>
+        <h3>You test with swift-snapshot-testing</h3>
+        <p>Your iOS or macOS project already has snapshot tests, with Swift Testing or XCTest.</p>
+<pre><span class="k">@Test</span> func payButton() {
+  assertSnapshot(of: PayButton(),
+                 as: .image)
+}</pre>
+      </li>
+      <li>
+        <span class="num">2</span>
+        <h3>They record reference images</h3>
+        <p>Each test writes PNGs next to it, in a <code>__Snapshots__</code> folder in your repository.</p>
+<pre>CheckoutTests/
+  __Snapshots__/CheckoutTests/
+    payButton.light.png
+    payButton.dark.png</pre>
+      </li>
+      <li>
+        <span class="num">3</span>
+        <h3>SnapshotKit works with them</h3>
+        <p>Open the repository. SnapshotKit finds the images, reads how CI runs the tests, and lets you review, run and re-record them.</p>
+        <ul class="ticks small">
+          <li>No dependency to add, no code to change</li>
+          <li>Reads your CI configuration and test results</li>
+          <li>Re-records by switching record mode on and off for you</li>
+        </ul>
+      </li>
+    </ol>
+    <p class="fits-note">New to snapshot testing? Start with Point-Free's <a href="https://github.com/pointfreeco/swift-snapshot-testing">swift-snapshot-testing</a>, then point SnapshotKit at your project.</p>
   </section>
 
   <section id="features" class="pillars">

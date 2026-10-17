@@ -1,9 +1,24 @@
 # SnapshotKit documentation
 
-SnapshotKit is a native Mac app, menu bar item and command-line tool for the reference images of
-[swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing): browse every snapshot, review
-what your branch changed, run the tests the way CI does, find out why they failed, and re-record what should
-change.
+**SnapshotKit is a companion for projects that test with
+[swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).** Your tests keep recording
+reference images exactly as they do today; SnapshotKit — a native Mac app, menu bar item and command-line tool —
+works with those images: browse every snapshot, review what your branch changed, run the tests the way CI does,
+find out why they failed, and re-record what should change.
+
+> **What SnapshotKit is not.** It isn't a snapshot testing library and doesn't replace swift-snapshot-testing.
+> There's no package to add and no test code to change: it reads your repository (the `__Snapshots__` folders,
+> your test sources and CI files) and the results your test runs produce. Without swift-snapshot-testing in your
+> project there's nothing for it to show — start with
+> [Point-Free's library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
+
+## How it fits in
+
+1. **You test with swift-snapshot-testing** — `assertSnapshot(of: view, as: .image)` in Swift Testing or XCTest.
+2. **The tests record reference images** — PNGs in `__Snapshots__` folders next to the test files, committed to
+   your repository.
+3. **SnapshotKit works with them** — it finds the images, reads how CI runs the tests, shows changes and
+   failures, and re-records by switching swift-snapshot-testing's record mode on and off for you.
 
 ![The SnapshotKit library](images/library.png)
 
