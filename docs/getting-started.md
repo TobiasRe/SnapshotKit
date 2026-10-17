@@ -5,7 +5,7 @@ macOS) project whose tests use [swift-snapshot-testing](https://github.com/point
 
 ## Requirements
 
-| | |
+| What | Requirement |
 |---|---|
 | Mac | Apple silicon, macOS 14 or later. Liquid Glass controls on macOS 26 and later; earlier versions get the same layout with flat controls. |
 | Xcode | Whatever your project's tests need. SnapshotKit runs `xcodebuild test` the way your CI does (Swift packages too, through their scheme) and uses the Xcode version CI pins, when that version is installed. |

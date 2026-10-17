@@ -198,7 +198,7 @@ selection; *What CI runs* goes back. `snapkit run --module <target>` does the sa
 
 ## Files and environment variables
 
-| | |
+| File or variable | What it is |
 |---|---|
 | `.snapshotkit.yml` | project configuration, at the repository root (committed if you like) |
 | `~/Library/Application Support/SnapshotKit/settings.json` | scan folders, pins, recents, preferences, per-project settings |
