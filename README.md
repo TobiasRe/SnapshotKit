@@ -9,8 +9,9 @@
 
 ![The SnapshotKit library: every snapshot of a project by test, with a large preview](docs/images/library.png)
 
-A macOS app (and `snapkit` CLI) for inspecting, managing and updating the reference images of iOS snapshot
-tests built with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing):
+**The companion app for projects that test with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).**
+Your tests keep recording reference images as they do today; SnapshotKit, a macOS app with a menu bar item and
+the `snapkit` CLI, works with them, with no package to add and no test code to change:
 
 - **Browse and inspect** every snapshot in a project by module, test file and test, as a list with a large
   preview or as a grid. See variants (light/dark, devices, named states) side by side, a snapshot's history

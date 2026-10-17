@@ -1,7 +1,10 @@
 # Getting started
 
-This page takes you from download to your first reviewed snapshot change. It assumes you have an iOS (or
-macOS) project whose tests use [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).
+This page takes you from download to your first reviewed snapshot change.
+
+SnapshotKit is a companion to [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing): you
+need an iOS (or macOS) project whose tests already use it. SnapshotKit adds nothing to that project; it works with
+the reference images the tests record and the results they produce.
 
 ## Requirements
 

@@ -2,7 +2,7 @@
 # (.github/workflows/pages.yml) at https://tobiasre.github.io/SnapshotKit/docs/.
 # Preview: pip install -r requirements-docs.txt && mkdocs serve
 site_name: SnapshotKit
-site_description: Documentation for SnapshotKit, the Mac app, menu bar item and CLI for swift-snapshot-testing.
+site_description: Documentation for SnapshotKit, the companion app for projects that test with swift-snapshot-testing.
 site_url: https://tobiasre.github.io/SnapshotKit/docs/
 repo_url: https://github.com/TobiasRe/SnapshotKit
 repo_name: TobiasRe/SnapshotKit
