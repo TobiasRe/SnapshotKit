@@ -7,7 +7,7 @@
 
 **[Website](https://tobiasre.github.io/SnapshotKit/) · [Documentation](https://tobiasre.github.io/SnapshotKit/docs/) · [Download](https://github.com/TobiasRe/SnapshotKit/releases/latest) · [Changelog](CHANGELOG.md)**
 
-![The SnapshotKit library: every snapshot of a project by test, with a large preview](docs/images/library.png)
+![SnapshotKit comparing a changed snapshot side by side: the same screen on the base branch and on the feature branch](docs/images/compare.png)
 
 **The companion app for projects that test with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).**
 Your tests keep recording reference images as they do today; SnapshotKit, a macOS app with a menu bar item and
