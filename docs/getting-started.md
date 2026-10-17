@@ -32,7 +32,7 @@ tests need Xcode and a simulator runtime, like running the tests yourself.
 your `PATH`:
 
 ```bash
-unzip snapkit-0.1.0-macos-arm64.zip
+unzip snapkit-0.1.1-macos-arm64.zip
 sudo mv snapkit /usr/local/bin/
 xattr -d com.apple.quarantine /usr/local/bin/snapkit
 snapkit --version

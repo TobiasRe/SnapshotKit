@@ -167,11 +167,18 @@
   .term .chg { color: var(--changed); }
   .term .cmt { color: var(--committed); }
   .term .new { color: var(--new); }
-  .commands { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1px; background: #2c2c2e; border: 1px solid #2c2c2e; border-radius: 12px; overflow: hidden; }
-  .commands div { background: var(--band); padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; }
+  /* Separate cards: a short last row leaves space instead of empty grey cells. */
+  .commands { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .commands div { border: 1px solid #2c2c2e; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; }
   .commands code { font-size: 15px; color: var(--band-ink); }
   .commands span { font-size: 14px; color: var(--band-ink-2); line-height: 1.45; }
   .note { font-size: 13px; color: var(--band-ink-2); }
+  .difftool { display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: center; padding: 28px; border: 1px solid #2c2c2e; border-radius: 12px; }
+  .difftool .text { flex: 1 1 320px; display: flex; flex-direction: column; gap: 10px; }
+  .difftool h3 { font-size: 24px; }
+  .difftool p { color: var(--band-ink-2); font-size: 16px; }
+  .difftool pre { flex: 1 1 360px; min-width: 0; margin: 0; overflow-x: auto; background: var(--term); border-radius: 10px; padding: 18px 20px; font-size: 13px; line-height: 1.7; color: var(--term-ink); }
+  .difftool .p { color: var(--term-dim); }
 
   /* Keyboard */
   .keys { padding-block: 96px; display: flex; flex-direction: column; gap: 28px; align-items: center; text-align: center; }
@@ -379,9 +386,21 @@ ShopTests/ShopScreenTests
         <div><code>flaky</code><span>Run the failing tests several times and say which are flaky.</span></div>
         <div><code>history</code><span>Recent runs and flaky tests, for the project or one test.</span></div>
         <div><code>diff</code><span>Pixel and perceptual difference of two PNGs, with a precision that passes.</span></div>
+        <div><code>open</code><span>The same, then compare the two in SnapshotKit: your diff tool for failing tests.</span></div>
         <div><code>config</code><span>The configuration CI uses, with a check of Xcode and the simulator.</span></div>
         <div><code>restore</code><span>Undo a record patch left behind by an interrupted run.</span></div>
         <div><code>projects</code><span>Scan folders for repositories with snapshot tests, or list them.</span></div>
+      </div>
+      <div class="difftool">
+        <div class="text">
+          <h3>Your diff tool, too.</h3>
+          <p>Name <code>snapkit open</code> as swift-snapshot-testing's diff tool, and every failing test's message ends in a command that opens the reference and the actual image side by side in SnapshotKit, one click from the snapshot in its project.</p>
+        </div>
+<pre><span class="p">// Swift Testing</span>
+@Suite(.snapshots(diffTool: "snapkit open"))
+
+<span class="p">// XCTest</span>
+withSnapshotTesting(diffTool: "snapkit open") { … }</pre>
       </div>
       <p class="note">Output from the sample projects that <code>scripts/make-samples.sh</code> generates, with paths shortened.</p>
     </div>

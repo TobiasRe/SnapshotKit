@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-10-17
 
 - Use SnapshotKit as swift-snapshot-testing's diff tool: with `.snapshots(diffTool: "snapkit open")`, a
   failure message ends in a command that opens the reference and the actual image in a SnapshotKit compare
