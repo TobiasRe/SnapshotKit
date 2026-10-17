@@ -45,11 +45,16 @@ snapshot tests built with swift-snapshot-testing.
 
 ### Projects and tools
 - Snapshots written outside the app (a re-record from Xcode or the CLI) appear while the window is open.
-- Scan folders, pins, recents, per-project base branch, and a ⌘K palette for projects and commands.
+- Scan folders that find repositories with snapshot tests up to six levels deep (recorded or not yet, committed
+  or not) and say what they found; pins, recents, per-project base branch, and a ⌘K palette for projects and
+  commands. ⌘F filters the current list; ⌥⌘O opens a snapshot's test in Xcode at its function.
 - An optional menu bar item with run progress (a pie and a done/total count), the failing count, Cancel,
   and one-click access to failing, pinned and recent projects.
 - The `snapkit` CLI covers the same ground: `snapshots`, `record`, `changes`, `run`, `rerecord`, `flaky`,
   `failures`, `history`, `diff`, `restore`, `config`, `projects`.
-- A small Liquid Glass design system (docs/design.md), with fallbacks for macOS 14–25: header, filter and
-  footer bars of fixed heights that line up across panes, a "12 / 40" stepper in every detail, and calm
-  dot-and-hairline status labels.
+- A small Liquid Glass design system (docs/design.md), with fallbacks for macOS 14–25: one family of 28-point
+  glass controls (icon circles, text capsules, segmented pills, fields and one accent action per region),
+  header, filter and footer bars of fixed heights that line up across panes, a "12 / 40" stepper in every
+  detail, and calm dot-and-hairline status labels.
+- `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
+  changes and failures, to try SnapshotKit on.

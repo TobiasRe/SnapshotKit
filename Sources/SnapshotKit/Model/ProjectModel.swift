@@ -71,8 +71,6 @@ enum RunOperation: Equatable {
         case .remoteFlakeCheck: "Checking flakiness on remote"
         }
     }
-
-    var isRemote: Bool { [.remoteRun, .remoteRecord, .remoteFlakeCheck].contains(self) }
 }
 
 /// A failing test with everything needed to investigate it.
