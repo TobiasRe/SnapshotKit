@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapshotKit · Every snapshot test, in one window</title>
+<meta name="description" content="A native Mac app, menu bar item and CLI for the reference images of swift-snapshot-testing: browse them, review what changed, and re-record what should. Free and open source.">
+<meta property="og:title" content="SnapshotKit">
+<meta property="og:description" content="Every snapshot test, in one window. A native Mac app, menu bar item and CLI for swift-snapshot-testing.">
+<meta property="og:image" content="https://tobiasre.github.io/SnapshotKit/images/library.png">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="images/app-icon.png">
+<style>
+  :root {
+    --ground: #fbfbfd;
+    --surface: #ffffff;
+    --ink: #1d1d1f;
+    --ink-2: #6e6e73;
+    --ink-3: #86868b;
+    --line: #e5e5ea;
+    --accent: #0a66e4;
+    --accent-ink: #ffffff;
+    --link: #0a5bd3;
+    --band: #1d1d1f;
+    --band-ink: #f5f5f7;
+    --band-ink-2: #a1a1a6;
+    --term: #000000;
+    --term-ink: #e5e5ea;
+    --term-dim: #8e8e93;
+    --menubar: rgba(246,246,248,0.92);
+    --shadow: 0 30px 60px -30px rgba(0,0,0,0.25);
+    --passed: #34c759;
+    --failed: #ff453a;
+    --changed: #ff9f0a;
+    --new: #30d158;
+    --committed: #0a84ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #000000;
+      --surface: #111113;
+      --ink: #f5f5f7;
+      --ink-2: #a1a1a6;
+      --ink-3: #8e8e93;
+      --line: #2c2c2e;
+      --accent: #2f7cf6;
+      --link: #4c9bff;
+      --band: #111113;
+      --term: #000000;
+      --menubar: rgba(30,30,32,0.92);
+      --shadow: 0 30px 60px -30px rgba(0,0,0,0.8);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 17px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--link); }
+  img { max-width: 100%; height: auto; display: block; }
+  code, pre, kbd { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  h1, h2, h3 { margin: 0; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  .muted { color: var(--ink-2); }
+
+  /* Navigation */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--ground) 86%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; padding: 12px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 600; }
+  .brand img { width: 28px; height: 28px; }
+  .links { display: flex; flex-wrap: wrap; gap: 4px 20px; flex: 1 1 auto; font-size: 14px; }
+  .links a { color: var(--ink-2); text-decoration: none; padding: 6px 0; }
+  .links a:hover { color: var(--ink); }
+
+  /* Buttons */
+  .button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 0 24px; border-radius: 999px;
+    font-size: 17px; font-weight: 500; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  .button:hover { filter: brightness(1.08); }
+  .button.quiet { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .button.small { min-height: 34px; padding: 0 16px; font-size: 14px; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 88px 0 40px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .hero .icon { width: 112px; height: 112px; }
+  .hero h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.04; letter-spacing: -0.035em; max-width: 920px; }
+  .hero p.lead { font-size: clamp(18px, 2.2vw, 21px); color: var(--ink-2); max-width: 740px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px; }
+  .meta { font-size: 13px; color: var(--ink-2); }
+  .shot { border-radius: 14px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .hero-shot { padding: 24px 0 96px; }
+
+  /* Three pillars */
+  .pillars { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .pillars .wrap { padding: 88px 24px; display: flex; flex-direction: column; gap: 40px; }
+  .pillars-title { font-size: clamp(28px, 3.4vw, 40px); line-height: 1.1; text-align: center; }
+  .pillars .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .pillar { display: flex; flex-direction: column; gap: 10px; padding: 28px; border-radius: 18px; border: 1px solid var(--line); background: var(--ground); color: var(--ink); text-decoration: none; transition: border-color 0.15s ease-out; }
+  .pillar:hover { border-color: var(--accent); }
+  .pillar svg { color: var(--accent); }
+  .pillar h3 { font-size: 22px; }
+  .pillar p { font-size: 16px; color: var(--ink-2); flex: 1 1 auto; }
+  .pillar .more { font-size: 15px; font-weight: 500; color: var(--link); }
+  .pillar .more::after { content: " ↓"; }
+
+  /* Alternating rows */
+  .rows { display: flex; flex-direction: column; gap: 96px; padding: 96px 0; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 48px; }
+  .row.flip { flex-wrap: wrap-reverse; }
+  .row .text { flex: 1 1 320px; display: flex; flex-direction: column; gap: 14px; }
+  .row .media { flex: 2 1 520px; min-width: 0; }
+  .row h2 { font-size: clamp(28px, 3.4vw, 36px); line-height: 1.1; }
+  .row p { font-size: 18px; color: var(--ink-2); }
+  .eyebrow { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+  /* Menu bar */
+  .menubar-section { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .menubar-section .inner { display: flex; flex-wrap: wrap; align-items: center; gap: 56px; padding: 96px 0; }
+  .menubar-section .text { flex: 1 1 340px; display: flex; flex-direction: column; gap: 16px; }
+  .menubar-section h2 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.05; }
+  .menubar-section .lead { font-size: 19px; color: var(--ink-2); }
+  .ticks { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .ticks li { display: flex; gap: 12px; align-items: flex-start; font-size: 16px; }
+  .ticks svg { flex: none; margin-top: 3px; color: var(--accent); }
+  .menubar-demo { flex: 1.4 1 480px; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; }
+  .menubar {
+    width: 100%; height: 34px; display: flex; align-items: center; justify-content: flex-end; gap: 20px;
+    padding: 0 16px; border-radius: 12px 12px 0 0; background: var(--menubar);
+    border: 1px solid var(--line); border-bottom: none; font-size: 14px; color: var(--ink);
+  }
+  .menubar .status { display: flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 12%, transparent); font-variant-numeric: tabular-nums; }
+  .menubar .faint { color: var(--ink-3); }
+  .panel-holder { width: 100%; display: flex; justify-content: flex-end; padding: 6px 10px 40px 40px; border: 1px solid var(--line); border-top: none; border-radius: 0 0 16px 16px; background: linear-gradient(var(--ground), var(--surface)); }
+  .panel { width: min(400px, 100%); border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden; }
+
+  /* Command line */
+  .cli { background: var(--band); color: var(--band-ink); }
+  .cli .inner { padding: 96px 0; display: flex; flex-direction: column; gap: 48px; }
+  .cli h2 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.05; }
+  .cli .lead { font-size: 19px; color: var(--band-ink-2); max-width: 720px; }
+  .cli .head { display: flex; flex-direction: column; gap: 16px; }
+  .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; }
+  .term { background: var(--term); border: 1px solid #2c2c2e; border-radius: 12px; overflow: hidden; min-width: 0; }
+  .term .bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border-bottom: 1px solid #1c1c1e; }
+  .term .bar span { width: 11px; height: 11px; border-radius: 50%; background: #3a3a3c; }
+  .term .bar em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--term-dim); }
+  .term pre { margin: 0; padding: 18px 20px 22px; overflow-x: auto; font-size: 13px; line-height: 1.7; color: var(--term-ink); }
+  .term .p { color: var(--term-dim); }
+  .term .ok { color: var(--passed); }
+  .term .bad { color: var(--failed); }
+  .term .chg { color: var(--changed); }
+  .term .cmt { color: var(--committed); }
+  .term .new { color: var(--new); }
+  .commands { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1px; background: #2c2c2e; border: 1px solid #2c2c2e; border-radius: 12px; overflow: hidden; }
+  .commands div { background: var(--band); padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; }
+  .commands code { font-size: 15px; color: var(--band-ink); }
+  .commands span { font-size: 14px; color: var(--band-ink-2); line-height: 1.45; }
+  .note { font-size: 13px; color: var(--band-ink-2); }
+
+  /* Keyboard */
+  .keys { padding: 96px 0; display: flex; flex-direction: column; gap: 28px; align-items: center; text-align: center; }
+  .keys h2 { font-size: clamp(28px, 3.4vw, 36px); }
+  .keygrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; width: 100%; }
+  .key { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .key kbd { font-family: inherit; font-size: 22px; font-weight: 600; }
+  .key span { font-size: 14px; color: var(--ink-2); }
+
+  /* Install */
+  .install { background: var(--surface); border-top: 1px solid var(--line); }
+  .install .inner { padding: 88px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
+  .install h2 { font-size: clamp(28px, 3.4vw, 36px); line-height: 1.1; }
+  .install .step { display: flex; flex-direction: column; gap: 12px; }
+  .install pre { margin: 0; overflow-x: auto; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
+
+  footer { border-top: 1px solid var(--line); }
+  footer .inner { padding: 32px 0 48px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
+  footer nav { padding: 0; gap: 18px; }
+
+  @media (max-width: 640px) {
+    /* The name and Download only: the section links would wrap into a header a quarter of the screen tall. */
+    .links { display: none; }
+    nav { justify-content: space-between; }
+    .hero { padding-top: 56px; }
+    .rows, .menubar-section .inner, .cli .inner, .keys { padding-top: 64px; padding-bottom: 64px; }
+    .terms { grid-template-columns: minmax(0, 1fr); }
+    .menubar .faint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav aria-label="Main">
+      <a class="brand" href="#top"><img src="images/app-icon.png" alt="">SnapshotKit</a>
+      <div class="links">
+        <a href="#app">App</a>
+        <a href="#menu-bar">Menu bar</a>
+        <a href="#cli">Command line</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/TobiasRe/SnapshotKit">GitHub</a>
+      </div>
+      <a class="button small" href="https://github.com/TobiasRe/SnapshotKit/releases/latest">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="wrap hero">
+    <img class="icon" src="images/app-icon.png" alt="SnapshotKit app icon">
+    <h1>Every snapshot test, in one window.</h1>
+    <p class="lead">SnapshotKit is a native Mac app, menu bar item and command-line tool for the reference images of swift-snapshot-testing. Browse them, review what your branch changed, and re-record what should change.</p>
+    <div class="actions">
+      <a class="button" href="https://github.com/TobiasRe/SnapshotKit/releases/latest">Download for Mac</a>
+      <a class="button quiet" href="https://github.com/TobiasRe/SnapshotKit">View on GitHub</a>
+    </div>
+    <p class="meta">Free and open source (MIT) · macOS 14 or later · Apple silicon</p>
+  </section>
+
+  <section class="wide hero-shot">
+    <img class="shot" src="images/library.png" width="2800" height="1760" alt="The SnapshotKit library: every snapshot of a project by test, with a large preview of the selected one and its variants">
+  </section>
+
+  <section id="features" class="pillars">
+    <div class="wrap">
+      <h2 class="pillars-title">One project, three ways to work with it.</h2>
+      <div class="grid">
+        <a class="pillar" href="#app">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="14" rx="2.5"/><path d="M2.5 8h19M9 8v10"/></svg>
+          <h3>The app</h3>
+          <p>Browse every reference image, review what your branch changed side by side or as a difference, see why tests failed, and re-record what should change.</p>
+          <span class="more">See the app</span>
+        </a>
+        <a class="pillar" href="#menu-bar">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="19" height="4" rx="1.5"/><rect x="12" y="9" width="9.5" height="12" rx="2"/><circle cx="16.75" cy="5" r="0.6" fill="currentColor"/></svg>
+          <h3>The menu bar</h3>
+          <p>Run progress as a filling pie, the failing count, and your projects one click away, while you keep working in Xcode.</p>
+          <span class="more">See the menu bar</span>
+        </a>
+        <a class="pillar" href="#cli">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M7 10l3 2.5L7 15M12.5 15H17"/></svg>
+          <h3>The command line</h3>
+          <p>snapkit lists, compares, runs and re-records snapshots the way CI does, for scripts, CI jobs and anyone who lives in a shell.</p>
+          <span class="more">See the CLI</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="app" class="wrap rows">
+    <div class="row">
+      <div class="text">
+        <span class="eyebrow">Review</span>
+        <h2>Review snapshots like code.</h2>
+        <p>Every PNG that differs from the base branch, committed or not, against the merge-base or the branch tip. Each change names the commit that last touched it.</p>
+      </div>
+      <img class="media shot" src="images/changes-dark.png" width="2200" height="1400" alt="Changed snapshots compared with the base branch, side by side, in dark mode">
+    </div>
+    <div class="row flip">
+      <img class="media shot" src="images/triage.png" width="2200" height="1400" alt="Failing tests with labels such as Flaky and Invisible, and a strip of each test's recent runs">
+      <div class="text">
+        <span class="eyebrow">Failures</span>
+        <h2>Know why it failed.</h2>
+        <p>Reference, actual and difference for the last run or an .xcresult from CI. Each difference is diagnosed, flaky tests are named, and every test shows its recent runs.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="text">
+        <span class="eyebrow">Diagnosis</span>
+        <h2>Invisible differences, explained.</h2>
+        <p>When a test fails on another machine without a visible change, SnapshotKit says so and offers the precision that would pass.</p>
+      </div>
+      <img class="media shot" src="images/diagnosis.png" width="1640" height="960" alt="A note saying the difference is not visible, with a button to copy perceptualPrecision: 0.99">
+    </div>
+    <div class="row flip">
+      <img class="media shot" src="images/library-grid.png" width="2200" height="1400" alt="The snapshot library as a grid, with changed, failing, uncommitted and orphaned filters">
+      <div class="text">
+        <span class="eyebrow">Update</span>
+        <h2>Re-record what should change.</h2>
+        <p>One test, a suite, every dark variant you filtered to, the failing ones or all of them, run the way CI runs them. The record trait is restored even if you quit, and the new references are verified.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="menu-bar" class="menubar-section">
+    <div class="wrap inner">
+      <div class="text">
+        <span class="eyebrow">Menu bar</span>
+        <h2>Your test runs, one glance away.</h2>
+        <p class="lead">Turn on <em>Show in menu bar</em> and SnapshotKit keeps an eye on your projects while you work in Xcode.</p>
+        <ul class="ticks">
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>A pie fills as tests complete, with a done/total count, and shows the failing count when nothing runs.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Live progress for every running project, passed and failed so far, the test running now, and Cancel.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Your failing, pinned and recent projects, to open or run in one click.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Close the window and it keeps running. The dock icon shows the failing count too.</span></li>
+        </ul>
+      </div>
+      <div class="menubar-demo" role="img" aria-label="The SnapshotKit menu bar item at 13 of 30 tests, with its panel open: SampleApp running tests, 12 passed and 1 failed, and a list of projects with payments-ui marked 3 failing">
+        <div class="menubar" aria-hidden="true">
+          <span class="faint">Xcode</span>
+          <span class="status">
+            <svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 8 L8 2.6 A5.4 5.4 0 0 1 10.3 12.9 Z" fill="currentColor"/></svg>
+            13/30
+          </span>
+          <span class="faint">Fri 9:41</span>
+        </div>
+        <div class="panel-holder" aria-hidden="true">
+          <picture class="panel">
+            <source srcset="images/menubar-panel-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="images/menubar-panel-light.png" width="680" height="527" alt="">
+          </picture>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cli" class="cli">
+    <div class="wrap inner">
+      <div class="head">
+        <span class="eyebrow" style="color: #4c9bff">Command line</span>
+        <h2>Everything in the app, from the terminal too.</h2>
+        <p class="lead">The <code>snapkit</code> CLI reads the same projects, runs tests the way CI does and re-records them the same safe way, for scripts, CI jobs and people who live in a shell.</p>
+      </div>
+
+      <div class="terms">
+        <div class="term">
+          <div class="bar" aria-hidden="true"><span></span><span></span><span></span><em>What did my branch change?</em></div>
+<pre><span class="p">$</span> snapkit changes --base develop
+Snapshots changed vs develop (Merge-base 0ad108e8): 22
+BubbleTests
+  <span class="chg">Uncommitted</span>  …/BubbleTests/emoji.dark.png
+  <span class="chg">Uncommitted</span>  …/BubbleTests/emoji.light.png
+ComposerTests
+  <span class="cmt">Committed</span>    …/ComposerTests/typing.dark.png
+ReactionTests
+  <span class="new">New</span>          …/ReactionTests/reacted.dark.png
+<span class="p">…</span></pre>
+        </div>
+        <div class="term">
+          <div class="bar" aria-hidden="true"><span></span><span></span><span></span><em>Why did CI fail?</em></div>
+<pre><span class="p">$</span> snapkit failures
+ShopTests/ProductCardTests
+  <span class="bad">✘</span> trailShoes()  (1/1 repetitions failed)
+    reference: …/ProductCardTests/trailShoes.light.png
+    Visible change in a 105×58 area at 847, 136.
+  <span class="bad">✘</span> waterBottle()  (1/1 repetitions failed)
+    reference: …/ProductCardTests/waterBottle.light.png
+    Visible change in a 105×58 area at 847, 136.
+ShopTests/ShopScreenTests
+  <span class="bad">✘</span> productList()  (1/1 repetitions failed)
+    Visible change in a 105×956 area at 739, 516.</pre>
+        </div>
+      </div>
+
+      <div class="commands">
+        <div><code>snapshots</code><span>List every snapshot with its state; find orphans; sort by size or recency.</span></div>
+        <div><code>changes</code><span>Snapshots that differ from the base branch, at the merge-base or the tip.</span></div>
+        <div><code>record</code><span>Re-record the tests of the snapshots whose path contains every word you give.</span></div>
+        <div><code>run</code><span>Run the snapshot tests the way CI does, locally or on a remote Mac.</span></div>
+        <div><code>rerecord</code><span>Re-record the failing suites of the last run, then verify.</span></div>
+        <div><code>failures</code><span>List failures from the last run or an .xcresult and diagnose each one.</span></div>
+        <div><code>flaky</code><span>Run the failing tests several times and say which are flaky.</span></div>
+        <div><code>history</code><span>Recent runs and flaky tests, for the project or one test.</span></div>
+        <div><code>diff</code><span>Pixel and perceptual difference of two PNGs, with a precision that passes.</span></div>
+        <div><code>config</code><span>The configuration CI uses, with a check of Xcode and the simulator.</span></div>
+        <div><code>restore</code><span>Undo a record patch left behind by an interrupted run.</span></div>
+        <div><code>projects</code><span>Scan folders for repositories with snapshot tests, or list them.</span></div>
+      </div>
+      <p class="note">Output from the sample projects that <code>scripts/make-samples.sh</code> generates, with paths shortened.</p>
+    </div>
+  </section>
+
+  <section class="wrap keys">
+    <h2>At home on the keyboard.</h2>
+    <div class="keygrid">
+      <div class="key"><kbd>⌘K</kbd><span>Projects and commands</span></div>
+      <div class="key"><kbd>⌘F</kbd><span>Filter the list</span></div>
+      <div class="key"><kbd>Space</kbd><span>Quick Look</span></div>
+      <div class="key"><kbd>⌥⌘O</kbd><span>Open the test in Xcode</span></div>
+      <div class="key"><kbd>⇧⌘R</kbd><span>Re-record the selection</span></div>
+    </div>
+  </section>
+
+  <section id="install" class="install">
+    <div class="wrap inner">
+      <div class="step">
+        <h2>Install</h2>
+        <p class="muted">Download the app and the CLI from the latest release, for Apple silicon and macOS 14 or later. Unzip and move SnapshotKit.app to Applications.</p>
+        <p><a class="button" href="https://github.com/TobiasRe/SnapshotKit/releases/latest">Download for Mac</a></p>
+      </div>
+      <div class="step">
+        <h3>First launch</h3>
+        <p class="muted">The app is ad-hoc signed and not notarized. Choose Open Anyway in System Settings › Privacy &amp; Security, or run:</p>
+        <pre>xattr -dr com.apple.quarantine \
+  /Applications/SnapshotKit.app</pre>
+      </div>
+      <div class="step">
+        <h3>From source</h3>
+        <p class="muted">With Xcode 26 or later, this builds the app and the CLI into ./dist.</p>
+        <pre>git clone https://github.com/TobiasRe/SnapshotKit
+cd SnapshotKit
+scripts/make-app.sh</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap inner">
+    <span>SnapshotKit is MIT licensed. Built for swift-snapshot-testing; not affiliated with Point-Free.</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/TobiasRe/SnapshotKit">GitHub</a>
+      <a href="https://github.com/TobiasRe/SnapshotKit/releases">Releases</a>
+      <a href="https://github.com/TobiasRe/SnapshotKit/blob/main/CHANGELOG.md">Changelog</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

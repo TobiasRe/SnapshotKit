@@ -227,7 +227,8 @@ SnapshotKit itself. Visual guidelines are in [docs/design.md](docs/design.md).
 Repository layout and naming: the Swift package follows SwiftPM conventions: `Sources/` and `Tests/` with one
 PascalCase folder per target (`SnapshotKitCore`, `SnapshotKit`, `SnapshotKitCLI`, which builds the `snapkit`
 executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects. Everything
-else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, and `assets/` for
+else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, `site/` for the
+website (a single static page, deployed to GitHub Pages by `.github/workflows/pages.yml`), and `assets/` for
 source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by `scripts/make-app.sh`; the
 `Assets/` folder inside it is Icon Composer's format). Root files keep their usual names (`README.md`,
 `LICENSE`, `CHANGELOG.md`, `Package.swift`).
