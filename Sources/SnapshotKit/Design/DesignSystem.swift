@@ -143,25 +143,6 @@ extension View {
     func primaryActionStyle() -> some View {
         buttonStyle(PrimaryActionButtonStyle())
     }
-
-    /// Solid content panel (never glass): hairline border, medium radius.
-    func panel() -> some View {
-        self
-            .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor)))
-    }
-
-    /// Soft blur where scrolling content meets a header, as Calendar does under its toolbar.
-    @ViewBuilder
-    func softTopEdge() -> some View {
-        if #available(macOS 26.0, *) {
-            self.scrollEdgeEffectStyle(.soft, for: .top)
-        } else {
-            self
-        }
-    }
 }
 
 /// Reads the contrast setting for `floatingGlass` (Liquid Glass adapts by itself; the fallbacks don't).

@@ -207,9 +207,10 @@ which is handy for trying the workflow out.
 
 ```bash
 swift test                              # core unit tests + the app's own snapshot tests
-scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min)
+scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min;
+                                        #   E2E_SIMULATOR="<name>" picks the simulator)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view
-scripts/make-samples.sh [dest]          # five sample projects with ~200 recorded snapshots to try the app on
+scripts/make-samples.sh [dest]          # five sample projects with ~140 recorded snapshots to try the app on
 ```
 
 `make-samples.sh` creates Shop, Weather, Chat, Fitness and DesignKit (Swift packages using

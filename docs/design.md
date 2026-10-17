@@ -138,7 +138,6 @@ can be followed between these views, and re-recording is available wherever a sn
   image (a ring with a pie), so it follows the menu bar's colour; the panel reuses the row and chip styles.
 - Scope controls degrade instead of clipping: segments with counts, then without, then a menu
   (`ViewThatFits`).
-- `softTopEdge()`: a soft scroll-edge blur under headers.
 
 ## Enforcement
 

@@ -10,6 +10,8 @@
 #   6. runs the same tests through the remote runner (local-directory transport) and a flakiness check
 #
 # Usage: scripts/e2e.sh [--keep] [--skip-remote] [--skip-interrupt]
+#   E2E_SIMULATOR="<name>" (environment) uses that simulator instead of the newest iPhone, e.g. to leave
+#   one that is busy with something else alone.
 # Requires: Xcode with an iOS simulator runtime, git, network access for swift-snapshot-testing.
 set -euo pipefail
 
@@ -49,15 +51,16 @@ sk() { (cd "$SAMPLE" && "$SNAPKIT" "$@"); }
 
 step "Pick the local Xcode and an iPhone simulator for the sample's CI file"
 XCODE_VERSION="$(xcodebuild -version | awk 'NR==1 {print $2}')"
-read -r SIM_NAME SIM_OS < <(xcrun simctl list devices available -j | python3 -c '
-import json, sys
+read -r SIM_NAME SIM_OS < <(xcrun simctl list devices available -j | E2E_SIMULATOR="${E2E_SIMULATOR:-}" python3 -c '
+import json, os as env, sys
 data = json.load(sys.stdin)["devices"]
+wanted = env.environ.get("E2E_SIMULATOR")
 best = None
 for runtime, devices in data.items():
     if ".iOS-" not in runtime: continue
     os = runtime.split(".iOS-")[1].replace("-", ".")
     for d in devices:
-        if d["name"].startswith("iPhone") and d.get("isAvailable", True):
+        if (d["name"] == wanted if wanted else d["name"].startswith("iPhone")) and d.get("isAvailable", True):
             key = tuple(int(x) for x in os.split("."))
             if best is None or key > best[0]: best = (key, d["name"], os)
 if not best: sys.exit("no iPhone simulator available")

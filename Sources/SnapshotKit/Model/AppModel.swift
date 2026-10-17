@@ -16,7 +16,6 @@ final class AppModel: ObservableObject {
     /// What the menu bar observes: the current project's changes, throttled.
     let menuState = MenuState()
     @Published var showQuickSwitcher = false
-    @Published var showProjectSettings = false
     @Published private(set) var isScanning = false
     @Published private(set) var startupNotice: String?
     /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
