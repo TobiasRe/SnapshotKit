@@ -5,6 +5,8 @@
 [![CI](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml/badge.svg)](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**[Website](https://tobiasre.github.io/SnapshotKit/) · [Download](https://github.com/TobiasRe/SnapshotKit/releases/latest) · [Changelog](CHANGELOG.md)**
+
 ![The SnapshotKit library: every snapshot of a project by test, with a large preview](docs/images/library.png)
 
 A macOS app (and `snapkit` CLI) for inspecting, managing and updating the reference images of iOS snapshot
