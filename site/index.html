@@ -63,6 +63,7 @@
   a { color: var(--link); }
   img { max-width: 100%; height: auto; display: block; }
   code, pre, kbd { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  /* Sections that are also .wrap or .wide set only padding-block, so these side gutters stay. */
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
   .wide { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
   h1, h2, h3 { margin: 0; letter-spacing: -0.02em; }
@@ -96,14 +97,14 @@
   .button.small { min-height: 34px; padding: 0 16px; font-size: 14px; }
 
   /* Hero */
-  .hero { text-align: center; padding: 88px 0 40px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .hero { text-align: center; padding-block: 88px 40px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
   .hero .icon { width: 112px; height: 112px; }
   .hero h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.04; letter-spacing: -0.035em; max-width: 920px; }
   .hero p.lead { font-size: clamp(18px, 2.2vw, 21px); color: var(--ink-2); max-width: 740px; }
   .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px; }
   .meta { font-size: 13px; color: var(--ink-2); }
   .shot { border-radius: 14px; border: 1px solid var(--line); box-shadow: var(--shadow); }
-  .hero-shot { padding: 24px 0 96px; }
+  .hero-shot { padding-block: 24px 96px; }
 
   /* Three pillars */
   .pillars { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -119,7 +120,7 @@
   .pillar .more::after { content: " ↓"; }
 
   /* Alternating rows */
-  .rows { display: flex; flex-direction: column; gap: 96px; padding: 96px 0; }
+  .rows { display: flex; flex-direction: column; gap: 96px; padding-block: 96px; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 48px; }
   .row.flip { flex-wrap: wrap-reverse; }
   .row .text { flex: 1 1 320px; display: flex; flex-direction: column; gap: 14px; }
@@ -130,7 +131,7 @@
 
   /* Menu bar */
   .menubar-section { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .menubar-section .inner { display: flex; flex-wrap: wrap; align-items: center; gap: 56px; padding: 96px 0; }
+  .menubar-section .inner { display: flex; flex-wrap: wrap; align-items: center; gap: 56px; padding-block: 96px; }
   .menubar-section .text { flex: 1 1 340px; display: flex; flex-direction: column; gap: 16px; }
   .menubar-section h2 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.05; }
   .menubar-section .lead { font-size: 19px; color: var(--ink-2); }
@@ -150,7 +151,7 @@
 
   /* Command line */
   .cli { background: var(--band); color: var(--band-ink); }
-  .cli .inner { padding: 96px 0; display: flex; flex-direction: column; gap: 48px; }
+  .cli .inner { padding-block: 96px; display: flex; flex-direction: column; gap: 48px; }
   .cli h2 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.05; }
   .cli .lead { font-size: 19px; color: var(--band-ink-2); max-width: 720px; }
   .cli .head { display: flex; flex-direction: column; gap: 16px; }
@@ -173,7 +174,7 @@
   .note { font-size: 13px; color: var(--band-ink-2); }
 
   /* Keyboard */
-  .keys { padding: 96px 0; display: flex; flex-direction: column; gap: 28px; align-items: center; text-align: center; }
+  .keys { padding-block: 96px; display: flex; flex-direction: column; gap: 28px; align-items: center; text-align: center; }
   .keys h2 { font-size: clamp(28px, 3.4vw, 36px); }
   .keygrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; width: 100%; }
   .key { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px; }
@@ -182,13 +183,13 @@
 
   /* Install */
   .install { background: var(--surface); border-top: 1px solid var(--line); }
-  .install .inner { padding: 88px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
+  .install .inner { padding-block: 88px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 40px; }
   .install h2 { font-size: clamp(28px, 3.4vw, 36px); line-height: 1.1; }
   .install .step { display: flex; flex-direction: column; gap: 12px; }
   .install pre { margin: 0; overflow-x: auto; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
 
   footer { border-top: 1px solid var(--line); }
-  footer .inner { padding: 32px 0 48px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
+  footer .inner { padding-block: 32px 48px; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
   footer nav { padding: 0; gap: 18px; }
 
   @media (max-width: 640px) {
