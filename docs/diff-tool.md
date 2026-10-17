@@ -4,8 +4,8 @@ When a snapshot test fails, swift-snapshot-testing ends the failure message with
 tool*, given the reference image and the image the test produced. Name `snapkit open` as that tool and the
 command opens the pair in a SnapshotKit compare window.
 
-> Available after 0.1.0: build from source until the next release, or use `snapkit diff` (below), which 0.1.0
-> has.
+> `snapkit open` and the compare window need SnapshotKit 0.1.1 or later. `snapkit diff` (below) works with every
+> version.
 
 ## Set it up
 
@@ -81,7 +81,7 @@ If you'd rather not leave the terminal, name `snapkit diff` instead:
 ```
 
 The command then prints the summary and, for invisible or tiny differences, the precision that would pass.
-Append `-o diff.png` to write the difference image. This works with 0.1.0.
+Append `-o diff.png` to write the difference image.
 
 ## Which app opens
 
