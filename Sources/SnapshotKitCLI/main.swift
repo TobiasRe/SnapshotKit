@@ -22,6 +22,9 @@ commands:
   history    [--repo P] [TEST]                   recent runs and flaky tests; TEST = Bundle/Suite/test()
   restore    [--repo P]                          undo a leftover record patch
   diff       A.png B.png [-o OUT.png]             pixel and perceptual difference, with a precision that passes
+  open       REFERENCE.png ACTUAL.png [--app PATH]
+                                                 the same summary, then compare them in SnapshotKit; as a diff
+                                                 tool: .snapshots(diffTool: "snapkit open")
   projects   scan ROOT... | list
 
 Every command first restores record patches left behind by an interrupted run.
@@ -45,7 +48,7 @@ func parse(_ args: [String]) -> Options {
     var o = Options()
     var rest = args[...]
     o.command = rest.popFirst() ?? ""
-    let takesValue: Set<String> = ["--repo", "--only", "--module", "--iterations", "--suite", "--xcresult", "--out", "--base", "--filter", "--sort", "-o"]
+    let takesValue: Set<String> = ["--repo", "--only", "--module", "--iterations", "--suite", "--xcresult", "--out", "--base", "--filter", "--sort", "--app", "-o"]
     let optionalValue: Set<String> = ["--remote"]
     while let arg = rest.popFirst() {
         if takesValue.contains(arg), let v = rest.popFirst() {
@@ -466,17 +469,26 @@ func main() async {
 
     case "diff":
         // Explains what kind of difference it is and which precision would pass.
-        guard o.positional.count == 2,
-              let a = FileManager.default.contents(atPath: o.positional[0]).flatMap(PixelImage.init(data:)),
-              let b = FileManager.default.contents(atPath: o.positional[1]).flatMap(PixelImage.init(data:)) else { fail("usage: snapkit diff A.png B.png [-o OUT.png]") }
-        let diff = ImageDiff.compare(a, b)
-        say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@, largest ΔE %.1f", diff.changedPixels, diff.changedFraction * 100,
-                                                    diff.sizeChanged ? ", size changed" : "", diff.maxPerceptualDelta))
-        let diagnosis = DiffDiagnosis(diff)
-        if !diff.isIdentical { say(diagnosis.summary) }
-        if let suggestion = diagnosis.suggestion { say("Would pass with: \(suggestion)") }
+        guard o.positional.count == 2, let diff = describeDiff(o.positional[0], o.positional[1])
+        else { fail("usage: snapkit diff A.png B.png [-o OUT.png]") }
         if let out = o.value("-o") { try? diff.image.pngData()?.write(to: URL(fileURLWithPath: out)) }
         exit(diff.isIdentical ? 0 : 1)
+
+    case "open":
+        // swift-snapshot-testing's diff tool: it appends the reference and the actual image's paths,
+        // so the failure message ends in a command that opens the pair in SnapshotKit.
+        guard o.positional.count == 2 else { fail("usage: snapkit open REFERENCE.png ACTUAL.png [--app PATH]") }
+        let request = CompareRequest(reference: URL(fileURLWithPath: o.positional[0]), actual: URL(fileURLWithPath: o.positional[1]))
+        for url in [request.reference, request.actual] where !FileManager.default.fileExists(atPath: url.path) {
+            fail("no such file: \(url.path)")
+        }
+        _ = describeDiff(request.reference.path, request.actual.path)
+        let app = o.value("--app") ?? ProcessInfo.processInfo.environment["SNAPSHOTKIT_APP"]
+        let opened = try? Shell.run(["open"] + (app.map { ["-a", $0] } ?? ["-b", "org.snapshotkit.SnapshotKit"]) + [request.url.absoluteString])
+        guard opened?.succeeded == true else {
+            fail("Couldn't open SnapshotKit\(app.map { " at \($0)" } ?? ""). Install SnapshotKit.app from "
+                 + "https://github.com/TobiasRe/SnapshotKit/releases, or pass --app PATH.")
+        }
 
     case "projects":
         let store = ProjectStore()
@@ -501,6 +513,20 @@ func main() async {
         fail("unknown command '\(o.command)'\n\n" + usage)
     }
     exit(0)
+}
+
+/// Prints how two PNGs differ (and which precision would pass); nil when either can't be read.
+@discardableResult
+func describeDiff(_ pathA: String, _ pathB: String) -> ImageDiffResult? {
+    guard let a = FileManager.default.contents(atPath: pathA).flatMap(PixelImage.init(data:)),
+          let b = FileManager.default.contents(atPath: pathB).flatMap(PixelImage.init(data:)) else { return nil }
+    let diff = ImageDiff.compare(a, b)
+    say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@, largest ΔE %.1f", diff.changedPixels, diff.changedFraction * 100,
+                                                diff.sizeChanged ? ", size changed" : "", diff.maxPerceptualDelta))
+    let diagnosis = DiffDiagnosis(diff)
+    if !diff.isIdentical { say(diagnosis.summary) }
+    if let suggestion = diagnosis.suggestion { say("Would pass with: \(suggestion)") }
+    return diff
 }
 
 await main()

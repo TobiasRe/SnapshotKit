@@ -53,6 +53,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// `snapshotkit://compare?reference=…&actual=…`, from `snapkit open` (the diff tool) or a link.
+    /// Taken as the Apple event itself: SwiftUI would otherwise route it to a scene and open
+    /// another main window instead of a compare window.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(openURL(_:reply:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass),
+                                                     andEventID: AEEventID(kAEGetURL))
+    }
+
+    @objc private func openURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: text), let request = CompareRequest(url: url) else { return }
+        MainActor.assumeIsolated { CompareWindows.show(request) }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { AppModel.shared.applicationWillTerminate() }
     }

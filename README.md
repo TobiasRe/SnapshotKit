@@ -106,9 +106,33 @@ snapkit flaky --iterations 10
 snapkit failures --xcresult ~/Downloads/ci.xcresult   # diagnoses each failure, shows recent runs
 snapkit history 'AppSnapshotTests/CardTests/card()'   # one test's runs: ✔ ✘ ◐
 snapkit diff reference.png failure.png                # "No visible difference … perceptualPrecision: 0.99"
+snapkit open reference.png failure.png                # the same, then compare them in SnapshotKit
 snapkit changes --filter dark
 snapkit run --remote      # on the machine in remoteHost
 ```
+
+### Use SnapshotKit as your diff tool
+
+swift-snapshot-testing ends a failure message with a command for your diff tool, given the reference and
+the image the test produced. Name `snapkit open` and that command opens the pair in a SnapshotKit compare
+window (side by side, slider, difference, toggle and the diagnosis), with **Show in Project** to jump to
+the snapshot in its library:
+
+```swift
+// Swift Testing: on a suite, or a base suite the others nest in
+@Suite(.snapshots(diffTool: "snapkit open"))
+struct CheckoutViewTests { … }
+
+// XCTest: in a shared base class
+override func invokeTest() {
+    withSnapshotTesting(diffTool: "snapkit open") { super.invokeTest() }
+}
+```
+
+The message then ends in `snapkit open "<reference>" "<actual>"`: run it from Terminal (or Xcode's
+report navigator, copied). It prints the same summary as `snapkit diff` and opens SnapshotKit.app, or the
+app given with `--app PATH` or `SNAPSHOTKIT_APP`. For a terminal-only answer, use `"snapkit diff"` instead.
+Other tools can open the same window with a `snapshotkit://compare?reference=<path>&actual=<path>` link.
 
 ## Configuration
 

@@ -155,6 +155,19 @@ final class AppModel: ObservableObject {
         selectedPath = project.path
     }
 
+    /// Opens the repository (adding it if it's new) and selects the snapshot at `path` in its library
+    /// once the library has loaded.
+    func reveal(snapshot path: String, in repository: URL) {
+        open(path: repository.path)
+        guard let model = models[Project(path: repository.path).path] else { return }
+        Task {
+            for _ in 0..<100 where !model.isInLibrary(path) {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            model.showInLibrary(path: path)
+        }
+    }
+
     private func openSelected() {
         guard let path = selectedPath else {
             current = nil

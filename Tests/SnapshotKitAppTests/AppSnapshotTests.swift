@@ -337,6 +337,29 @@ extension AppUITests {
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
         }
 
+        /// A pair opened from outside (`snapkit open`, the diff tool): its own window, the header in the
+        /// title bar beside the traffic lights.
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func compareWindow(appearance: NSAppearance.Name) throws {
+            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let app = AppModel(store: AppFixtures.store())
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-compare-window")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let reference = dir.appendingPathComponent("payButton.dark.png"), actual = dir.appendingPathComponent("actual.png")
+            try AppFixtures.reference.write(to: reference)
+            try AppFixtures.actual.write(to: actual)
+            let request = CompareRequest(reference: reference, actual: actual)
+            ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual),
+                                   for: CompareWindow.identity(of: request))
+            let view = CompareWindow(request: request,
+                                     location: (URL(fileURLWithPath: "/work/payments-ui"),
+                                                "Tests/AppSnapshotTests/__Snapshots__/CheckoutViewTests/payButton.dark.png"),
+                                     leadingInset: 72)
+                .environmentObject(app)
+            assertSnapshot(of: host(view, size: CGSize(width: 900, height: 560), appearance: appearance), as: Self.strategy,
+                           named: appearance == .darkAqua ? "dark" : "light")
+        }
+
         /// The floating bar drops stats and size instead of wrapping.
         @Test func compareNarrowPane() {
             UserDefaults.standard.set(CompareMode.difference.rawValue, forKey: "compareMode")
@@ -437,6 +460,10 @@ extension AppUITests {
             settle(hosting)
             if !keepFocus {
                 window.makeFirstResponder(nil)
+                settle(hosting)
+            } else if let editor = window.firstResponder as? NSTextView {
+                // The caret blinks, so a render caught it on or off by chance; leave it out.
+                editor.insertionPointColor = .clear
                 settle(hosting)
             }
             return hosting
