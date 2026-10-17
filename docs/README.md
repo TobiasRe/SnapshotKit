@@ -6,6 +6,8 @@ reference images exactly as they do today; SnapshotKit — a native Mac app, men
 works with those images: browse every snapshot, review what your branch changed, run the tests the way CI does,
 find out why they failed, and re-record what should change.
 
+![SnapshotKit comparing a changed snapshot side by side: the same screen on the base branch and on the feature branch](images/compare.png)
+
 > **What SnapshotKit is not.** It isn't a snapshot testing library and doesn't replace swift-snapshot-testing.
 > There's no package to add and no test code to change: it reads your repository (the `__Snapshots__` folders,
 > your test sources and CI files) and the results your test runs produce. Without swift-snapshot-testing in your
@@ -19,8 +21,6 @@ find out why they failed, and re-record what should change.
    your repository.
 3. **SnapshotKit works with them** — it finds the images, reads how CI runs the tests, shows changes and
    failures, and re-records by switching swift-snapshot-testing's record mode on and off for you.
-
-![The SnapshotKit library](images/library.png)
 
 ## Start here
 
