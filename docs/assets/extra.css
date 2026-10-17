@@ -1,0 +1,60 @@
+/* The hosted docs in the website's colours: system font, the app's blue, calm surfaces. */
+:root {
+  --md-primary-fg-color: #0a66e4;
+  --md-primary-fg-color--light: #4c9bff;
+  --md-primary-fg-color--dark: #0848a8;
+  --md-accent-fg-color: #0a66e4;
+  --md-text-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --md-code-font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1c1c1e;
+  --md-accent-fg-color: #4c9bff;
+  --md-typeset-a-color: #4c9bff;
+  --md-default-bg-color: #111113;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #fbfbfd;
+  --md-primary-bg-color: #1d1d1f;
+  --md-typeset-a-color: #0a5bd3;
+}
+
+/* A light header like the website's, with a hairline instead of a coloured bar. */
+[data-md-color-scheme="default"] .md-header,
+[data-md-color-scheme="default"] .md-tabs {
+  color: #1d1d1f;
+  border-bottom: 1px solid #e5e5ea;
+  box-shadow: none;
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  border-bottom: 1px solid #2c2c2e;
+  box-shadow: none;
+}
+
+.md-header__button.md-logo img {
+  height: 1.6rem;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+.md-typeset h2 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Screenshots: rounded, with a hairline, like on the website. */
+.md-typeset img {
+  border-radius: 10px;
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.72rem;
+}

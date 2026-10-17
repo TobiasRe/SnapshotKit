@@ -1,0 +1,96 @@
+# The hosted documentation: docs/ built with MkDocs Material and published with the website
+# (.github/workflows/pages.yml) at https://tobiasre.github.io/SnapshotKit/docs/.
+# Preview: pip install -r requirements-docs.txt && mkdocs serve
+site_name: SnapshotKit
+site_description: Documentation for SnapshotKit, the Mac app, menu bar item and CLI for swift-snapshot-testing.
+site_url: https://tobiasre.github.io/SnapshotKit/docs/
+repo_url: https://github.com/TobiasRe/SnapshotKit
+repo_name: TobiasRe/SnapshotKit
+edit_uri: edit/main/docs/
+copyright: SnapshotKit is MIT licensed. Not affiliated with Point-Free.
+
+docs_dir: docs
+site_dir: build/docs-site
+
+theme:
+  name: material
+  logo: images/app-icon.png
+  favicon: images/app-icon.png
+  # The system font, like the app and the website; nothing is loaded from Google.
+  font: false
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.footer
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+extra_css:
+  - assets/extra.css
+
+extra:
+  homepage: https://tobiasre.github.io/SnapshotKit/
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/TobiasRe/SnapshotKit
+      name: SnapshotKit on GitHub
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.keys
+
+nav:
+  - Overview: README.md
+  - Getting started: getting-started.md
+  - Using the app:
+      - Projects and scanning: projects.md
+      - The snapshot library: library.md
+      - Reviewing changes: changes.md
+      - Failures and flaky tests: failures.md
+      - Comparing images: comparing.md
+      - Running tests: running.md
+      - Re-recording: re-recording.md
+      - Remote runs: remote-runs.md
+      - The menu bar item: menu-bar.md
+      - Keyboard shortcuts: keyboard-shortcuts.md
+  - Reference:
+      - Configuration: configuration.md
+      - The snapkit CLI: cli.md
+      - Your diff tool: diff-tool.md
+      - Troubleshooting and FAQ: troubleshooting.md
+  - Contributors:
+      - Design system: design.md

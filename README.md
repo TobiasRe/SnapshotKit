@@ -5,7 +5,7 @@
 [![CI](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml/badge.svg)](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[Website](https://tobiasre.github.io/SnapshotKit/) · [Documentation](docs/README.md) · [Download](https://github.com/TobiasRe/SnapshotKit/releases/latest) · [Changelog](CHANGELOG.md)**
+**[Website](https://tobiasre.github.io/SnapshotKit/) · [Documentation](https://tobiasre.github.io/SnapshotKit/docs/) · [Download](https://github.com/TobiasRe/SnapshotKit/releases/latest) · [Changelog](CHANGELOG.md)**
 
 ![The SnapshotKit library: every snapshot of a project by test, with a large preview](docs/images/library.png)
 
@@ -237,6 +237,7 @@ scripts/e2e.sh [--keep]                 # end to end against a real simulator (s
                                         #   E2E_SIMULATOR="<name>" picks the simulator)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view
 scripts/make-samples.sh [dest]          # five sample projects with ~140 recorded snapshots to try the app on
+mkdocs serve                            # the documentation at localhost:8000 (pip install -r requirements-docs.txt)
 ```
 
 `make-samples.sh` creates Shop, Weather, Chat, Fitness and DesignKit (Swift packages using
@@ -254,7 +255,8 @@ Repository layout and naming: the Swift package follows SwiftPM conventions: `So
 PascalCase folder per target (`SnapshotKitCore`, `SnapshotKit`, `SnapshotKitCLI`, which builds the `snapkit`
 executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects. Everything
 else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, `site/` for the
-website (a single static page, deployed to GitHub Pages by `.github/workflows/pages.yml`), and `assets/` for
+website (a single static page; `.github/workflows/pages.yml` deploys it to GitHub Pages together with `docs/`
+built by MkDocs under `/docs/`), and `assets/` for
 source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by `scripts/make-app.sh`; the
 `Assets/` folder inside it is Icon Composer's format). Root files keep their usual names (`README.md`,
 `LICENSE`, `CHANGELOG.md`, `Package.swift`).

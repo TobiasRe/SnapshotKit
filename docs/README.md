@@ -41,7 +41,7 @@ change.
 | Page | Covers |
 |---|---|
 | [Design](design.md) | the app's design system: principles, tokens, components |
-| [The README's Development section](../README.md#development) | building, testing, the end-to-end script, sample projects |
+| [The README's Development section](https://github.com/TobiasRe/SnapshotKit#development) | building, testing, the end-to-end script, sample projects |
 
 ## Concepts in one minute
 
