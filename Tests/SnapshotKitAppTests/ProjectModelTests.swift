@@ -257,6 +257,26 @@ extension AppUITests {
             #expect(!titles.contains("Cancel Run"))
         }
 
+        @Test func reRecordAllCoversEveryTestButOrphans() {
+            let app = AppModel(store: AppFixtures.store())
+            let model = AppFixtures.project(.library, store: app.store)
+            app.show(model)
+            let files = model.recordableSnapshots
+            #expect(files.count == model.library!.files.count - 1)            // oldAvatar's test is gone
+            #expect(!files.contains { model.orphanIDs.contains($0.id) })
+            #expect(ProjectModel.testCount(files) == 5)                       // payButton's two variants are one test
+            #expect(PaletteCommand.available(app: app).map(\.title).contains("Re-record All Snapshot Tests…"))
+        }
+
+        @Test func reRecordAllWithNothingRecordedSaysSo() {
+            let model = AppFixtures.project(.empty, store: AppFixtures.store())
+            #expect(model.recordableSnapshots.isEmpty)
+            model.reRecordAll()
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessage?.hasPrefix("No snapshot tests to re-record") == true)
+            #expect(!model.isRunning)
+        }
+
         @Test func listWidthStaysWithinItsBoundsAndLeavesTheDetailRoom() {
             typealias Split = ListDetailSplit<SwiftUI.EmptyView, SwiftUI.EmptyView>
             #expect(Split.clamp(400, min: 280, available: 1100) == 400)

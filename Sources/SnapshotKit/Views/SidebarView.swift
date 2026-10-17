@@ -9,26 +9,49 @@ struct SidebarView: View {
         let recent = Set(model.store.settings.recents)
         return model.projects.filter { recent.contains($0.path) && !model.isPinned($0) }
     }
-    private var others: [Project] {
-        let recent = Set(model.store.settings.recents)
-        return model.projects.filter { !recent.contains($0.path) && !model.isPinned($0) }
+    /// Every project, alphabetically, in a fixed place: opening one adds it to Recent but doesn't
+    /// take it out of here.
+    private var all: [Project] {
+        model.projects.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Pinned and recent projects appear twice, so their shortcut rows get their own tags: a click
+    /// there highlights that row, not both.
+    private static let shortcutTags = ["pinned:", "recent:"]
+    @State private var clickedTag: String?
+
+    private static func path(of tag: String) -> String {
+        for prefix in shortcutTags where tag.hasPrefix(prefix) { return String(tag.dropFirst(prefix.count)) }
+        return tag
+    }
+
+    private var selection: Binding<String?> {
+        Binding(
+            get: {
+                guard let path = model.selectedPath else { return nil }
+                return clickedTag.map(Self.path(of:)) == path ? clickedTag : path
+            },
+            set: { tag in
+                clickedTag = tag
+                model.selectedPath = tag.map(Self.path(of:))
+            })
     }
 
     var body: some View {
-        List(selection: $model.selectedPath) {
+        List(selection: selection) {
             if !pinned.isEmpty {
-                Section("Pinned") { rows(pinned) }
+                Section("Pinned") { rows(pinned, tagPrefix: "pinned:") }
             }
             if !recents.isEmpty {
-                Section("Recent") { rows(recents) }
+                Section("Recent") { rows(recents, tagPrefix: "recent:") }
             }
             Section(model.isScanning ? "Projects (scanning…)" : "Projects") {
-                if others.isEmpty && pinned.isEmpty && recents.isEmpty {
+                if all.isEmpty {
                     Text("Drop a repository here, or use + below.")
                         .font(DS.Font.caption)
                         .foregroundStyle(.secondary)
                 }
-                rows(others)
+                rows(all)
             }
         }
         .listStyle(.sidebar)
@@ -62,7 +85,7 @@ struct SidebarView: View {
     }
 
     @ViewBuilder
-    private func rows(_ projects: [Project]) -> some View {
+    private func rows(_ projects: [Project], tagPrefix: String = "") -> some View {
         ForEach(projects) { project in
             Label {
                 HStack(spacing: DS.Space.s) {
@@ -88,7 +111,7 @@ struct SidebarView: View {
             // as the lists' (about +15 levels in dark, like Linear's).
             .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
                   + ((model.failingCounts[project.path]).map { " — \($0) failing in the last run" } ?? ""))
-            .tag(project.path)
+            .tag(tagPrefix + project.path)
                 .contextMenu {
                     Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }

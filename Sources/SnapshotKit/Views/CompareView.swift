@@ -163,20 +163,11 @@ struct CompareView: View {
 
     private func controlBar(showStats: Bool, showSize: Bool, iconsOnly: Bool = false) -> some View {
         HStack(spacing: DS.Space.m) {
-            Picker("Mode", selection: $modeRaw) {
-                ForEach(CompareMode.allCases) { m in
-                    Group {
-                        if iconsOnly { Image(systemName: m.systemImage).help(m.rawValue) } else { Text(m.rawValue) }
-                    }
-                    .tag(m.rawValue)
-                    .accessibilityLabel(m.rawValue)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            // The bar is glass already, so the segments sit straight on it.
+            GlassSegmented(title: "Compare Mode", segments: CompareMode.allCases.enumerated().map { index, m in
+                Segment(m.rawValue, symbol: iconsOnly ? m.systemImage : nil, help: "\(m.rawValue) (⌘\(index + 1))", value: m.rawValue)
+            }, selection: $modeRaw, chrome: false)
             .fixedSize()
-            .help("Compare mode (⌘1–⌘4)")
-            .accessibilityLabel("Compare Mode")
 
             if showStats, let stats = pair?.stats {
                 HStack(spacing: DS.Space.xs + 1) {
@@ -217,31 +208,7 @@ struct CompareView: View {
                     .accessibilityLabel("Zoom to Change")
             }
 
-            ControlGroup {
-                Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
-                    .help("Zoom out (⌘−)")
-                    .accessibilityLabel("Zoom Out")
-                Menu {
-                    Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
-                    Divider()
-                    ForEach([2, 4, 8, 16], id: \.self) { factor in
-                        Button("\(factor)×") {
-                            // Keep the area being looked at centered while changing level.
-                            withAnimation(DS.motion) { app.viewport.zoom(by: CGFloat(factor) / app.viewport.scale) }
-                        }
-                    }
-                } label: {
-                    Text(zoomLabel).monospacedDigit().frame(minWidth: 34)
-                }
-                .help("Zoom relative to fit. ⌘0 or double-click fits.")
-                .accessibilityLabel("Zoom Level")
-                .accessibilityValue(zoomLabel)
-                Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
-                    .help("Zoom in (⌘=)")
-                    .accessibilityLabel("Zoom In")
-            }
-            .controlGroupStyle(.navigation)
-            .fixedSize()
+            ZoomControls()
         }
         .controlSize(.small)
         .padding(.horizontal, DS.Space.m)
@@ -275,12 +242,6 @@ struct CompareView: View {
         guard mode == .slider else { return .ignored }
         withAnimation(DS.motion) { split = min(max(split + direction * 0.05, 0), 1) }
         return .handled
-    }
-
-    private var zoomLabel: String {
-        let s = app.viewport.scale
-        if abs(s - 1) < 0.01 { return "Fit" }
-        return s >= 10 ? String(format: "%.0f×", s) : String(format: "%.1f×", s)
     }
 
     @ViewBuilder
@@ -431,6 +392,50 @@ struct PixelReadout: View {
     }
 }
 
+/// − level +, plain on a glass bar (compare and single snapshot alike): no bordered boxes inside
+/// a pill. The level is a menu of fixed steps.
+struct ZoomControls: View {
+    @EnvironmentObject private var app: AppModel
+
+    private var label: String {
+        let s = app.viewport.scale
+        if abs(s - 1) < 0.01 { return "Fit" }
+        return s >= 10 ? String(format: "%.0f×", s) : String(format: "%.1f×", s)
+    }
+
+    var body: some View {
+        HStack(spacing: DS.Space.xs) {
+            Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
+                .help("Zoom out (⌘−)")
+                .accessibilityLabel("Zoom Out")
+            Menu {
+                Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
+                Divider()
+                ForEach([2, 4, 8, 16], id: \.self) { factor in
+                    Button("\(factor)×") {
+                        // Keep the area being looked at centered while changing level.
+                        withAnimation(DS.motion) { app.viewport.zoom(by: CGFloat(factor) / app.viewport.scale) }
+                    }
+                }
+            } label: {
+                Text(label).monospacedDigit().frame(minWidth: 34)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Zoom relative to fit. ⌘0 or double-click fits.")
+            .accessibilityLabel("Zoom Level")
+            .accessibilityValue(label)
+            Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
+                .help("Zoom in (⌘=)")
+                .accessibilityLabel("Zoom In")
+        }
+        .buttonStyle(.borderless)
+        .modifier(QuietControlText())
+        .fixedSize()
+    }
+}
+
 /// Explains differences people can't easily see: invisible rendering noise, a few stray
 /// pixels or a size change. Visible changes speak for themselves and get no note.
 struct DiagnosisNote: View {
@@ -447,15 +452,18 @@ struct DiagnosisNote: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let suggestion = diagnosis.suggestion {
-                    Button(copied ? "Copied" : "Copy \(suggestion)") {
+                    // An action, so it looks like the others: text and icon, not blue link text.
+                    Button {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(suggestion, forType: .string)
                         copied = true
+                    } label: {
+                        Label(copied ? "Copied" : suggestion, systemImage: copied ? "checkmark" : "doc.on.doc")
+                            .font(DS.Font.code)
                     }
-                    .font(DS.Font.code)
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.tint)
                     .fixedSize()
+                    .quietControl()
+                    .accessibilityLabel(copied ? "Copied" : "Copy \(suggestion)")
                     .help("The most lenient setting that passes this comparison. Prefer fixing the cause if you can.")
                 }
             }

@@ -48,6 +48,12 @@ struct ProjectView: View {
                     }
             }
         }
+        .confirmationDialog("Re-record all \(ProjectModel.testCount(project.recordableSnapshots)) snapshot tests?",
+                            isPresented: $project.confirmReRecordAll) {
+            Button("Re-record All") { project.reRecordAll() }
+        } message: {
+            Text("Every reference image is recorded again and then verified. Review the result on the Changes tab before committing.")
+        }
         .navigationTitle(project.project.name)
         .navigationSubtitle(subtitle)
         .toolbar {
@@ -70,9 +76,19 @@ struct ProjectView: View {
                     Button("Cancel", systemImage: "stop.fill") { project.cancel() }
                         .help("Cancel (⌘.)")
                 } else {
-                    Button("Run", systemImage: "play.fill") { project.runTests() }
-                        .disabled(project.environment == nil)
-                        .help("Run snapshot tests with the CI configuration (⌘R)")
+                    // Run, with the two bulk re-records one click away under its chevron.
+                    Menu {
+                        Button("Re-record Failing Tests", systemImage: "camera.badge.ellipsis") { project.reRecordFailed() }
+                            .disabled(project.failingSuites.isEmpty)
+                        Button("Re-record All Snapshot Tests…", systemImage: "camera.on.rectangle") { project.confirmReRecordAll = true }
+                            .disabled(project.recordableSnapshots.isEmpty)
+                    } label: {
+                        Label("Run", systemImage: "play.fill")
+                    } primaryAction: {
+                        project.runTests()
+                    }
+                    .disabled(project.environment == nil)
+                    .help("Run snapshot tests with the CI configuration (⌘R); the arrow re-records failed or all snapshot tests")
                 }
             }
         }
@@ -134,17 +150,25 @@ struct RunInspector: View {
 
                 PropertySection("Scope", footer: "Pick a single test target to run only its snapshot tests.") {
                     PropertyRow("Test target", alignment: .center) {
-                        Picker("Scope", selection: Binding(
-                            get: { project.settings.module ?? "" },
-                            set: { value in project.updateSettings { $0.module = value.isEmpty ? nil : value } }
-                        )) {
-                            Text("What CI runs").tag("")
-                            if !project.modules.isEmpty { Divider() }
-                            ForEach(project.modules, id: \.self) { Text($0).tag($0) }
+                        // A glass menu like the Changes filters, not a system pop-up button.
+                        Menu {
+                            Picker("Test target", selection: Binding(
+                                get: { project.settings.module ?? "" },
+                                set: { value in project.updateSettings { $0.module = value.isEmpty ? nil : value } }
+                            )) {
+                                Text("What CI runs").tag("")
+                                if !project.modules.isEmpty { Divider() }
+                                ForEach(project.modules, id: \.self) { Text($0).tag($0) }
+                            }
+                            .pickerStyle(.inline)
+                            .labelsHidden()
+                        } label: {
+                            Text(project.settings.module ?? "What CI runs")
                         }
-                        .labelsHidden()
                         .fixedSize()
+                        .quietControl()
                         .disabled(project.isRunning)
+                        .accessibilityLabel("Test target")
                     }
                 }
 
@@ -173,19 +197,15 @@ struct RunInspector: View {
                                         + "Remote runs sync the working tree to that Mac over SSH and run the same command there.") {
                         PropertyRow("Base branch", alignment: .center) {
                             TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
-                                .textFieldStyle(.roundedBorder)
-                                // Fixed: a focused field is a point taller, and focus arrives at an
-                                // unpredictable moment, which moved the rows below.
-                                .frame(height: 22)
+                                .textFieldStyle(.plain)
+                                .fieldChrome()
                                 .accessibilityLabel("Base branch")
                                 .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
                         }
                         PropertyRow("Remote host", alignment: .center) {
                             TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
-                                .textFieldStyle(.roundedBorder)
-                                // Fixed: a focused field is a point taller, and focus arrives at an
-                                // unpredictable moment, which moved the rows below.
-                                .frame(height: 22)
+                                .textFieldStyle(.plain)
+                                .fieldChrome()
                                 .accessibilityLabel("Remote host")
                                 .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
                         }
@@ -447,11 +467,13 @@ struct RunStatusHeader: View {
         HStack(spacing: DS.Space.s) {
             if project.isRunning {
                 Button("Cancel", role: .cancel) { project.cancel() }
-                    .secondaryActionStyle()
                     .fixedSize()
+                    .quietControl()
                     .keyboardShortcut(".")
             } else {
-                GlassIconMenu(title: "More Actions", symbol: "ellipsis", help: "Flakiness check and remote runs") {
+                GlassIconMenu(title: "More Actions", symbol: "ellipsis", help: "Re-record everything, flakiness check and remote runs") {
+                    Button("Re-record All Snapshot Tests…") { project.confirmReRecordAll = true }
+                        .disabled(project.recordableSnapshots.isEmpty || project.environment == nil)
                     Button("Check Flakiness (\(project.store.settings.flakeIterations)×)") { project.checkFlakiness() }
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
                     Divider()
@@ -533,14 +555,10 @@ struct LogView: View {
                 if suites.isEmpty {
                     Text("Output").font(DS.Font.caption.weight(.semibold)).foregroundStyle(.secondary)
                 } else {
-                    Picker("Show", selection: $project.runPane) {
-                        ForEach(RunPane.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
-                    .controlSize(.small)
-                    .accessibilityLabel("Show Results or Output")
+                    GlassSegmented(title: "Show Results or Output",
+                                   segments: RunPane.allCases.map { Segment($0.rawValue, value: $0) },
+                                   selection: $project.runPane)
+                        .fixedSize()
                 }
                 let testCount = suites.reduce(0) { $0 + $1.tests.count }
                 Text(showResults ? "\(testCount) test\(testCount == 1 ? "" : "s")" : "\(lines.count) line\(lines.count == 1 ? "" : "s")")

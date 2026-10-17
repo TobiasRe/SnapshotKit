@@ -135,31 +135,13 @@ extension View {
     }
 
     func floatingGlassCapsule() -> some View {
-        floatingGlass(in: Capsule())
+        floatingGlass(in: Capsule(style: .circular))
     }
 
-    /// The one prominent action in a region.
-    @ViewBuilder
+    /// The one prominent action in a region: an accent capsule as tall as the controls beside it
+    /// (the system's prominent styles are shorter and keep rounded corners on the Mac).
     func primaryActionStyle() -> some View {
-        if DS.solidSurfaces {
-            self.buttonStyle(.borderedProminent)
-        } else if #available(macOS 26.0, *) {
-            self.buttonStyle(.glassProminent)
-        } else {
-            self.buttonStyle(.borderedProminent)
-        }
-    }
-
-    /// Secondary actions next to a primary one.
-    @ViewBuilder
-    func secondaryActionStyle() -> some View {
-        if DS.solidSurfaces {
-            self.buttonStyle(.bordered)
-        } else if #available(macOS 26.0, *) {
-            self.buttonStyle(.glass)
-        } else {
-            self.buttonStyle(.bordered)
-        }
+        buttonStyle(PrimaryActionButtonStyle())
     }
 
     /// Solid content panel (never glass): hairline border, medium radius.
@@ -225,8 +207,8 @@ struct Chip: View {
         .padding(.vertical, DS.Space.xxs)
         .lineLimit(1)
         .fixedSize()   // never wraps: the text next to it truncates instead
-        .background(Capsule().fill(Color.primary.opacity(0.04)))
-        .overlay(Capsule().strokeBorder(Color(nsColor: .separatorColor)))
+        .background(Capsule(style: .circular).fill(Color.primary.opacity(0.04)))
+        .overlay(Capsule(style: .circular).strokeBorder(Color(nsColor: .separatorColor)))
     }
 }
 
@@ -315,6 +297,13 @@ extension DS {
                                                             .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
             return NSColor.labelColor.withAlphaComponent(highContrast ? 0.2 : 0.08)
         })
+        /// The chosen segment of a segmented control: a little firmer than a selected row, since it
+        /// sits on glass rather than on a plain column.
+        static let thumb = Color(nsColor: NSColor(name: nil) { appearance in
+            let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
+                                                            .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
+            return NSColor.labelColor.withAlphaComponent(highContrast ? 0.25 : 0.1)
+        })
         /// A row under the pointer: half the selection.
         static let hover = Color.primary.opacity(0.04)
         /// An opaque hairline, for edges drawn over something else.
@@ -340,10 +329,23 @@ extension View {
         self
             .buttonStyle(.borderless)
             .menuStyle(.borderlessButton)
+            .modifier(QuietControlText())
             .padding(.horizontal, DS.Space.s + 2)
             .frame(height: DS.Control.height)
-            .glassChrome(Capsule())
-            .contentShape(Capsule())
+            .glassChrome(Capsule(style: .circular))
+            .contentShape(Capsule(style: .circular))
+    }
+
+    /// A text field in the same 28-point glass capsule as the controls beside it (search, base
+    /// branch), instead of a square-cornered box. The height is fixed: a focused field (the field
+    /// editor) is otherwise a point or two taller, and focus arrives at an unpredictable moment,
+    /// which moved everything below.
+    func fieldChrome() -> some View {
+        self
+            .frame(height: 16)
+            .padding(.horizontal, DS.Space.m)
+            .frame(height: DS.Control.height)
+            .glassChrome(Capsule(style: .circular))
     }
 
     /// Liquid Glass around a header control, the way Linear rings its toolbar icons: interactive
@@ -351,6 +353,38 @@ extension View {
     /// renders, where glass can't be composited.
     func glassChrome<S: InsettableShape>(_ shape: S) -> some View {
         modifier(GlassChrome(shape: shape))
+    }
+}
+
+/// Accent-filled glass on macOS 26 and later; a solid accent capsule before that, in off-screen
+/// renders and with Increase Contrast. White text either way.
+struct PrimaryActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func makeBody(configuration: Configuration) -> some View {
+        let label = configuration.label
+            .fontWeight(.medium)
+            .foregroundStyle(.white.opacity(enabled ? 1 : 0.7))
+            .padding(.horizontal, DS.Space.m + 2)
+            .frame(height: DS.Control.height)
+            .contentShape(Capsule(style: .circular))
+        let fill = Color.accentColor.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
+        if DS.solidSurfaces || !DS.hasLiquidGlass || contrast == .increased {
+            label.background(Capsule(style: .circular).fill(fill))
+        } else if #available(macOS 26.0, *) {
+            label.glassEffect(.regular.tint(fill).interactive(), in: Capsule(style: .circular))
+        }
+    }
+}
+
+/// Text like the icon buttons beside it, not accent-coloured link text; dimmed when disabled,
+/// which a fixed colour would otherwise override.
+struct QuietControlText: ViewModifier {
+    @Environment(\.isEnabled) private var enabled
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.6))
     }
 }
 
@@ -388,21 +422,32 @@ private struct SelectableTile: ViewModifier {
 /// `DS.Surface.selection` instead.
 private struct NativeHighlightOff: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Probe() }
-    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.apply() }
+    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.scheduleApply() }
 
     final class Probe: NSView {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            apply()
-            // A row can join its table after it joins the window (sidebars do).
-            DispatchQueue.main.async { [weak self] in self?.apply() }
+            scheduleApply()
         }
 
-        func apply() {
+        /// Changing the table's style while SwiftUI updates views makes the List publish changes
+        /// mid-update, so it waits for the next turn of the run loop. By then a row has also joined
+        /// its table if it joined the window first (sidebars do). The run loop rather than the main
+        /// queue, so it also happens while something on the main queue spins the run loop.
+        func scheduleApply() {
+            RunLoop.main.perform(inModes: [.common]) { [weak self] in
+                MainActor.assumeIsolated { self?.apply() }
+            }
+        }
+
+        private func apply() {
             var view = superview
             while let current = view {
                 if let table = current as? NSTableView {
-                    if table.selectionHighlightStyle != .none { table.selectionHighlightStyle = .none }
+                    guard table.selectionHighlightStyle != .none else { return }
+                    table.selectionHighlightStyle = .none
+                    // Rows already on screen keep the style they were made with.
+                    table.enumerateAvailableRowViews { row, _ in row.selectionHighlightStyle = .none }
                     return
                 }
                 view = current.superview
@@ -499,7 +544,7 @@ struct GlassIconButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.primary)
+        .modifier(QuietControlText())
         .glassChrome(Circle())
         .help(help ?? title)
         .accessibilityLabel(title)
@@ -547,7 +592,7 @@ struct GlassSplitButton<Content: View>: View {
             }
             .buttonStyle(.plain)
             // Primary, like the menus beside it (a native menu label can't be tinted secondary).
-            .foregroundStyle(.primary)
+            .modifier(QuietControlText())
             .help(help ?? title)
             .accessibilityLabel(title)
             Rectangle()
@@ -564,6 +609,85 @@ struct GlassSplitButton<Content: View>: View {
             .help("More ways to \(title.lowercased())")
             .accessibilityLabel("\(title) Options")
         }
-        .glassChrome(Capsule())
+        .glassChrome(Capsule(style: .circular))
+    }
+}
+
+/// One choice of a `GlassSegmented`: a title, or an icon with the title as its tooltip.
+struct Segment<Value: Hashable> {
+    var value: Value
+    var title: String
+    var symbol: String?
+    var help: String?
+
+    init(_ title: String, symbol: String? = nil, help: String? = nil, value: Value) {
+        self.title = title
+        self.symbol = symbol
+        self.help = help
+        self.value = value
+    }
+}
+
+/// A segmented control as a glass pill, like the buttons beside it: the chosen segment is a quiet
+/// capsule that slides over, instead of the system's grey track with a white block.
+struct GlassSegmented<Value: Hashable>: View {
+    var title: String
+    var segments: [Segment<Value>]
+    @Binding var selection: Value
+    /// Off when the control already sits on glass (the compare bar), which needs no second pill.
+    var chrome = true
+    @Namespace private var thumb
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(segments.indices, id: \.self) { index in
+                segment(segments[index])
+            }
+        }
+        .padding(DS.Space.xxs)
+        .modifier(SegmentedChrome(enabled: chrome))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+
+    private func segment(_ segment: Segment<Value>) -> some View {
+        let selected = segment.value == selection
+        return Button {
+            withAnimation(DS.motion) { selection = segment.value }
+        } label: {
+            Group {
+                if let symbol = segment.symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: DS.Control.icon, weight: .medium))
+                        .frame(width: DS.Control.height + 4)
+                } else {
+                    Text(segment.title)
+                        .lineLimit(1)
+                        .padding(.horizontal, DS.Space.s + 2)
+                }
+            }
+            .frame(height: DS.Control.height - 2 * DS.Space.xxs)
+            .foregroundStyle(Color(nsColor: selected ? .labelColor : .secondaryLabelColor))
+            .background {
+                if selected {
+                    Capsule(style: .circular)
+                        .fill(DS.Surface.thumb)
+                        .matchedGeometryEffect(id: "thumb", in: thumb)
+                }
+            }
+            .contentShape(Capsule(style: .circular))
+        }
+        .buttonStyle(.plain)
+        .help(segment.help ?? segment.title)
+        .accessibilityLabel(segment.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+private struct SegmentedChrome: ViewModifier {
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled { content.glassChrome(Capsule(style: .circular)) } else { content }
     }
 }

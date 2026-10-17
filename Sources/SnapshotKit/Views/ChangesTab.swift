@@ -500,13 +500,7 @@ struct SearchField: View {
                     .accessibilityLabel("Clear")
             }
         }
-        // A fixed height: a focused field (the field editor) is otherwise a couple of points
-        // taller, and focus arrives at an unpredictable moment, which moved everything below.
-        .frame(height: 16)
-        .padding(.horizontal, DS.Space.s)
-        .padding(.vertical, DS.Space.xs)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+        .fieldChrome()
     }
 }
 

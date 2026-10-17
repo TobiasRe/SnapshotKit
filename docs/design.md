@@ -104,6 +104,20 @@ can be followed between these views, and re-recording is available wherever a sn
   controls, 28 points tall (`DS.Control`). Interactive Liquid Glass on macOS 26 and later; a faint fill with a
   hairline before that, with Increase Contrast, and in off-screen renders. Icon-only controls name
   themselves in the tooltip and to VoiceOver.
+- One control family, all 28 points tall: `GlassIconButton` (circle), `quietControl()` (text in a glass capsule,
+  primary text, dimmed when disabled), `fieldChrome()` (search and text fields in the same capsule) and
+  `primaryActionStyle()` (the one accent capsule per region, prominent glass on macOS 26 and later). No
+  system bordered buttons, pop-up buttons, segmented controls or control groups in the content; Settings keeps
+  the system form controls, and the toolbar is the system's.
+- Capsules are `Capsule(style: .circular)`: the continuous style draws its flat end segment a point outside
+  the curve, which showed as a tick at both ends of every pill.
+- `ZoomControls`: − level + on the compare and snapshot bars, plain on the glass.
+- `GlassSegmented`: every segmented control (layout, scope, variant, Results/Output, compare mode) is a glass
+  pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system's grey
+  track. On a bar that is glass already (compare), the segments sit on it without a second pill. Labels use
+  fixed label colours: glass would otherwise pick its own, which came out dark in dark mode.
+- The sidebar lists every project under Projects, alphabetically, so a project stays where it is when
+  opened. Pinned and Recent above are shortcuts to the same projects; a click highlights only the row clicked.
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
   ranked list, one line each, a command's shortcut where a project shows its folder, so the palette also
   teaches the keyboard.
@@ -122,7 +136,7 @@ can be followed between these views, and re-recording is available wherever a sn
   is reused for versions and variants, so every comparison looks and behaves the same.
 - `MenuBarLabel` / `ProgressPie` / `MenuBarPanel`: the optional menu bar item. The icon is a 16 pt template
   image (a ring with a pie), so it follows the menu bar's colour; the panel reuses the row and chip styles.
-- Scope controls degrade instead of clipping: segmented with counts, then without, then a menu
+- Scope controls degrade instead of clipping: segments with counts, then without, then a menu
   (`ViewThatFits`).
 - `softTopEdge()`: a soft scroll-edge blur under headers.
 
