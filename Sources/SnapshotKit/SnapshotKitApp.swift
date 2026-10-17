@@ -95,6 +95,8 @@ struct SnapshotKitCommands: Commands {
             Button("Re-record Failing Tests") { project?.reRecordFailed() }
                 .keyboardShortcut("r", modifiers: [.command, .shift, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
+            Button("Re-record All Snapshot Tests…") { project?.confirmReRecordAll = true }
+                .disabled(busy || project?.environment == nil || (project?.recordableSnapshots.isEmpty ?? true))
             Button("Check Flakiness of Failed Tests") { project?.checkFlakiness() }
                 .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))

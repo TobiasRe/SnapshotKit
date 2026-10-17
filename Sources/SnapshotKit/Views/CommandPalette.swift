@@ -68,6 +68,11 @@ extension PaletteCommand {
             commands.append(.init(title: "Re-record Failing Tests", symbol: "camera.badge.ellipsis", shortcut: "⌥⇧⌘R") { project.reRecordFailed() })
             commands.append(.init(title: "Check Flakiness of Failed Tests", symbol: "waveform.path.ecg", shortcut: "⌥⌘R") { project.checkFlakiness() })
         }
+        if idle && project.environment != nil && !project.recordableSnapshots.isEmpty {
+            commands.append(.init(title: "Re-record All Snapshot Tests…", symbol: "camera.on.rectangle", shortcut: nil) {
+                project.confirmReRecordAll = true
+            })
+        }
         if project.isRunning {
             commands.append(.init(title: "Cancel Run", symbol: "stop", shortcut: "⌘.") { project.cancel() })
         }

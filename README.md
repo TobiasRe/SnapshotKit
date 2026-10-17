@@ -77,7 +77,8 @@ last run.
 In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
 snapshots; sort by size or recency; switch between list and grid. A snapshot's detail lists its variants
 and committed versions to compare against, and links to its change or failure. **Re-record Shown** records
-everything the filter shows (say, every `dark` variant).
+everything the filter shows (say, every `dark` variant). The arrow beside the toolbar's Run button
+re-records all failing tests or every snapshot test in one step.
 
 **Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie
 as tests complete (with a done/total count) and otherwise shows the failing count. Its panel shows live

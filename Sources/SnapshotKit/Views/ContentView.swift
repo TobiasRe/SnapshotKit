@@ -83,7 +83,8 @@ struct WelcomeView: View {
                 Button("Add Scan Folder…") {
                     model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") { model.addScanRoot($0) }
                 }
-                .secondaryActionStyle()
+                .fixedSize()
+                .quietControl()
             }
             Text("Or drop a repository onto this window. ⌘K finds projects and commands.")
                 .font(DS.Font.caption)

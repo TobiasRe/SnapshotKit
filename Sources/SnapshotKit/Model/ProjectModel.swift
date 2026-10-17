@@ -128,6 +128,8 @@ final class ProjectModel: ObservableObject {
     @Published var libraryFilter = ""
     /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
     @Published var focusFilterRequest = 0
+    /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
+    @Published var confirmReRecordAll = false
     @Published var libraryScope = LibraryScope.all
     @Published var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.standard.set(librarySort.rawValue, forKey: "librarySort") }
@@ -978,6 +980,27 @@ final class ProjectModel: ObservableObject {
             return
         }
         reRecord(suites: targets, onlyTesting: nil, what: targets.map(\.name).joined(separator: ", "))
+    }
+
+    /// Every snapshot whose test still exists (orphans have none left to run).
+    var recordableSnapshots: [SnapshotFile] {
+        library?.files.filter { !orphanIDs.contains($0.id) } ?? []
+    }
+
+    /// The number of tests behind `files`, for "Re-record 24 tests?".
+    static func testCount(_ files: [SnapshotFile]) -> Int {
+        Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count
+    }
+
+    /// Re-records every snapshot test in the project, then verifies.
+    func reRecordAll() {
+        let files = recordableSnapshots
+        guard !files.isEmpty else {
+            lastMessage = "No snapshot tests to re-record yet. Run the tests to record the first ones."
+            lastMessageIsError = true
+            return
+        }
+        reRecord(files, granularity: .tests)
     }
 
     /// The test behind whatever is selected on the current tab, if there is one to record.

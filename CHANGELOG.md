@@ -20,7 +20,8 @@ snapshot tests built with swift-snapshot-testing.
   that only picked up rendering noise. Each change names the commit that last touched it.
 
 ### Update
-- Re-record any test, suite or filtered set of snapshots, or all failing tests. The record trait is patched
+- Re-record any test, suite or filtered set of snapshots, all failing tests, or every snapshot test (from
+  the Run button's menu in the toolbar). The record trait is patched
   temporarily (Swift Testing and XCTest) and always restored: on error, cancel, Ctrl-C, SIGTERM, quit, or at
   the next launch after a crash, keeping edits made during the run. The new references are verified.
 - Re-record on a remote Mac over SSH to get references rendered on the CI machine.

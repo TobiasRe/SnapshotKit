@@ -89,35 +89,29 @@ struct SnapshotsTab: View {
                     }
                     .pickerStyle(.inline)
                 }
-                Picker("Layout", selection: $layoutRaw) {
-                    Label("List", systemImage: "list.bullet").tag(LibraryLayout.list.rawValue)
-                    Label("Grid", systemImage: "square.grid.2x2").tag(LibraryLayout.grid.rawValue)
-                }
-                .pickerStyle(.segmented)
-                .labelStyle(.iconOnly)
-                .labelsHidden()
+                GlassSegmented(title: "Layout", segments: [
+                    Segment("List", symbol: "list.bullet", help: "Show snapshots as a list with a large preview",
+                            value: LibraryLayout.list.rawValue),
+                    Segment("Grid", symbol: "square.grid.2x2", help: "Show snapshots as a grid",
+                            value: LibraryLayout.grid.rawValue),
+                ], selection: $layoutRaw)
                 .fixedSize()
-                .help("Show snapshots as a list with a large preview, or as a grid")
-                .accessibilityLabel("Layout")
             }
             PaneBar(height: DS.Bar.filters) {
                 // Counts when they fit, then without, then a menu: never wraps or clips.
                 ViewThatFits(in: .horizontal) {
-                    scopePicker(counts: true).pickerStyle(.segmented)
-                    scopePicker(counts: false).pickerStyle(.segmented)
+                    scopeSegments(counts: true)
+                    scopeSegments(counts: false)
                     Menu {
-                        scopePicker(counts: true).pickerStyle(.inline)
+                        scopePicker.pickerStyle(.inline)
                     } label: {
                         Label(scopeMenuTitle, systemImage: "line.3.horizontal.decrease.circle")
                     }
                     .fixedSize()
                     .quietControl()
+                    .accessibilityLabel("Show")
                 }
-                .labelsHidden()
-                .controlSize(.small)
-                // In the full-width grid, segments stretched across the window; keep them compact.
-                .frame(maxWidth: 480, alignment: .leading)
-                .accessibilityLabel("Show")
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.bottom, DS.Space.xs)
         }
@@ -159,12 +153,26 @@ struct SnapshotsTab: View {
         }
     }
 
-    private func scopePicker(counts: Bool) -> some View {
+    /// Orphaned only once there are any (or it is the current scope).
+    private var scopes: [LibraryScope] {
+        LibraryScope.allCases.filter { $0 != .orphaned || !project.orphanIDs.isEmpty || project.libraryScope == .orphaned }
+    }
+
+    private func scopeTitle(_ scope: LibraryScope, counts: Bool) -> String {
+        let count = project.count(in: scope)
+        return scope == .all || !counts || count == 0 ? scope.rawValue : "\(scope.rawValue) \(count)"
+    }
+
+    private func scopeSegments(counts: Bool) -> some View {
+        GlassSegmented(title: "Show",
+                       segments: scopes.map { Segment(scopeTitle($0, counts: counts), value: $0) },
+                       selection: $project.libraryScope)
+            .fixedSize()
+    }
+
+    private var scopePicker: some View {
         Picker("Show", selection: $project.libraryScope) {
-            ForEach(LibraryScope.allCases.filter { $0 != .orphaned || !project.orphanIDs.isEmpty || project.libraryScope == .orphaned }) { scope in
-                let count = project.count(in: scope)
-                Text(scope == .all || !counts || count == 0 ? scope.rawValue : "\(scope.rawValue) \(count)").tag(scope)
-            }
+            ForEach(scopes) { Text(scopeTitle($0, counts: true)).tag($0) }
         }
     }
 
@@ -175,9 +183,7 @@ struct SnapshotsTab: View {
         return scope == .all || count == 0 ? "Show: \(scope.rawValue)" : "Show: \(scope.rawValue) \(count)"
     }
 
-    private func testCount(_ files: [SnapshotFile]) -> Int {
-        Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count
-    }
+    private func testCount(_ files: [SnapshotFile]) -> Int { ProjectModel.testCount(files) }
 
     private func shownTitle(_ files: [SnapshotFile]) -> String {
         let all = files.count == (project.library?.files.count ?? 0)
@@ -506,14 +512,10 @@ struct SnapshotDetail: View {
                 .truncationMode(.tail)
             Spacer(minLength: DS.Space.s)
             if variants.count > 1 {
-                Picker("Variant", selection: Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 })) {
-                    ForEach(variants) { Text($0.variant.isEmpty ? "default" : $0.variant).tag($0.id) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help("This test's variants")
-                .accessibilityLabel("Variant")
+                GlassSegmented(title: "Variant",
+                               segments: variants.map { Segment($0.variant.isEmpty ? "default" : $0.variant, value: $0.id) },
+                               selection: Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 }))
+                    .fixedSize()
             }
             compareMenu(variants: variants)
         }
@@ -649,22 +651,7 @@ struct SnapshotViewer: View {
                 Text(SnapshotLibrary.formatSize(fileSize))
                     .font(DS.Font.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
-                ControlGroup {
-                    Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
-                        .help("Zoom out (⌘−)")
-                        .accessibilityLabel("Zoom Out")
-                    Button(abs(app.viewport.scale - 1) < 0.01 ? "Fit" : String(format: "%.1f×", app.viewport.scale)) {
-                        withAnimation(DS.motion) { app.viewport.reset() }
-                    }
-                    .monospacedDigit()
-                    .help("Fit (⌘0)")
-                    .accessibilityLabel("Zoom to Fit")
-                    Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
-                        .help("Zoom in (⌘=)")
-                        .accessibilityLabel("Zoom In")
-                }
-                .controlGroupStyle(.navigation)
-                .fixedSize()
+                ZoomControls()
             }
             .controlSize(.small)
             .padding(.horizontal, DS.Space.m)
@@ -767,7 +754,7 @@ struct SnapshotGrid: View {
                         StatusMarks(status: status)
                             .padding(.horizontal, DS.Space.xs)
                             .padding(.vertical, DS.Space.xxs)
-                            .background(Capsule().fill(Color(nsColor: .windowBackgroundColor).opacity(0.9)))
+                            .background(Capsule(style: .circular).fill(Color(nsColor: .windowBackgroundColor).opacity(0.9)))
                             .padding(DS.Space.xs)
                     }
                 }
