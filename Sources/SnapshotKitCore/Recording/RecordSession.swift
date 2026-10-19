@@ -306,7 +306,8 @@ public final class PatchRegistry: @unchecked Sendable {
 
 /// Restores active patches when the process is interrupted or terminated.
 public enum InterruptGuard {
-    private static var sources: [DispatchSourceSignal] = []
+    /// Only read and written inside `queue.sync`, which serializes every access.
+    nonisolated(unsafe) private static var sources: [DispatchSourceSignal] = []
     private static let queue = DispatchQueue(label: "snapshotkit.signals")
 
     /// Installs handlers for SIGINT, SIGTERM, SIGHUP and SIGQUIT that stop child processes

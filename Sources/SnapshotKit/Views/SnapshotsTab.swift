@@ -684,7 +684,8 @@ enum SnapshotImageCache {
         }
     }
 
-    static let shared: NSCache<NSString, Entry> = {
+    /// NSCache is thread-safe (decoding fills it off the main thread).
+    nonisolated(unsafe) static let shared: NSCache<NSString, Entry> = {
         let cache = NSCache<NSString, Entry>()
         cache.totalCostLimit = 200 * 1024 * 1024
         return cache

@@ -58,7 +58,8 @@ final class ComparePairCache {
     final class Box { let pair: ComparePair; init(_ pair: ComparePair) { self.pair = pair } }
     /// Full-screen @3x pairs hold tens of megabytes of pixels each, so the cache is bounded by
     /// size, not only by count.
-    static let shared: NSCache<NSString, Box> = {
+    /// NSCache is thread-safe (decoding fills it off the main thread).
+    nonisolated(unsafe) static let shared: NSCache<NSString, Box> = {
         let cache = NSCache<NSString, Box>()
         cache.countLimit = 40
         cache.totalCostLimit = 400 * 1024 * 1024

@@ -31,5 +31,5 @@ let package = Package(
             exclude: ["__Snapshots__"]
         ),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

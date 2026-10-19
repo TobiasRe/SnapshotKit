@@ -50,7 +50,8 @@ struct Thumbnail: View {
 }
 
 enum ThumbnailCache {
-    static let shared: NSCache<NSString, NSImage> = {
+    /// NSCache is thread-safe (thumbnails are made off the main thread).
+    nonisolated(unsafe) static let shared: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
         cache.countLimit = 600
         return cache
