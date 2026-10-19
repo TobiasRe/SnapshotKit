@@ -147,6 +147,11 @@ can be followed between these views, and re-recording is available wherever a sn
   Off-screen rendering can't composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
   (headless captures included). Real glass needs a look on screen.
 - **An accessibility audit test** walks each tab's live accessibility tree and fails on unlabeled controls.
+- **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every tab, compare mode,
+  the palette and the welcome screen in the real window and fails on any SwiftUI or AppKit runtime issue,
+  such as *Publishing changes from within view updates*. Tests can't see those; they only reach the log.
+- **Swift 6 language mode.** Data races and actor isolation are checked at compile time; shared state that
+  is safe for another reason is marked `nonisolated(unsafe)` with that reason next to it.
 - **Re-record only what you changed.** In a record-mode run of the whole suite, layout can depend on which
   tests failed earlier in that run. Re-record single tests with `--filter`, then run everything normally.
 

@@ -237,6 +237,7 @@ swift test                              # core unit tests + the app's own snapsh
 scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min;
                                         #   E2E_SIMULATOR="<name>" picks the simulator)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view
+scripts/check-runtime-warnings.sh       # fails on SwiftUI/AppKit runtime warnings (Xcode's purple ones)
 scripts/make-samples.sh [dest]          # five sample projects with ~140 recorded snapshots to try the app on
 mkdocs serve                            # the documentation at localhost:8000 (pip install -r requirements-docs.txt)
 ```

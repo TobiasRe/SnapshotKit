@@ -19,3 +19,7 @@ jobs:
       # recording machine, so they run locally rather than on CI hardware.
       - name: Core tests
         run: swift test --filter SnapshotKitCoreTests
+      # SwiftUI and AppKit report problems such as "Publishing changes from within view updates"
+      # only at run time, to the system log; tests can't see them. Show every screen and fail on any.
+      - name: No runtime warnings
+        run: scripts/check-runtime-warnings.sh
