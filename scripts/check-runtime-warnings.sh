@@ -25,8 +25,9 @@ cat > "$SNAPSHOTKIT_HOME/settings.json" <<EOF
 EOF
 
 # /usr/bin/log: in zsh, `log` is a builtin.
-/usr/bin/log stream --style compact --level debug \
-  --predicate 'subsystem == "com.apple.runtime-issues" AND process == "SnapshotKit"' > "$LOG" 2>&1 &
+# Everything the app logs, not only runtime issues: seeing its other messages proves the stream works
+# here (a CI machine that withholds the log would otherwise pass without having checked anything).
+/usr/bin/log stream --style compact --level debug --predicate 'process == "SnapshotKit"' > "$LOG" 2>&1 &
 LOG_PID=$!
 trap 'kill $LOG_PID 2>/dev/null || true; rm -rf "$WORK"' EXIT
 sleep 2 # the stream attaches asynchronously
@@ -60,7 +61,12 @@ sleep 2 # let the last messages reach the stream
 kill $LOG_PID 2>/dev/null || true
 wait $LOG_PID 2>/dev/null || true
 
-issues="$(grep -F "runtime-issues" "$LOG" | grep -v '^Filtering' || true)"
+seen="$(grep -c "SnapshotKit\[" "$LOG" || true)"
+if [ "$seen" -eq 0 ]; then
+  echo "✘ The log stream saw nothing from SnapshotKit, so runtime issues couldn't be checked."
+  exit 1
+fi
+issues="$(grep -F "[com.apple.runtime-issues" "$LOG" || true)"
 if [ -n "$issues" ]; then
   count="$(printf '%s\n' "$issues" | wc -l | tr -d ' ')"
   echo
@@ -69,4 +75,4 @@ if [ -n "$issues" ]; then
   exit 1
 fi
 echo
-echo "✔ No runtime issues in $screens screens."
+echo "✔ No runtime issues in $screens screens ($seen log messages from the app checked)."
