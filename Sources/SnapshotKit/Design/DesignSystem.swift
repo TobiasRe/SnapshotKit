@@ -399,8 +399,11 @@ private struct SelectableTile: ViewModifier {
     }
 }
 
-/// Finds the table behind a SwiftUI `List` and turns off its selection highlight, so rows can draw
-/// `DS.Surface.selection` instead.
+/// Turns off the system selection highlight of the list row it sits in, so the row can draw
+/// `DS.Surface.selection` instead. Per row, not on the table: setting the table's
+/// `selectionHighlightStyle` makes SwiftUI's List update and publish changes mid-update ("Publishing
+/// changes from within view updates"), however late it's done. Every row carries a probe, so rows
+/// the table creates or reuses later are covered as they appear.
 private struct NativeHighlightOff: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { Probe() }
     func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.scheduleApply() }
@@ -411,10 +414,9 @@ private struct NativeHighlightOff: NSViewRepresentable {
             scheduleApply()
         }
 
-        /// Changing the table's style while SwiftUI updates views makes the List publish changes
-        /// mid-update, so it waits for the next turn of the run loop. By then a row has also joined
-        /// its table if it joined the window first (sidebars do). The run loop rather than the main
-        /// queue, so it also happens while something on the main queue spins the run loop.
+        /// After the current view update: a probe joins its row view only once the row is laid out.
+        /// The run loop rather than the main queue, so it also happens while something on the main
+        /// queue spins the run loop (the snapshot tests).
         func scheduleApply() {
             RunLoop.main.perform(inModes: [.common]) { [weak self] in
                 MainActor.assumeIsolated { self?.apply() }
@@ -424,11 +426,8 @@ private struct NativeHighlightOff: NSViewRepresentable {
         private func apply() {
             var view = superview
             while let current = view {
-                if let table = current as? NSTableView {
-                    guard table.selectionHighlightStyle != .none else { return }
-                    table.selectionHighlightStyle = .none
-                    // Rows already on screen keep the style they were made with.
-                    table.enumerateAvailableRowViews { row, _ in row.selectionHighlightStyle = .none }
+                if let row = current as? NSTableRowView {
+                    if row.selectionHighlightStyle != .none { row.selectionHighlightStyle = .none }
                     return
                 }
                 view = current.superview
