@@ -202,6 +202,21 @@ import Testing
         #expect(x.config.scheme == "Snapshots")
     }
 
+    @Test func aFoldedCommandGoesOnPastItsActionOnALineOfItsOwn() {
+        let text = """
+        snapshots:
+          script:
+            - >
+              xcodebuild
+              -workspace App.xcworkspace
+              test
+              -scheme Snapshots
+        """
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)])
+        #expect(x.invocation?.actions == ["test"])
+        #expect(x.config.scheme == "Snapshots")
+    }
+
     @Test func commentedOutCommandsAreIgnored() {
         let text = """
         snapshots:

@@ -171,13 +171,14 @@ public struct CIConfigParser {
     }
 
     private static func isFoldedContinuation(_ next: String) -> Bool {
+        // Bare action words on their own line (`test`) are also continuations.
+        if actionWords.contains(next) { return true }
         // `-scheme App` continues a folded command; `- run tests` is a new YAML list item.
         guard next.hasPrefix("-"), next.count > 1 else { return false }
-        let second = next[next.index(after: next.startIndex)]
-        if second.isLetter { return true }
-        // Bare action words on their own line (`test`) are also continuations.
-        return false
+        return next[next.index(after: next.startIndex)].isLetter
     }
+
+    static let actionWords: Set<String> = ["test", "build", "build-for-testing", "test-without-building", "clean", "analyze", "archive"]
 
     // MARK: - xcodebuild invocations
 
@@ -213,7 +214,6 @@ public struct CIConfigParser {
 
     func parseArguments(_ words: [String]) -> Invocation {
         var inv = Invocation(arguments: words, actions: [])
-        let actionWords: Set<String> = ["test", "build", "build-for-testing", "test-without-building", "clean", "analyze", "archive"]
         var i = 0
         func next() -> String? {
             i += 1
@@ -239,7 +239,7 @@ public struct CIConfigParser {
                     if let v = resolved(String(word.dropFirst("-only-testing:".count))) { inv.onlyTesting.append(v) }
                 } else if word.hasPrefix("-skip-testing:") {
                     if let v = resolved(String(word.dropFirst("-skip-testing:".count))) { inv.skipTesting.append(v) }
-                } else if actionWords.contains(word) {
+                } else if Self.actionWords.contains(word) {
                     inv.actions.append(word)
                 }
             }
