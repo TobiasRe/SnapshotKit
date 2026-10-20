@@ -556,15 +556,15 @@ struct GlassSplitButton<Content: View>: View {
                 .fill(DS.Surface.hairline)
                 .frame(width: 1, height: DS.Control.height - 12)
                 .accessibilityHidden(true)
+            // Titled like GlassIconMenu, or VoiceOver reads the chevron's name ("Down").
             Menu { menu } label: {
-                Image(systemName: "chevron.down")
+                Label("\(title) Options", systemImage: "chevron.down").labelStyle(.iconOnly)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
             .frame(width: DS.Control.height - 2, height: DS.Control.height)
             .help("More ways to \(title.lowercased())")
-            .accessibilityLabel("\(title) Options")
         }
         .glassChrome(Capsule(style: .circular))
     }

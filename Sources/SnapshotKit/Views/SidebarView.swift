@@ -63,12 +63,12 @@ struct SidebarView: View {
                     Button("Rescan Folders") { model.rescan() }
                         .disabled(model.store.settings.scanRoots.isEmpty)
                 } label: {
-                    Image(systemName: "plus")
+                    // Titled, so VoiceOver reads "Add" rather than the symbol's name.
+                    Label("Add", systemImage: "plus").labelStyle(.iconOnly)
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
                 .help("Add a project or a folder to scan")
-                .accessibilityLabel("Add")
                 Spacer()
                 Button { model.showQuickSwitcher = true } label: {
                     Label("⌘K", systemImage: "magnifyingglass")

@@ -288,7 +288,7 @@ struct SnapshotRow: View {
                 if detail != .none {
                     Text(file.suite).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                statusLine
+                SnapshotStatusLine(file: file, status: status, showVariant: showVariant)
             }
             Spacer(minLength: DS.Space.s)
             // Only failing gets a mark of its own: the line above already says how it changed.
@@ -316,18 +316,22 @@ struct SnapshotRow: View {
     }
 }
 
-extension SnapshotRow {
-    /// What's notable about the snapshot, then its variant, on one quiet line like a change's row:
-    /// "● Uncommitted · dark". One state at most: orphaned, else its change against the base
-    /// branch, else an edit git hasn't committed.
-    private var statusLine: some View {
+/// What's notable about a snapshot, then its variant, on one quiet line like a change's row:
+/// "● Uncommitted · dark". One state at most: orphaned, else its change against the base branch,
+/// else an edit git hasn't committed.
+struct SnapshotStatusLine: View {
+    var file: SnapshotFile
+    var status: SnapshotStatus
+    var showVariant = true
+
+    var body: some View {
         let state: (label: String, color: Color, help: String)? =
             if status.orphaned { ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
             else if let change = status.change { (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
             else if file.state != .clean { (SnapshotStateChip.label(file.state), file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet") }
             else { nil }
         let variant = showVariant && !file.variant.isEmpty ? file.variant : nil
-        return HStack(spacing: DS.Space.xs) {
+        HStack(spacing: DS.Space.xs) {
             if let state {
                 Circle().fill(state.color).frame(width: DS.Status.mark, height: DS.Status.mark)
             }
@@ -784,21 +788,17 @@ struct SnapshotGrid: View {
         return VStack(alignment: .leading, spacing: DS.Space.xs) {
             Thumbnail(id: "snapshot:\(file.path)#\(file.byteSize)", size: Self.tile, load: project.snapshotLoader(for: file))
                 .overlay(alignment: .topTrailing) {
-                    if status.failureID != nil || status.change != nil {
-                        StatusMarks(status: status)
+                    // Like a row: only failing gets a mark; the line below says how it changed.
+                    if status.failureID != nil {
+                        StatusMarks(status: SnapshotStatus(failureID: status.failureID, verdict: status.verdict))
                             .padding(.horizontal, DS.Space.xs)
                             .padding(.vertical, DS.Space.xxs)
                             .background(Capsule(style: .circular).fill(Color(nsColor: .windowBackgroundColor).opacity(0.9)))
                             .padding(DS.Space.xs)
                     }
                 }
-            HStack(spacing: DS.Space.xs) {
-                Text(file.testName).font(DS.Font.secondary).fontWeight(.medium).lineLimit(1)
-                if file.state != .clean { SnapshotStateChip(state: file.state) }
-            }
-            if project.showsVariant(file) {
-                Text(file.variant).font(DS.Font.code).foregroundStyle(.secondary).lineLimit(1)
-            }
+            Text(file.testName).font(DS.Font.secondary).fontWeight(.medium).lineLimit(1)
+            SnapshotStatusLine(file: file, status: status, showVariant: project.showsVariant(file))
         }
         .frame(width: Self.tile.width, alignment: .leading)
         // Selected like a list row: a quiet fill behind the whole tile, not an accent frame.

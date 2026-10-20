@@ -253,7 +253,10 @@ struct CompareView: View {
 
     @ViewBuilder
     private func content(_ pair: ComparePair) -> some View {
-        switch mode {
+        // A slider needs two images: with one missing it would show the other, or nothing, without
+        // a word, so side by side says which side is missing and why.
+        let shown = mode == .slider && (pair.before == nil || pair.after == nil) ? .sideBySide : mode
+        switch shown {
         case .sideBySide:
             HStack(spacing: 0) {
                 pane(pair.before, label: beforeLabel, missing: beforeMissing, size: pair.pixelSize)
