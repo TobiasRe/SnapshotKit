@@ -1161,8 +1161,9 @@ final class ProjectModel {
         if result.cancelled { message = "Cancelled." }
         else if !result.buildErrors.isEmpty && result.summary == nil { message = "Build failed: \(result.buildErrors.first ?? "")" }
         else if result.failed > 0 { message = Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) }
-        else { message = "All \(result.passed) tests passed." }
-        finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled),
+        else if result.nothingTested != nil { message = "No test ran." }
+        else { message = result.passed == 1 ? "1 test passed." : "All \(result.passed) tests passed." }
+        finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled) || result.nothingTested != nil,
                action: result.failed > 0 && !result.cancelled ? .showFailures : nil)
     }
 

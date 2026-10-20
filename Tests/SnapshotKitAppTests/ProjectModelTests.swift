@@ -939,6 +939,21 @@ extension AppUITests {
             #expect(app.runningPaths.isEmpty)
         }
 
+        /// A run counts its passed tests right, and one in which no test ran says so.
+        @Test func aRunSaysHowManyTestsPassed() async throws {
+            let (repo, _) = try makeRepo()
+            let one = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.cardPassed)
+            one.runTests()
+            try await waitUntilFinished(one)
+            #expect(one.lastMessage == "1 test passed.")
+
+            let none = try runnableModel(repo, xcodebuild: "exit 0")     // no results, no test output
+            none.runTests()
+            try await waitUntilFinished(none)
+            #expect(none.lastMessage == "No test ran.")
+            #expect(none.lastMessageIsError)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
