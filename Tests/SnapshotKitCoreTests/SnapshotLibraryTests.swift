@@ -32,6 +32,20 @@ import Testing
         #expect(tree[1].fileCount == 3)
     }
 
+    @Test func nonASCIINamesAreListedWithTheirState() throws {
+        let repo = try TempRepo()
+        let dir = "Tests/AppTests/__Snapshots__/ÜbersichtTests"
+        try repo.write("\(dir)/größe.1.png", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        try repo.write("\(dir)/ok.1.png", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        try repo.commitAll("base")
+        try repo.write("\(dir)/größe.1.png", png(width: 2, height: 2, rgba: (0, 0, 255, 255)))
+        try repo.write("\(dir)/café.1.png", png(width: 2, height: 2, rgba: (0, 0, 255, 255)))
+        try repo.git.run(["mv", "\(dir)/ok.1.png", "\(dir)/ök.1.png"])
+
+        let state = Dictionary(uniqueKeysWithValues: try SnapshotLibrary.load(repository: repo.url).files.map { ($0.fileName, $0.state) })
+        #expect(state == ["größe.1.png": .modified, "café.1.png": .untracked, "ök.1.png": .modified])
+    }
+
     @Test func namesAndFilters() {
         let file = SnapshotFile(path: "Tests/AppTests/__Snapshots__/CardTests/card-appearance.dark.png", byteSize: 1)
         #expect(file.module == "AppTests")
@@ -77,6 +91,28 @@ import Testing
         let versions = repo.git.history(of: new)
         #expect(versions.map(\.subject) == ["Rename suite", "Record"])
         #expect(repo.git.image(of: new, at: versions[1].commit) == data)
+    }
+
+    @Test func followsRenamesOfNonASCIINames() throws {
+        let repo = try TempRepo()
+        let old = "Tests/AppTests/__Snapshots__/CardTests/größe.1.png"
+        let new = "Tests/AppTests/__Snapshots__/CardTests/größe-neu.1.png"
+        let data = png(width: 2, height: 2, rgba: (0, 0, 255, 255))
+        try repo.write(old, data)
+        try repo.commitAll("Record")
+        try repo.git.run(["mv", old, new])
+        try repo.commitAll("Rename test")
+
+        let versions = repo.git.history(of: new)
+        #expect(versions.map(\.subject) == ["Rename test", "Record"])
+        #expect(repo.git.image(of: new, at: versions[1].commit) == data)
+    }
+
+    @Test func recognisesSHA1AndSHA256CommitNames() {
+        #expect(Git.isCommitHash(String(repeating: "a", count: 40)))
+        #expect(Git.isCommitHash(String(repeating: "0f", count: 32)))
+        #expect(!Git.isCommitHash("Tests/__Snapshots__/A/b.png"))
+        #expect(!Git.isCommitHash(String(repeating: "g", count: 40)))
     }
 }
 

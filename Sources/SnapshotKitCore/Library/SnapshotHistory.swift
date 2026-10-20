@@ -35,16 +35,23 @@ extension Git {
     public func image(of path: String, at commit: String) -> Data? {
         if let data = show(revision: commit, path: path) { return data }
         // After a rename the old commit knows the file under its old name: walk the file's log
-        // (commit line, then the name it had in that commit) to find it.
-        guard let log = tryRun(["log", "--follow", "--name-only", "--format=%H", "--", path]) else { return nil }
+        // (each commit, then the name it had in that commit) to find it.
+        guard let log = try? nulSeparated(["log", "-z", "--follow", "--name-only", "--format=%H", "--", path]) else { return nil }
         var current: String?
-        for line in log.split(separator: "\n").map(String.init) where !line.isEmpty {
-            if line.count == 40, line.allSatisfy(\.isHexDigit) {
-                current = line
+        for entry in log {
+            // A name follows its commit after a newline.
+            let name = String(entry.drop { $0 == "\n" })
+            if Self.isCommitHash(name) {
+                current = name
             } else if current == commit {
-                return show(revision: commit, path: line)
+                return show(revision: commit, path: name)
             }
         }
         return nil
+    }
+
+    /// A full object name: 40 hex digits, or 64 in a SHA-256 repository.
+    static func isCommitHash(_ text: String) -> Bool {
+        (text.count == 40 || text.count == 64) && text.allSatisfy(\.isHexDigit)
     }
 }

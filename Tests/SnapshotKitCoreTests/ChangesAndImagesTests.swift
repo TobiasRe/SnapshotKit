@@ -39,8 +39,8 @@ import Testing
             "deleted.1.png": .deleted,
         ])
         #expect(set.groups.map(\.suite) == ["CardTests", "ListTests"])
-        #expect(repo.git.baseImage(for: set.changes.first { $0.fileName == "committed.1.png" }!, in: set) == red)
-        #expect(repo.git.currentImage(for: set.changes.first { $0.fileName == "deleted.1.png" }!) == nil)
+        #expect(repo.git.baseImage(for: try #require(set.changes.first { $0.fileName == "committed.1.png" }), in: set) == red)
+        #expect(repo.git.currentImage(for: try #require(set.changes.first { $0.fileName == "deleted.1.png" })) == nil)
 
         // Against the tip, develop's own change appears too.
         let tip = try repo.git.snapshotChanges(baseBranch: "develop", against: .tip)
@@ -81,6 +81,21 @@ import Testing
         // The restored file is untracked on this branch; drawn differently, it is a change again.
         try repo.write("\(snaps)/ListTests/deleted.1.png", blue)
         #expect(try repo.git.snapshotChanges(baseBranch: "develop").changes.map(\.kind) == [.uncommitted])
+    }
+
+    @Test func nonASCIINamesAreClassified() throws {
+        let repo = try TempRepo()
+        let snaps = "Tests/AppTests/__Snapshots__/ÜbersichtTests"
+        try repo.write("\(snaps)/größe.1.png", red)
+        try repo.write("\(snaps)/gelöscht.1.png", red)
+        try repo.commitAll("base")
+        try repo.git.run(["checkout", "-q", "-b", "feature"])
+        try repo.write("\(snaps)/größe.1.png", blue)
+        try FileManager.default.removeItem(at: repo.url.appendingPathComponent("\(snaps)/gelöscht.1.png"))
+        try repo.write("\(snaps)/neu é.1.png", blue)
+
+        let kinds = Dictionary(uniqueKeysWithValues: try repo.git.snapshotChanges(baseBranch: "develop").changes.map { ($0.fileName, $0.kind) })
+        #expect(kinds == ["größe.1.png": .uncommitted, "gelöscht.1.png": .deleted, "neu é.1.png": .new])
     }
 
     @Test func filterAndNames() {

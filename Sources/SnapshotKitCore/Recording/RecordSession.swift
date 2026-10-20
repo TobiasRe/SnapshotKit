@@ -125,7 +125,7 @@ public final class RecordSession: @unchecked Sendable {
         let paths = Array(Set(targets.map(\.path))).sorted()
         let dirty = try git.status(paths: paths)
         if !dirty.isEmpty {
-            throw RecordPatchError.uncommittedChanges(dirty.map { String($0.dropFirst(3)) })
+            throw RecordPatchError.uncommittedChanges(dirty.map(\.path))
         }
 
         var files: [PatchedFile] = []

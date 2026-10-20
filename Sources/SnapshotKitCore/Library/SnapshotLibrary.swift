@@ -111,17 +111,13 @@ public struct SnapshotLibrary: Sendable {
     public static func load(repository: URL) throws -> SnapshotLibrary {
         let git = Git(root: repository)
         let pathspec = ":(glob)**/__Snapshots__/**/*.png"
-        let listed = try git.run(["ls-files", "--cached", "--others", "--exclude-standard", "--", pathspec])
-        // Untrimmed and NUL-separated: the first line's leading space is part of its status code.
-        let status = (try? Shell.run(["git", "status", "--porcelain", "-z", "--untracked-files=all", "--", pathspec], in: repository).stdout) ?? ""
+        let listed = try git.nulSeparated(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", pathspec])
         var states: [String: SnapshotFile.State] = [:]
-        for line in status.split(separator: "\0") where line.count > 3 {
-            let code = line.prefix(2), path = String(line.dropFirst(3))
-            states[path] = code == "??" ? .untracked : .modified
+        for entry in (try? git.status(paths: [pathspec])) ?? [] {
+            states[entry.path] = entry.code == "??" ? .untracked : .modified
         }
         var seen = Set<String>()
-        let files: [SnapshotFile] = listed.split(separator: "\n").compactMap { line in
-            let path = String(line)
+        let files: [SnapshotFile] = listed.compactMap { path in
             guard seen.insert(path).inserted,
                   let attributes = try? FileManager.default.attributesOfItem(atPath: repository.appendingPathComponent(path).path)
             else { return nil } // tracked but deleted in the working tree

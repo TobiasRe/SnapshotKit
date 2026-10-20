@@ -118,19 +118,16 @@ extension Git {
         guard let baseRef = resolveBaseRef(baseBranch) else { throw SnapshotChangeError.baseBranchNotFound(baseBranch) }
         let base = diffBase == .mergeBase ? try mergeBase(baseRef) : try run(["rev-parse", baseRef])
 
-        // Base → working tree (includes staged and unstaged edits of tracked files).
-        let sinceBase = try run(["diff", "--name-status", "--no-renames", base, "--", "*.png"])
+        // Base → working tree (includes staged and unstaged edits of tracked files): status, path, status, path…
+        let sinceBase = try nulSeparated(["diff", "--name-status", "-z", "--no-renames", base, "--", "*.png"])
         // HEAD → working tree, to tell committed from uncommitted modifications.
-        let sinceHead = Set(try run(["diff", "--name-only", "--no-renames", "HEAD", "--", "*.png"])
-            .split(separator: "\n").map(String.init))
-        let untracked = try run(["ls-files", "--others", "--exclude-standard", "--", "*.png"])
-            .split(separator: "\n").map(String.init)
+        let sinceHead = Set(try nulSeparated(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--", "*.png"]))
+        let untracked = try nulSeparated(["ls-files", "-z", "--others", "--exclude-standard", "--", "*.png"])
 
         var changes: [String: SnapshotChange] = [:]
-        for line in sinceBase.split(separator: "\n") {
-            let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
-            guard parts.count == 2, let status = parts[0].first else { continue }
-            let path = parts[1]
+        for i in stride(from: 0, to: sinceBase.count - 1, by: 2) {
+            guard let status = sinceBase[i].first else { continue }
+            let path = sinceBase[i + 1]
             let kind: SnapshotChangeKind
             switch status {
             case "A": kind = .new
@@ -145,9 +142,9 @@ extension Git {
         // An untracked file the base also has (re-created after this branch deleted it, or brought
         // back by a revert) is new only if the base doesn't have it; otherwise compare the content.
         let baseBlobs = untracked.isEmpty ? [:] : Dictionary(
-            try run(["ls-tree", base, "--"] + untracked).split(separator: "\n").compactMap { line -> (String, String)? in
+            try nulSeparated(["ls-tree", "-z", base, "--"] + untracked).compactMap { entry -> (String, String)? in
                 // "<mode> blob <hash>\t<path>"
-                let parts = line.split(separator: "\t", maxSplits: 1)
+                let parts = entry.split(separator: "\t", maxSplits: 1)
                 guard parts.count == 2, let hash = parts[0].split(separator: " ").last else { return nil }
                 return (String(parts[1]), String(hash))
             }, uniquingKeysWith: { a, _ in a })

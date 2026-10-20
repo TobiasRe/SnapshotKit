@@ -7,7 +7,6 @@ struct TempRepo {
     var git: Git { Git(root: url) }
 
     init(branch: String = "develop") throws {
-        isolateHome()
         url = testTemp("repo")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try git.run(["init", "-q", "-b", branch])
@@ -36,13 +35,6 @@ struct TempRepo {
     }
 }
 
-/// Keeps tests from touching the user's real settings/registry.
-func isolateHome() {
-    let dir = TestTemp.root.appendingPathComponent("home")
-    setenv("SNAPSHOTKIT_HOME", dir.path, 1)
-}
-
-
 /// A fresh path for one test's files. Everything lives under one directory per test process;
 /// directories of processes that have finished are removed, so test runs don't pile up.
 func testTemp(_ name: String) -> URL {
@@ -50,6 +42,9 @@ func testTemp(_ name: String) -> URL {
 }
 
 enum TestTemp {
+    /// Also isolates the test process, once: settings, history and the patch registry go to a
+    /// temporary home instead of the user's, and git ignores the user's and the system's
+    /// configuration (hooks, signing or `core.quotePath` would change what the tests see).
     static let root: URL = {
         let runs = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-test-runs")
         for old in (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [] {
@@ -58,6 +53,9 @@ enum TestTemp {
         }
         let root = runs.appendingPathComponent("\(getpid())")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        setenv("SNAPSHOTKIT_HOME", root.appendingPathComponent("home").path, 1)
+        setenv("GIT_CONFIG_GLOBAL", "/dev/null", 1)
+        setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
         return root
     }()
 }

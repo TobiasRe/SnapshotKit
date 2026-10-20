@@ -60,14 +60,26 @@ public struct Git: Sendable {
         try run(["merge-base", a, b])
     }
 
-    /// Porcelain status entries for the given paths (empty when clean).
-    public func status(paths: [String]) throws -> [String] {
+    /// One `git status --porcelain` entry.
+    public struct StatusEntry: Equatable, Sendable {
+        /// The two status columns, e.g. `" M"`, `"A "` or `"??"`.
+        public var code: String
+        public var path: String
+    }
+
+    /// Status entries for the given paths or pathspecs (empty when clean).
+    public func status(paths: [String]) throws -> [StatusEntry] {
         guard !paths.isEmpty else { return [] }
-        // Not trimmed: the leading status column may be a space.
-        let args = ["git", "status", "--porcelain", "--untracked-files=all", "--"] + paths
-        let result = try Shell.run(args, in: root)
-        guard result.succeeded else { throw CommandError(command: args, result: result) }
-        return result.stdout.split(separator: "\n").map(String.init)
+        var entries = try nulSeparated(["status", "--porcelain", "-z", "--untracked-files=all", "--"] + paths)[...]
+        var result: [StatusEntry] = []
+        while let entry = entries.popFirst() {
+            guard entry.count > 3 else { continue }
+            let code = String(entry.prefix(2))
+            result.append(StatusEntry(code: code, path: String(entry.dropFirst(3))))
+            // A rename or copy is followed by the path it came from.
+            if code.contains("R") || code.contains("C") { _ = entries.popFirst() }
+        }
+        return result
     }
 
     /// File contents at a revision, or nil if the path did not exist there.
@@ -77,6 +89,16 @@ public struct Git: Sendable {
 
     /// Paths of tracked files matching a pathspec.
     public func lsFiles(_ pathspecs: [String]) -> [String] {
-        (tryRun(["ls-files", "--"] + pathspecs) ?? "").split(separator: "\n").map(String.init)
+        (try? nulSeparated(["ls-files", "-z", "--"] + pathspecs)) ?? []
+    }
+
+    /// The output of a command run with `-z`, split at the NULs. Without `-z`, git quotes paths
+    /// with non-ASCII or unusual characters (`"gr\303\266\303\237e.png"`); with it, every path
+    /// comes back as it is.
+    func nulSeparated(_ args: [String]) throws -> [String] {
+        let command = ["git"] + args
+        let result = try Shell.run(command, in: root)
+        guard result.succeeded else { throw CommandError(command: command, result: result) }
+        return result.stdout.split(separator: "\0").map(String.init)
     }
 }
