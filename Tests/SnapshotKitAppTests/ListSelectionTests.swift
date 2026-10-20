@@ -23,6 +23,7 @@ extension AppUITests {
         init() {
             DS.solidSurfaces = true
             AppSnapshotTests.launchOnce()
+            AppFixtures.resetDefaults()
         }
 
         @Test func clicksOnLibraryRowsReachTheList() throws {
@@ -53,7 +54,7 @@ extension AppUITests {
         /// seen: publishing from inside `body` is the classic way to cause one.
         @Test func runtimeIssuesAreSeen() throws {
             let since = Date()
-            _ = host(PublishesWhileUpdating(model: Counter()))
+            AppFixtures.host(PublishesWhileUpdating(model: Counter())) { _ in }
             #expect(!(try runtimeIssues(since: since)).isEmpty, "a runtime issue was logged but not read back")
         }
 
@@ -61,61 +62,50 @@ extension AppUITests {
 
         private func expectClicksReachTheList(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
                                               sourceLocation: SourceLocation = #_sourceLocation) throws {
-            let (window, _) = hostProject(scenario, tab: tab)
-            let table = try #require(tables(in: window.contentView!).first { $0.numberOfRows > 2 }, "no list found",
-                                     sourceLocation: sourceLocation)
-            var checked = 0
-            for row in rows(of: table) {
-                let chain = hitChain(in: window, at: table.rect(ofRow: row), of: table)
-                guard !chain.contains(where: { $0.contains("Header") }) else { continue }
-                checked += 1
-                #expect(chain.contains("SwiftUIOutlineListView"), "row \(row): \(chain.prefix(4))", sourceLocation: sourceLocation)
-                #expect(!chain.contains { $0 == "Probe" || $0.contains("Highlight") },
-                        "row \(row): a click lands on \(chain.prefix(3)), not on the list", sourceLocation: sourceLocation)
+            try hostProject(scenario, tab: tab) { root, _ in
+                let table = try #require(tables(in: root).first { $0.numberOfRows > 2 }, "no list found",
+                                         sourceLocation: sourceLocation)
+                var checked = 0
+                for row in rows(of: table) {
+                    let chain = hitChain(in: root, at: table.rect(ofRow: row), of: table)
+                    guard !chain.contains(where: { $0.contains("Header") }) else { continue }
+                    checked += 1
+                    #expect(chain.contains("SwiftUIOutlineListView"), "row \(row): \(chain.prefix(4))", sourceLocation: sourceLocation)
+                    #expect(!chain.contains { $0 == "Probe" || $0.contains("Highlight") },
+                            "row \(row): a click lands on \(chain.prefix(3)), not on the list", sourceLocation: sourceLocation)
+                }
+                #expect(checked >= 2, "only \(checked) rows checked", sourceLocation: sourceLocation)
             }
-            #expect(checked >= 2, "only \(checked) rows checked", sourceLocation: sourceLocation)
         }
 
         private func expectQuietSelection(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
                                           selection: (ProjectModel) -> String?,
                                           sourceLocation: SourceLocation = #_sourceLocation) throws {
-            let (window, project) = hostProject(scenario, tab: tab)
-            let table = try #require(tables(in: window.contentView!).first { $0.numberOfRows > 2 }, "no list found",
-                                     sourceLocation: sourceLocation)
-            let since = Date()
-            var selected: Set<String> = []
-            for row in rows(of: table).prefix(4) {
-                // What NSTableView does after a click: select the row and post the selection change.
-                table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-                settle(window)
-                if let id = selection(project) { selected.insert(id) }
+            try hostProject(scenario, tab: tab) { root, project in
+                let table = try #require(tables(in: root).first { $0.numberOfRows > 2 }, "no list found",
+                                         sourceLocation: sourceLocation)
+                let since = Date()
+                var selected: Set<String> = []
+                for row in rows(of: table).prefix(4) {
+                    // What NSTableView does after a click: select the row and post the selection change.
+                    table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                    AppFixtures.settle(root)
+                    if let id = selection(project) { selected.insert(id) }
+                }
+                #expect(selected.count >= 2, "selecting rows didn't change the selection", sourceLocation: sourceLocation)
+                let issues = try runtimeIssues(since: since)
+                #expect(issues.isEmpty, "\(issues.count) runtime issues, first: \(issues.first ?? "")", sourceLocation: sourceLocation)
             }
-            #expect(selected.count >= 2, "selecting rows didn't change the selection", sourceLocation: sourceLocation)
-            let issues = try runtimeIssues(since: since)
-            #expect(issues.isEmpty, "\(issues.count) runtime issues, first: \(issues.first ?? "")", sourceLocation: sourceLocation)
         }
 
-        private func hostProject(_ scenario: AppFixtures.Scenario, tab: ProjectTab) -> (NSWindow, ProjectModel) {
+        private func hostProject(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
+                                 _ body: (NSView, ProjectModel) throws -> Void) rethrows {
             let store = AppFixtures.store()
             let app = AppModel(store: store)
             let project = AppFixtures.project(scenario, store: store)
             project.tab = tab
             app.show(project)
-            return (host(ProjectView(project: project).environment(app)), project)
-        }
-
-        private func host(_ view: some View) -> NSWindow {
-            let window = NSWindow(contentRect: CGRect(x: -20000, y: -20000, width: 1100, height: 700),
-                                  styleMask: [.borderless], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: view.frame(width: 1100, height: 700))
-            for _ in 0..<3 { settle(window) }
-            return window
-        }
-
-        private func settle(_ window: NSWindow) {
-            window.contentView?.layoutSubtreeIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+            try AppFixtures.host(ProjectView(project: project).environment(app)) { try body($0, project) }
         }
 
         /// Every visible row, not a section header.
@@ -134,10 +124,10 @@ extension AppUITests {
         }
 
         /// The view a click in the middle of `rect` goes to, and its superviews.
-        private func hitChain(in window: NSWindow, at rect: NSRect, of table: NSTableView) -> [String] {
+        private func hitChain(in root: NSView, at rect: NSRect, of table: NSTableView) -> [String] {
             let point = table.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
             var chain: [String] = []
-            var view = window.contentView?.hitTest(window.contentView!.convert(point, from: nil))
+            var view = root.hitTest(root.convert(point, from: nil))
             while let current = view {
                 chain.append(String(describing: type(of: current)))
                 view = current.superview

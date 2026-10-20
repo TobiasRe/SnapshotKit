@@ -21,6 +21,7 @@ extension AppUITests {
         init() {
             DS.solidSurfaces = true
             AppSnapshotTests.launchOnce()
+            AppFixtures.resetDefaults()
         }
 
         /// A launched (accessory, never activated) NSApplication renders split views, sidebars and
@@ -42,15 +43,13 @@ extension AppUITests {
         }
 
         @Test func snapshotsGrid() {
-            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
-            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
+            AppFixtures.defaults.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
             let (app, project) = makeApp(.library)
             assertPane(project, app: app, appearance: .aqua)
         }
 
         @Test func snapshotsGridDark() {
-            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
-            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
+            AppFixtures.defaults.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
             let (app, project) = makeApp(.library)
             assertPane(project, app: app, appearance: .darkAqua)
         }
@@ -64,7 +63,7 @@ extension AppUITests {
 
         /// The end of a review: every change viewed and viewed ones hidden.
         @Test func reviewFinished() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.changes)
             project.setAllViewed(true)
             project.hideViewed = true
@@ -74,7 +73,7 @@ extension AppUITests {
 
         /// Comparing the current snapshot with the version from two months ago.
         @Test func snapshotComparedWithEarlierVersion() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.library)
             let file = project.displayedSnapshots[0]
             let old = AppFixtures.snapshotVersions[2]
@@ -86,7 +85,7 @@ extension AppUITests {
 
         /// Light next to dark: two variants of the same test.
         @Test func snapshotComparedWithVariant() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.library)
             let dark = project.displayedSnapshots[0], light = project.displayedSnapshots[1]
             ComparePairCache.store(ComparePair.make(before: project.snapshotLoader(for: light)(), after: project.snapshotLoader(for: dark)()),
@@ -98,7 +97,6 @@ extension AppUITests {
         @Test func snapshotsBySize() {
             let (app, project) = makeApp(.library)
             project.librarySort = .size
-            defer { project.librarySort = .name }
             project.selectedSnapshotID = project.displayedSnapshots.first?.id
             #expect(project.displayedSnapshots.map(\.byteSize) == project.displayedSnapshots.map(\.byteSize).sorted(by: >))
             assertPane(project, app: app, appearance: .aqua)
@@ -117,7 +115,7 @@ extension AppUITests {
                     .environment(app)
                     .onPreferenceChange(SnapshotCanvasTopKey.self) { tops.values[file.testName + "." + file.variant] = $0 }
                 // Narrow, as the detail pane often is: crowded headers must not grow either.
-                _ = host(view, size: CGSize(width: 560, height: 600), appearance: .aqua)
+                AppFixtures.host(view, size: CGSize(width: 560, height: 600)) { _ in }
             }
             #expect(tops.values.count == project.displayedSnapshots.count)
             #expect(Set(tops.values.values).count == 1, "canvas tops differ: \(tops.values)")
@@ -158,58 +156,52 @@ extension AppUITests {
 
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func changesTab(appearance: NSAppearance.Name) {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.changes)
             assertPane(project, app: app, appearance: appearance)
         }
 
         /// The outcome of the last run floats over another tab, with the way to its failures.
         @Test func noticeAfterAFailedRun() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.failedRun)
             project.tab = .changes
             let view = ProjectView(project: project).environment(app)
-            assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy)
+            assertView(view, size: Self.paneSize, appearance: .aqua)
         }
 
         /// The narrowest pane the window allows (980 points less the sidebar): header buttons keep
         /// their labels and the titles beside them give way.
         @Test(arguments: [ProjectTab.changes, .run])
         func narrowPane(tab: ProjectTab) {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(tab == .run ? .failedRun : .changes)
             project.tab = tab
             let view = ProjectView(project: project).environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 740, height: 520), appearance: .aqua), as: Self.strategy,
-                           named: tab.rawValue.lowercased())
+            assertView(view, size: CGSize(width: 740, height: 520), appearance: .aqua, named: tab.rawValue.lowercased())
         }
 
         /// Increase Contrast: the selection, hairlines and labels must stay visible.
         @Test func changesTabWithIncreasedContrast() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.changes)
             let view = ProjectView(project: project).environment(app)
-            assertSnapshot(of: host(view, size: Self.paneSize, appearance: .accessibilityHighContrastAqua), as: Self.strategy)
+            assertView(view, size: Self.paneSize, appearance: .accessibilityHighContrastAqua)
         }
 
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func failuresTab(appearance: NSAppearance.Name) {
-            UserDefaults.standard.set(CompareMode.slider.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.slider.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.failures)
             assertPane(project, app: app, appearance: appearance)
         }
 
-        @Test(arguments: ["missingXcode", "brokenConfig", "missingBaseBranch", "neverRun"])
-        func problemStates(name: String) {
-            let scenario: AppFixtures.Scenario = switch name {
-            case "missingXcode": .missingXcode
-            case "brokenConfig": .brokenConfig
-            case "missingBaseBranch": .missingBaseBranch
-            default: .neverRun
-            }
+        // The label stays `name`: the reference files are named after it.
+        @Test(arguments: [AppFixtures.Scenario.missingXcode, .brokenConfig, .missingBaseBranch, .neverRun])
+        func problemStates(name scenario: AppFixtures.Scenario) {
             let (app, project) = makeApp(scenario)
             let view = ProjectView(project: project).environment(app)
-            assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy, named: name)
+            assertView(view, size: Self.paneSize, appearance: .aqua, named: "\(scenario)")
         }
 
         @Test func nothingChangedOrFailing() {
@@ -233,8 +225,8 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
             let view = SidebarView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 260, height: 420), appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light")
+            assertView(view, size: CGSize(width: 260, height: 420), appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light")
         }
 
         @Test func quickSwitcher() {
@@ -242,7 +234,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = "pay"
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
+            assertView(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true)
         }
 
         @Test func commandPalette() {
@@ -250,7 +242,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = "rec"
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
+            assertView(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true)
         }
 
         @Test func commandPaletteDark() {
@@ -258,7 +250,7 @@ extension AppUITests {
             QuickSwitcherQuery.preset = ""
             defer { QuickSwitcherQuery.preset = nil }
             let view = QuickSwitcherView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua, keepFocus: true), as: Self.strategy)
+            assertView(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua, keepFocus: true)
         }
 
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
@@ -268,14 +260,14 @@ extension AppUITests {
             store.addScanRoot("/Volumes/Projects/ios")
             let app = AppModel(store: store)
             let view = SettingsView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 520, height: 500), appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light")
+            assertView(view, size: CGSize(width: 520, height: 500), appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light")
         }
 
         @Test func welcome() {
             let app = AppModel(store: AppFixtures.store())
             let view = WelcomeView().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
+            assertView(view, size: CGSize(width: 700, height: 460), appearance: .aqua)
         }
 
         // MARK: Menu bar
@@ -289,8 +281,8 @@ extension AppUITests {
             #expect(app.runningPaths == [project.project.path])
             #expect(project.progressFraction.map { abs($0 - 13.0 / 30) < 0.001 } == true, "\(String(describing: project.progressFraction)) \(project.passed) \(project.failed) \(project.skipped)")
             let view = MenuBarPanel().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light")
+            assertView(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light")
         }
 
         /// Nothing running: the projects, the failing ones marked.
@@ -299,7 +291,7 @@ extension AppUITests {
             app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
             app.updateRunningPaths()
             let view = MenuBarPanel().environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: .aqua), as: Self.strategy)
+            assertView(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: .aqua)
         }
 
         /// The menu bar icon: unknown total, then 0, 40, 100 percent.
@@ -310,31 +302,31 @@ extension AppUITests {
                 }
             }
             .padding(8)
-            assertSnapshot(of: host(view, size: CGSize(width: 120, height: 32), appearance: .aqua), as: Self.strategy)
+            assertView(view, size: CGSize(width: 120, height: 32), appearance: .aqua)
         }
 
         // MARK: Compare view
 
         @Test(arguments: [CompareMode.sideBySide, .slider, .difference, .toggle])
         func compareModes(mode: CompareMode) {
-            UserDefaults.standard.set(mode.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(mode.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-test")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-test")
                 .environment(app)
             let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference"; case .toggle: "toggle" }
-            assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy, named: name)
+            assertView(view, size: CGSize(width: 820, height: 480), appearance: .aqua, named: name)
         }
 
         /// A size change shows both sizes, the difference that matters.
         @Test func compareSizeChanged() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             let taller = AppFixtures.screen(accent: .systemBlue, height: 280)
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: taller), for: "compare-size")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-size")
                 .environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
+            assertView(view, size: CGSize(width: 820, height: 480), appearance: .aqua)
         }
 
         /// Several failures selected: the batch detail with its two actions.
@@ -348,9 +340,9 @@ extension AppUITests {
         /// title bar beside the traffic lights.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func compareWindow(appearance: NSAppearance.Name) throws {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-compare-window")
+            let dir = AppFixtures.temporaryDirectory("compare-window")
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let reference = dir.appendingPathComponent("payButton.dark.png"), actual = dir.appendingPathComponent("actual.png")
             try AppFixtures.reference.write(to: reference)
@@ -363,42 +355,43 @@ extension AppUITests {
                                                 "Tests/AppSnapshotTests/__Snapshots__/CheckoutViewTests/payButton.dark.png"),
                                      leadingInset: 72)
                 .environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 900, height: 560), appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light")
+            assertView(view, size: CGSize(width: 900, height: 560), appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light")
         }
 
         /// The floating bar drops stats and size instead of wrapping.
         @Test func compareNarrowPane() {
-            UserDefaults.standard.set(CompareMode.difference.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.difference.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-narrow")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-narrow")
                 .environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 440, height: 360), appearance: .aqua), as: Self.strategy, named: "440pt")
+            assertView(view, size: CGSize(width: 440, height: 360), appearance: .aqua, named: "440pt")
         }
 
         /// Rendering noise gets a note explaining it and the precision that would pass.
         @Test func compareImperceptibleDifference() {
-            UserDefaults.standard.set(CompareMode.difference.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.difference.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.renderingNoise), for: "compare-noise")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-noise")
                 .environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
+            assertView(view, size: CGSize(width: 820, height: 480), appearance: .aqua)
         }
 
         /// ⇧⌘0 frames the changed pixels (here: only the button changed colour).
         @Test func compareZoomToChange() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.badged), for: "compare-zoom-change")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom-change")
                 .environment(app)
-            let hosted = host(view, size: CGSize(width: 820, height: 480), appearance: .aqua)
-            app.zoomToChangeRequest += 1
-            settle(hosted)
-            #expect(app.viewport.scale > 2)
-            assertSnapshot(of: hosted, as: Self.strategy)
+            AppFixtures.host(view, size: CGSize(width: 820, height: 480)) { hosted in
+                app.zoomToChangeRequest += 1
+                AppFixtures.settle(hosted)
+                #expect(app.viewport.scale > 2)
+                assertSnapshot(of: hosted, as: Self.strategy)
+            }
         }
 
         /// The readout shown while hovering: a pixel of the button that changed colour.
@@ -408,8 +401,8 @@ extension AppUITests {
                                     before: PixelImage(data: AppFixtures.reference), after: PixelImage(data: AppFixtures.actual),
                                     beforeLabel: "Reference", afterLabel: "Actual")
                 .padding()
-            assertSnapshot(of: host(view, size: CGSize(width: 480, height: 64), appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light")
+            assertView(view, size: CGSize(width: 480, height: 64), appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light")
         }
 
         /// Flaky pattern, then the same with Differentiate Without Color: failures hollow, mixed half filled.
@@ -418,18 +411,17 @@ extension AppUITests {
             let points = AppFixtures.timeline([.passed, .failed, .passed, .mixed, .failed, .passed])
             let view = HistoryStrip(points: points, size: .regular, differentiateWithoutColor: withoutColor)
                 .padding()
-            assertSnapshot(of: host(view, size: CGSize(width: 120, height: 48), appearance: .aqua), as: Self.strategy,
-                           named: withoutColor ? "shapes" : "color")
+            assertView(view, size: CGSize(width: 120, height: 48), appearance: .aqua, named: withoutColor ? "shapes" : "color")
         }
 
         @Test func compareZoomedIn() {
-            UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
             app.viewport = Viewport(scale: 4, offset: CGSize(width: 120, height: -60))
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-zoom")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom")
                 .environment(app)
-            assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .darkAqua), as: Self.strategy, named: "dark-4x")
+            assertView(view, size: CGSize(width: 820, height: 480), appearance: .darkAqua, named: "dark-4x")
         }
 
         // MARK: Helpers
@@ -445,52 +437,19 @@ extension AppUITests {
         private func assertPane(_ project: ProjectModel, app: AppModel, appearance: NSAppearance.Name,
                                 fileID: StaticString = #fileID, file: StaticString = #filePath,
                                 testName: String = #function, line: UInt = #line, column: UInt = #column) {
-            let view = ProjectView(project: project).environment(app)
-            assertSnapshot(of: host(view, size: Self.paneSize, appearance: appearance), as: Self.strategy,
-                           named: appearance == .darkAqua ? "dark" : "light",
-                           fileID: fileID, file: file, testName: testName, line: line, column: column)
+            assertView(ProjectView(project: project).environment(app), size: Self.paneSize, appearance: appearance,
+                       named: appearance == .darkAqua ? "dark" : "light",
+                       fileID: fileID, file: file, testName: testName, line: line, column: column)
         }
 
-        /// - Parameter keepFocus: keep whichever field took focus (the ⌘K palette's search field
-        ///   should); otherwise focus is cleared, as a field that took it while the view settled
-        ///   draws a pixel off and the moment it arrives varies from run to run.
-        private func host<V: View>(_ view: V, size: CGSize, appearance: NSAppearance.Name, keepFocus: Bool = false) -> NSView {
-            let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
-            window.appearance = NSAppearance(named: appearance)
-            window.isReleasedWhenClosed = false
-            // Rendering the hosting view skips the window's own background, which left headers
-            // transparent (white text on white in dark mode); draw it as the window would.
-            let hosting = NSHostingView(rootView: deterministic(view.frame(width: size.width, height: size.height)
-                .background(Color(nsColor: .windowBackgroundColor))))
-            hosting.frame = CGRect(origin: .zero, size: size)
-            window.contentView = hosting
-            settle(hosting)
-            if !keepFocus {
-                window.makeFirstResponder(nil)
-                settle(hosting)
-            } else if let editor = window.firstResponder as? NSTextView {
-                // The caret blinks, so a render caught it on or off by chance; leave it out.
-                editor.insertionPointColor = .clear
-                settle(hosting)
+        private func assertView<V: View>(_ view: V, size: CGSize, appearance: NSAppearance.Name, keepFocus: Bool = false,
+                                         named name: String? = nil,
+                                         fileID: StaticString = #fileID, file: StaticString = #filePath,
+                                         testName: String = #function, line: UInt = #line, column: UInt = #column) {
+            AppFixtures.host(view, size: size, appearance: appearance, keepFocus: keepFocus) { hosted in
+                assertSnapshot(of: hosted, as: Self.strategy, named: name,
+                               fileID: fileID, file: file, testName: testName, line: line, column: column)
             }
-            return hosting
-        }
-
-        private func deterministic<V: View>(_ view: V) -> some View {
-            view
-                .environment(\.locale, Locale(identifier: "en_US"))
-                .environment(\.timeZone, TimeZone(identifier: "UTC")!)
-                .environment(\.calendar, Calendar(identifier: .gregorian))
-        }
-
-        /// Lets SwiftUI finish layout and `onAppear`/`task` work that is already cached.
-        private func settle(_ view: NSView) {
-            for _ in 0..<3 {
-                view.layoutSubtreeIfNeeded()
-                RunLoop.main.run(until: Date().addingTimeInterval(0.15))
-            }
-            view.layoutSubtreeIfNeeded()
-            view.displayIfNeeded()
         }
     }
 }

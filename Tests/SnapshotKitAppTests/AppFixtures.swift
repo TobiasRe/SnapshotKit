@@ -197,14 +197,87 @@ enum AppFixtures {
         }
     }
 
+    // MARK: Hosting
+
+    /// The defaults that hosted views read and write through `@AppStorage`, emptied by `resetDefaults()`,
+    /// so a test sees neither an earlier test's compare mode or layout nor the test runner's own defaults.
+    static let defaults = UserDefaults(suiteName: defaultsSuite)!
+    private static let defaultsSuite = "SnapshotKitAppTests"
+
+    static func resetDefaults() {
+        defaults.removePersistentDomain(forName: defaultsSuite)
+        // ProjectModel keeps its sort order in the standard defaults.
+        UserDefaults.standard.removeObject(forKey: "librarySort")
+    }
+
+    /// Shows `view` in an off-screen window, as the app's window would, lets it settle, hands the hosting
+    /// view to `body` and closes the window.
+    ///
+    /// - Parameter keepFocus: keep whichever field took focus (the ⌘K palette's search field
+    ///   should); otherwise focus is cleared, as a field that took it while the view settled
+    ///   draws a pixel off and the moment it arrives varies from run to run.
+    static func host<V: View, Result>(_ view: V, size: CGSize = CGSize(width: 1100, height: 700),
+                                      appearance: NSAppearance.Name = .aqua, keepFocus: Bool = false,
+                                      _ body: (NSView) throws -> Result) rethrows -> Result {
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: appearance)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        // Rendering the hosting view skips the window's own background, which left headers
+        // transparent (white text on white in dark mode); draw it as the window would.
+        let hosting = NSHostingView(rootView: deterministic(view.frame(width: size.width, height: size.height)
+            .background(Color(nsColor: .windowBackgroundColor))))
+        hosting.frame = CGRect(origin: .zero, size: size)
+        window.contentView = hosting
+        settle(hosting)
+        if !keepFocus {
+            window.makeFirstResponder(nil)
+            settle(hosting)
+        } else if let editor = window.firstResponder as? NSTextView {
+            // The caret blinks, so a render caught it on or off by chance; leave it out.
+            editor.insertionPointColor = .clear
+            settle(hosting)
+        }
+        return try body(hosting)
+    }
+
+    private static func deterministic<V: View>(_ view: V) -> some View {
+        view
+            .environment(\.locale, Locale(identifier: "en_US"))
+            .environment(\.timeZone, TimeZone(identifier: "UTC")!)
+            .environment(\.calendar, Calendar(identifier: .gregorian))
+            .defaultAppStorage(defaults)
+    }
+
+    /// Lets SwiftUI finish layout and `onAppear`/`task` work that is already cached.
+    static func settle(_ view: NSView) {
+        for _ in 0..<3 {
+            view.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        }
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded()
+    }
+
     // MARK: Models
 
-    /// One home per test process, emptied on first use, so runs don't pile up temp directories.
+    /// One directory per test process for settings and repositories. Those of earlier runs are removed
+    /// once their process has ended, so runs don't pile up temp directories.
     static let home: URL = {
-        let home = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-tests")
-        try? FileManager.default.removeItem(at: home)
+        let runs = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-test-runs")
+        for old in (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [] {
+            if let pid = Int32(old), pid != getpid(), kill(pid, 0) == 0 { continue }
+            try? FileManager.default.removeItem(at: runs.appendingPathComponent(old))
+        }
+        let home = runs.appendingPathComponent("\(getpid())")
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         return home
     }()
+
+    /// A fresh directory for one test's files.
+    static func temporaryDirectory(_ name: String) -> URL {
+        home.appendingPathComponent("\(name)-\(UUID().uuidString)").resolvingSymlinksInPath()
+    }
 
     static func store() -> ProjectStore {
         setenv("SNAPSHOTKIT_HOME", home.path, 1)
@@ -245,7 +318,7 @@ enum AppFixtures {
 
     static func project(_ scenario: Scenario, store: ProjectStore) -> ProjectModel {
         let model = ProjectModel(project: Project(path: repository.path), store: store, autoload: false)
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-fixtures")
+        let tmp = temporaryDirectory("fixtures")
         var f = ProjectFixture()
         f.context = context
         f.environment = environment

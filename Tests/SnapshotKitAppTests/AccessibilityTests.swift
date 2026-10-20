@@ -7,11 +7,12 @@ import Testing
 extension AppUITests {
     /// Every control a VoiceOver user can reach must say what it is.
     @MainActor
-    @Suite(.serialized)
+    @Suite(.serialized, .enabled(if: AXIsProcessTrusted(), "SwiftUI only builds its accessibility tree for a trusted AX client"))
     struct AccessibilityTests {
         init() {
             DS.solidSurfaces = true
             AppSnapshotTests.launchOnce()
+            AppFixtures.resetDefaults()
         }
 
         /// Menu buttons (`AXMenuButton`) are left out: SwiftUI menus keep their title on an AppKit
@@ -19,13 +20,9 @@ extension AppUITests {
         /// have text labels in code; check them with VoiceOver.
         static let interactiveRoles: Set<NSAccessibility.Role> = [.button, .popUpButton, .checkBox, .slider, .radioButton, .textField]
 
-        /// Interactive elements with neither a label, title nor value. Uses KVC because SwiftUI's
-        /// accessibility nodes are private NSObject subclasses.
-        func unlabeled(in root: NSView) -> [String] {
-            audit(root).unlabeled
-        }
-
-        /// Walks the tree; returns all interactive roles seen (to prove the walk works) and the unlabeled ones.
+        /// Walks the tree; returns all interactive roles seen (to prove the walk works) and the ones with
+        /// neither a label, title nor value. Uses KVC because SwiftUI's accessibility nodes are private
+        /// NSObject subclasses.
         func audit(_ root: NSView) -> (interactive: [String], unlabeled: [String]) {
             // Asking through the AX API makes SwiftUI build its accessibility tree.
             var windows: CFTypeRef?
@@ -69,54 +66,44 @@ extension AppUITests {
             return (interactive, found)
         }
 
-        func render(_ scenario: AppFixtures.Scenario, tab: ProjectTab, compare: CompareMode = .sideBySide) -> NSView {
-            UserDefaults.standard.set(compare.rawValue, forKey: "compareMode")
+        /// Audits the project pane showing `tab`.
+        func audit(_ scenario: AppFixtures.Scenario, tab: ProjectTab, compare: CompareMode = .sideBySide) -> (interactive: [String], unlabeled: [String]) {
+            AppFixtures.defaults.set(compare.rawValue, forKey: "compareMode")
             let store = AppFixtures.store()
             let app = AppModel(store: store)
             let project = AppFixtures.project(scenario, store: store)
             project.tab = tab
             app.show(project)
-            let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 700), styleMask: [.borderless], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            let hosting = NSHostingView(rootView: ProjectView(project: project).environment(app).frame(width: 1100, height: 700))
-            window.contentView = hosting
-            for _ in 0..<3 { hosting.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date().addingTimeInterval(0.15)) }
-            return hosting
+            return AppFixtures.host(ProjectView(project: project).environment(app)) { audit($0) }
         }
 
-        @Test(.enabled(if: AXIsProcessTrusted(), "SwiftUI only builds its accessibility tree for a trusted AX client"))
-        func runTab() {
-            let result = audit(render(.failedRun, tab: .run))
+        @Test func runTab() {
+            let result = audit(.failedRun, tab: .run)
             #expect(result.interactive.count >= 5, "the walk should reach the run tab's controls")
             #expect(result.unlabeled == [])
         }
 
-        @Test(.enabled(if: AXIsProcessTrusted()))
-        func snapshotsTab() {
-            let result = audit(render(.library, tab: .snapshots))
+        @Test func snapshotsTab() {
+            let result = audit(.library, tab: .snapshots)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
 
-        @Test(.enabled(if: AXIsProcessTrusted()))
-        func snapshotsGrid() {
-            UserDefaults.standard.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
-            defer { UserDefaults.standard.set(LibraryLayout.list.rawValue, forKey: "libraryLayout") }
-            let result = audit(render(.library, tab: .snapshots))
+        @Test func snapshotsGrid() {
+            AppFixtures.defaults.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
+            let result = audit(.library, tab: .snapshots)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
 
-        @Test(.enabled(if: AXIsProcessTrusted()))
-        func changesTab() {
-            let result = audit(render(.changes, tab: .changes))
+        @Test func changesTab() {
+            let result = audit(.changes, tab: .changes)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
 
-        @Test(.enabled(if: AXIsProcessTrusted()))
-        func failuresTabWithSlider() {
-            let result = audit(render(.failures, tab: .failures, compare: .slider))
+        @Test func failuresTabWithSlider() {
+            let result = audit(.failures, tab: .failures, compare: .slider)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }

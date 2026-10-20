@@ -9,9 +9,16 @@ extension AppUITests {
     @MainActor
     @Suite(.serialized)
     struct ProjectModelTests {
+        init() {
+            AppFixtures.resetDefaults()
+            // The tests' git and the app's must not pick up hooks, templates or settings of this machine's user.
+            setenv("GIT_CONFIG_GLOBAL", "/dev/null", 1)
+            setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
+        }
+
         /// A repo on `feature` with one committed snapshot change and one uncommitted re-record.
         func makeRepo() throws -> (URL, String) {
-            let dir = AppFixtures.home.appendingPathComponent("model-\(UUID().uuidString)").resolvingSymlinksInPath()
+            let dir = AppFixtures.temporaryDirectory("model")
             let png = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
             try FileManager.default.createDirectory(at: dir.appendingPathComponent(png).deletingLastPathComponent(), withIntermediateDirectories: true)
             func git(_ args: String...) throws { try Shell.output(["git"] + args, in: dir) }
@@ -73,7 +80,8 @@ extension AppUITests {
             let first = try #require(model.filteredChanges.first)
             model.selectedChangeID = first.id
             model.setViewed(true, for: first)
-            #expect(model.selectedChangeID == model.filteredChanges.last?.id)
+            let next = try #require(model.filteredChanges.last)
+            #expect(model.selectedChangeID == next.id)
 
             // A fresh model reads the marks back.
             let reopened = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
@@ -81,7 +89,7 @@ extension AppUITests {
             await waitForChanges(reopened)
             #expect(reopened.viewedChanges == [first.id])
             reopened.hideViewed = true
-            #expect(reopened.filteredChanges.map(\.id) == [model.filteredChanges.last!.id])
+            #expect(reopened.filteredChanges.map(\.id) == [next.id])
         }
 
         @Test func discardsOnlyInvisibleReRecords() async throws {
@@ -110,7 +118,7 @@ extension AppUITests {
             #expect(model.lastMessage?.hasPrefix("Discarded 1 re-recorded snapshot") == true)
         }
 
-        @Test func navigationFollowsTheListOrder() {
+        @Test func navigationFollowsTheListOrder() throws {
             let store = AppFixtures.store()
             let model = AppFixtures.project(.changes, store: store)
             #expect(model.displayedChanges.map(\.testName) == ["payButton", "summary", "badge", "legacyHeader"])
@@ -118,7 +126,7 @@ extension AppUITests {
             model.selectAdjacent(1)
             #expect(model.selectedChange?.testName == "summary")
             // legacyHeader is already viewed, so marking summary skips ahead to badge.
-            model.setViewed(true, for: model.selectedChange!)
+            model.setViewed(true, for: try #require(model.selectedChange))
             #expect(model.selectedChange?.testName == "badge")
             model.selectAdjacent(5)
             #expect(model.selectedChange?.testName == "legacyHeader")
@@ -180,7 +188,7 @@ extension AppUITests {
 
         /// Scanning a folder finds its projects and says so; nothing found is never silent.
         @Test func scanningAFolderFindsProjectsAndSaysSo() async throws {
-            let root = AppFixtures.home.appendingPathComponent("scan-\(UUID().uuidString)").resolvingSymlinksInPath()
+            let root = AppFixtures.temporaryDirectory("scan")
             let repo = root.appendingPathComponent("team/app")
             let snapshots = repo.appendingPathComponent("Tests/__Snapshots__/S")
             try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true)
@@ -223,11 +231,11 @@ extension AppUITests {
             #expect(model.viewedChanges.isEmpty)
         }
 
-        @Test func countersShowOnlyWhenATestHasSeveralSnapshots() {
+        @Test func countersShowOnlyWhenATestHasSeveralSnapshots() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
             let files = model.library?.files ?? []
-            let named = files.first { $0.variant == "dark" }!
-            let lone = files.first { $0.testName == "summary" }!
+            let named = try #require(files.first { $0.variant == "dark" })
+            let lone = try #require(files.first { $0.testName == "summary" })
             #expect(model.showsVariant(named))
             #expect(lone.variant == "1" && !model.showsVariant(lone))
             #expect(!model.showsVariant(SnapshotFile(path: "T/__Snapshots__/S/plain.png", byteSize: 0)))
@@ -278,12 +286,12 @@ extension AppUITests {
             #expect(model.effectiveFailureSelection == [ids[1]])
         }
 
-        @Test func reRecordAllCoversEveryTestButOrphans() {
+        @Test func reRecordAllCoversEveryTestButOrphans() throws {
             let app = AppModel(store: AppFixtures.store())
             let model = AppFixtures.project(.library, store: app.store)
             app.show(model)
             let files = model.recordableSnapshots
-            #expect(files.count == model.library!.files.count - 1)            // oldAvatar's test is gone
+            #expect(files.count == (try #require(model.library)).files.count - 1)   // oldAvatar's test is gone
             #expect(!files.contains { model.orphanIDs.contains($0.id) })
             #expect(ProjectModel.testCount(files) == 5)                       // payButton's two variants are one test
             #expect(PaletteCommand.available(app: app).map(\.title).contains("Re-record All Snapshot Tests…"))
@@ -307,9 +315,9 @@ extension AppUITests {
             #expect(Split.clamp(500, min: 300, available: 600) == 300)      // a tiny window: the list's minimum wins
         }
 
-        @Test func showInLibraryClearsFiltersThatHideTheSnapshot() {
+        @Test func showInLibraryClearsFiltersThatHideTheSnapshot() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
-            let header = AppFixtures.libraryImages.first { $0.0.testName == "header" }!.0
+            let header = try #require(AppFixtures.libraryImages.first { $0.0.testName == "header" }).0
             model.libraryScope = .failing
             model.libraryFilter = "payButton"
             model.tab = .changes
@@ -340,7 +348,7 @@ extension AppUITests {
             #expect(app.current?.project.path == Project(path: repo.path).path)
             #expect(app.projects.contains { $0.path == Project(path: repo.path).path })
             // A file outside any repository is neither a project nor a scan folder.
-            let file = AppFixtures.home.appendingPathComponent("loose-\(UUID().uuidString).txt")
+            let file = AppFixtures.temporaryDirectory("loose").appendingPathExtension("txt")
             try Data("x".utf8).write(to: file)
             #expect(!app.addDroppedFolders([file]))
         }
