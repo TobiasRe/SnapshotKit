@@ -1365,8 +1365,13 @@ final class ProjectModel {
     private func applyFlakeResult(_ result: TestRunResult, iterations: Int) {
         RunHistory(repository: project.url).append(RunRecord.make(kind: .flakeCheck, host: result.host, repository: project.url, result: result))
         setHistory(RunHistory(repository: project.url).load())
+        // A cancelled check has repeated some tests only partly (its bundle has what ran): no verdicts.
+        guard !result.cancelled else {
+            finish(message: "Cancelled.")
+            return
+        }
         guard let summary = result.summary else {
-            finish(message: result.cancelled ? "Cancelled." : "Flakiness check produced no results.", isError: !result.cancelled)
+            finish(message: "Flakiness check produced no results.", isError: true)
             return
         }
         // Merge, so checking one test keeps verdicts for the others.

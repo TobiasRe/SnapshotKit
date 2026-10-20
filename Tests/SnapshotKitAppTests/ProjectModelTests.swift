@@ -963,6 +963,19 @@ extension AppUITests {
             #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
         }
 
+        /// A cancelled flakiness check says so and leaves the verdicts as they were, as a cancelled run does.
+        @Test func cancellingAFlakinessCheckKeepsTheVerdicts() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun, testResults: Self.payButtonFailed, failures: true)
+            let verdicts = model.failures.map(\.verdict)
+            model.checkFlakiness()
+            try await waitUntilStarted(model)
+            model.cancel()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Cancelled.")
+            #expect(model.failures.map(\.verdict) == verdicts)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
