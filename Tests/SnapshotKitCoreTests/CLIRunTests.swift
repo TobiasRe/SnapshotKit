@@ -48,6 +48,14 @@ private func lastRun(_ outcome: TestOutcome, host: String = "local", bundle: Str
         #expect(Outcome(try snapkit("record", "--repo", repo.url.path, "gone")) == failure("No snapshot path contains “gone”."))
     }
 
+    /// Not "no previous run recorded" and every test run again to find failures there aren't.
+    @Test func rerecordWithNothingFailing() throws {
+        let repo = try repoWithCardTests()
+        LastRun.update(with: lastRun(.passed), repository: repo.url)
+        #expect(Outcome(try snapkit("rerecord", "--repo", repo.url.path)) == Outcome(status: 0, stdout: "Nothing to re-record: no failing suites.\n"))
+        #expect(Outcome(try snapkit("flaky", "--repo", repo.url.path)) == Outcome(status: 0, stdout: "No failing suites to check.\n"))
+    }
+
     @Test func rerecordUsesTheFailingSuitesOfTheLastRun() throws {
         let repo = try repoWithCardTests()
         LastRun.update(with: lastRun(.failed), repository: repo.url)

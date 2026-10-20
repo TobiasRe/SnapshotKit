@@ -292,8 +292,11 @@ func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer)
             return SuiteResult(bundle: parts[0], path: Array(parts.dropFirst()), tests: [], failureFiles: [])
         }
     }
-    if let last, !last.failingSuites.isEmpty {
-        say("snapkit: using failing suites from the last run (\(last.host), \(last.date.formatted(date: .omitted, time: .shortened)))")
+    // A last run without failures leaves nothing to do; only without one are the tests run first.
+    if let last {
+        if !last.failingSuites.isEmpty {
+            say("snapkit: using failing suites from the last run (\(last.host), \(last.date.formatted(date: .omitted, time: .shortened)))")
+        }
         return last.failingSuites
     }
     say("snapkit: no previous run recorded; running tests to find failing suites")
