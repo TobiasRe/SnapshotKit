@@ -6,6 +6,42 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Changed
+- Calmer lists: a snapshot's row and grid tile say how it changed on one line ("● Uncommitted · dark"), with
+  only failing tests marked on the right. The toolbar's re-record button (the same as each detail header's)
+  is gone, and the Run tab lists Xcode and the simulator once.
+- A test with more than three variants picks them from a menu instead of a wide segmented control.
+- Each repository keeps its own result bundles and failure images in `.git/snapshotkit/results/` (the newest
+  10 runs, always including the last); a run in one project no longer removes another's.
+
+### Fixed
+- The sidebar stayed blank, and ⌘K showed only its backdrop, whenever no project was open at launch
+  (including the first launch).
+- Failures match their reference images when the repository was moved or copied, or the bundle came from CI.
+- Reverting a snapshot renamed only in case no longer deletes it.
+- Recording works in test files with Windows line endings, a byte order mark, or a `@Suite(...)` ending in a
+  comment or a comma.
+- Tests named with raw identifiers (`` `pay button`() ``) no longer show as orphaned.
+- CI files: block-list matrices, `KEY=value xcodebuild …` and commented-out lines are read correctly.
+- A run that records a new reference no longer makes the test look flaky.
+- The diagnosis never suggests `perceptualPrecision: 1`, which can't pass.
+- Remote runs sync submodules, and download recorded snapshots with spaces or non-ASCII names.
+- The ⌘K palette no longer lists projects whose path merely contains the typed letters somewhere.
+- VoiceOver reads the names of icon menus (··· and the re-record arrow) instead of "More" or "Down".
+- Re-recording one test no longer clears the other failures of the last run; only the tests that ran are
+  updated, in the app and in `.git/snapshotkit/last-run.json`.
+- A cancelled run, re-record or verification keeps the last run's failures instead of wiping them, and says
+  "Cancelled." rather than reporting a result.
+- A re-record whose build failed, or that ran no test, says "Nothing was recorded" (and `snapkit record` /
+  `rerecord` exit 1) instead of "Recorded".
+- Deleting, discarding or reverting the selected item selects the next one instead of jumping to the top, and
+  lists start at their first visible row.
+- Overlapping refreshes of the library or Changes no longer show an older result over a newer one.
+- Opening a folder that doesn't exist or isn't a git repository says so instead of adding it as a project.
+- Opening the base version of two snapshots of the same test, or of a branch like `release/1.0`, opens the
+  right image.
+- The same notice ("All 12 tests passed.") shows again after it was closed.
+
 ## [0.2.0] - 2026-10-20
 
 ### Added
