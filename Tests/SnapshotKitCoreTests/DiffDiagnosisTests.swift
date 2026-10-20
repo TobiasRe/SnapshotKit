@@ -88,6 +88,17 @@ import Testing
         #expect(rect == CGRect(x: 124, y: 100, width: 400, height: 800))
     }
 
+    /// The image sits above the control bar, not in the canvas centre; zooming at a point still keeps
+    /// the pixel under it there.
+    @Test func zoomingKeepsThePixelUnderThePointer() {
+        var v = Viewport()
+        let point = CGPoint(x: 400, y: 300)
+        let anchor = CGPoint(x: point.x - canvas.width / 2, y: point.y - canvas.height / 2)
+        let before = v.pixel(at: point, imageSize: image, canvas: canvas)!
+        v.zoom(by: 4, anchor: anchor)
+        #expect(v.pixel(at: point, imageSize: image, canvas: canvas)! == before)
+    }
+
     @Test func pixelUnderPointFollowsZoomAndPan() {
         var v = Viewport()
         #expect(v.pixel(at: CGPoint(x: 124, y: 100), imageSize: image, canvas: canvas)! == (0, 0))

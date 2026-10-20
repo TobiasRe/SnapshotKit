@@ -251,10 +251,14 @@ import Testing
     @Test func zoomAroundAnchorKeepsPointFixed() {
         var v = Viewport()
         let anchor = CGPoint(x: 100, y: -50)
-        // Content point under the anchor, in image coordinates: (anchor - offset) / scale.
-        let before = CGPoint(x: (anchor.x - v.offset.width) / v.scale, y: (anchor.y - v.offset.height) / v.scale)
+        // Content point under the anchor, from the image's unshifted centre (`bottomBias / 2` above
+        // the view's): (anchor - offset) / scale.
+        func content() -> CGPoint {
+            CGPoint(x: (anchor.x - v.offset.width) / v.scale, y: (anchor.y + Viewport.bottomBias / 2 - v.offset.height) / v.scale)
+        }
+        let before = content()
         v.zoom(by: 2, anchor: anchor)
-        let after = CGPoint(x: (anchor.x - v.offset.width) / v.scale, y: (anchor.y - v.offset.height) / v.scale)
+        let after = content()
         #expect(v.scale == 2)
         #expect(before == after)
     }

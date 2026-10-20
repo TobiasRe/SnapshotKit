@@ -19,7 +19,9 @@ public struct Viewport: Equatable, Sendable {
     public mutating func zoom(by factor: CGFloat, anchor: CGPoint = .zero) {
         let newScale = min(max(scale * factor, Self.minScale), Self.maxScale)
         let applied = newScale / scale
-        // A point p (from center) maps to p' = anchor + (p - anchor) * applied.
+        // Relative to where an unshifted image is centred, `bottomBias / 2` above the view's centre.
+        let anchor = CGPoint(x: anchor.x, y: anchor.y + Self.bottomBias / 2)
+        // A point p (from that centre) maps to p' = anchor + (p - anchor) * applied.
         offset = CGSize(
             width: anchor.x + (offset.width - anchor.x) * applied,
             height: anchor.y + (offset.height - anchor.y) * applied
