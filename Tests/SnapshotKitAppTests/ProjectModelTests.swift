@@ -571,12 +571,12 @@ extension AppUITests {
         // MARK: Operations
 
         /// A model of `repo` that can run, with `script` as xcodebuild.
-        func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil,
+        func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil, attachments: URL? = nil,
                            failures: Bool = false) throws -> ProjectModel {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
-            f.environment = try AppFixtures.fakeXcode(script, testResults: testResults)
+            f.environment = try AppFixtures.fakeXcode(script, testResults: testResults, attachments: attachments)
             f.tab = .failures
             if failures {
                 f.lastResult = AppFixtures.lastResult
@@ -749,6 +749,46 @@ extension AppUITests {
             let last = try #require(LastRun.load(repository: repo))
             #expect(last.failed == 1)
             #expect(last.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
+        }
+
+        /// xcresulttool's report of a run in which payButton() failed.
+        static let payButtonFailed = """
+            {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+              {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Failed",
+                 "children": [{"name": "Snapshot does not match reference.", "nodeType": "Failure Message", "result": "Failed"}]}]}]}]}
+            """
+
+        /// xcodebuild whose first run (the record) passes and whose later ones (the verification) fail.
+        static let recordsThenFails = "[ -e \"$0.ran\" ] || { touch \"$0.ran\"; exit 0; }\nexit 65"
+
+        /// A folder as `xcresulttool export attachments` leaves it: payButton()'s reference and actual image.
+        func payButtonAttachments() throws -> URL {
+            let dir = AppFixtures.temporaryDirectory("attachments")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try AppFixtures.reference.write(to: dir.appendingPathComponent("reference_0_A.png"))
+            try AppFixtures.actual.write(to: dir.appendingPathComponent("failure_0_B.png"))
+            try Data("""
+                [{"testIdentifier": "CheckoutViewTests/payButton()", "attachments": [
+                  {"exportedFileName": "reference_0_A.png", "suggestedHumanReadableName": "reference_0_A.png"},
+                  {"exportedFileName": "failure_0_B.png", "suggestedHumanReadableName": "failure_0_B.png"}]}]
+                """.utf8).write(to: dir.appendingPathComponent("manifest.json"))
+            return dir
+        }
+
+        /// A test that still fails after its re-record shows what it looks like now, as after a run.
+        @Test func aFailedVerificationShowsItsImages() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let model = try runnableModel(repo, xcodebuild: Self.recordsThenFails, testResults: Self.payButtonFailed,
+                                          attachments: try payButtonAttachments(), failures: true)
+            let payButton = try #require(model.failures.first { $0.test.name == "payButton()" })
+
+            model.reRecord(failures: [payButton])
+            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.contains("Verification still fails") == true)
+            let images = try #require(model.failures.first { $0.id == payButton.id }?.images.first)
+            #expect(images.failure.flatMap { try? Data(contentsOf: $0) } == AppFixtures.actual)
         }
     }
 }

@@ -84,8 +84,9 @@ enum AppFixtures {
 
     /// An environment whose xcodebuild is the shell `script`, for running operations without Xcode.
     /// `/usr/bin/xcodebuild` and `/usr/bin/xcrun` hand over to `$DEVELOPER_DIR/usr/bin/xcrun <tool> …`.
-    /// Every run's result bundle reads as `testResults` (xcresulttool's JSON), or as unreadable.
-    static func fakeXcode(_ script: String, testResults: String? = nil) throws -> TestEnvironment {
+    /// Every run's result bundle reads as `testResults` (xcresulttool's JSON), or as unreadable, and
+    /// exports the files in the folder `attachments` (a manifest.json and its images), or none.
+    static func fakeXcode(_ script: String, testResults: String? = nil, attachments: URL? = nil) throws -> TestEnvironment {
         let app = temporaryDirectory("xcode").appendingPathComponent("Xcode.app")
         let xcrun = app.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
         try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -93,6 +94,10 @@ enum AppFixtures {
             #!/bin/sh
             if [ "$1 $2 $3 $4" = "xcresulttool get test-results tests" ]; then
             \(testResults.map { "cat <<'JSON'\n\($0)\nJSON" } ?? "exit 1")
+            exit
+            fi
+            if [ "$1 $2 $3" = "xcresulttool export attachments" ]; then
+            \(attachments.map { "cp -R '\($0.path)/.' \"$7\"" } ?? "exit 1")
             exit
             fi
             [ "$1" = xcodebuild ] || exit 1

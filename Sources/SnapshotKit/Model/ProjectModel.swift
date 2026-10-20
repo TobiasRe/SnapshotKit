@@ -1036,15 +1036,22 @@ final class ProjectModel {
         Task {
             do {
                 let result = try await runner.run(onLine: onLine, onEvent: onEvent)
-                let dir = result.resultBundle.deletingPathExtension().appendingPathExtension("attachments")
-                let images = await offCooperativePool {
-                    (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir, developerDir: env.xcode.developerDir)) ?? []
-                }
-                completeRun(result, images: images, kind: .run, attachmentsDirectory: images.isEmpty ? nil : dir)
+                let (images, dir) = await Self.exportImages(of: result, developerDir: env.xcode.developerDir)
+                completeRun(result, images: images, kind: .run, attachmentsDirectory: dir)
             } catch {
                 finish(throwing: error)
             }
         }
+    }
+
+    /// A run's failure images, exported next to its result bundle, and the folder they are in.
+    private nonisolated static func exportImages(of result: TestRunResult, developerDir: String) async
+        -> (images: [SnapshotFailureImages], directory: URL?) {
+        let dir = result.resultBundle.deletingPathExtension().appendingPathExtension("attachments")
+        let images = await offCooperativePool {
+            (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir, developerDir: developerDir)) ?? []
+        }
+        return (images, images.isEmpty ? nil : dir)
     }
 
     private func completeRun(_ result: TestRunResult, images: [SnapshotFailureImages], kind: RunKind, attachmentsDirectory: URL? = nil) {
@@ -1185,7 +1192,8 @@ final class ProjectModel {
                 }
                 // A cancelled verification has no results; the last run's failures stay.
                 if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
-                    applyPartialRun(verifyRun)
+                    let (images, dir) = await Self.exportImages(of: verifyRun, developerDir: env.xcode.developerDir)
+                    applyPartialRun(verifyRun, images: images, attachmentsDirectory: dir)
                     if verifyRun.succeeded {
                         message += " Verified: \(verifyRun.passed) passed."
                     } else {
@@ -1203,10 +1211,12 @@ final class ProjectModel {
     }
 
     /// Takes in a run of some tests (a re-record's verification): those tests have their new
-    /// results; the others keep the last run's, here and on disk.
-    private func applyPartialRun(_ run: TestRunResult) {
+    /// results and images; the others keep the last run's, here and on disk.
+    private func applyPartialRun(_ run: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?) {
         let ran = run.summary?.suites ?? []
         var last = LastRun.load(repository: project.url) ?? LastRun(result: run)
+        // The last run keeps one folder of images: the verification's, when the run had none.
+        if last.attachmentsDirectory == nil { last.attachmentsDirectory = attachmentsDirectory?.path }
         last.failingSuites = Self.merging(ran, into: last.failingSuites).filter(\.isFailing)
         last.failed = last.failingSuites.reduce(0) { $0 + $1.failedCount }
         if let suites = last.suites.map({ Self.merging(ran, into: $0) }) {
@@ -1217,7 +1227,7 @@ final class ProjectModel {
 
         let rerun = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
         lastFailingSuites = Self.merging(ran, into: lastFailingSuites).filter(\.isFailing)
-        setFailures(suites: lastFailingSuites, images: failures.filter { !rerun.contains($0.id) }.flatMap(\.images),
+        setFailures(suites: lastFailingSuites, images: failures.filter { !rerun.contains($0.id) }.flatMap(\.images) + images,
                     source: failureSource ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
     }
 
