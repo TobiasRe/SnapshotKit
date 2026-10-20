@@ -42,7 +42,7 @@ struct ChangesTab: View {
                                 Button { project.setViewed(!viewed, for: change) } label: {
                                     Label("Viewed", systemImage: viewed ? "checkmark.circle.fill" : "circle")
                                 }
-                                .foregroundStyle(viewed ? .primary : .secondary)
+                                // The icon says on or off; a grey label read as disabled.
                                 .fixedSize()
                                 .quietControl()
                                 .help("Mark as reviewed and go to the next snapshot (V in the list)")
@@ -192,13 +192,14 @@ struct ChangesTab: View {
 
                 Menu {
                     ForEach(SnapshotChangeKind.allCases, id: \.self) { kind in
-                        Toggle("\(kind.label) (\(count(kind)))", isOn: Binding(
+                        // A count only when there is one: "Deleted (0)" is noise.
+                        Toggle(count(kind) > 0 ? "\(kind.label) (\(count(kind)))" : kind.label, isOn: Binding(
                             get: { project.changeKinds.contains(kind) },
                             set: { on in if on { project.changeKinds.insert(kind) } else { project.changeKinds.remove(kind) } }
                         ))
                     }
                     Divider()
-                    Toggle("Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
+                    Toggle(project.viewedChanges.isEmpty ? "Hide Viewed" : "Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
                     Button("Mark All as Viewed") { project.setAllViewed(true) }
                         .disabled(project.displayedChanges.allSatisfy { project.viewedChanges.contains($0.id) })
                     Button("Mark All as Not Viewed") { project.setAllViewed(false) }
@@ -233,7 +234,7 @@ struct ChangesTab: View {
                 let count = total == 0 ? nil : shown == total ? "\(total) change\(total == 1 ? "" : "s")" : "\(shown) of \(total)"
                 let base = "vs \(set.baseRef)"
                 ViewThatFits(in: .horizontal) {
-                    Text([count, base + " @ \(set.baseCommit.prefix(7))"].compactMap { $0 }.joined(separator: " · "))
+                    (Text([count, base + " @ "].compactMap { $0 }.joined(separator: " · ")) + Text(set.baseCommit.prefix(7)).fontDesign(.monospaced))
                     Text([count, base].compactMap { $0 }.joined(separator: " · "))
                     Text(count ?? base)
                 }
@@ -246,7 +247,7 @@ struct ChangesTab: View {
                         .tint(DS.Status.passed)
                         .frame(width: 44)
                         .accessibilityHidden(true)
-                    Text("\(viewed)/\(set.changes.count) viewed").monospacedDigit().fixedSize()
+                    Text("\(viewed) of \(set.changes.count) viewed").monospacedDigit().fixedSize()
                 }
             }
         }

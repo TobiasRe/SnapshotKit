@@ -59,11 +59,11 @@ public enum EnvironmentError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .xcodeNotInstalled(required, source, installed):
-            let from = source.map { " (required by \($0))" } ?? ""
-            let list = installed.isEmpty ? "none found" : installed.map { "\($0.version) at \($0.path)" }.joined(separator: ", ")
-            return "Xcode \(required) is not installed\(from). Installed: \(list). Install it (e.g. from developer.apple.com/download or with `xcodes install \(required)`), or set `xcode:` in .snapshotkit.yml."
+            let from = source.map { " (required by `\($0)`)" } ?? ""
+            let list = installed.isEmpty ? "none found" : installed.map { "\($0.version) at `\($0.path)`" }.joined(separator: ", ")
+            return "Xcode \(required) is not installed\(from). Installed: \(list). Install it (e.g. from developer.apple.com/download or with `xcodes install \(required)`), or set `xcode:` in `.snapshotkit.yml`."
         case let .xcodePathMissing(path):
-            return "Xcode at \(path) does not exist. Install it there or set `xcode:` / `developerDir:` in .snapshotkit.yml."
+            return "Xcode at `\(path)` does not exist. Install it there or set `xcode:` / `developerDir:` in `.snapshotkit.yml`."
         case .noXcode:
             return "No Xcode installation found. Install Xcode and run `xcode-select -s /Applications/Xcode.app`."
         case let .runtimeMissing(platform, os, installed, xcode):
@@ -71,10 +71,10 @@ public enum EnvironmentError: Error, LocalizedError, Equatable {
             return "The \(platform) \(os) simulator runtime is not installed for Xcode \(xcode). Installed runtimes: \(list). Install it with `xcodebuild -downloadPlatform \(platform) -buildVersion \(os)` or in Xcode › Settings › Components."
         case let .simulatorMissing(name, platform, os, available):
             let list = available.isEmpty ? "none" : available.joined(separator: ", ")
-            return "No “\(name)” simulator on \(platform) \(os). Available on that runtime: \(list). Create one with `xcrun simctl create \"\(name)\" \"\(name)\" <runtime-id>`, or set `device:` in .snapshotkit.yml."
+            return "No “\(name)” simulator on \(platform) \(os). Available on that runtime: \(list). Create one with `xcrun simctl create \"\(name)\" \"\(name)\" <runtime-id>`, or set `device:` in `.snapshotkit.yml`."
         case let .noDestination(available):
             let list = available.prefix(8).joined(separator: ", ")
-            return "No simulator is configured: CI has no `-destination` with a device name. Set `device:` (and optionally `os:`) in .snapshotkit.yml. Available: \(list)"
+            return "No simulator is configured: CI has no `-destination` with a device name. Set `device:` (and optionally `os:`) in `.snapshotkit.yml`. Available: \(list)"
         case let .simctlFailed(message):
             return "Could not list simulators: \(message)"
         }

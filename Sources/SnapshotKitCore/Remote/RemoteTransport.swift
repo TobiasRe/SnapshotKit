@@ -118,7 +118,7 @@ public enum RemoteError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
-            "No remote machine configured. Set `remoteHost:` in .snapshotkit.yml or in the project’s settings."
+            "No remote machine configured. Set `remoteHost:` in `.snapshotkit.yml` or in the project’s settings."
         case let .commandFailed(host, _, _, output):
             "Command on \(host) failed: \(output)"
         case let .syncFailed(host, output):

@@ -30,6 +30,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Messages use typographic quotes and apostrophes (“develop”, can’t); commands to type keep straight ones.
 - `snapkit run` and `flaky` refuse `--iterations 1` (exit 64) instead of quietly running two.
 - **Check Again** reloads the configuration, so a fixed `.snapshotkit.yml` is picked up.
+- In a narrow window the Run tab moves **Re-record Failing Suites** into its ··· menu, so the outcome stays
+  readable. The Changes footer counts “3 of 16 viewed”, and empty filter choices no longer read “(0)”.
+- File names, paths and settings in messages, notices and the Run inspector are set in code type, like the
+  commands beside them.
 - Faster with thousands of snapshots: the library loads in less than half the time, and a re-record starts
   seconds sooner.
 

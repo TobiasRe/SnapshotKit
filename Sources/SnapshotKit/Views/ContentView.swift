@@ -120,7 +120,7 @@ struct NoticeBanner: View {
             // Failed is a red circle everywhere; the triangle means a warning.
             Image(systemName: isError ? "xmark.circle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? DS.Status.failed : Color.secondary)
-            Text(text)
+            Text(StatusNote.code(text, font: DS.Font.secondary.monospaced()))
                 .font(DS.Font.secondary)
                 .lineLimit(3)
                 .textSelection(.enabled)

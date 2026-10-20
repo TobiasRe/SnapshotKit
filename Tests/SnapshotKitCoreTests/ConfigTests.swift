@@ -372,8 +372,8 @@ import Testing
             Issue.record("expected an error")
         } catch let error as EnvironmentError {
             let message = error.localizedDescription
-            #expect(message.contains("Xcode 98.0 is not installed (required by .gitlab-ci.yml)"))
-            #expect(message.contains("99.2 at /Apps/Xcode-99.2.app"))
+            #expect(message.contains("Xcode 98.0 is not installed (required by `.gitlab-ci.yml`)"))
+            #expect(message.contains("99.2 at `/Apps/Xcode-99.2.app`"))
         }
     }
 

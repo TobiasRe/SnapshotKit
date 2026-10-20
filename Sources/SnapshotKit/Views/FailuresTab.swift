@@ -283,7 +283,8 @@ struct FailuresTab: View {
     @ViewBuilder
     private func hint(_ item: FailureItem) -> some View {
         if item.isNewReference {
-            Label("This test had no reference yet, so one was just recorded. Run the tests again to check against it.", systemImage: "sparkles")
+            StatusNote("This test had no reference yet, so one was just recorded. Run the tests again to check against it.",
+                       symbol: "sparkles", color: DS.Status.color(for: .new))
                 .foregroundStyle(.secondary)
         } else {
             verdictHint(item)
@@ -303,7 +304,7 @@ struct FailuresTab: View {
                        symbol: "lightbulb", color: DS.Status.failed)
                 .foregroundStyle(.secondary)
         case .alwaysFails where project.diagnoses[item.id]?.kind == .imperceptible:
-            StatusNote("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.",
+            StatusNote("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax `perceptualPrecision`.",
                        symbol: "lightbulb", color: DS.Status.changed)
                 .foregroundStyle(.secondary)
         case .alwaysFails:

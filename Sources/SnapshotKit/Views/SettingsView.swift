@@ -42,9 +42,9 @@ struct SettingsView: View {
                 HStack {
                     Text("Scan Folders")
                     Spacer()
-                    Button("Rescan") { model.rescan() }
+                    Button("Rescan Folders") { model.rescan() }
                         .disabled(roots.isEmpty)
-                    Button("Add Folder…") {
+                    Button("Add Scan Folder…") {
                         model.addScanRootFromPanel()
                         reload()
                     }

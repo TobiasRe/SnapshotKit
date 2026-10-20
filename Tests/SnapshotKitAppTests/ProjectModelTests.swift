@@ -493,7 +493,7 @@ extension AppUITests {
             model.reload()
             for _ in 0..<200 where model.environmentError == nil { try await Task.sleep(for: .milliseconds(20)) }
             try await Task.sleep(for: .seconds(1.5))       // the first check is done by now
-            #expect(model.environmentError?.contains("/nonexistent/Xcode.app does not exist") == true)
+            #expect(model.environmentError?.contains("`/nonexistent/Xcode.app` does not exist") == true)
         }
 
         // MARK: Selection

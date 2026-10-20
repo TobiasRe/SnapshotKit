@@ -60,12 +60,12 @@ enum AppFixtures {
 
     static var context: ProjectContext { context(at: repository) }
 
-    static func context(at repository: URL) -> ProjectContext {
+    static func context(at repository: URL, xcode: String = "99.1") -> ProjectContext {
         var config = SnapshotConfig()
         config.scheme = "SampleApp"
         config.workspace = "SampleApp.xcworkspace"
         config.testPlan = "Snapshots"
-        config.xcodeVersion = "99.1"
+        config.xcodeVersion = xcode
         config.deviceName = "Example Phone"
         config.osVersion = "99.0"
         config.baseBranch = "develop"
@@ -435,6 +435,7 @@ enum AppFixtures {
             f.tab = .failures
         case .missingXcode:
             f.tab = .run
+            f.context = context(at: repository, xcode: "99.2") // what CI asks for, which this Mac lacks
             f.environment = nil
             f.environmentError = EnvironmentError.xcodeNotInstalled(
                 required: "99.2", source: ".gitlab-ci.yml",

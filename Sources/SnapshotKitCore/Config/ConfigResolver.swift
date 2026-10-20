@@ -130,9 +130,9 @@ public enum ConfigError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .invalidOverride(let message):
-            "\(SnapshotConfig.overrideFileName) could not be read (\(message))."
+            "`\(SnapshotConfig.overrideFileName)` could not be read (\(message))."
         case .missingScheme:
-            "No scheme found. CI files do not contain an `xcodebuild -scheme …` call; add `scheme: <Name>` to \(SnapshotConfig.overrideFileName)."
+            "No scheme found. CI files do not contain an `xcodebuild -scheme …` call; add `scheme: <Name>` to `\(SnapshotConfig.overrideFileName)`."
         }
     }
 }

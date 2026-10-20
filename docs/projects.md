@@ -23,7 +23,7 @@ ones.
 | **File › Add Project…** (⌘O) | Choose any folder inside a repository; the repository’s root is added and opened. |
 | Sidebar **+** › **Add Project…** | The same. |
 | Drop a repository folder onto the window | Added and opened. |
-| Sidebar **+** › **Add Scan Folder…** | Choose a folder that contains repositories; it is scanned now and on every **Rescan**. |
+| Sidebar **+** › **Add Scan Folder…** | Choose a folder that contains repositories; it is scanned now and on every **Rescan Folders**. |
 | Drop any other folder onto the window | Added as a scan folder and scanned. |
 | ⌘K, type a path | Projects match by name and by path. |
 
@@ -129,7 +129,7 @@ SnapshotKit from another app, the changes are refreshed too.
 | Setting | Default | What it does |
 |---|---|---|
 | Show in menu bar | off | Adds the [menu bar item](menu-bar.md). SnapshotKit then keeps running when its window is closed. |
-| Scan Folders | none | Folders searched for projects, with Rescan and Add Folder…. |
+| Scan Folders | none | Folders searched for projects, with **Rescan Folders** and **Add Scan Folder…**. |
 | Flakiness check runs | 5 | How many times **Check Flakiness** runs the failing tests (2–50). |
 | Verify after re-recording | on | After recording new references, run the same tests again to confirm they pass. |
 | Settings file | | **Show in Finder** reveals `settings.json`. |

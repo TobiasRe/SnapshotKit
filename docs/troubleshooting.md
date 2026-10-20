@@ -51,7 +51,7 @@ prints the same checks.
 | *No “iPhone 16 Pro” simulator on iOS 18.2. Available on that runtime: …* | Create it: `xcrun simctl create "iPhone 16 Pro" "iPhone 16 Pro" <runtime-id>`, or set `device:` to an available one. |
 | *No simulator is configured: CI has no `-destination` with a device name.* | Set `device:` (and `os:`) in `.snapshotkit.yml`. |
 | *No scheme found. CI files do not contain an `xcodebuild -scheme …` call* | Add `scheme:` to `.snapshotkit.yml`. |
-| *.snapshotkit.yml could not be read (line N: …)* | Fix that line; the file is flat `key: value` YAML without nesting. See [Configuration](configuration.md#format). |
+| *`.snapshotkit.yml` could not be read (line N: …)* | Fix that line; the file is flat `key: value` YAML without nesting. See [Configuration](configuration.md#format). |
 
 **The configuration SnapshotKit found is wrong.**
 Run `snapkit config` to see every value and where it came from, then override what’s wrong in

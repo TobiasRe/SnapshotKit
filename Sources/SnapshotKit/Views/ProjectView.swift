@@ -183,24 +183,24 @@ struct RunInspector: View {
                         // a script) say where they came from.
                         c.source(of: field).flatMap { ctx.resolved.ciFiles.contains($0) ? nil : $0 }
                     }
-                    PropertySection("Configuration", footer: (ctx.resolved.ciFiles.isEmpty ? "No CI files found." : "From " + ctx.resolved.ciFiles.joined(separator: ", ")
-                                                              + (ctx.resolved.overrideFile.map { " and \($0)" } ?? "") + "."),
+                    PropertySection("Configuration", footer: (ctx.resolved.ciFiles.isEmpty ? "No CI files found." : "From " + ctx.resolved.ciFiles.map { "`\($0)`" }.joined(separator: ", ")
+                                                              + (ctx.resolved.overrideFile.map { " and `\($0)`" } ?? "") + "."),
                                     notes: ctx.resolved.notes) {
-                        PropertyRow("Scheme", value: c.scheme, source: source(.scheme))
-                        if let ws = c.workspace { PropertyRow("Workspace", value: ws, source: source(.workspace)) }
-                        if let p = c.project { PropertyRow("Project", value: p, source: source(.project)) }
-                        if let plan = c.testPlan { PropertyRow("Test plan", value: plan, source: source(.testPlan)) }
-                        if !c.onlyTesting.isEmpty { PropertyRow("Only testing", value: c.onlyTesting.joined(separator: ", "), source: source(.onlyTesting)) }
+                        PropertyRow("Scheme", value: c.scheme, source: source(.scheme), code: true)
+                        if let ws = c.workspace { PropertyRow("Workspace", value: ws, source: source(.workspace), code: true) }
+                        if let p = c.project { PropertyRow("Project", value: p, source: source(.project), code: true) }
+                        if let plan = c.testPlan { PropertyRow("Test plan", value: plan, source: source(.testPlan), code: true) }
+                        if !c.onlyTesting.isEmpty { PropertyRow("Only testing", value: c.onlyTesting.joined(separator: ", "), source: source(.onlyTesting), code: true) }
                         // Once found, Environment shows the Xcode and simulator in use; until then, what's asked for.
                         if project.environment == nil {
                             PropertyRow("Xcode", value: c.xcodeVersion ?? c.developerDir ?? "Selected Xcode", source: source(.xcodeVersion) ?? source(.developerDir))
                             PropertyRow("Device", value: c.deviceName.map { $0 + (c.osVersion.map { " · \($0)" } ?? "") }, source: source(.deviceName))
                         }
-                        if let wd = c.workingDirectory { PropertyRow("Directory", value: wd, source: source(.workingDirectory)) }
+                        if let wd = c.workingDirectory { PropertyRow("Directory", value: wd, source: source(.workingDirectory), code: true) }
                     }
 
                     PropertySection("Comparison & Remote",
-                                    footer: project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git")." }) {
+                                    footer: project.detectedBaseBranch.map { "Detected `\($0)` from `\(ctx.config.source(of: .baseBranch) ?? "git")`." }) {
                         PropertyRow("Base branch", alignment: .center) {
                             TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
                                 .textFieldStyle(.plain)
@@ -244,14 +244,10 @@ struct RunInspector: View {
             PropertyRow("Simulator", value: "\(env.simulator.name) · \(env.simulator.platform) \(env.simulator.osVersion)",
                         source: env.simulator.state)
         } else if let error = project.environmentError {
-            VStack(alignment: .leading, spacing: DS.Space.s) {
-                StatusNote(error, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                // Reload, not just re-check: the fix is often an edit to .snapshotkit.yml.
-                Button("Check Again") { project.reload() }
-                    .quietControl()
-            }
+            // The header's Check Again is the way on; one button for it is enough.
+            StatusNote(error, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         } else if project.configError != nil {
             Text("Fix the configuration to check Xcode and the simulator.")
                 .foregroundStyle(.secondary)
@@ -334,15 +330,17 @@ struct PropertyRow<Value: View>: View {
 }
 
 extension PropertyRow where Value == PropertyValue {
-    init(_ label: String, value: String?, source: String? = nil) {
-        self.init(label, source: value == nil ? nil : source) { PropertyValue(text: value ?? "—") }
+    /// `code`: an identifier (a scheme, a file, a path), set in monospaced type at the row's size.
+    init(_ label: String, value: String?, source: String? = nil, code: Bool = false) {
+        self.init(label, source: value == nil ? nil : source) { PropertyValue(text: value ?? "—", code: code && value != nil) }
     }
 }
 
 /// A property's value as text people can select and copy.
 struct PropertyValue: View {
     var text: String
-    var body: some View { Text(text).textSelection(.enabled) }
+    var code = false
+    var body: some View { Text(text).fontDesign(code ? .monospaced : nil).textSelection(.enabled) }
 }
 
 /// Outcome first, then the actions that act on it.
@@ -351,34 +349,11 @@ struct RunStatusHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The outcome and what to do about it, in the same header bar as every other pane.
-            HStack(alignment: .center, spacing: DS.Space.m) {
-                statusIcon
-                    .font(.title3)
-                    .frame(width: 22)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                    Text(title)
-                        .font(DS.Font.heading)
-                        .lineLimit(1)
-                    Group {
-                        if let started = project.startedAt, project.isRunning {
-                            TimelineView(.periodic(from: started, by: 1)) { context in
-                                Text("\(project.phase.label)… · \(Self.elapsed(context.date.timeIntervalSince(started)))")
-                                    .monospacedDigit()
-                            }
-                        } else {
-                            Text(subtitle)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .help(project.isRunning ? "" : project.lastResult?.commandLine ?? "")
-                        }
-                    }
-                    .font(DS.Font.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: DS.Space.m)
-                actions
+            // The outcome and what to do about it, in the same header bar as every other pane. When
+            // the title and every button don't fit, Re-record moves into the menu before the title cuts.
+            ViewThatFits(in: .horizontal) {
+                row(compact: false)
+                row(compact: true)
             }
             .padding(.horizontal, DS.Space.l)
             .frame(maxWidth: .infinity, minHeight: DS.Bar.header, maxHeight: DS.Bar.header)
@@ -424,6 +399,37 @@ struct RunStatusHeader: View {
             .padding(.bottom, DS.Space.xs)
         }
         .background(DS.Surface.content)
+    }
+
+    private func row(compact: Bool) -> some View {
+        HStack(alignment: .center, spacing: DS.Space.m) {
+            statusIcon
+                .font(.title3)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                Text(StatusNote.code(title, font: DS.Font.heading.monospaced()))
+                    .font(DS.Font.heading)
+                    .lineLimit(1)
+                Group {
+                    if let started = project.startedAt, project.isRunning {
+                        TimelineView(.periodic(from: started, by: 1)) { context in
+                            Text("\(project.phase.label)… · \(Self.elapsed(context.date.timeIntervalSince(started)))")
+                                .monospacedDigit()
+                        }
+                    } else {
+                        Text(subtitle)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(project.isRunning ? "" : project.lastResult?.commandLine ?? "")
+                    }
+                }
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: DS.Space.m)
+            actions(compact: compact)
+        }
     }
 
     private var hasCounts: Bool {
@@ -477,8 +483,9 @@ struct RunStatusHeader: View {
         return "Runs the snapshot tests exactly like CI."
     }
 
+    /// Compact puts Re-record Failing Suites in the menu, for headers too narrow for it.
     @ViewBuilder
-    private var actions: some View {
+    private func actions(compact: Bool) -> some View {
         HStack(spacing: DS.Space.s) {
             if project.isRunning {
                 Button("Cancel", role: .cancel) { project.cancel() }
@@ -487,6 +494,9 @@ struct RunStatusHeader: View {
                     .keyboardShortcut(".")
             } else {
                 GlassIconMenu(title: "More Actions", symbol: "ellipsis", help: "Re-record everything, flakiness check and remote runs") {
+                    if compact && !hasProblem {
+                        reRecordFailed.disabled(!canReRecordFailed)
+                    }
                     Button("Re-record All Snapshot Tests…") { project.confirmReRecordAll = true }
                         .disabled(project.recordableSnapshots.isEmpty || project.environment == nil)
                     Button("Check Flakiness (\(project.store.settings.flakeIterations)×)") { project.checkFlakiness() }
@@ -502,17 +512,19 @@ struct RunStatusHeader: View {
                     .disabled(!project.hasRemote)
                 }
 
-                if project.environmentError != nil || project.configError != nil {
+                if hasProblem {
                     // Nothing can run; offer the one action that can help.
                     Button("Check Again") { project.reload() }
                         .primaryActionStyle()
                         .fixedSize()
                 } else {
-                    Button("Re-record Failing Suites") { project.reRecordFailed() }
-                        .fixedSize()
-                        .quietControl()
-                        .disabled(project.failingSuites.isEmpty || project.environment == nil)
-                        .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
+                    if !compact {
+                        reRecordFailed
+                            .fixedSize()
+                            .quietControl()
+                            .disabled(!canReRecordFailed)
+                            .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
+                    }
                     Button("Run Tests") { project.runTests() }
                         .primaryActionStyle()
                         .fixedSize()
@@ -523,6 +535,15 @@ struct RunStatusHeader: View {
         }
         .controlSize(.small)
     }
+
+    private var hasProblem: Bool { project.environmentError != nil || project.configError != nil }
+
+    private var canReRecordFailed: Bool { !project.failingSuites.isEmpty && project.environment != nil }
+
+    /// Disable it outside its style: the quiet style dims by the enabled state around it.
+    private var reRecordFailed: some View {
+        Button("Re-record Failing Suites") { project.reRecordFailed() }
+    }
 }
 
 /// Leading-aligned section footer (grouped forms otherwise trail-align multi-line text).
@@ -531,7 +552,8 @@ struct FormFooter: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text)
+        // Files and branches in backticks are set in code type.
+        Text(StatusNote.code(text))
             .font(DS.Font.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.leading)
@@ -592,7 +614,7 @@ struct LogView: View {
                     Button { project.showFullLog.toggle() } label: {
                         Label("Build output", systemImage: project.showFullLog ? "checkmark.circle.fill" : "circle")
                     }
-                    .foregroundStyle(project.showFullLog ? .primary : .secondary)
+                    // The icon says on or off; a grey label read as disabled.
                     .fixedSize()
                     .quietControl()
                     .controlSize(.small)
@@ -751,7 +773,7 @@ struct RunResultsList: View {
         return HStack(spacing: DS.Space.s) {
             Image(systemName: icon(test.outcome))
                 .foregroundStyle(color(test.outcome))
-                .accessibilityLabel(test.outcome.rawValue)
+                .accessibilityLabel(Self.spoken(test.outcome))
             Text(test.name).lineLimit(1)
             if test.repetitions.count > 1 {
                 Chip(text: "\(test.passedRepetitions) of \(test.repetitions.count) runs passed",
@@ -763,16 +785,29 @@ struct RunResultsList: View {
                     .font(DS.Font.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            if canOpen {
-                Button { project.showFailure(id) } label: { Image(systemName: "arrow.forward.circle") }
-                    .buttonStyle(.borderless)
-                    .help("Compare on the Failures tab")
-                    .accessibilityLabel("Show Failure")
-            }
+            // Every row keeps the button's slot, so durations line up whether a row has it or not.
+            Button { project.showFailure(id) } label: { Image(systemName: "arrow.forward.circle") }
+                .buttonStyle(.borderless)
+                .help("Compare on the Failures tab")
+                .accessibilityLabel("Show Failure")
+                .opacity(canOpen ? 1 : 0)
+                .disabled(!canOpen)
+                .accessibilityHidden(!canOpen)
         }
         .listRowSeparator(.hidden)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { if canOpen { project.showFailure(id) } }
+    }
+
+    /// An outcome in words, for VoiceOver ("expectedFailure" is no word).
+    nonisolated static func spoken(_ outcome: TestOutcome) -> String {
+        switch outcome {
+        case .passed: "Passed"
+        case .failed: "Failed"
+        case .skipped: "Skipped"
+        case .expectedFailure: "Expected failure"
+        case .unknown: "Unknown result"
+        }
     }
 
     private func icon(_ outcome: TestOutcome) -> String {

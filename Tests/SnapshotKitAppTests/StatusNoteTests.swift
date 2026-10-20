@@ -11,6 +11,13 @@ struct StatusNoteTests {
         #expect(code == ["xcodes install 99.2"])
     }
 
+    /// A heading or notice sets its code in its own size, not a note's caption.
+    @Test func largerTextSetsCodeInItsOwnSize() {
+        let font = DS.Font.heading.monospaced()
+        let text = StatusNote.code("Set `remoteHost:` first.", font: font)
+        #expect(text.runs.compactMap(\.font) == [font])
+    }
+
     @Test func aStrayBacktickStaysAsTyped() {
         #expect(String(StatusNote.code("It's `odd").characters) == "It's `odd")
     }

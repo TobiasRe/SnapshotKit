@@ -396,10 +396,10 @@ public struct CIConfigParser {
         } else if !documents.isEmpty {
             let remote = documents.flatMap { remoteIncludes(in: $0.text) }
             if remote.isEmpty {
-                out.notes.append("No xcodebuild invocation found in \(documents.map(\.name).joined(separator: ", ")).")
+                out.notes.append("No `xcodebuild` invocation found in \(documents.map { "`\($0.name)`" }.joined(separator: ", ")).")
             } else {
-                out.notes.append("The test job comes from \(remote.joined(separator: ", ")), which SnapshotKit can’t read. "
-                                 + "Settings were taken from CI variables; set anything missing in .snapshotkit.yml.")
+                out.notes.append("The test job comes from \(remote.map { "`\($0)`" }.joined(separator: ", ")), which SnapshotKit can’t read. "
+                                 + "Settings were taken from CI variables; set anything missing in `.snapshotkit.yml`.")
             }
         }
 

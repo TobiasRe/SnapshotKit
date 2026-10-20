@@ -95,7 +95,7 @@ Viewed marks work like a code review’s:
 - They are stored per clone in `.git/snapshotkit/viewed.json` and never committed.
 - A mark remembers the file’s content. If the snapshot is re-recorded after you marked it, it shows as
   unviewed again.
-- The footer shows your progress (*3/16 viewed*) as a bar.
+- The footer shows your progress (*3 of 16 viewed*) as a bar.
 - **Hide Viewed** in the kinds menu leaves only what’s left to review.
 
 ## Re-records with no visible change

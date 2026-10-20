@@ -259,7 +259,7 @@ final class AppModel {
         let folders = reports.map { name($0.root) }.joined(separator: ", ")
         if count == 0 {
             return "No git repositories with snapshot tests in \(folders) (looked \(ProjectScanner.defaultDepth) folders deep). "
-                + "A repository counts when it has __Snapshots__ images, a .snapshotkit.yml or depends on swift-snapshot-testing."
+                + "A repository counts when it has `__Snapshots__` images, a `.snapshotkit.yml` or depends on swift-snapshot-testing."
         }
         return "Found \(count) project\(count == 1 ? "" : "s") with snapshot tests in \(folders)."
     }

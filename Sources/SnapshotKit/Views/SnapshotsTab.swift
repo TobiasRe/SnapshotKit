@@ -248,14 +248,7 @@ struct SnapshotsTab: View {
                       let item = NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) else { return [] }
                 return [item]
             }
-            .overlay {
-                if tree.isEmpty && !project.libraryFilter.isEmpty {
-                    ContentUnavailableView.search(text: project.libraryFilter)
-                } else if tree.isEmpty && project.libraryScope != .all {
-                    ContentUnavailableView("Nothing \(project.libraryScope.rawValue)", systemImage: "checkmark.circle",
-                                           description: Text("No snapshot is \(project.libraryScope.rawValue.lowercased()) right now."))
-                }
-            }
+            .overlay { if tree.isEmpty { LibraryEmptyState(project: project) } }
         }
     }
 
@@ -378,6 +371,21 @@ struct SnapshotStatusLine: View {
                 .lineLimit(1)
         }
         .help(state?.help ?? "")
+    }
+}
+
+/// Why an empty library list or grid is empty: the filter, or the scope. A library without any
+/// snapshot says so in the detail, with the way to record the first ones.
+struct LibraryEmptyState: View {
+    let project: ProjectModel
+
+    var body: some View {
+        if !project.libraryFilter.isEmpty {
+            ContentUnavailableView.search(text: project.libraryFilter)
+        } else if project.libraryScope != .all {
+            ContentUnavailableView("Nothing \(project.libraryScope.rawValue)", systemImage: "checkmark.circle",
+                                   description: Text("No snapshot is \(project.libraryScope.rawValue.lowercased()) right now."))
+        }
     }
 }
 
@@ -785,12 +793,7 @@ struct SnapshotGrid: View {
             }
             .padding(.vertical, DS.Space.m)
         }
-        .overlay {
-            if tree.isEmpty {
-                ContentUnavailableView("No Snapshots", systemImage: "photo.on.rectangle",
-                                       description: Text(project.libraryFilter.isEmpty ? "Nothing matches this scope." : "Nothing matches the filter."))
-            }
-        }
+        .overlay { if tree.isEmpty { LibraryEmptyState(project: project) } }
     }
 
     private func tile(_ file: SnapshotFile) -> some View {

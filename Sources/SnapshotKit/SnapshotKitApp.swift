@@ -138,13 +138,16 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(busy || !(project?.hasRemote ?? false))
             Divider()
-            Button("Cancel") { project?.cancel() }
+            // Named as in the palette: "Cancel" alone says nothing in a menu.
+            Button("Cancel Run") { project?.cancel() }
                 .keyboardShortcut(".")
                 .disabled(!(project?.isRunning ?? false))
         }
         CommandGroup(after: .toolbar) {
             if let project = model.current {
+                // The Failures list has no filter field to focus.
                 Button("Filter…") { project.focusFilterRequest += 1 }.keyboardShortcut("f")
+                    .disabled(project.tab == .failures)
                 Divider()
                 Button("Snapshots") { project.tab = .snapshots }.keyboardShortcut("1", modifiers: [.command, .option])
                 Button("Changes") { project.tab = .changes }.keyboardShortcut("2", modifiers: [.command, .option])
@@ -152,11 +155,11 @@ struct SnapshotKitCommands: Commands {
                 Button("Run") { project.tab = .run }.keyboardShortcut("4", modifiers: [.command, .option])
                 Divider()
                 // Step through snapshots even while the image, not the list, has focus.
-                Button("Next Item") { project.selectAdjacent(1) }
-                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-                    .disabled(project.tab == .run)
                 Button("Previous Item") { project.selectAdjacent(-1) }
                     .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    .disabled(project.tab == .run)
+                Button("Next Item") { project.selectAdjacent(1) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
                     .disabled(project.tab == .run)
                 Button("Toggle Viewed") {
                     if let change = project.selectedChange { project.setViewed(!project.viewedChanges.contains(change.id), for: change) }
