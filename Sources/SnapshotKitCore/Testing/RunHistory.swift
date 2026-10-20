@@ -182,7 +182,10 @@ extension RunRecord {
     /// Captures git state for a run in `repository`.
     public static func make(kind: RunKind, host: String, repository: URL, result: TestRunResult) -> RunRecord {
         let git = Git(root: repository)
+        // Untracked files don't count (build products), except new references: the run that
+        // recorded one failed, and the next passes on the same commit.
         let dirty = !(git.tryRun(["status", "--porcelain", "--untracked-files=no"]) ?? "").isEmpty
+            || !((try? git.status(paths: [":(glob)**/__Snapshots__/**"])) ?? []).isEmpty
         return RunRecord(kind: kind, host: host, commit: git.tryRun(["rev-parse", "HEAD"]), branch: git.currentBranch(),
                          dirty: dirty, summary: result.summary, passed: result.passed, failed: result.failed,
                          skipped: result.skipped, resultBundle: result.resultBundle.path)

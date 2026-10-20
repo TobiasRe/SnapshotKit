@@ -230,6 +230,20 @@ import Testing
         #expect(RunHistory.timeline(for: "B/S/a()", in: runs, limit: 2).map(\.result) == [.failed, .mixed])
     }
 
+    /// swift-snapshot-testing fails the run that records a missing reference, and the next one
+    /// passes on the same commit: with the new reference untracked, that isn't a clean tree.
+    @Test func aNewReferenceMakesTheTreeDirtyButBuildProductsDont() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardTests.swift", "")
+        try repo.commitAll("init")
+        let result = TestRunResult(commandLine: "", exitStatus: 1, cancelled: false, resultBundle: URL(fileURLWithPath: "/r.xcresult"),
+                                   summary: nil, passed: 0, failed: 1, skipped: 0, buildErrors: [])
+        try repo.write("build/output.log", "")
+        #expect(!RunRecord.make(kind: .run, host: "local", repository: repo.url, result: result).dirty)
+        try repo.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", "png")
+        #expect(RunRecord.make(kind: .run, host: "local", repository: repo.url, result: result).dirty)
+    }
+
     @Test func sameResultBundleIsRecordedOnce() {
         let history = RunHistory(repository: URL(fileURLWithPath: "/some/repo"), home: testTemp("history"))
         var r = record("c1", .failed)
