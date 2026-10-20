@@ -158,8 +158,13 @@ var interruptSource: DispatchSourceSignal?
 
 func repository(_ o: CommandArguments) -> URL {
     let path = o.value("--repo") ?? FileManager.default.currentDirectoryPath
-    guard let git = Git.repository(containing: URL(fileURLWithPath: path)) else { fail("\(path) is not inside a git repository") }
-    return git.root
+    guard FileManager.default.fileExists(atPath: path) else { fail("no such folder: \(path)") }
+    do {
+        guard let git = try Git.repository(at: URL(fileURLWithPath: path)) else { fail("\(path) is not inside a git repository") }
+        return git.root
+    } catch {
+        fail(error.localizedDescription)
+    }
 }
 
 func context(_ o: CommandArguments) -> ProjectContext {

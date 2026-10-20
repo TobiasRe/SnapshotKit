@@ -23,6 +23,18 @@ import Testing
         #expect(error.result.stderr.contains("No such file"))
     }
 
+    /// Not "`git rev-parse` exited with 127: env: git: No such file or directory", nor, from the
+    /// CLI, "… is not inside a git repository".
+    @Test func aCommandMissingFromThePathSaysSo() throws {
+        let command = ["git", "rev-parse", "--show-toplevel"]
+        let result = try Shell.run(command, environment: ["PATH": "/no/such/bin"])
+        let error = CommandError(command: command, result: result)
+        #expect(error.isNotFound)
+        #expect(error.errorDescription?.hasPrefix("`git` was not found on the PATH (") == true)
+        #expect(error.errorDescription?.hasSuffix(". Install Xcode or its command line tools (`xcode-select --install`).") == true)
+        #expect(throws: CommandError.self) { try Git.repository(at: URL(fileURLWithPath: "/"), environment: ["PATH": "/no/such/bin"]) }
+    }
+
     @Test func quotesOnlyWhatTheShellWouldSplit() {
         #expect(Shell.quote("-only-testing:App/Card_1") == "-only-testing:App/Card_1")
         #expect(Shell.quote("") == "''")

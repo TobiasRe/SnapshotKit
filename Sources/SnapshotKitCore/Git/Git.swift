@@ -10,8 +10,24 @@ public struct Git: Sendable {
 
     /// Finds the repository containing `url`, or nil if it is not inside a git work tree.
     public static func repository(containing url: URL) -> Git? {
-        guard let top = try? Shell.output(["git", "rev-parse", "--show-toplevel"], in: url) else { return nil }
-        return Git(root: URL(fileURLWithPath: top))
+        (try? repository(at: url)) ?? nil
+    }
+
+    /// Like `repository(containing:)`, but throws when git itself can't run (it isn't installed,
+    /// say), instead of reporting that as "not a repository".
+    public static func repository(at url: URL) throws -> Git? {
+        try repository(at: url, environment: nil)
+    }
+
+    static func repository(at url: URL, environment: [String: String]?) throws -> Git? {
+        let command = ["git", "rev-parse", "--show-toplevel"]
+        let result = try Shell.run(command, in: url, environment: environment)
+        guard result.succeeded else {
+            let error = CommandError(command: command, result: result)
+            if error.isNotFound { throw error }
+            return nil
+        }
+        return Git(root: URL(fileURLWithPath: result.trimmedOutput))
     }
 
     /// Runs `git <args>` in the repository and returns its output, trimmed; throws a

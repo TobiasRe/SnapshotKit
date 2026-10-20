@@ -15,7 +15,18 @@ public struct CommandError: Error, LocalizedError, Sendable {
     public var command: [String]
     public var result: CommandResult
 
+    /// The command isn't installed: `/usr/bin/env`, which runs every command, exits 127 with
+    /// "env: git: No such file or directory".
+    public var isNotFound: Bool {
+        result.status == 127 && result.stderr.hasPrefix("env: ")
+    }
+
     public var errorDescription: String? {
+        if isNotFound, let name = command.first {
+            let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+            let install = ["git", "xcrun", "xcodebuild"].contains(name) ? " Install Xcode or its command line tools (`xcode-select --install`)." : ""
+            return "`\(name)` was not found on the PATH (\(path)).\(install)"
+        }
         let detail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         return "`\(command.joined(separator: " "))` exited with \(result.status)" + (detail.isEmpty ? "" : ": \(detail)")
     }
