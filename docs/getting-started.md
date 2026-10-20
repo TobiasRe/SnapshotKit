@@ -11,7 +11,7 @@ the reference images the tests record and the results they produce.
 | What | Requirement |
 |---|---|
 | Mac | Apple silicon, macOS 14 or later. Liquid Glass controls on macOS 26 and later; earlier versions get the same layout with flat controls. |
-| Xcode | Xcode 16 or later (SnapshotKit reads results with `xcresulttool get test-results`), and whatever your project's tests need. SnapshotKit runs `xcodebuild test` the way your CI does (Swift packages too, through their scheme) and uses the Xcode version CI pins, when that version is installed. |
+| Xcode | Xcode 16 or later (SnapshotKit reads results with `xcresulttool get test-results`), and whatever your project’s tests need. SnapshotKit runs `xcodebuild test` the way your CI does (Swift packages too, through their scheme) and uses the Xcode version CI pins, when that version is installed. |
 | Projects | Git repositories with snapshot tests built on swift-snapshot-testing (Swift Testing or XCTest). |
 
 Browsing, reviewing changes and comparing images need nothing but the repository. Running and re-recording
@@ -63,7 +63,7 @@ scripts/make-app.sh        # builds dist/SnapshotKit.app and dist/snapkit, plus 
 When SnapshotKit starts without projects it shows a welcome screen. There are three ways in:
 
 - **Add Project…** (⌘O): choose a git repository. Any folder inside the repository works; SnapshotKit uses
-  the repository's root.
+  the repository’s root.
 - **Add Scan Folder…**: choose a folder that *contains* repositories, such as `~/Developer`. SnapshotKit
   looks up to six folders deep and adds every repository with snapshot tests. See
   [Projects and scanning](projects.md).
@@ -82,7 +82,7 @@ tab has something to show:
 scripts/make-samples.sh ~/Developer/snapshotkit-samples
 ```
 
-It records the references on a dedicated simulator ("SnapshotKit Samples") and takes a few minutes. Then add
+It records the references on a dedicated simulator (“SnapshotKit Samples”) and takes a few minutes. Then add
 the folder as a scan folder.
 
 ## A first tour
@@ -97,7 +97,7 @@ the folder as a scan folder.
 4. **Failures** — after a run (or after importing a CI `.xcresult`), every failing snapshot with reference,
    actual image and difference, diagnosed. See [Failures and flaky tests](failures.md).
 5. **Re-record** — the camera button in a detail header (⇧⌘R) records the selected test again and verifies
-   it; the arrow next to the toolbar's Run button re-records the failing suites or every snapshot test. See
+   it; the arrow next to the toolbar’s Run button re-records the failing suites or every snapshot test. See
    [Re-recording](re-recording.md).
 
 Press ⌘K at any time to jump to a project or run a command by name.
@@ -108,8 +108,8 @@ Press ⌘K at any time to jump to a project or run a command by name.
 |---|---|
 | App settings: scan folders, pins, recents, preferences, and per-project choices (base branch, remote host, test target) | `~/Library/Application Support/SnapshotKit/settings.json` (Settings › Show in Finder) |
 | Run history (every run, for flakiness and the history strips) | `~/Library/Application Support/SnapshotKit/history/` |
-| Per-clone state: the last run, Viewed marks, a record patch in progress | the repository's `.git/snapshotkit/` folder (`last-run.json`, `viewed.json`, `record-patch.json`), so it never shows up in `git status` |
-| Run results and failure images | the repository's git directory (`.git/snapshotkit/results/`): the newest 10 runs, and always the last run's |
+| Per-clone state: the last run, Viewed marks, a record patch in progress | the repository’s `.git/snapshotkit/` folder (`last-run.json`, `viewed.json`, `record-patch.json`), so it never shows up in `git status` |
+| Run results and failure images | the repository’s git directory (`.git/snapshotkit/results/`): the newest 10 runs, and always the last run’s |
 | Project configuration you choose to commit | `.snapshotkit.yml` at the repository root. See [Configuration](configuration.md). |
 
 `SNAPSHOTKIT_HOME` points the app and the CLI at another settings folder, which is useful for scripts and

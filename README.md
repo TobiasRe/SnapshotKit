@@ -17,18 +17,18 @@ Your tests keep recording reference images as they do today. SnapshotKit, a macO
 the `snapkit` CLI, works with them, with no package to add and no test code to change:
 
 - **Browse and inspect** every snapshot in a project by module, test file and test, as a list with a large
-  preview or as a grid. See variants (light/dark, devices, named states) side by side, a snapshot's history
+  preview or as a grid. See variants (light/dark, devices, named states) side by side, a snapshot’s history
   across commits, its size, and the pixel under the pointer.
 - **Review changes**: every snapshot that differs from the base branch, with side-by-side, slider, difference
   and toggle views, *Viewed* marks like a code review, and one-step discard of re-records that only picked up
   rendering noise.
 - **Update**: re-record any test, suite or filtered set of snapshots (not just failing ones), with the source
   patch always restored and the result verified.
-- **Manage**: find orphaned snapshots whose test is gone, the largest images, what's new or modified; copy or
+- **Manage**: find orphaned snapshots whose test is gone, the largest images, what’s new or modified; copy or
   drag snapshots and side-by-side comparisons into a review.
 - **Failing and flaky tests** are part of the same picture: reference vs. actual vs. difference (also for an
   `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
-  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test's recent runs.
+  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 
 ## How it fits with swift-snapshot-testing
@@ -37,10 +37,10 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
 2. **The tests record reference images**: PNGs in `__Snapshots__` folders next to the test files, committed to
    your repository.
 3. **SnapshotKit works with them**: it finds the images, reads how CI runs the tests, shows changes and
-   failures, and re-records by switching swift-snapshot-testing's record mode on and off for you.
+   failures, and re-records by switching swift-snapshot-testing’s record mode on and off for you.
 
-SnapshotKit isn't a snapshot testing library and doesn't replace swift-snapshot-testing. New to snapshot
-testing? Start with [Point-Free's library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
+SnapshotKit isn’t a snapshot testing library and doesn’t replace swift-snapshot-testing. New to snapshot
+testing? Start with [Point-Free’s library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
 
 ## Install
 
@@ -75,9 +75,9 @@ See [Getting started](https://tobiasre.github.io/SnapshotKit/docs/getting-starte
 ## Quick start
 
 Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (sidebar **+** › Add Scan
-Folder, or drop a folder that isn't a repository). Scanning looks six folders deep for git repositories with
+Folder, or drop a folder that isn’t a repository). Scanning looks six folders deep for git repositories with
 `__Snapshots__` images, a `.snapshotkit.yml`, or a dependency on swift-snapshot-testing, and says what it
-found. A project opens on its snapshot library. The sidebar shows each project's failing count from its
+found. A project opens on its snapshot library. The sidebar shows each project’s failing count from its
 last run.
 
 | Shortcut | Action |
@@ -98,15 +98,15 @@ last run.
 | ← / → | Move the slider divider (or drag its knob) |
 | Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
 | ⌘C | Copy the selected snapshot (in a list) |
-| ⌥⌘O | Open the selected snapshot's test in Xcode, at its function |
+| ⌥⌘O | Open the selected snapshot’s test in Xcode, at its function |
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous snapshot, change or failure, wherever the focus is |
-| V (in the list), ⌥⌘V | Toggle a change's *Viewed* mark; marking it viewed goes to the next one |
+| V (in the list), ⌥⌘V | Toggle a change’s *Viewed* mark; marking it viewed goes to the next one |
 
 In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
-snapshots; sort by size or recency; switch between list and grid. A snapshot's detail lists its variants
-and committed versions to compare against, and links to its change or failure. The footer's
+snapshots; sort by size or recency; switch between list and grid. A snapshot’s detail lists its variants
+and committed versions to compare against, and links to its change or failure. The footer’s
 **Re-record All…** (or **Re-record N Shown…** when filtered) records everything the list shows (say, every
-`dark` variant). The arrow beside the toolbar's Run button re-records the failing suites or every snapshot test
+`dark` variant). The arrow beside the toolbar’s Run button re-records the failing suites or every snapshot test
 in one step.
 
 Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
@@ -164,7 +164,7 @@ override func invokeTest() {
 }
 ```
 
-The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from Xcode's Report navigator and
+The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from Xcode’s Report navigator and
 run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. See
 [Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
 
@@ -174,7 +174,7 @@ run it in Terminal. It prints the same summary as `snapkit diff` and opens Snaps
 runs `xcodebuild` with the same scheme, test plan, test selection, simulator and Xcode version; anything can be
 overridden in `.snapshotkit.yml`. See [Configuration](https://tobiasre.github.io/SnapshotKit/docs/configuration/).
 
-**Re-recording.** SnapshotKit switches swift-snapshot-testing's record mode on in the test source, runs just the
+**Re-recording.** SnapshotKit switches swift-snapshot-testing’s record mode on in the test source, runs just the
 chosen tests, restores the source (also on cancel, quit, a signal, or at the next launch after a crash), and
 runs the tests again to verify. See [Re-recording](https://tobiasre.github.io/SnapshotKit/docs/re-recording/).
 
@@ -215,9 +215,9 @@ swift-snapshot-testing, each a git repository) next to this repository, records 
 dedicated simulator, and gives four of them a feature branch with committed and uncommitted changes, a
 failing last run, an orphaned and a new snapshot. Add the folder as a scan folder to try every tab.
 
-The app's UI is covered by snapshot tests (swift-snapshot-testing with Swift Testing) in
+The app’s UI is covered by snapshot tests (swift-snapshot-testing with Swift Testing) in
 `Tests/SnapshotKitAppTests`. They render real views from fixture state in light and dark. Liquid Glass
-can't be composited off-screen, so those renders use an opaque stand-in and leave out the system toolbar
+can’t be composited off-screen, so those renders use an opaque stand-in and leave out the system toolbar
 and sidebar chrome. To update references, delete the PNG or set `record: .all`, or re-record them with
 SnapshotKit itself. Visual guidelines are in [docs/design.md](docs/design.md).
 
@@ -228,7 +228,7 @@ else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), 
 website (a single static page; `.github/workflows/pages.yml` deploys it to GitHub Pages together with `docs/`
 built by MkDocs under `/docs/`), and `assets/` for
 source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by `scripts/make-app.sh`; the
-`Assets/` folder inside it is Icon Composer's format). Root files keep their usual names (`README.md`,
+`Assets/` folder inside it is Icon Composer’s format). Root files keep their usual names (`README.md`,
 `LICENSE`, `CHANGELOG.md`, `Package.swift`).
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,

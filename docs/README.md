@@ -8,11 +8,11 @@ find out why they failed, and re-record what should change.
 
 ![SnapshotKit comparing a changed snapshot side by side: the same screen on the base branch and on the feature branch](images/compare.png)
 
-> **What SnapshotKit is not.** It isn't a snapshot testing library and doesn't replace swift-snapshot-testing.
-> There's no package to add and no test code to change: it reads your repository (the `__Snapshots__` folders,
+> **What SnapshotKit is not.** It isn’t a snapshot testing library and doesn’t replace swift-snapshot-testing.
+> There’s no package to add and no test code to change: it reads your repository (the `__Snapshots__` folders,
 > your test sources and CI files) and the results your test runs produce. Without swift-snapshot-testing in your
-> project there's nothing for it to show — start with
-> [Point-Free's library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
+> project there’s nothing for it to show — start with
+> [Point-Free’s library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
 
 ## How it fits in
 
@@ -20,7 +20,7 @@ find out why they failed, and re-record what should change.
 2. **The tests record reference images** — PNGs in `__Snapshots__` folders next to the test files, committed to
    your repository.
 3. **SnapshotKit works with them** — it finds the images, reads how CI runs the tests, shows changes and
-   failures, and re-records by switching swift-snapshot-testing's record mode on and off for you.
+   failures, and re-records by switching swift-snapshot-testing’s record mode on and off for you.
 
 ## Start here
 
@@ -48,15 +48,15 @@ find out why they failed, and re-record what should change.
 |---|---|
 | [Configuration](configuration.md) | what is read from CI, `.snapshotkit.yml` keys, precedence, base branch, Xcode and simulator selection, files and environment variables |
 | [The `snapkit` CLI](cli.md) | every command, option, output and exit status |
-| [Using SnapshotKit as your diff tool](diff-tool.md) | `snapkit open` with swift-snapshot-testing's `diffTool`, and `snapshotkit://` links |
+| [Using SnapshotKit as your diff tool](diff-tool.md) | `snapkit open` with swift-snapshot-testing’s `diffTool`, and `snapshotkit://` links |
 | [Troubleshooting and FAQ](troubleshooting.md) | error messages and what to do about them |
 
 ## For contributors
 
 | Page | Covers |
 |---|---|
-| [Design](design.md) | the app's design system: principles, tokens, components |
-| [The README's Development section](https://github.com/TobiasRe/SnapshotKit#development) | building, testing, the end-to-end script, sample projects |
+| [Design](design.md) | the app’s design system: principles, tokens, components |
+| [The README’s Development section](https://github.com/TobiasRe/SnapshotKit#development) | building, testing, the end-to-end script, sample projects |
 
 ## Concepts in one minute
 

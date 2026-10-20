@@ -49,19 +49,19 @@ Changed** show one flat list, useful for finding oversized images or what was re
 
 ## Rows and tiles
 
-Each row (and each grid tile) has a thumbnail, the test name and one quiet status line: what's notable about
+Each row (and each grid tile) has a thumbnail, the test name and one quiet status line: what’s notable about
 the snapshot, then its variant, for example *● Uncommitted · dark*. The line names one state at most, with a
 colored dot:
 
 - **Orphaned** — its test no longer exists,
 - otherwise its change against the base branch, the same word as on the Changes tab: **Committed**,
   **Uncommitted**, **New** or **Deleted**,
-- otherwise an edit git hasn't committed: **Modified** or **New**.
+- otherwise an edit git hasn’t committed: **Modified** or **New**.
 
 A snapshot with nothing notable shows just its variant. Only failing gets a mark of its own, at the trailing
 edge (on a tile, its top corner): a red ✕ when its test failed in the last run, an orange ⚠ when it is flaky.
 
-A test's variants are listed under one title; the variant is left out when a test has only one.
+A test’s variants are listed under one title; the variant is left out when a test has only one.
 
 ## The detail
 
@@ -69,8 +69,8 @@ Selecting a snapshot shows it large on the right.
 
 **Header** — the test name and variant, the breadcrumb (`ShopTests › CheckoutTests`), status chips, and the
 actions. The chips are **Failing** (or **Flaky**) when its test failed in the last run, and the same word as the
-row's status line (*Uncommitted*, *New*, *Orphaned*…). Click **Failing** to compare it with the actual image on
-the Failures tab, or a change's chip to review it on the Changes tab.
+row’s status line (*Uncommitted*, *New*, *Orphaned*…). Click **Failing** to compare it with the actual image on
+the Failures tab, or a change’s chip to review it on the Changes tab.
 
 - **Re-record** (camera): records this test again, then verifies it. Its arrow offers **Re-record Test** and
   **Re-record Suite** (every test in the file). See [Re-recording](re-recording.md).
@@ -78,7 +78,7 @@ the Failures tab, or a change's chip to review it on the Changes tab.
   Default App, Reveal in Finder, Copy Image, Copy Path, and Move to Trash for orphaned snapshots.
 - **12 / 40** with arrows (⌥⌘↑ / ⌥⌘↓): where you are in the list, and the way through it.
 
-**Info row** — the snapshot's history from git: how many committed versions it has, and when, by whom and in
+**Info row** — the snapshot’s history from git: how many committed versions it has, and when, by whom and in
 which commit it was last changed. Next to it:
 
 - the **variant** switch (dark / light, iPhoneSE / iPhone13ProMax…), when the test has several: up to three
@@ -98,14 +98,14 @@ the pixel under the pointer.
 | Copy the image | ⌘C (in the list), or ··· › Copy Image |
 | Put snapshots in a document, a ticket or a chat | drag rows or tiles out of the list |
 | Open the test that records it | ⌥⌘O, or ··· › Open Test in Xcode. Xcode opens the test file at the test function. |
-| Re-record what the list shows | the footer's **Re-record All…** (or **Re-record N Shown…** when filtered). Filter first to narrow it down, e.g. every `dark` variant. More than ten tests asks first. |
-| Clean up orphans | Show › Orphaned, then the footer's **Move N to Trash…**. Committed files stay recoverable through git, all of them from the Trash; commit the deletion to remove them from the repository. |
+| Re-record what the list shows | the footer’s **Re-record All…** (or **Re-record N Shown…** when filtered). Filter first to narrow it down, e.g. every `dark` variant. More than ten tests asks first. |
+| Clean up orphans | Show › Orphaned, then the footer’s **Move N to Trash…**. Committed files stay recoverable through git, all of them from the Trash; commit the deletion to remove them from the repository. |
 
 The footer counts what the library holds: snapshots, tests, modules and total size.
 
 ## Orphaned snapshots
 
 A snapshot is orphaned when no test in its test file records that name any more — typically after a test
-was renamed or deleted, or a variant was dropped. Orphans can't be re-recorded (there's no test to run).
+was renamed or deleted, or a variant was dropped. Orphans can’t be re-recorded (there’s no test to run).
 They are found by reading the test sources, so a test that builds its snapshot names dynamically may be
 flagged by mistake; check before trashing.

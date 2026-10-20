@@ -88,7 +88,7 @@ Opening the same pair again brings its window forward; each new pair gets its ow
 
 ## Terminal only: `snapkit diff`
 
-If you'd rather not leave the terminal, define a tool that runs `snapkit diff` instead:
+If you’d rather not leave the terminal, define a tool that runs `snapkit diff` instead:
 
 ```swift
 extension SnapshotTestingConfiguration.DiffTool {
@@ -127,4 +127,4 @@ same Mac, or another tool can use it. Links with any other form are ignored.
 
 - swift-snapshot-testing only puts the command into the message; nothing runs automatically during tests.
 - The actual image lives in a temporary folder of the test run. Open it soon, or it may be cleaned up.
-- The window compares files; it doesn't need the project to be added to SnapshotKit, and nothing is changed.
+- The window compares files; it doesn’t need the project to be added to SnapshotKit, and nothing is changed.

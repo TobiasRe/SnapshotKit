@@ -9,8 +9,8 @@ marking each as viewed.
 ## What counts as a change
 
 SnapshotKit compares the snapshot images in your working tree with the base branch: the PNGs under a
-`__Snapshots__` folder, the same files the library lists, including new ones git doesn't track yet (unless
-they're ignored). Other PNGs, such as app icons or test fixtures, aren't snapshots and don't show up.
+`__Snapshots__` folder, the same files the library lists, including new ones git doesn’t track yet (unless
+they’re ignored). Other PNGs, such as app icons or test fixtures, aren’t snapshots and don’t show up.
 
 | Kind | Meaning |
 |---|---|
@@ -31,7 +31,7 @@ The base branch is found in this order (see [Configuration](configuration.md#the
 4. `origin/HEAD`, else the first of `develop`, `main` and `master` that exists.
 
 `origin/<branch>` is preferred over a local branch of the same name, so fetch to compare with the latest
-state. If the branch doesn't exist, the tab says so: *Base branch “x” was not found locally or on origin.
+state. If the branch doesn’t exist, the tab says so: *Base branch “x” was not found locally or on origin.
 Fetch it or choose a different base branch.*
 
 Comparing at the merge-base needs the commit where your branch left the base branch. A shallow clone (common
@@ -43,7 +43,7 @@ The filter bar has three menus:
 
 - **Branch** (⑂ `develop`): pick another base branch, or **Use Detected Branch** to go back to automatic.
 - **Merge-base / Branch tip**: compare with the point where your branch left the base branch (the default:
-  only your branch's changes, what a pull request shows), or with the base branch's current tip (also shows
+  only your branch’s changes, what a pull request shows), or with the base branch’s current tip (also shows
   what changed there since you branched).
 - **Kinds** (*All*): show or hide Committed, Uncommitted, New and Deleted; **Hide Viewed**; **Mark All as
   Viewed** / **Mark All as Not Viewed**.
@@ -61,19 +61,19 @@ The detail header shows the test name and variant, its breadcrumb, its kind, and
 - **Viewed** — mark it reviewed, or unmark it: V in the list and ⌥⌘V anywhere toggle the mark. Marking a
   change as viewed also moves to the next unviewed change, so you can go through a branch with one shortcut.
 - **···** — Re-record the test, Show in Library, Open Test in Xcode, Open in Default App, Reveal in Finder,
-  open the base branch's version, Copy Side-by-Side Image, Mark as Viewed, Copy Path, and **Discard
+  open the base branch’s version, Copy Side-by-Side Image, Mark as Viewed, Copy Path, and **Discard
   Change…**, which undoes a working-tree change after asking: an uncommitted change is restored from `HEAD`,
-  a new file that was never committed is deleted. Committed changes aren't touched; revert those with git.
+  a new file that was never committed is deleted. Committed changes aren’t touched; revert those with git.
 - **N / M** with arrows — previous and next change (⌥⌘↑ / ⌥⌘↓ work from anywhere).
 
 ## Reverting a change
 
-**Revert to develop…** (in a change's ··· menu or its right-click menu) puts a snapshot back the way the base
+**Revert to develop…** (in a change’s ··· menu or its right-click menu) puts a snapshot back the way the base
 branch has it, whatever kind of change it is:
 
 | Kind | Revert |
 |---|---|
-| Committed or Uncommitted | the base branch's image is written back |
+| Committed or Uncommitted | the base branch’s image is written back |
 | New | the file is removed |
 | Deleted | the file comes back from the base branch |
 
@@ -81,7 +81,7 @@ branch has it, whatever kind of change it is:
 suite, `dark`, only *New*) to revert a set. Both ask first.
 
 Only the working tree changes: nothing is staged or committed, so the reverted snapshots show up as changes of
-their own until you commit them. That's the difference to **Discard Change…**, which only undoes
+their own until you commit them. That’s the difference to **Discard Change…**, which only undoes
 *uncommitted* edits, back to your last commit.
 
 The info row says where the change comes from: the commit that last changed it on this branch (*Changed Oct 16
@@ -90,13 +90,13 @@ jumps to the snapshot in the library.
 
 ## Viewed marks
 
-Viewed marks work like a code review's:
+Viewed marks work like a code review’s:
 
 - They are stored per clone in `.git/snapshotkit/viewed.json` and never committed.
-- A mark remembers the file's content. If the snapshot is re-recorded after you marked it, it shows as
+- A mark remembers the file’s content. If the snapshot is re-recorded after you marked it, it shows as
   unviewed again.
 - The footer shows your progress (*3/16 viewed*) as a bar.
-- **Hide Viewed** in the kinds menu leaves only what's left to review.
+- **Hide Viewed** in the kinds menu leaves only what’s left to review.
 
 ## Re-records with no visible change
 

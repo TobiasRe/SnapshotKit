@@ -1,6 +1,6 @@
 # Comparing images
 
-Every place SnapshotKit shows two images — a change against the base branch, a failure's reference and actual
+Every place SnapshotKit shows two images — a change against the base branch, a failure’s reference and actual
 image, a snapshot against another variant or an earlier commit, a pair opened with `snapkit open` — uses the
 same compare view. This page explains its modes, zoom, the pixel readout and the diagnosis.
 
@@ -13,7 +13,7 @@ is remembered.
 |---|---|---|---|
 | **Side by Side** | ⌘1 | before and after next to each other, zoomed and panned together | layout changes, copy changes |
 | **Slider** | ⌘2 | one image over the other, split where you drag the knob (← / → move it) | the exact place a change starts |
-| **Difference** | ⌘3 | only the changed pixels, in magenta, over a faded gray copy | small changes you can't spot |
+| **Difference** | ⌘3 | only the changed pixels, in magenta, over a faded gray copy | small changes you can’t spot |
 | **Toggle** | ⌘4 | one image at a time; Space flips | movement and shifts, which are easier to see than to compare |
 
 Each side is labeled: *Reference* and *Actual* for failures, the base branch and *This branch* / *Working
@@ -41,7 +41,7 @@ the bounding box of every changed pixel.
 ## Pixel readout
 
 Hover the image to read the pixel under the pointer. The readout shows its coordinates, the color on each
-side and their **ΔE** — the CIE94 color difference that swift-snapshot-testing's `perceptualPrecision`
+side and their **ΔE** — the CIE94 color difference that swift-snapshot-testing’s `perceptualPrecision`
 is based on. Below about 2.3, nobody can see the difference.
 
 ## Statistics
@@ -53,9 +53,9 @@ The bar shows, for the pair:
 
 ## The diagnosis
 
-![The Difference mode with the note "No visible difference (largest ΔE 0.5)" and a button to copy perceptualPrecision: 0.99](images/diagnosis.png)
+![The Difference mode with the note “No visible difference (largest ΔE 0.5)” and a button to copy perceptualPrecision: 0.99](images/diagnosis.png)
 
-When a difference isn't obvious, a note above the bar says what kind it is. SnapshotKit measures every pixel's
+When a difference isn’t obvious, a note above the bar says what kind it is. SnapshotKit measures every pixel’s
 ΔE and classifies the pair, in this order:
 
 | Diagnosis | When | What it says | What it offers |

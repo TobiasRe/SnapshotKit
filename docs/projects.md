@@ -9,7 +9,7 @@ A git repository is a project when any of these is true:
 
 - it has a `.snapshotkit.yml` at its root,
 - it contains files in `__Snapshots__` folders, committed or not yet (anything `git ls-files` lists, including
-  untracked files that aren't ignored),
+  untracked files that aren’t ignored),
 - one of its files names `swift-snapshot-testing` (`Package.swift`, `Package.resolved`, an Xcode project),
   even if no test has recorded a snapshot yet.
 
@@ -20,7 +20,7 @@ ones.
 
 | How | What happens |
 |---|---|
-| **File › Add Project…** (⌘O) | Choose any folder inside a repository; the repository's root is added and opened. |
+| **File › Add Project…** (⌘O) | Choose any folder inside a repository; the repository’s root is added and opened. |
 | Sidebar **+** › **Add Project…** | The same. |
 | Drop a repository folder onto the window | Added and opened. |
 | Sidebar **+** › **Add Scan Folder…** | Choose a folder that contains repositories; it is scanned now and on every **Rescan**. |
@@ -39,7 +39,7 @@ scanning skips:
   `vendor`,
 - folders named `Library`, `Applications`, `Music`, `Movies`, `Pictures` or `Public` (at any level, not only
   in the home folder),
-- the inside of a repository once it is found (nested repositories aren't searched).
+- the inside of a repository once it is found (nested repositories aren’t searched).
 
 Scanning `~` typically takes a few seconds.
 
@@ -60,7 +60,7 @@ The sidebar has up to three sections:
 - **Projects** — every project, alphabetically. A project stays in its place here when you open it; Pinned
   and Recent are shortcuts to the same projects.
 
-Each row shows the project's initials, its name and, after a run with failures, a red dot with the number of
+Each row shows the project’s initials, its name and, after a run with failures, a red dot with the number of
 failing tests. Hover a row for its full path. Right-click for **Pin**/**Unpin**, **Reveal in Finder** and
 **Remove from List** (which only removes it from SnapshotKit, never from disk).
 
@@ -77,7 +77,7 @@ to choose; Escape to close.
 - **Commands** are whatever can be done right now in the open project, each with its keyboard shortcut:
   Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
   Flakiness of Failing Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
-  Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed and Add Project…. Commands that can't
+  Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed and Add Project…. Commands that can’t
   run (nothing failing, a run in progress) are left out.
 
 Matching is fuzzy: `rrf` finds *Re-record Failing Suites*, `pay` finds *payments-ui*.
@@ -94,7 +94,7 @@ SnapshotKit has one main window. A project shows in it with a toolbar and four t
 | **Run** | ⌥⌘4 | Configuration, runs, live output and results. [Details](running.md) |
 
 The tab labels carry counts: *Snapshots (26)*, *Changes (16)*, *Failures (3)*. The window title is the project
-name; the subtitle is the current branch and, when it isn't the base branch, the base branch it is compared
+name; the subtitle is the current branch and, when it isn’t the base branch, the base branch it is compared
 with (`feature/checkout → develop`).
 
 Besides the tabs, the toolbar holds **Run** (▶, ⌘R): run the snapshot tests the way CI does. Its arrow offers

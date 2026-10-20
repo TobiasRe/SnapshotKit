@@ -1,14 +1,14 @@
 # Running tests
 
 SnapshotKit runs your snapshot tests **the way your CI runs them**: the same scheme, workspace, test plan,
-test selection, simulator and, when it's installed, the same Xcode version, all read from your CI files. That
+test selection, simulator and, when it’s installed, the same Xcode version, all read from your CI files. That
 way a test that passes in SnapshotKit passes in CI, and references recorded here match what CI compares.
 
 ## Starting a run
 
-- **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar's ▶, or **Run Tests** on the Run tab.
+- **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar’s ▶, or **Run Tests** on the Run tab.
 - **⌘.** or **Cancel** stops it (the run is terminated and any record patch is restored). A canceled run
-  says *Cancelled.* and leaves the last run's failures as they were.
+  says *Cancelled.* and leaves the last run’s failures as they were.
 
 The **Run** tab (⌥⌘4) shows the run as it happens:
 
@@ -20,7 +20,7 @@ The **Run** tab (⌥⌘4) shows the run as it happens:
   field (matches are highlighted), copy it with the copy button.
 
 When the run ends, the **Results** list shows every test by suite, with its outcome and duration, and an
-arrow to jump to a failure. A notice offers **Show Failures** when something failed. The project's failing
+arrow to jump to a failure. A notice offers **Show Failures** when something failed. The project’s failing
 count appears in the sidebar, the Dock icon and the [menu bar item](menu-bar.md).
 
 ## The configuration panel
@@ -29,9 +29,9 @@ The left side of the Run tab shows what SnapshotKit will run and where each valu
 
 | Section | Shows |
 |---|---|
-| **Environment** | the Xcode version (and build) that will be used, *Not pinned by CI* when CI doesn't name one, and the simulator with its state (e.g. *Booted*). |
+| **Environment** | the Xcode version (and build) that will be used, *Not pinned by CI* when CI doesn’t name one, and the simulator with its state (e.g. *Booted*). |
 | **Scope** | **Test target**: *What CI runs* (default), or one test target with snapshots, to run only its tests. |
-| **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection and working directory. A footer names the CI files they come from; a value from somewhere else (*.snapshotkit.yml*, a script) names its source. Notes say what SnapshotKit had to guess or couldn't read. Until Xcode and the simulator are found, it also shows the Xcode and device that were asked for. |
+| **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection and working directory. A footer names the CI files they come from; a value from somewhere else (*.snapshotkit.yml*, a script) names its source. Notes say what SnapshotKit had to guess or couldn’t read. Until Xcode and the simulator are found, it also shows the Xcode and device that were asked for. |
 | **Comparison & Remote** | the **Base branch** for the Changes tab and the **Remote host** for remote runs; type to override them for this project. |
 
 When something is missing or wrong — Xcode not installed, no simulator runtime, a broken `.snapshotkit.yml` —
@@ -65,7 +65,7 @@ xcodebuild test
 
 Each repository keeps its own result bundles in `.git/snapshotkit/results/` (inside its git directory, so
 never committed), with their exported failure images next to them: the newest 10 runs, and always the last
-run's, whatever other projects run.
+run’s, whatever other projects run.
 
 ## Running part of the tests
 

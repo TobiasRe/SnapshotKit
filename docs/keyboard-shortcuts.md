@@ -24,7 +24,7 @@
 | ⌥⇧⌘R | Re-record the failing suites of the last run, then verify |
 | ⌥⌘R | Check flakiness of the failing tests |
 | ⌘. | Cancel the run |
-| ⌥⌘O | Open the selected snapshot's test in Xcode, at its function |
+| ⌥⌘O | Open the selected snapshot’s test in Xcode, at its function |
 
 ## Lists
 
@@ -32,10 +32,10 @@
 |---|---|
 | ↑ / ↓ | Previous / next item in the focused list |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
-| V (in the Changes list), ⌥⌘V | Toggle the selected change's Viewed mark; marking it viewed goes to the next unviewed change |
+| V (in the Changes list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
 | ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
 | Space | Quick Look the selected snapshot |
-| ⌘C | Copy the selected snapshot's image |
+| ⌘C | Copy the selected snapshot’s image |
 
 ## Comparing
 

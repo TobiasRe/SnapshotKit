@@ -6,27 +6,27 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 
 ## Where the inspiration comes from
 
-- **Finder and System Settings:** the sidebar is the system's glass material, never painted over. The
+- **Finder and System Settings:** the sidebar is the system’s glass material, never painted over. The
   layering stays quiet and consistent across every pane.
-- **Safari:** the toolbar floats above the document and recedes when you don't need it.
+- **Safari:** the toolbar floats above the document and recedes when you don’t need it.
 - **Photos and Preview:** editing and zoom controls float as glass over the image, not in a strip above it.
 - **Calendar:** headers softly blur the content scrolling beneath them.
 - **Kaleidoscope and other image-diff tools:** comparing images needs more than side by side. A one-up *toggle*
   shows movement, a loupe reads exact pixels, and the tool should take you to the change rather than make you
   hunt for it.
-- **Code review (GitHub's *Viewed* checkbox):** reviewing many changed files is a checklist. Mark one, move on.
+- **Code review (GitHub’s *Viewed* checkbox):** reviewing many changed files is a checklist. Mark one, move on.
 - **WWDC26 refinements:** Liquid Glass now diffuses busy backgrounds better. Standard components pick up these
-  changes for free; custom controls don't, and have to be checked with Increase Contrast, Reduce Transparency
+  changes for free; custom controls don’t, and have to be checked with Increase Contrast, Reduce Transparency
   and Reduce Motion. That is one more reason to keep custom glass to a minimum.
-- **Linear's 2024 redesign:** reduce visual noise and keep things aligned. The chrome around the content (the
-  "inverted L") is quiet and consistent; labels, icons and buttons line up across panes, which you feel more
+- **Linear’s 2024 redesign:** reduce visual noise and keep things aligned. The chrome around the content (the
+  “inverted L”) is quiet and consistent; labels, icons and buttons line up across panes, which you feel more
   than see. Color is mostly neutral and comes from a few inputs, not dozens of hand-picked values; status
-  is a small colored dot on a neutral label. A detail view says where you are in the list ("12 / 40") and
+  is a small colored dot on a neutral label. A detail view says where you are in the list (“12 / 40”) and
   steps through it in place.
 - **Practitioner guidance:**
   - Start from standard structure (`NavigationSplitView`, toolbars, inspectors).
   - Add custom glass only where a surface floats over content, and group neighboring glass in one container.
-  - Don't tint every surface or stack glass on glass.
+  - Don’t tint every surface or stack glass on glass.
 
 ## What the app is for
 
@@ -69,7 +69,7 @@ can be followed between these views, and re-recording is available wherever a sn
 | Token | Values |
 |---|---|
 | Spacing (`DS.Space`) | 2 · 4 · 8 · 12 · 16 · 24 (4-pt grid) |
-| Bars (`DS.Bar`) | header 52 · filters 36 · footer 32: every column's bars, so edges line up across panes |
+| Bars (`DS.Bar`) | header 52 · filters 36 · footer 32: every column’s bars, so edges line up across panes |
 | Radius (`DS.Radius`) | 6 thumbnails/chips · 10 panels · 16 floating bars (concentric with the window) |
 | Surfaces (`DS.Surface`) | content · selection (grid tiles, primary 8%) · thumb (chosen segment, 10%) · hover (4%) · match (log filter hits) · hairline (separator) |
 | Panes (`DS.Pane`) | a detail is at least 440 wide; the list beside it gives way first |
@@ -86,17 +86,17 @@ can be followed between these views, and re-recording is available wherever a sn
 - `PaneBar` / `PaneFooter`: the fixed-height bars of a column. A list has a header (search and view options),
   a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
   row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window, and the
-  list footers sit level with the sidebar's footer.
+  list footers sit level with the sidebar’s footer.
 - `ListDetailSplit`: the list beside its detail (400 points by default, 280–520), with one divider position
   for every tab, kept across launches; dragging it on one tab sets it everywhere, and switching tabs never moves it. Content too wide
   for the column gives way (a long branch name truncates) instead of spilling over.
-- `PropertySection` / `PropertyRow`: an inspector's properties (the Run tab's configuration): small section
+- `PropertySection` / `PropertyRow`: an inspector’s properties (the Run tab’s configuration): small section
   headers, gray labels in a 104-point column, values beside them, and where a value came from in quieter
   type under it.
-- `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
-- `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
+- `PositionStepper`: “12 / 40” with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
+- `ListSectionHeader`: a group’s name with its count in tertiary type. Lists have no row separators; the
   selection and the section headers carry the structure.
-- `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%). Selection is the list's own
+- `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%). Selection is the list’s own
   system highlight, as in every Mac app: SwiftUI has no way to restyle it, and reaching into the AppKit
   table underneath cost clicks. Grid tiles and palette rows, which have no system highlight, use
   `selectableTile(_:)` and `DS.Surface.selection` (the text color at 8%).
@@ -109,66 +109,66 @@ can be followed between these views, and re-recording is available wherever a sn
   primary text, dimmed when disabled), `fieldChrome()` (search and text fields in the same capsule) and
   `primaryActionStyle()` (the one accent capsule per region, prominent glass on macOS 26 and later). No
   system bordered buttons, pop-up buttons, segmented controls or control groups in the content; Settings keeps
-  the system form controls, and the toolbar is the system's.
+  the system form controls, and the toolbar is the system’s.
 - Capsules are `Capsule(style: .circular)`: the continuous style draws its flat end segment a point outside
   the curve, which showed as a tick at both ends of every pill.
 - `ZoomControls`: − level + on the compare and snapshot bars, plain on the glass.
 - `GlassSegmented`: every segmented control (layout, scope, variant, Results/Output, compare mode) is a glass
-  pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system's gray
+  pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system’s gray
   track. On a bar that is glass already (compare), the segments sit on it without a second pill. Labels use
   fixed label colors: glass would otherwise pick its own, which came out dark in dark mode.
 - The sidebar lists every project under Projects, alphabetically, so a project stays where it is when
   opened. Pinned and Recent above are shortcuts to the same projects; a click highlights only the row clicked.
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
-  ranked list, one line each, a command's shortcut where a project shows its folder, so the palette also
+  ranked list, one line each, a command’s shortcut where a project shows its folder, so the palette also
   teaches the keyboard.
-- `ProjectMonogram`: a project's initials in a small neutral tile, telling projects apart without color.
+- `ProjectMonogram`: a project’s initials in a small neutral tile, telling projects apart without color.
 - `Chip`: a small status label: a colored dot and neutral text in a hairline capsule, so several labels in a
   row stay calm and the text is readable in either appearance.
 - `HistoryStrip`: the signature element. One mark per recent run of a test, green, red or orange. A flaky test
   reads as a broken pattern, a regression as a clean switch to red. It appears in failure rows (compact) and
   the failure detail (regular).
-- `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn't plainly visible
+- `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn’t plainly visible
   (Invisible, Few pixels, Size changed), and offer the precision that would pass.
 - `PixelReadout`: the hover loupe, showing coordinates, both colors and their ΔE.
 - `SnapshotRow` / grid tile: thumbnail, test name, variant in code type, state chip (New, Modified, Orphaned)
   and `StatusMarks` at the trailing edge (failing ✕, flaky ⚠, change dot). One row design for every list.
-- `SnapshotViewer`: a single image with the compare view's zoom, pan and readout; the compare view itself
+- `SnapshotViewer`: a single image with the compare view’s zoom, pan and readout; the compare view itself
   is reused for versions and variants, so every comparison looks and behaves the same.
 - `MenuBarLabel` / `ProgressPie` / `MenuBarPanel`: the optional menu bar item. The icon is a 16 pt template
-  image (a ring with a pie), so it follows the menu bar's color; the panel reuses the row and chip styles.
+  image (a ring with a pie), so it follows the menu bar’s color; the panel reuses the row and chip styles.
 - Scope controls degrade instead of clipping: segments with counts, then without, then a menu
   (`ViewThatFits`).
 
 ## Enforcement
 
 - **Every view uses the tokens** for spacing, radii, bar and control heights, type, status colors and
-  surfaces. Literals are left only for sizes that belong to one component (a window's default size, the
+  surfaces. Literals are left only for sizes that belong to one component (a window’s default size, the
   slider knob, the welcome icon), where a token would be a name used once.
 - **Snapshot tests** (`Tests/SnapshotKitAppTests`) render every pane, state and compare mode in light and
   dark at a 99.9% pixel tolerance, so visual changes have to be re-recorded on purpose.
-  Off-screen rendering can't composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
+  Off-screen rendering can’t composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
   (headless captures included). Real glass needs a look on screen.
-- **An accessibility audit test** walks each tab's live accessibility tree and fails on unlabeled controls.
+- **An accessibility audit test** walks each tab’s live accessibility tree and fails on unlabeled controls.
 - **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every tab, compare mode,
   the palette and the welcome screen in the real window and fails on any SwiftUI or AppKit runtime issue,
   such as *Publishing changes from within view updates*. `ListSelectionTests` select rows in every list the
-  way a click does and read the same log in-process. The same captures fail when a list's scroll view is
+  way a click does and read the same log in-process. The same captures fail when a list’s scroll view is
   taller than the window: a layout that overflows leaves the sidebar blank, which no test window shows.
 - **Models are `@Observable`.** On macOS 27, lists and segmented pickers write their bindings from inside a
-  view update; written into an `ObservableObject`'s `@Published` property, that logged a runtime issue on
-  every click. Observation doesn't. Stored properties that aren't state (tasks, caches, observers) are
-  `@ObservationIgnored`, so filling a cache while a view reads it doesn't redraw that view.
+  view update; written into an `ObservableObject`’s `@Published` property, that logged a runtime issue on
+  every click. Observation doesn’t. Stored properties that aren’t state (tasks, caches, observers) are
+  `@ObservationIgnored`, so filling a cache while a view reads it doesn’t redraw that view.
 - **Swift 6 language mode.** Data races and actor isolation are checked at compile time; shared state that
   is safe for another reason is marked `nonisolated(unsafe)` with that reason next to it.
 - **Re-record only what you changed.** In a record-mode run of the whole suite, layout can depend on which
   tests failed earlier in that run. Re-record single tests with `--filter`, then run everything normally.
 
-## Don'ts
+## Don’ts
 
-- Don't paint behind the sidebar or toolbar, and don't put glass inside lists or forms.
-- Don't use more than one prominent button per region, and don't use decorative color or gradients.
-- Don't let a bar's height depend on its content: use `DS.Bar`, so neighboring panes stay aligned.
-- Don't let a control give way to a title: buttons keep their size (`fixedSize`) and titles truncate.
-- Don't show the same empty state twice, or a count of zero.
-- Don't add new spacing or radius values. If one seems necessary, add it here first.
+- Don’t paint behind the sidebar or toolbar, and don’t put glass inside lists or forms.
+- Don’t use more than one prominent button per region, and don’t use decorative color or gradients.
+- Don’t let a bar’s height depend on its content: use `DS.Bar`, so neighboring panes stay aligned.
+- Don’t let a control give way to a title: buttons keep their size (`fixedSize`) and titles truncate.
+- Don’t show the same empty state twice, or a count of zero.
+- Don’t add new spacing or radius values. If one seems necessary, add it here first.

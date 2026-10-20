@@ -33,21 +33,21 @@ Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it wi
 ## Common behavior
 
 **Which repository.** `--repo PATH`, or the current directory. Any folder inside a repository works: `snapkit`
-uses the repository's root (`git rev-parse --show-toplevel`). Outside a repository: *error: … is not inside a
-git repository*; a `--repo` folder that doesn't exist: *error: no such folder: …*. Without `git`: *error: `git`
+uses the repository’s root (`git rev-parse --show-toplevel`). Outside a repository: *error: … is not inside a
+git repository*; a `--repo` folder that doesn’t exist: *error: no such folder: …*. Without `git`: *error: `git`
 was not found on the PATH (…). Install Xcode or its command line tools (`xcode-select --install`).*
 
 **Configuration.** Commands that run tests read the CI files, `.snapshotkit.yml` and the per-project settings
 the app stores, in that order. See [Configuration](configuration.md). `snapshots`, `diff`, `open`, `restore`
-and `projects` don't need it.
+and `projects` don’t need it.
 
 **Options** come after the command, in any order. Repeating an option keeps the last value, except `--only`
-and `--suite`, which collect every value. An option the command doesn't take, a missing or malformed value, or
+and `--suite`, which collect every value. An option the command doesn’t take, a missing or malformed value, or
 an extra argument is an error (exit status 64).
 
 **Output.** Color only when writing to a terminal, and never with `NO_COLOR` set. Errors go to standard error
 as `error: …`, and so do notes and warnings (a restored record patch, *Interrupted…*). Progress lines
-start with `▸`, SnapshotKit's own notes with `snapkit:`. Test output is shortened to what matters (suites,
+start with `▸`, SnapshotKit’s own notes with `snapkit:`. Test output is shortened to what matters (suites,
 failures, errors, the summary); `--verbose` prints everything `xcodebuild` prints.
 
 **Exit status.**
@@ -56,7 +56,7 @@ failures, errors, the summary); `--verbose` prints everything `xcodebuild` print
 |---|---|
 | 0 | done (for `run`, `record`, `rerecord`: tests passed or verified) |
 | 1 | an error, failing tests or a failed verification (see each command) |
-| 2 | Xcode or the simulator isn't available as configured; for `diff`, an image that can't be read or written |
+| 2 | Xcode or the simulator isn’t available as configured; for `diff`, an image that can’t be read or written |
 | 64 | wrong options or arguments |
 | 130, 143… | interrupted by a signal (128 + the signal number) |
 
@@ -107,7 +107,7 @@ your working tree, grouped by folder, each with its kind: **Committed** (on this
 | Option | |
 |---|---|
 | `--base BRANCH` | compare with this branch instead of the configured or detected one |
-| `--tip` | compare with the base branch's tip instead of the merge-base |
+| `--tip` | compare with the base branch’s tip instead of the merge-base |
 | `--filter TEXT` | only paths containing every word |
 
 ```
@@ -147,7 +147,7 @@ simulator:
 snapkit: Xcode 16.2 · iPhone 16 Pro iOS 18.2
 ```
 
-Exits 2 when Xcode or the simulator is missing, 1 when the configuration can't be read. See
+Exits 2 when Xcode or the simulator is missing, 1 when the configuration can’t be read. See
 [Configuration](configuration.md).
 
 ## run
@@ -160,7 +160,7 @@ Runs the snapshot tests with the CI configuration (see [Running tests](running.m
 
 | Option | |
 |---|---|
-| `--only ID` | run only this test identifier (`Bundle`, `Bundle/Suite` or `Bundle/Suite/test()`); repeatable; replaces CI's selection |
+| `--only ID` | run only this test identifier (`Bundle`, `Bundle/Suite` or `Bundle/Suite/test()`); repeatable; replaces CI’s selection |
 | `--module TARGET` | run only this test target |
 | `--iterations N` | run every test N times, each in a fresh process; a flakiness check. N must be at least 2 (else exit 64) |
 | `--remote` | run on the configured remote host |
@@ -178,8 +178,8 @@ Failure images: 2 (see `snapkit failures`)
 ```
 
 plus up to ten build errors when the build failed. A canceled run starts the summary with *Cancelled.* The run
-is added to the history and, without `--iterations`, remembered as the last run, which the app's Failures tab
-and `rerecord` / `failures` use. A canceled run isn't: the last run's failures stay as they were.
+is added to the history and, without `--iterations`, remembered as the last run, which the app’s Failures tab
+and `rerecord` / `failures` use. A canceled run isn’t: the last run’s failures stay as they were.
 
 Exits 0 when the tests passed, 1 when they failed, the build failed or the run was canceled.
 
@@ -212,11 +212,11 @@ Recorded and verified: 2 passed.
 ```
 
 Other endings: *Recorded, but verification failed: 1 still failing (flaky?).* and, with `--no-verify`,
-*Recorded.* If the test source couldn't be restored automatically you get a `WARNING:` naming the backup.
+*Recorded.* If the test source couldn’t be restored automatically you get a `WARNING:` naming the backup.
 Canceled while recording: *Cancelled.* Canceled during the verification, or before it started: *Recorded; the
 verification was cancelled.*
 
-The verification's results go into the last run: the tests it ran replace their earlier results, every other
+The verification’s results go into the last run: the tests it ran replace their earlier results, every other
 test keeps its own (see [`rerecord`](#rerecord)).
 
 No match: *No snapshot path contains “x” and “y”.* When the build fails or no test runs, nothing is recorded:
@@ -233,9 +233,9 @@ snapkit rerecord [--repo PATH] [--suite ID]… [--no-verify] [--remote [HOST]] [
 Re-records **whole failing suites**, then verifies them.
 
 - Without `--suite`: the failing suites of the last run (*snapkit: using failing suites from the last run
-  (local, 10:42)*). If there's no last run, it runs the tests first to find them.
+  (local, 10:42)*). If there’s no last run, it runs the tests first to find them.
 - `--suite ID` (repeatable): these suites (`Bundle/Suite`); a bare suite name works when the last run had it.
-- `--remote [HOST]`: record on the remote Mac; your files aren't patched, the new PNGs are downloaded, then
+- `--remote [HOST]`: record on the remote Mac; your files aren’t patched, the new PNGs are downloaded, then
   verified on the remote Mac (unless `--no-verify`). See [Remote runs](remote-runs.md).
 
 ```
@@ -249,8 +249,8 @@ Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* If the 
 the recording is done (exit 1). Nothing failing: *Nothing to re-record: no failing suites.* (exit 0).
 
 The verification is merged into the last run rather than replacing it: the suites it ran get their new
-results, and the last run's other failures stay, so you can re-record one suite at a time. The last run's
-result bundle switches to the verification's only once every suite that still fails was part of it. A
+results, and the last run’s other failures stay, so you can re-record one suite at a time. The last run’s
+result bundle switches to the verification’s only once every suite that still fails was part of it. A
 canceled verification changes nothing.
 
 ## flaky
@@ -259,7 +259,7 @@ canceled verification changes nothing.
 snapkit flaky [--repo PATH] [--iterations N] [--suite ID]… [--remote [HOST]] [--verbose]
 ```
 
-Runs the failing suites (as `rerecord` picks them) N times — `--iterations` (at least 2), else the app's
+Runs the failing suites (as `rerecord` picks them) N times — `--iterations` (at least 2), else the app’s
 setting, default 5 — each repetition in a fresh process, and prints a verdict per test:
 
 ```
@@ -290,7 +290,7 @@ ShopTests/ProductCardTests
     recent runs: ✔ ✔ ✘
 ```
 
-Every reference the test's failure messages name is listed once. When the test ran on several simulators, or
+Every reference the test’s failure messages name is listed once. When the test ran on several simulators, or
 is parameterized and several of its cases failed, each set of images is labeled with its device, its
 arguments, or both:
 
@@ -315,13 +315,13 @@ pass with …*: `perceptualPrecision: …`, `precision: …`, or both (see
 
 | Option | |
 |---|---|
-| `--xcresult PATH` | read this result bundle instead of the last run's |
+| `--xcresult PATH` | read this result bundle instead of the last run’s |
 | `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). Only the files of an earlier export there are replaced. |
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
-*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* If the last run's bundle has been removed:
+*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* If the last run’s bundle has been removed:
 *The last run’s results are gone (…). Run the tests again (`snapkit run`), or pass --xcresult PATH.* Exits 0
-after listing, failures or not; 1 when there is no bundle or it can't be read.
+after listing, failures or not; 1 when there is no bundle or it can’t be read.
 
 ## history
 
@@ -339,9 +339,9 @@ No flaky signals.
 ```
 
 When there are flaky signals, the second part reads *Flaky (passed and failed on the same commit):* followed by
-each test, its passes and failures, the hosts it failed on and its strip. Dates follow your system's format.
+each test, its passes and failures, the hosts it failed on and its strip. Dates follow your system’s format.
 
-With TEST (`Bundle/Suite/test()`): the same runs and flaky signals, then that test's strip (up to 30 runs,
+With TEST (`Bundle/Suite/test()`): the same runs and flaky signals, then that test’s strip (up to 30 runs,
 oldest first) and one line per run. Kinds:
 `run`, `record`, `verify`, `flakeCheck`, `imported`. Exits 0.
 
@@ -362,7 +362,7 @@ Visible change in a 105×58 area at 847, 136.
 For invisible or tiny differences it adds *Would pass with: perceptualPrecision: 0.99* (or `precision: …`, or
 both).
 `-o OUT.png` writes the difference image (changed pixels in magenta). Exits 0 when the images are identical, 1
-when they differ, 2 when one can't be read or `-o` can't be written. See [Comparing images](comparing.md#the-diagnosis).
+when they differ, 2 when one can’t be read or `-o` can’t be written. See [Comparing images](comparing.md#the-diagnosis).
 
 ## open
 
@@ -371,7 +371,7 @@ snapkit open REFERENCE.png ACTUAL.png [--app PATH]
 ```
 
 Prints the same summary as `diff`, then opens the pair in a SnapshotKit compare window. This is the command to
-name as swift-snapshot-testing's diff tool — see [Using SnapshotKit as your diff tool](diff-tool.md).
+name as swift-snapshot-testing’s diff tool — see [Using SnapshotKit as your diff tool](diff-tool.md).
 
 | Option | |
 |---|---|
@@ -387,7 +387,7 @@ or pass --app PATH.* (exit 1). Otherwise exits 0, whether or not the images diff
 snapkit restore [--repo PATH] [--force]
 ```
 
-Restores a record patch left in this repository's test sources, the same way the automatic restore does, and
+Restores a record patch left in this repository’s test sources, the same way the automatic restore does, and
 prints what it did, or *No record patch to restore.* If a SnapshotKit or `snapkit` process that is still running
 owns the patch, it refuses (*A re-record is already in progress for …*); `--force` restores anyway.
 
@@ -398,9 +398,9 @@ snapkit projects scan FOLDER…
 snapkit projects [list]
 ```
 
-`scan` adds the folders as scan folders (in the app's settings), rescans every scan folder and lists the
-projects found: *5 project(s) with snapshot tests (looked 6 folders deep).* Folders macOS doesn't allow it to
-read are named. `list` prints the app's projects: pinned (📌) first, then recent, then the rest. See
+`scan` adds the folders as scan folders (in the app’s settings), rescans every scan folder and lists the
+projects found: *5 project(s) with snapshot tests (looked 6 folders deep).* Folders macOS doesn’t allow it to
+read are named. `list` prints the app’s projects: pinned (📌) first, then recent, then the rest. See
 [Projects and scanning](projects.md).
 
 ## Environment variables

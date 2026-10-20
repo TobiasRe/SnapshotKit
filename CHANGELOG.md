@@ -11,22 +11,22 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   device and arguments, and lists every reference its failures name.
 - Clearer errors: a shallow clone that lacks the merge-base says how to fetch it (`git fetch --unshallow`), a
   repository without commits that there is nothing to compare with, a missing `git` which PATH was searched,
-  and `snapkit --repo` a folder that doesn't exist.
+  and `snapkit --repo` a folder that doesn’t exist.
 
 ### Changed
-- Calmer lists: a snapshot's row and grid tile say how it changed on one line ("● Uncommitted · dark"), with
-  only failing tests marked on the right, and the detail's chip uses the same word. The toolbar's re-record
-  button (the same as each detail header's) is gone, and the Run tab lists Xcode and the simulator once.
+- Calmer lists: a snapshot’s row and grid tile say how it changed on one line (“● Uncommitted · dark”), with
+  only failing tests marked on the right, and the detail’s chip uses the same word. The toolbar’s re-record
+  button (the same as each detail header’s) is gone, and the Run tab lists Xcode and the simulator once.
 - One main window: no New Window or window tabs; the Dock icon or the menu bar item brings it back.
 - The same names everywhere: **Re-record Failing Suites** (Failures, Run tab, menus, ⌘K), **Check Flakiness of
   Failing Tests**, and **Zoom to Fit** for ⌘0. **Re-record All…** only ever means every snapshot.
-- Flakiness reads "2 of 5 runs passed" and the history "4 of 8 recent runs passed"; failed and passed are
+- Flakiness reads “2 of 5 runs passed” and the history “4 of 8 recent runs passed”; failed and passed are
   circles everywhere, and status colors sit on icons rather than whole sentences.
 - A test with more than three variants picks them from a menu instead of a wide segmented control.
 - Each repository keeps its own result bundles and failure images in `.git/snapshotkit/results/` (the newest
-  10 runs, always including the last); a run in one project no longer removes another's.
+  10 runs, always including the last); a run in one project no longer removes another’s.
 - The Changes tab and `snapkit changes` list only snapshots, PNGs under `__Snapshots__` like the library;
-  an app icon or test fixture no longer shows up as a change. Variants are ordered like the library's.
+  an app icon or test fixture no longer shows up as a change. Variants are ordered like the library’s.
 - Messages use typographic quotes and apostrophes (“develop”, can’t); commands to type keep straight ones.
 - `snapkit run` and `flaky` refuse `--iterations 1` (exit 64) instead of quietly running two.
 - **Check Again** reloads the configuration, so a fixed `.snapshotkit.yml` is picked up.
@@ -38,8 +38,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   (including the first launch).
 - Failures match their reference images when the repository was moved or copied, or the bundle came from CI.
 - A test that ran on several simulators, or a parameterized test, counts a run per device and keeps every
-  device's and case's images; a flakiness check on two simulators no longer calls a flaky test "Fails every
-  time". Run progress names a parameterized test once, by its name.
+  device’s and case’s images; a flakiness check on two simulators no longer calls a flaky test “Fails every
+  time”. Run progress names a parameterized test once, by its name.
 - Reverting a snapshot renamed only in case no longer deletes it.
 - Recording works in test files with Windows line endings, a byte order mark, or a `@Suite(...)` ending in a
   comment or a comma.
@@ -50,39 +50,39 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - A `.snapshotkit.yml` that starts with `---` can be read.
 - Without an OS, or with `latest`, runs use the newest simulator runtime, as CI does, not an older booted one.
 - A run that records a new reference no longer makes the test look flaky.
-- The diagnosis never suggests `perceptualPrecision: 1` or `precision: 0`, which can't pass or pass anything;
+- The diagnosis never suggests `perceptualPrecision: 1` or `precision: 0`, which can’t pass or pass anything;
   a few visible pixels over rendering noise get both `precision` and `perceptualPrecision`.
 - Remote runs sync submodules, and download recorded snapshots with spaces or non-ASCII names.
 - The ⌘K palette no longer lists projects whose path merely contains the typed letters somewhere.
 - A project opened through a symbolic link shares its settings and history with the real path, as `snapkit`
   does.
-- VoiceOver reads the names of icon menus (··· and the re-record arrow) instead of "More" or "Down".
+- VoiceOver reads the names of icon menus (··· and the re-record arrow) instead of “More” or “Down”.
 - Re-recording one test no longer clears the other failures of the last run; only the tests that ran are
   updated, in the app, in `snapkit` and in `.git/snapshotkit/last-run.json`. A test that still fails after
   re-recording shows its images.
-- A canceled run, re-record, verification or flakiness check keeps the last run's failures and verdicts
-  instead of wiping them, and says "Cancelled." rather than reporting a result. In `snapkit`, a Ctrl-C after
-  recording says "Recorded; the verification was cancelled." and exits 1.
-- A re-record whose build failed, or that ran no test, says "Nothing was recorded" (and `snapkit record` /
-  `rerecord` exit 1) instead of "Recorded"; a verification that ran no test says it couldn't verify.
-- Counts read right with one ("1 test passed", "1 fails every time"), a run in which no test ran says so, and
-  `snapkit` prints "▸ Finished" once.
-- The Dock badge counts failing tests, not a flakiness check's failed repetitions.
-- Moving snapshots to the Trash says which couldn't be moved, and why.
+- A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts
+  instead of wiping them, and says “Cancelled.” rather than reporting a result. In `snapkit`, a Ctrl-C after
+  recording says “Recorded; the verification was cancelled.” and exits 1.
+- A re-record whose build failed, or that ran no test, says “Nothing was recorded” (and `snapkit record` /
+  `rerecord` exit 1) instead of “Recorded”; a verification that ran no test says it couldn’t verify.
+- Counts read right with one (“1 test passed”, “1 fails every time”), a run in which no test ran says so, and
+  `snapkit` prints “▸ Finished” once.
+- The Dock badge counts failing tests, not a flakiness check’s failed repetitions.
+- Moving snapshots to the Trash says which couldn’t be moved, and why.
 - Deleting, discarding or reverting the selected item selects the next one instead of jumping to the top, and
   lists start at their first visible row. A filter that hides the selection moves it to the first row shown.
 - Overlapping refreshes of the library, Changes or the Xcode check no longer show an older result over a newer
-  one; a reload no longer replaces imported failures with the last local run's.
+  one; a reload no longer replaces imported failures with the last local run’s.
 - A branch checked out outside the app shows up when you come back to it; a repository folder deleted or moved
   while open is reported as gone.
 - A flakiness check, remote re-record or import that finishes no longer pulls you away from the tab you moved
   to meanwhile.
 - When the image size changed, each side is drawn at its own size; sizes and coordinates no longer read as
   decimals in locales like German. Zooming keeps the pixel under the pointer in place.
-- Opening a folder that doesn't exist or isn't a git repository says so instead of adding it as a project.
+- Opening a folder that doesn’t exist or isn’t a git repository says so instead of adding it as a project.
 - Opening the base version of two snapshots of the same test, or of a branch like `release/1.0`, opens the
   right image.
-- The same notice ("All 12 tests passed.") shows again after it was closed.
+- The same notice (“All 12 tests passed.”) shows again after it was closed.
 
 ## [0.2.0] - 2026-10-20
 

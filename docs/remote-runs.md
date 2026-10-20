@@ -31,15 +31,15 @@ Set the host in one of two places (the project setting wins):
 
 The value is anything `ssh` accepts: `user@ci-mac.local`, or an alias from `~/.ssh/config`. Optionally set
 `remoteDirectory:` in `.snapshotkit.yml` for where the working copy lives on the remote Mac; the default is
-`~/.snapshotkit/workspaces/<repository>-<hash>`. It must not contain spaces or shell characters: macOS's
+`~/.snapshotkit/workspaces/<repository>-<hash>`. It must not contain spaces or shell characters: macOS’s
 `rsync` hands the path to the remote shell unquoted. A `remoteHost` that starts with `-` or contains spaces is
-refused, so a repository can't slip `ssh` options in.
+refused, so a repository can’t slip `ssh` options in.
 
 ## What a remote run does
 
 1. **Checking remote Xcode and simulator** — the same checks as locally, on the remote Mac. Problems are
    reported as *On ci-mac: Xcode 16.2 is not installed …*.
-2. **Syncing working tree** — your tracked files plus untracked files that aren't ignored (`git ls-files -co
+2. **Syncing working tree** — your tracked files plus untracked files that aren’t ignored (`git ls-files -co
    --exclude-standard`) are copied with `rsync`, including uncommitted changes. Files you deleted are deleted
    there too, except build products (`.build`, `.swiftpm`, `DerivedData`, `.snapshotkit`).
 3. **Running tests remotely** — `xcodebuild test` with the CI configuration, over `ssh -tt`, so canceling here
@@ -47,7 +47,7 @@ refused, so a repository can't slip `ssh` options in.
 4. **Collecting results** — the result summary and failure images are fetched, and remote paths are mapped back
    to your repository, so the Failures tab works as for a local run.
 
-The run is recorded in the history with the host's name, so the strips and the flakiness signal include
+The run is recorded in the history with the host’s name, so the strips and the flakiness signal include
 remote runs.
 
 ## Re-recording remotely
@@ -65,7 +65,7 @@ remote runs.
 **Run tab › ··· › On *host* › Check Flakiness** (or `snapkit flaky --remote`) repeats the failing tests on the
 remote Mac. A test that fails on CI but passes on your Mac often shows its true colors there.
 
-## A local "remote"
+## A local “remote”
 
 `remoteHost: local` runs the same remote flow against a directory on this Mac, which is useful for trying it
 out and for tests.

@@ -1,6 +1,6 @@
 # The menu bar item
 
-SnapshotKit can live in the menu bar, so you see how a run is going — and what's failing — while you work in
+SnapshotKit can live in the menu bar, so you see how a run is going — and what’s failing — while you work in
 Xcode, without switching windows.
 
 ## Turning it on
@@ -14,9 +14,9 @@ runs continue, and the menu bar item reopens the window. With it off, closing th
 |---|---|
 | Nothing running | the SnapshotKit symbol (a stack of pictures) |
 | Nothing running, tests failing | the symbol and the number of failing tests across your projects |
-| A run in progress | a pie that fills as tests complete, and `done/total` (e.g. `13/30`); a quarter arc while the total isn't known yet |
+| A run in progress | a pie that fills as tests complete, and `done/total` (e.g. `13/30`); a quarter arc while the total isn’t known yet |
 
-The icon is a template image, so it follows the menu bar's color in light and dark mode and with a colored
+The icon is a template image, so it follows the menu bar’s color in light and dark mode and with a colored
 wallpaper.
 
 ## The panel
@@ -25,7 +25,7 @@ Click the icon for a panel:
 
 ![The menu bar panel](images/menubar-panel-light.png)
 
-**Running** — for every project with a run in progress: its name, what it's doing (*Running tests*,
+**Running** — for every project with a run in progress: its name, what it’s doing (*Running tests*,
 *ci-mac: Syncing working tree*…), a progress bar, the passed and failed counts so far, the test running now,
 and ⊗ to cancel it.
 
@@ -39,4 +39,4 @@ pinned and recent ones. Click a project to open it in the window; click ▶ to r
 
 - The **Dock icon** shows the failing count of the open project as a badge, and bounces when a run finishes
   while SnapshotKit is in the background.
-- The **sidebar** shows each project's failing count from its last run.
+- The **sidebar** shows each project’s failing count from its last run.
