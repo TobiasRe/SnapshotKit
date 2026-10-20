@@ -33,7 +33,7 @@ public struct TestRunResult: Sendable {
 }
 
 /// Runs `xcodebuild test` with a project's CI configuration and streams its output.
-public final class TestRunner: @unchecked Sendable {
+public final class TestRunner: @unchecked Sendable { // `process` and `cancelRequested` are guarded by `lock`.
     public let repository: URL
     public let config: SnapshotConfig
     public let environment: TestEnvironment
@@ -88,6 +88,7 @@ public final class TestRunner: @unchecked Sendable {
         if let workspace = config.workspace { args += ["-workspace", workspace] }
         else if let project = config.project { args += ["-project", project] }
         let result = try Shell.run(args, in: workingDirectory, environment: environment.processEnvironment)
+        guard result.succeeded else { throw CommandError(command: args, result: result) }
         struct Listing: Decodable {
             struct Container: Decodable { var schemes: [String]? }
             var project: Container?
@@ -103,7 +104,7 @@ public final class TestRunner: @unchecked Sendable {
     }
 
     /// Result bundles kept in the temporary results folder; older ones are deleted.
-    public static let keptResultBundles = 30
+    static let keptResultBundles = 30
 
     public static func newResultBundleURL() -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/results", isDirectory: true)
@@ -116,7 +117,8 @@ public final class TestRunner: @unchecked Sendable {
     static func pruneResults(in dir: URL) {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey]) else { return }
-        let bundles = entries.filter { $0.pathExtension == "xcresult" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        func created(_ url: URL) -> Date { (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
+        let bundles = entries.filter { $0.pathExtension == "xcresult" }.sorted { created($0) > created($1) }
         for old in bundles.dropFirst(keptResultBundles) {
             try? fm.removeItem(at: old)
             try? fm.removeItem(at: old.deletingPathExtension().appendingPathExtension("attachments"))
@@ -131,7 +133,7 @@ public final class TestRunner: @unchecked Sendable {
         onLine: @escaping @Sendable (String) -> Void = { _ in },
         onEvent: @escaping @Sendable (TestEvent, TestOutputParser) -> Void = { _, _ in }
     ) async throws -> TestRunResult {
-        let scheme = try resolveScheme()
+        let scheme = try await offCooperativePool { try self.resolveScheme() }
         let bundle = Self.newResultBundleURL()
         let process = StreamingProcess(
             executable: "xcodebuild",
@@ -158,7 +160,8 @@ public final class TestRunner: @unchecked Sendable {
 
         var summary: TestRunSummary?
         if FileManager.default.fileExists(atPath: bundle.path) {
-            summary = try? XCResultParser.load(resultBundle: bundle, developerDir: environment.xcode.developerDir)
+            let developerDir = environment.xcode.developerDir
+            summary = try? await offCooperativePool { try XCResultParser.load(resultBundle: bundle, developerDir: developerDir) }
         }
         return TestRunResult(
             commandLine: process.commandLine,
@@ -173,6 +176,8 @@ public final class TestRunner: @unchecked Sendable {
         )
     }
 
+    /// Stops the run: xcodebuild gets SIGINT (then SIGTERM and SIGKILL if it lingers), and a run
+    /// that hasn't started yet throws `CancellationError`.
     public func cancel() {
         let process: StreamingProcess? = lock.withLock {
             cancelRequested = true

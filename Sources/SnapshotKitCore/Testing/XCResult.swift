@@ -162,7 +162,7 @@ public enum XCResultParser {
         }
     }
 
-    /// Reads a result bundle with the given Xcode's `xcresulttool`.
+    /// Reads a result bundle with the given Xcode's `xcresulttool`. Blocks until it has finished.
     public static func load(resultBundle: URL, developerDir: String?) throws -> TestRunSummary {
         let env = developerDir.map { ["DEVELOPER_DIR": $0] }
         let result = try Shell.run(
