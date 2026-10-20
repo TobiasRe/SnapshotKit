@@ -69,9 +69,11 @@ struct FailuresTab: View {
                 Button("Re-record All") { project.reRecordFailed() }
                     .quietControl()
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
+                    .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
                 Button("Check Flakiness") { project.checkFlakiness() }
                     .quietControl()
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
+                    .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
             }
             .padding(.bottom, DS.Space.xs)
         }

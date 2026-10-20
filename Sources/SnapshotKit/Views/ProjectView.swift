@@ -497,7 +497,7 @@ struct RunStatusHeader: View {
                         .fixedSize()
                         .quietControl()
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
-                        .help("Re-record only the failing suites, then verify (⇧⌘R)")
+                        .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
                     Button("Run Tests") { project.runTests() }
                         .primaryActionStyle()
                         .fixedSize()
