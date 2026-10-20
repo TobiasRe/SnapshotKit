@@ -16,9 +16,6 @@ public struct ResolvedConfig: Sendable {
         self.overrideFile = overrideFile
         self.notes = notes
     }
-
-    /// The base branch, falling back to auto-detection when neither CI nor the override sets one.
-    public var baseBranch: String? { config.baseBranch }
 }
 
 public enum ConfigResolver {
@@ -74,11 +71,14 @@ public enum ConfigResolver {
         let overrideURL = repository.appendingPathComponent(SnapshotConfig.overrideFileName)
         if let text = try? String(contentsOf: overrideURL, encoding: .utf8) {
             do {
-                let (override, unknown) = try SnapshotConfig.fromOverrideFile(text)
+                let (override, unknown, mistyped) = try SnapshotConfig.fromOverrideFile(text)
                 config.override(with: override)
                 overrideFile = SnapshotConfig.overrideFileName
                 if !unknown.isEmpty {
                     notes.append("Ignored unknown keys in \(SnapshotConfig.overrideFileName): \(unknown.joined(separator: ", "))")
+                }
+                if !mistyped.isEmpty {
+                    notes.append("Ignored lists in \(SnapshotConfig.overrideFileName) where one value belongs: \(mistyped.joined(separator: ", "))")
                 }
             } catch {
                 throw ConfigError.invalidOverride(error.localizedDescription)

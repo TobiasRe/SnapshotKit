@@ -83,23 +83,18 @@ public struct SnapshotConfig: Codable, Equatable, Sendable {
         takeList(\.skipTesting, .skipTesting)
         takeList(\.extraArguments, .extraArguments)
     }
-
-    /// Fills only fields that are still unset.
-    public mutating func fillGaps(from other: SnapshotConfig) {
-        var merged = other
-        merged.override(with: self)
-        self = merged
-    }
 }
 
 extension SnapshotConfig {
     public static let overrideFileName = ".snapshotkit.yml"
 
-    /// Parses `.snapshotkit.yml`. Unknown keys are reported so typos do not go unnoticed.
-    public static func fromOverrideFile(_ text: String, source: String = overrideFileName) throws -> (SnapshotConfig, unknownKeys: [String]) {
+    /// Parses `.snapshotkit.yml`. Unknown keys, and lists where a single value belongs, are
+    /// reported so typos do not go unnoticed.
+    public static func fromOverrideFile(_ text: String, source: String = overrideFileName) throws
+        -> (SnapshotConfig, unknownKeys: [String], mistypedKeys: [String]) {
         let values = try MiniYAML.parse(text)
         var config = SnapshotConfig()
-        var unknown: [String] = []
+        var unknown: [String] = [], mistyped: [String] = []
         let aliases: [String: Field] = [
             "xcode": .xcodeVersion, "xcodeVersion": .xcodeVersion,
             "developerDir": .developerDir, "xcodePath": .developerDir,
@@ -116,6 +111,8 @@ extension SnapshotConfig {
         ]
         for (key, value) in values {
             guard let field = aliases[key] else { unknown.append(key); continue }
+            let takesList = [.onlyTesting, .skipTesting, .extraArguments].contains(field)
+            guard takesList || value.string != nil else { mistyped.append(key); continue }
             config.sources[field.rawValue] = source
             switch field {
             case .xcodeVersion: config.xcodeVersion = value.string
@@ -137,6 +134,6 @@ extension SnapshotConfig {
                 config.extraArguments = value.string.map(ShellWords.split) ?? value.strings
             }
         }
-        return (config, unknown.sorted())
+        return (config, unknown.sorted(), mistyped.sorted())
     }
 }

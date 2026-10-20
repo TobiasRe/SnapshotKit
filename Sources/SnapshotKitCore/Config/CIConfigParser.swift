@@ -52,9 +52,9 @@ public struct CIConfigParser {
         }
     }
 
-    public var variables: [String: String] = [:]
+    var variables: [String: String] = [:]
 
-    public init(variables: [String: String] = [:]) {
+    init(variables: [String: String] = [:]) {
         self.variables = variables
     }
 
@@ -65,7 +65,7 @@ public struct CIConfigParser {
     )
 
     /// Collects `KEY: value`, `KEY=value` and `export KEY=value` definitions. First wins.
-    public static func collectVariables(_ text: String, into variables: inout [String: String]) {
+    static func collectVariables(_ text: String, into variables: inout [String: String]) {
         for line in text.components(separatedBy: .newlines) {
             let ns = line as NSString
             guard let m = assignment.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { continue }
@@ -88,7 +88,7 @@ public struct CIConfigParser {
     )
 
     /// Expands variable references; unknown references are left untouched.
-    public func expand(_ string: String) -> String {
+    func expand(_ string: String) -> String {
         var current = string
         for _ in 0..<5 {
             let ns = current as NSString
@@ -118,7 +118,7 @@ public struct CIConfigParser {
 
     /// Joins backslash continuations and YAML-folded flag lines (`-scheme X` on its own line)
     /// so each command is one string.
-    public static func logicalLines(_ text: String) -> [(line: String, index: Int)] {
+    static func logicalLines(_ text: String) -> [(line: String, index: Int)] {
         let raw = text.components(separatedBy: .newlines)
         var result: [(String, Int)] = []
         var i = 0
@@ -160,7 +160,7 @@ public struct CIConfigParser {
 
     // MARK: - xcodebuild invocations
 
-    public func invocations(in text: String) -> [Invocation] {
+    func invocations(in text: String) -> [Invocation] {
         let lines = Self.logicalLines(text)
         let rawLines = text.components(separatedBy: .newlines)
         var found: [Invocation] = []
@@ -229,38 +229,37 @@ public struct CIConfigParser {
     // MARK: - Xcode version
 
     /// Finds the Xcode version (or Xcode path) CI selects.
-    public func xcodeSelection(in text: String) -> (version: String?, developerDir: String?) {
+    func xcodeSelection(in text: String) -> (version: String?, developerDir: String?) {
         let expanded = expand(text)
-        let patterns = [
-            #"xcode-version:\s*['"]?([0-9]+(?:\.[0-9]+)*)"#,
-            #"Xcode[_-]?([0-9]+(?:\.[0-9]+)*)\.app"#,
-            #"\b[A-Z_]*XCODE[A-Z_]*VERSION[A-Z_]*\s*[:=]\s*['"]?(?:Xcode[_ -]?)?([0-9]+(?:\.[0-9]+)*)"#,
-            #"\bxcodes\s+(?:select|use|install)\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
-            #"\bxcversion\s+select\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
-            #"image:\s*\S*xcode[:_-]([0-9]+(?:\.[0-9]+)*)"#,
-        ]
-        for pattern in patterns {
-            if let v = firstCapture(pattern, in: expanded) { return (v, nil) }
+        for pattern in Self.xcodeVersionPatterns {
+            if let v = Self.firstCapture(pattern, in: expanded) { return (v, nil) }
         }
-        if let dir = firstCapture(#"DEVELOPER_DIR\s*[:=]\s*['"]?([^'"\s]+)"#, in: expanded), Self.isResolved(dir) {
-            return (nil, dir)
-        }
-        if let dir = firstCapture(#"xcode-select\s+(?:-s|--switch)\s+['"]?([^'"\s]+)"#, in: expanded), Self.isResolved(dir) {
-            return (nil, dir)
+        for pattern in Self.xcodePathPatterns {
+            if let dir = Self.firstCapture(pattern, in: expanded), Self.isResolved(dir) { return (nil, dir) }
         }
         return (nil, nil)
     }
 
+    private static let xcodeVersionPatterns = searchPatterns([
+        #"xcode-version:\s*['"]?([0-9]+(?:\.[0-9]+)*)"#,
+        #"Xcode[_-]?([0-9]+(?:\.[0-9]+)*)\.app"#,
+        #"\b[A-Z_]*XCODE[A-Z_]*VERSION[A-Z_]*\s*[:=]\s*['"]?(?:Xcode[_ -]?)?([0-9]+(?:\.[0-9]+)*)"#,
+        #"\bxcodes\s+(?:select|use|install)\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
+        #"\bxcversion\s+select\s+['"]?([0-9]+(?:\.[0-9]+)*)"#,
+        #"image:\s*\S*xcode[:_-]([0-9]+(?:\.[0-9]+)*)"#,
+    ])
+    private static let xcodePathPatterns = searchPatterns([
+        #"DEVELOPER_DIR\s*[:=]\s*['"]?([^'"\s]+)"#,
+        #"xcode-select\s+(?:-s|--switch)\s+['"]?([^'"\s]+)"#,
+    ])
+
     // MARK: - Base branch
 
     /// The branch merge/pull requests target, when CI restricts it.
-    public func baseBranch(in text: String) -> String? {
+    func baseBranch(in text: String) -> String? {
         let expanded = expand(text)
-        if let gitlab = firstCapture(#"\$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\s*==\s*["']([^"']+)["']"#, in: expanded) {
-            return gitlab
-        }
-        if let gitlab = firstCapture(#"\$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\s*=~\s*/\^?([A-Za-z0-9._/-]+?)\$?/"#, in: expanded) {
-            return gitlab
+        for pattern in Self.mergeRequestTargetPatterns {
+            if let gitlab = Self.firstCapture(pattern, in: expanded) { return gitlab }
         }
         // GitHub: `pull_request:` followed by `branches:` as an inline or block list.
         let lines = expanded.components(separatedBy: .newlines)
@@ -298,12 +297,16 @@ public struct CIConfigParser {
         return nil
     }
 
+    private static let mergeRequestTargetPatterns = searchPatterns([
+        #"\$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\s*==\s*["']([^"']+)["']"#,
+        #"\$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\s*=~\s*/\^?([A-Za-z0-9._/-]+?)\$?/"#,
+    ])
+
     // MARK: - Whole documents
 
     public struct Extraction: Sendable {
         public var config = SnapshotConfig()
         public var invocation: Invocation?
-        public var invocationSource: String?
         public var notes: [String] = []
     }
 
@@ -324,7 +327,6 @@ public struct CIConfigParser {
         var config = SnapshotConfig()
         if let (inv, source) = best {
             out.invocation = inv
-            out.invocationSource = source
             func set<T>(_ kp: WritableKeyPath<SnapshotConfig, T?>, _ value: T?, _ field: SnapshotConfig.Field) {
                 guard let value else { return }
                 config[keyPath: kp] = value
@@ -375,7 +377,7 @@ public struct CIConfigParser {
         }
 
         // Xcode selection: prefer the document that holds the chosen invocation.
-        let ordered = documents.sorted { a, _ in a.name == best?.1 }
+        let ordered = documents.filter { $0.name == best?.1 } + documents.filter { $0.name != best?.1 }
         for doc in ordered {
             let selection = parser.xcodeSelection(in: doc.text)
             if let v = selection.version {
@@ -429,7 +431,7 @@ public struct CIConfigParser {
     /// Settings taken from conventional variable names, for when the `xcodebuild` command is out of
     /// sight (in a shared template) or leaves something out. Only fully resolved values count.
     /// Returns (field, value, variable name), most specific variable first per field.
-    public func variableSettings(_ variables: [String: String]) -> [(SnapshotConfig.Field, String, String)] {
+    func variableSettings(_ variables: [String: String]) -> [(SnapshotConfig.Field, String, String)] {
         let resolved = variables.compactMap { name, raw -> (String, String)? in
             let value = MiniYAML.unquote(expand(raw)).trimmingCharacters(in: .whitespaces)
             return value.isEmpty || !Self.isResolved(value) ? nil : (name.uppercased(), value)
@@ -485,10 +487,9 @@ public struct CIConfigParser {
     /// Shell scripts a CI document invokes (e.g. `./scripts/test.sh`), so their
     /// `xcodebuild` calls can be read too.
     public static func referencedScripts(in text: String) -> [String] {
-        let regex = try! NSRegularExpression(pattern: #"(?:^|[\s"'])((?:\./)?[A-Za-z0-9_./-]+\.sh)\b"#)
         let ns = text as NSString
         var seen: [String] = []
-        for m in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+        for m in scriptReference.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             var path = ns.substring(with: m.range(at: 1))
             if path.hasPrefix("./") { path.removeFirst(2) }
             if !seen.contains(path) { seen.append(path) }
@@ -496,8 +497,14 @@ public struct CIConfigParser {
         return seen
     }
 
-    private func firstCapture(_ pattern: String, in text: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .anchorsMatchLines]) else { return nil }
+    private static let scriptReference = try! NSRegularExpression(pattern: #"(?:^|[\s"'])((?:\./)?[A-Za-z0-9_./-]+\.sh)\b"#)
+
+    /// Case-insensitive, `^` and `$` at every line.
+    private static func searchPatterns(_ patterns: [String]) -> [NSRegularExpression] {
+        patterns.map { try! NSRegularExpression(pattern: $0, options: [.caseInsensitive, .anchorsMatchLines]) }
+    }
+
+    private static func firstCapture(_ regex: NSRegularExpression, in text: String) -> String? {
         let ns = text as NSString
         guard let m = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else { return nil }
         return ns.substring(with: m.range(at: 1))

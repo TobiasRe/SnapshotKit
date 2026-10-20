@@ -214,6 +214,27 @@ import Testing
         #expect(resolved.notes.contains { $0.contains("typo") })
     }
 
+    @Test func listsWhereOneValueBelongsAreReported() throws {
+        let (config, unknown, mistyped) = try SnapshotConfig.fromOverrideFile("scheme: [A, B]\nonlyTesting: AppTests\ndevice: Phone\n")
+        #expect(config.scheme == nil && config.source(of: .scheme) == nil)
+        #expect(config.onlyTesting == ["AppTests"])
+        #expect(config.deviceName == "Phone")
+        #expect(unknown.isEmpty)
+        #expect(mistyped == ["scheme"])
+    }
+
+    @Test func xcodeComesFromTheDocumentWithTheTestCommand() {
+        let documents = [
+            CIConfigParser.Document(name: "a.yml", text: "env:\n  XCODE_VERSION: 98.0\n"),
+            CIConfigParser.Document(name: "b.yml", text: "env:\n  XCODE_VERSION: 98.1\n"),
+            CIConfigParser.Document(name: "c.yml", text: "XCODE_VERSION: 99.0\nrun: xcodebuild test -scheme Snapshots\n"),
+            CIConfigParser.Document(name: "d.yml", text: "env:\n  XCODE_VERSION: 98.2\n"),
+        ]
+        let config = CIConfigParser.extract(from: documents).config
+        #expect(config.xcodeVersion == "99.0")
+        #expect(config.source(of: .xcodeVersion) == "c.yml")
+    }
+
     @Test func baseBranchAutoDetection() throws {
         let repo = try TempRepo(branch: "main")
         try repo.write("README", "x")
@@ -235,6 +256,17 @@ import Testing
         #expect(EnvironmentValidator.versionMatches(installed: "99.1.0", required: "99.1"))
         #expect(EnvironmentValidator.versionMatches(installed: "99.1", required: "99"))
         #expect(!EnvironmentValidator.versionMatches(installed: "99.10", required: "99.1"))
+    }
+
+    @Test func versionOrderAndRuntimeNames() throws {
+        #expect(EnvironmentValidator.compareVersions("99.10", "99.9") == .orderedDescending)
+        #expect(EnvironmentValidator.compareVersions("99.1", "99.1") == .orderedSame)
+        #expect(EnvironmentValidator.compareVersions("9.4", "10.0") == .orderedAscending)
+        let iOS = try #require(EnvironmentValidator.parseRuntime("com.apple.CoreSimulator.SimRuntime.iOS-99-1"))
+        #expect(iOS == ("iOS", "99.1"))
+        let vision = try #require(EnvironmentValidator.parseRuntime("com.apple.CoreSimulator.SimRuntime.xrOS-2-0"))
+        #expect(vision == ("visionOS", "2.0"))
+        #expect(EnvironmentValidator.parseRuntime("com.apple.CoreSimulator.SimRuntime.unknown") == nil)
     }
 
     @Test func selectsPinnedXcodeOrExplainsWhatIsMissing() throws {
