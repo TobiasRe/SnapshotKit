@@ -111,6 +111,14 @@ public struct TestOutputParser: Sendable {
         return events
     }
 
+    /// Ends the run when the output is over, unless a line already did ("** TEST FAILED **"), for
+    /// an `xcodebuild` that was stopped, crashed or never got that far.
+    public mutating func finish() -> [TestEvent] {
+        guard phase < .finished else { return [] }
+        phase = .finished
+        return [.phase(.finished)]
+    }
+
     /// The line without the zero-width spaces (and other invisible format characters) Swift Testing
     /// can leave at its start, as after an issue's message: "\u{200B}\u{200B}✘ Test …".
     public static func withoutInvisiblePrefix(_ line: String) -> Substring {

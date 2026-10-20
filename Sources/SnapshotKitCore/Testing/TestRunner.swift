@@ -190,7 +190,7 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
             for event in parser.consume(line) { onEvent(event, parser) }
         }
         let status = await process.waitForExit()
-        onEvent(.phase(.finished), parser)
+        for event in parser.finish() { onEvent(event, parser) }
 
         var summary: TestRunSummary?
         if FileManager.default.fileExists(atPath: bundle.path) {

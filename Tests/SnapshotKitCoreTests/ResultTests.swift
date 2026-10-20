@@ -94,6 +94,17 @@ import Testing
         #expect(TestOutputParser.withoutInvisiblePrefix("\u{200B}\u{200B}✘ Test greeting() failed") == "✘ Test greeting() failed")
     }
 
+    /// The runner finishes every run, also one whose output never said so; once is enough.
+    @Test func finishesOnce() {
+        var parser = TestOutputParser()
+        #expect(parser.consume("** TEST FAILED **") == [.phase(.finished)])
+        #expect(parser.finish().isEmpty)
+        var cut = TestOutputParser()
+        _ = cut.consume("Testing started")
+        #expect(cut.finish() == [.phase(.finished)])
+        #expect(cut.phase == .finished)
+    }
+
     @Test func xctestLinesAndBuildErrors() {
         var parser = TestOutputParser()
         _ = parser.consume("Test Suite 'FeatureTests' started at 2026-01-01")

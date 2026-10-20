@@ -117,7 +117,8 @@ final class Printer: Sendable {
 
     func event(_ event: TestEvent, _ parser: TestOutputParser) {
         lock.withLock {
-            if case .phase(let phase) = event { say(color("36", "▸ \(phase.label)") + (phase == .testing ? "" : "…")) }
+            // "Building…", but "Testing" (the tests' own lines follow) and "Finished".
+            if case .phase(let phase) = event { say(color("36", "▸ \(phase.label)") + (phase < .testing ? "…" : "")) }
         }
     }
 }

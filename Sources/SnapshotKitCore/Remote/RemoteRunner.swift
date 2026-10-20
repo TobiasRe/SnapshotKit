@@ -255,7 +255,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
             for event in parser.consume(line) { onEvent(event, parser) }
         }
         let status = await process.waitForExit()
-        onEvent(.phase(.finished), parser)
+        for event in parser.finish() { onEvent(event, parser) }
 
         onStage(.collecting)
         let summary = try? await offCooperativePool { try self.collectSummary(bundle: bundle, environment: environment, remoteDir: dir) }
