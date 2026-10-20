@@ -683,9 +683,14 @@ final class ProjectModel {
     /// Writes the base-side image to a temporary file (for opening in another app).
     func exportBaseImage(for change: SnapshotChange) -> URL? {
         guard let data = imageLoader(for: change)().0 else { return nil }
+        // In the snapshot's own folder, so no other snapshot's base image (a test's second one, a
+        // test of the same name in another suite) takes its place.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/base-images", isDirectory: true)
+            .appendingPathComponent((change.path as NSString).deletingLastPathComponent, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("\(change.testName) (\(changeSet?.baseBranch ?? "base")).png")
+        let name = (change.fileName as NSString).deletingPathExtension
+        let branch = (changeSet?.baseBranch ?? "base").replacingOccurrences(of: "/", with: "-")
+        let url = dir.appendingPathComponent("\(name) (\(branch)).png")
         return (try? data.write(to: url)) != nil ? url : nil
     }
 

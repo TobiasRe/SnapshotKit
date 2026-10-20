@@ -385,14 +385,33 @@ extension AppUITests {
             #expect(app.store.settings.recents.allSatisfy { $0 != missing.path && $0 != plain.path })
         }
 
+        /// Each snapshot's base image gets a file of its own: two of one test, the same test name in
+        /// another suite, and a base branch with a slash in its name.
         @Test func exportsBaseImageForOpeningElsewhere() async throws {
-            let (repo, _) = try makeRepo()
+            let (repo, png) = try makeRepo()
+            let second = png.replacingOccurrences(of: "card.1", with: "card.2")
+            let other = png.replacingOccurrences(of: "CardTests", with: "OtherCardTests")
+            try FileManager.default.createDirectory(at: repo.appendingPathComponent(other).deletingLastPathComponent(), withIntermediateDirectories: true)
+            try AppFixtures.badged.write(to: repo.appendingPathComponent(second))
+            try AppFixtures.renderingNoise.write(to: repo.appendingPathComponent(other))
+            let git = Git(root: repo)
+            try git.run(["add", "--", second, other]); try git.run(["commit", "-qm", "more"])
+            try git.run(["branch", "release/1.0"])
+            for path in [second, other] { try AppFixtures.actual.write(to: repo.appendingPathComponent(path)) }
+
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
-            model.updateSettings { $0.baseBranch = "develop" }
+            model.updateSettings { $0.baseBranch = "release/1.0" }
             await waitForChanges(model)
-            let change = try #require(model.changeSet?.changes.first)
-            let url = try #require(model.exportBaseImage(for: change))
-            #expect(try Data(contentsOf: url) == AppFixtures.reference)
+            let changes = try #require(model.changeSet?.changes)
+            #expect(changes.count == 3)
+            let base = [png: AppFixtures.reference, second: AppFixtures.badged, other: AppFixtures.renderingNoise]
+            var urls: Set<URL> = []
+            for change in changes {
+                let url = try #require(model.exportBaseImage(for: change))
+                urls.insert(url)
+                #expect(try Data(contentsOf: url) == base[change.path])
+            }
+            #expect(urls.count == 3)
         }
 
         @Test func incrementalLogMatchesFullFilter() {
