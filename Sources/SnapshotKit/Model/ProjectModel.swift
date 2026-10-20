@@ -375,10 +375,11 @@ final class ProjectModel {
                 return (library, library.map { SnapshotLibrary.orphans($0.files, repository: repo) } ?? [])
             }
             isLoadingLibrary = false
+            let shown = displayedSnapshots.map(\.id)
             library = loaded
             orphanIDs = orphans
-            if selectedSnapshotID == nil || !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
-                selectedSnapshotID = displayedSnapshots.first?.id
+            if !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
+                selectedSnapshotID = Self.replacement(for: selectedSnapshotID, shown: shown, now: displayedSnapshots.map(\.id))
             }
         }
     }
@@ -541,12 +542,13 @@ final class ProjectModel {
             isLoadingChanges = false
             switch result {
             case .success(let (set, viewed)):
+                let shown = displayedChanges.map(\.id)
                 changeSet = set
                 viewedChanges = viewed
                 diagnoseChanges(set)
                 changesError = nil
-                if selectedChangeID == nil || !set.changes.contains(where: { $0.id == selectedChangeID }) {
-                    selectedChangeID = displayedChanges.first?.id
+                if !set.changes.contains(where: { $0.id == selectedChangeID }) {
+                    selectedChangeID = Self.replacement(for: selectedChangeID, shown: shown, now: displayedChanges.map(\.id))
                 }
             case .failure(let error):
                 changeSet = nil
@@ -568,6 +570,17 @@ final class ProjectModel {
     /// Failures in the order the list shows them: grouped by suite.
     var displayedFailures: [FailureItem] {
         Dictionary(grouping: failures, by: \.suite.identifier).sorted { $0.key < $1.key }.flatMap(\.value)
+    }
+
+    /// What to select once `selected` is gone (trashed, discarded, reverted): the next row that was
+    /// shown after it, else the one before it, else the first row shown now.
+    private static func replacement(for selected: String?, shown: [String], now: [String]) -> String? {
+        let remaining = Set(now)
+        if let selected, let i = shown.firstIndex(of: selected),
+           let next = shown[(i + 1)...].first(where: remaining.contains) ?? shown[..<i].last(where: remaining.contains) {
+            return next
+        }
+        return now.first
     }
 
     /// Moves the selection in the current tab's list, from anywhere in the window.

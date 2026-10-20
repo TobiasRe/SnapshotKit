@@ -417,5 +417,26 @@ extension AppUITests {
                                           resultBundle: repo.appendingPathComponent("run.xcresult"), summary: TestRunSummary(suites: suites),
                                           passed: 0, failed: failed, skipped: 0, buildErrors: [])).save(repository: repo)
         }
+
+        /// Discarding the selected change moves on to the next one, as a review goes, not back to the top.
+        @Test func discardingTheSelectionSelectsTheNextOne() async throws {
+            let (repo, png) = try makeRepo()
+            let names = ["a", "b", "c"].map { png.replacingOccurrences(of: "card", with: $0) }
+            for name in names { try AppFixtures.badged.write(to: repo.appendingPathComponent(name)) }
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            for _ in 0..<200 where model.library?.files.count != 4 { try await Task.sleep(for: .milliseconds(50)) }
+            let b = try #require(model.changeSet?.changes.first { $0.path == names[1] })
+            model.selectedChangeID = b.id
+            model.selectedSnapshotID = b.id
+
+            model.discard(b)
+            for _ in 0..<200 where model.library?.files.count != 3 || model.changeSet?.changes.count != 3 {
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            #expect(model.selectedChangeID == names[2])
+            #expect(model.selectedSnapshotID == names[2])
+        }
     }
 }
