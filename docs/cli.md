@@ -41,9 +41,11 @@ the app stores, in that order. See [Configuration](configuration.md). `snapshots
 and `projects` don't need it.
 
 **Options** come after the command, in any order. Repeating an option keeps the last value, except `--only`
-and `--suite`, which collect every value. Unknown options are ignored.
+and `--suite`, which collect every value. An option the command doesn't take, a missing or malformed value, or
+an extra argument is an error (exit status 64).
 
-**Output.** Color only when writing to a terminal. Errors go to standard error as `error: …`. Progress lines
+**Output.** Color only when writing to a terminal, and never with `NO_COLOR` set. Errors go to standard error
+as `error: …`, and so do notes and warnings (a restored record patch, *Interrupted…*). Progress lines
 start with `▸`, SnapshotKit's own notes with `snapkit:`. Test output is shortened to what matters (suites,
 failures, errors, the summary); `--verbose` prints everything `xcodebuild` prints.
 
@@ -53,7 +55,8 @@ failures, errors, the summary); `--verbose` prints everything `xcodebuild` print
 |---|---|
 | 0 | done (for `run`, `record`, `rerecord`: tests passed or verified) |
 | 1 | an error, failing tests or a failed verification (see each command) |
-| 2 | Xcode or the simulator isn't available as configured |
+| 2 | Xcode or the simulator isn't available as configured; for `diff`, an image that can't be read or written |
+| 64 | wrong options or arguments |
 | 130, 143… | interrupted by a signal (128 + the signal number) |
 
 **Leftover record patches.** Every command first restores record patches left behind by a run that was killed
@@ -211,9 +214,9 @@ Re-records **whole failing suites**, then verifies them.
 
 - Without `--suite`: the failing suites of the last run (*snapkit: using failing suites from the last run
   (local, 10:42)*). If there's no last run, it runs the tests first to find them.
-- `--suite ID` (repeatable): these suites (`Bundle/Suite`).
-- `--remote [HOST]`: record on the remote Mac; your files aren't patched, the new PNGs are downloaded (*Downloaded
-  3 snapshot(s) recorded on ci-mac.*). No verification. See [Remote runs](remote-runs.md).
+- `--suite ID` (repeatable): these suites (`Bundle/Suite`); a bare suite name works when the last run had it.
+- `--remote [HOST]`: record on the remote Mac; your files aren't patched, the new PNGs are downloaded, then
+  verified on the remote Mac (unless `--no-verify`). See [Remote runs](remote-runs.md).
 
 ```
 Recorded suites: AppSnapshotTests/CheckoutViewTests
@@ -239,8 +242,8 @@ Fails every time   0✔ 5✘  CheckoutViewTests/payButton()
 Flaky              3✔ 2✘  CheckoutViewTests/summary()
 ```
 
-Verdicts: **Fails every time**, **Flaky**, **Passes**. Recorded in the history. Exits 0 whatever the verdicts
-(1 only when no result could be read).
+Verdicts: **Fails every time**, **Flaky**, **Passes**. Recorded in the history. Exits 0 when every test passes,
+1 when one is flaky or fails every time (or no result could be read).
 
 ## failures
 
@@ -267,7 +270,7 @@ For an invisible or tiny difference the diagnosis ends with *Would pass with pre
 | Option | |
 |---|---|
 | `--xcresult PATH` | read this result bundle instead of the last run's |
-| `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). **The folder is replaced.** |
+| `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). Only the files of an earlier export there are replaced. |
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
 *No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* Exits 0 after listing, failures or not; 1
@@ -311,7 +314,7 @@ Visible change in a 105×58 area at 847, 136.
 
 For invisible or tiny differences it adds *Would pass with: perceptualPrecision: 0.99* (or `precision: …`).
 `-o OUT.png` writes the difference image (changed pixels in magenta). Exits 0 when the images are identical, 1
-when they differ or can't be read. See [Comparing images](comparing.md#the-diagnosis).
+when they differ, 2 when one can't be read or `-o` can't be written. See [Comparing images](comparing.md#the-diagnosis).
 
 ## open
 

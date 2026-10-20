@@ -12,11 +12,28 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Revert any change to the base branch from the Changes tab (committed, uncommitted, new or deleted), one at a
   time or everything the list shows.
 - Select several failures (⌘-click or ⇧-click) to re-record or flakiness-check just those.
+- `snapkit rerecord --remote` verifies on the remote Mac, like a local re-record (skip with `--no-verify`).
+
+### Changed
+- "Re-record Failing Tests" is now **Re-record Failing Suites**, which is what it always did.
+- `snapkit` rejects options a command doesn't take, and missing or malformed values (exit status 64).
+- `snapkit flaky` exits 1 when a test is flaky or fails every time; `snapkit diff` exits 2 when an image can't
+  be read. Color honors `NO_COLOR`; notes and warnings go to standard error.
 
 ### Fixed
 - Clicking a row in the library, Changes and Failures lists selects it again; only the keyboard did before.
 - Selecting a row no longer logs SwiftUI runtime warnings ("Publishing changes from within view updates").
 - A snapshot brought back after the branch deleted it no longer shows as new when it matches the base branch.
+- `snapkit failures --out DIR` no longer deletes the other files in DIR.
+- Run history, settings and the record-patch registry are kept (as a `.corrupt` copy) when they can't be read,
+  instead of being overwritten; the app and `snapkit` no longer overwrite each other's settings.
+- Snapshots with non-ASCII file names appear in the library, the Changes tab and remote syncs.
+- Failures match their reference image when the project sets a diff tool such as `snapkit open`.
+- Viewed marks are kept in linked worktrees.
+- The first Ctrl-C in `snapkit` cancels the run and still prints its summary; the second quits.
+- A record patch that can't be undone at launch is reported instead of silently skipped.
+- `remoteHost` values that look like `ssh` options are refused.
+- Long `git` and `xcodebuild` calls no longer hold up the rest of the app while they run.
 
 ## [0.1.1] - 2026-10-17
 

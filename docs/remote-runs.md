@@ -31,7 +31,9 @@ Set the host in one of two places (the project setting wins):
 
 The value is anything `ssh` accepts: `user@ci-mac.local`, or an alias from `~/.ssh/config`. Optionally set
 `remoteDirectory:` in `.snapshotkit.yml` for where the working copy lives on the remote Mac; the default is
-`~/.snapshotkit/workspaces/<repository>-<hash>`.
+`~/.snapshotkit/workspaces/<repository>-<hash>`. It must not contain spaces or shell characters: macOS's
+`rsync` hands the path to the remote shell unquoted. A `remoteHost` that starts with `-` or contains spaces is
+refused, so a repository can't slip `ssh` options in.
 
 ## What a remote run does
 
