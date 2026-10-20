@@ -102,21 +102,28 @@ public struct LastRun: Codable, Sendable {
         attachmentsDirectory ?? resultBundle.map { ($0 as NSString).deletingPathExtension + ".attachments" }
     }
 
-    private func imagesPath(for test: String) -> String? {
-        testAttachments?[test] ?? runImagesPath
+    private func imagesPath(for test: String, ownImages: URL? = nil) -> String? {
+        testAttachments?[test] ?? ownImages?.path ?? runImagesPath
     }
 
     /// The folder with the failure images of `test` (`Bundle/Suite/test()`), if any.
     public func attachmentsDirectory(for test: String) -> URL? {
-        imagesPath(for: test).flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        attachmentsDirectory(for: test, ownImages: nil)
     }
 
-    /// The failing tests' images, each test's from the run that last ran it.
-    public func failureImages() -> [SnapshotFailureImages] {
+    private func attachmentsDirectory(for test: String, ownImages: URL?) -> URL? {
+        imagesPath(for: test, ownImages: ownImages).flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+    }
+
+    /// The failing tests' images, each test's from the run that last ran it. `ownImages`: where the
+    /// run's bundle was exported again, to take the run's own images from instead.
+    public func failureImages(ownImagesIn ownImages: URL? = nil) -> [SnapshotFailureImages] {
         var tests: [URL: [(test: TestCaseResult, suite: SuiteResult)]] = [:]
         for suite in failingSuites {
             for test in suite.tests where test.outcome == .failed {
-                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name) { tests[folder, default: []].append((test, suite)) }
+                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name, ownImages: ownImages) {
+                    tests[folder, default: []].append((test, suite))
+                }
             }
         }
         return tests.sorted { $0.key.path < $1.key.path }.flatMap { folder, tests -> [SnapshotFailureImages] in

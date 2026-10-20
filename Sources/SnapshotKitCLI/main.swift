@@ -529,19 +529,32 @@ func main() async {
 
     case "failures":
         let ctx = context(o)
-        let bundle: URL
         let last = LastRun.load(repository: ctx.repository)
-        if let path = o.value("--xcresult") { bundle = URL(fileURLWithPath: path) }
-        else if let path = last?.resultBundle, path.hasSuffix(".xcresult"), FileManager.default.fileExists(atPath: path) { bundle = URL(fileURLWithPath: path) }
-        else if let last, last.host == "local", let path = last.resultBundle {
-            fail("The last run’s results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
-        }
-        else { fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).") }
-        let out = o.value("--out").map { URL(fileURLWithPath: $0) } ?? bundle.deletingPathExtension().appendingPathExtension("attachments")
+        let out = o.value("--out").map { URL(fileURLWithPath: $0) }
         do {
-            let summary = try XCResultParser.load(resultBundle: bundle, developerDir: nil)
-            let images = try FailureAttachments.export(resultBundle: bundle, to: out, developerDir: nil)
-            for suite in summary.failingSuites {
+            let bundle: URL
+            let failingSuites: [SuiteResult], images: [SnapshotFailureImages]
+            var imported: TestRunSummary?
+            if let path = o.value("--xcresult") {
+                bundle = URL(fileURLWithPath: path)
+                let summary = try XCResultParser.load(resultBundle: bundle, developerDir: nil)
+                failingSuites = summary.failingSuites
+                images = try FailureAttachments.export(resultBundle: bundle, to: out ?? bundle.deletingPathExtension().appendingPathExtension("attachments"),
+                                                       developerDir: nil)
+                imported = summary
+            } else if let last, let path = last.resultBundle, path.hasSuffix(".xcresult"), FileManager.default.fileExists(atPath: path) {
+                bundle = URL(fileURLWithPath: path)
+                // The last run's failures rather than its bundle's: a re-record's verification since may
+                // have fixed some, and has the images of those it ran.
+                failingSuites = last.failingSuites
+                if let out { _ = try FailureAttachments.export(resultBundle: bundle, to: out, developerDir: nil) }
+                images = last.failureImages(ownImagesIn: out)
+            } else if let last, last.host == "local", let path = last.resultBundle {
+                fail("The last run’s results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
+            } else {
+                fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).")
+            }
+            for suite in failingSuites {
                 say(color("31", suite.identifier))
                 for test in suite.tests where test.outcome == .failed {
                     say("  ✘ \(test.name)  (\(test.failedRepetitions)/\(test.repetitions.count) repetitions failed)")
@@ -568,9 +581,12 @@ func main() async {
                     if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
                 }
             }
-            if summary.failingSuites.isEmpty { say("No failing tests in \(bundle.lastPathComponent).") }
-            RunHistory(repository: ctx.repository).append(RunRecord(kind: .imported, host: bundle.lastPathComponent, commit: nil, branch: nil, dirty: false,
-                                                                    summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: bundle.path))
+            if failingSuites.isEmpty { say("No failing tests in \(bundle.lastPathComponent).") }
+            if let summary = imported {
+                RunHistory(repository: ctx.repository).append(RunRecord(kind: .imported, host: bundle.lastPathComponent, commit: nil, branch: nil, dirty: false,
+                                                                        summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped,
+                                                                        resultBundle: bundle.path))
+            }
         } catch { fail(error.localizedDescription) }
 
     case "changes":

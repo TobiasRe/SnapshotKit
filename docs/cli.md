@@ -281,7 +281,8 @@ snapkit failures [--repo PATH] [--xcresult PATH] [--out DIR]
 ```
 
 Lists the failing tests of the last run, or of an `.xcresult` (for example a CI artifact), with their images and
-a diagnosis:
+a diagnosis. The last run is the one `rerecord` and the app show: a re-record’s verification since then has
+replaced the results, and images, of the tests it ran.
 
 ```
 ShopTests/ProductCardTests

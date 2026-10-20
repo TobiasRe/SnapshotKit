@@ -232,16 +232,19 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
         return ["PATH": "\(bin.path):/usr/bin:/bin"]
     }
 
-    /// A CI artifact: `card()` failed, its reference white and the new image with three red pixels.
-    func bundle(named name: String = "CI", failing: Bool = true, repo: TempRepo) throws -> URL {
+    /// A CI artifact: `card()` failed, its reference white and the new image with three red pixels;
+    /// `alsoFailing` names another suite whose `a()` failed, without images.
+    func bundle(named name: String = "CI", failing: Bool = true, alsoFailing: String? = nil, repo: TempRepo) throws -> URL {
         let bundle = testTemp("artifacts").appendingPathComponent("\(name).xcresult")
         let attachments = bundle.appendingPathComponent("attachments")
         try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
         let message = "Snapshot does not match reference.\n\n@\u{2212}\n\"file://\(repo.root)/\(reference)\"\n@+\n\"file:///tmp/CardTests/card.1.png\""
         let card: [String: Any] = ["name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": failing ? "Failed" : "Passed",
                                    "children": failing ? [["name": message, "nodeType": "Failure Message"]] : []]
+        let other: [[String: Any]] = alsoFailing.map { suite in [["name": suite, "nodeType": "Test Suite", "children": [
+            ["name": "a()", "nodeType": "Test Case", "nodeIdentifier": "\(suite)/a()", "result": "Failed"]]]] } ?? []
         let tests: [String: Any] = ["testNodes": [["name": "App", "nodeType": "Test Plan", "children": [
-            ["name": "AppTests", "nodeType": "Unit test bundle", "children": [
+            ["name": "AppTests", "nodeType": "Unit test bundle", "children": other + [
                 ["name": "CardTests", "nodeType": "Test Suite", "children": [card,
                     ["name": "row()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/row()", "result": "Passed"]]]]]]]]]
         try JSONSerialization.data(withJSONObject: tests).write(to: bundle.appendingPathComponent("tests.json"))
@@ -335,6 +338,37 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
                         Visible change in a 5×1 area at 0, 0.
 
                     """))
+    }
+
+    /// After a re-record's verification fixed ListTests, the last run's bundle still has it failing:
+    /// what is listed is the last run as the verification left it.
+    @Test func listsTheLastRunAsAVerificationLeftIt() throws {
+        let repo = try TempRepo()
+        let ci = try bundle(alsoFailing: "ListTests", repo: repo)
+        let summary = try XCResultParser.parse(Data(contentsOf: ci.appendingPathComponent("tests.json")))
+        #expect(summary.failingSuites.map(\.name) == ["ListTests", "CardTests"])
+        let images = ci.deletingPathExtension().appendingPathExtension("attachments")
+        try FileManager.default.copyItem(at: ci.appendingPathComponent("attachments"), to: images)
+        LastRun.update(with: TestRunResult(commandLine: "", exitStatus: 65, cancelled: false, resultBundle: ci, summary: summary,
+                                           passed: summary.passed, failed: summary.failed, skipped: 0, buildErrors: []),
+                       attachmentsDirectory: images, repository: repo.url)
+        LastRun.update(with: LastRunTests.run([LastRunTests.suite("ListTests", .passed)], bundle: "verify"), partial: true, repository: repo.url)
+
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, environment: try fakeXcrun())) == Outcome(status: 0, stdout: """
+            AppTests/CardTests
+              ✘ card()  (1/1 repetitions failed)
+                reference: \(reference)
+                failure:    \(images.path)/F.png
+                difference: \(images.path)/D.png
+                Visible change in a 3×1 area at 0, 0.
+
+            """))
+        // Exported again where it is told, its images are listed from there.
+        let out = testTemp("snapshot-failures")
+        let result = try snapkit("failures", "--repo", repo.url.path, "--out", out.path, environment: try fakeXcrun())
+        #expect(result.stdout.contains("\n    failure:    \(out.path)/F.png\n    difference: \(out.path)/D.png\n"))
+        #expect(!result.stdout.contains("ListTests"))
+        #expect(snapkit.history(of: repo.url).load().isEmpty)
     }
 
     @Test func exportsWhereItIsTold() throws {
