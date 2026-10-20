@@ -231,10 +231,10 @@ final class ProjectModel {
     private var lastFailingSuites: [SuiteResult] = []
 
     /// Image bytes for changes, used instead of git when set (previews and snapshot tests).
-    private var fixtureImages: [String: (Data?, Data?)]?
-    private var fixtureSnapshotImages: [String: Data]?
-    private var fixtureHistory: [String: [SnapshotVersion]]?
-    private var fixtureVersionImages: [String: Data]?
+    @ObservationIgnored private var fixtureImages: [String: (Data?, Data?)]?
+    @ObservationIgnored private var fixtureSnapshotImages: [String: Data]?
+    @ObservationIgnored private var fixtureHistory: [String: [SnapshotVersion]]?
+    @ObservationIgnored private var fixtureVersionImages: [String: Data]?
 
     init(project: Project, store: ProjectStore, autoload: Bool = true) {
         self.project = project
@@ -1383,8 +1383,9 @@ final class LineBatcher: @unchecked Sendable {
         scheduled = true
         lock.unlock()
         if schedule {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                MainActor.assumeIsolated { self?.flushNow() }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(100))
+                self?.flushNow()
             }
         }
     }

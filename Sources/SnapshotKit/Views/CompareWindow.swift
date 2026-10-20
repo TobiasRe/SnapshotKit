@@ -29,7 +29,7 @@ struct CompareWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             PaneBar(height: DS.Bar.header) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Space.xxs) {
                     Text(title).font(DS.Font.heading).lineLimit(1)
                     Text(subtitle)
                         .font(DS.Font.caption)
@@ -87,8 +87,10 @@ struct CompareWindow: View {
 enum CompareWindows {
     private static var windows: [CompareRequest: NSWindow] = [:]
 
-    static func show(_ request: CompareRequest, model: AppModel? = nil) {
-        if let window = windows[request], window.isVisible {
+    static func show(_ request: CompareRequest) {
+        // Closed windows stay alive (`isReleasedWhenClosed` is off) until they're let go of here.
+        windows = windows.filter { $0.value.isVisible || $0.value.isMiniaturized }
+        if let window = windows[request] {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -106,7 +108,7 @@ enum CompareWindows {
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 420)
-        window.contentView = NSHostingView(rootView: view.environment(model ?? .shared))
+        window.contentView = NSHostingView(rootView: view.environment(AppModel.shared))
         window.center()
         window.setFrameAutosaveName("CompareWindow")
         windows[request] = window
