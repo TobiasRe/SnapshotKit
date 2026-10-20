@@ -134,12 +134,28 @@ extension Git {
             let kind: SnapshotChangeKind
             switch status {
             case "A": kind = .new
-            case "D": kind = .deleted
+            case "D":
+                // Gone from the index but back on disk (untracked): the untracked pass below decides.
+                if FileManager.default.fileExists(atPath: root.appendingPathComponent(path).path) { continue }
+                kind = .deleted
             default: kind = sinceHead.contains(path) ? .uncommitted : .committed
             }
             changes[path] = SnapshotChange(path: path, kind: kind)
         }
-        for path in untracked { changes[path] = SnapshotChange(path: path, kind: .new) }
+        // An untracked file the base also has (re-created after this branch deleted it, or brought
+        // back by a revert) is new only if the base doesn't have it; otherwise compare the content.
+        let baseBlobs = untracked.isEmpty ? [:] : Dictionary(
+            try run(["ls-tree", base, "--"] + untracked).split(separator: "\n").compactMap { line -> (String, String)? in
+                // "<mode> blob <hash>\t<path>"
+                let parts = line.split(separator: "\t", maxSplits: 1)
+                guard parts.count == 2, let hash = parts[0].split(separator: " ").last else { return nil }
+                return (String(parts[1]), String(hash))
+            }, uniquingKeysWith: { a, _ in a })
+        let current = baseBlobs.isEmpty ? [] : try run(["hash-object", "--"] + Array(baseBlobs.keys)).split(separator: "\n").map(String.init)
+        let unchanged = Set(zip(Array(baseBlobs.keys), current).filter { baseBlobs[$0.0] == $0.1 }.map(\.0))
+        for path in untracked where !unchanged.contains(path) {
+            changes[path] = SnapshotChange(path: path, kind: baseBlobs[path] == nil ? .new : .uncommitted)
+        }
 
         return SnapshotChangeSet(
             baseBranch: baseBranch,
@@ -158,6 +174,20 @@ extension Git {
     /// Image bytes in the working tree (nil for deleted files).
     public func currentImage(for change: SnapshotChange) -> Data? {
         change.kind == .deleted ? nil : try? Data(contentsOf: root.appendingPathComponent(change.path))
+    }
+
+    /// Puts snapshots back the way the base has them: a modified one gets the base's image, a new one
+    /// is removed, a deleted one comes back. Only the working tree changes (nothing is staged or
+    /// committed), so the result shows as uncommitted changes to review and commit.
+    public func revertToBase(_ changes: [SnapshotChange], in set: SnapshotChangeSet) throws {
+        let restore = changes.filter { $0.kind != .new }.map(\.path)
+        if !restore.isEmpty {
+            try run(["restore", "--source=\(set.baseCommit)", "--worktree", "--"] + restore)
+        }
+        for change in changes where change.kind == .new {
+            let url = root.appendingPathComponent(change.path)
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        }
     }
 
     /// Uncommitted snapshot edits that look the same as the committed version: re-records that

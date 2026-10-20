@@ -178,6 +178,9 @@ final class ProjectModel: ObservableObject {
     }
     @Published private(set) var failureSource: FailureSource?
     @Published var selectedFailureID: String?
+    /// Failures selected together with ⌘- or ⇧-click. `selectedFailureID` stays the one in focus;
+    /// a set that no longer contains it (the selection moved by keyboard) no longer counts.
+    @Published var failureSelection: Set<String> = []
     @Published private(set) var flakeResults: [FlakeResult] = []
     @Published private(set) var historyFlaky: [FlakySignal] = []
     /// What kind of difference each failure is (first repetition), computed in the background.
@@ -676,6 +679,28 @@ final class ProjectModel: ObservableObject {
         refreshChanges()
     }
 
+    /// Puts snapshots back the way the base branch has them (any kind of change: committed,
+    /// uncommitted, new or deleted). Only the working tree changes; the result is there to commit.
+    func revertToBase(_ changes: [SnapshotChange]) {
+        guard let set = changeSet, !changes.isEmpty, !isRunning else { return }
+        let repo = project.url
+        Task {
+            let result = await Task.detached { Result { try Git(root: repo).revertToBase(changes, in: set) } }.value
+            ThumbnailCache.shared.removeAllObjects()
+            ComparePairCache.shared.removeAllObjects()
+            switch result {
+            case .success:
+                let what = changes.count == 1 ? changes[0].fileName : "\(changes.count) snapshots"
+                lastMessage = "Reverted \(what) to \(set.baseBranch). Commit the result to keep it."
+                lastMessageIsError = false
+            case .failure(let error):
+                lastMessage = "Could not revert: \(error.localizedDescription)"
+                lastMessageIsError = true
+            }
+            refreshChanges()
+        }
+    }
+
     /// Uncommitted re-records with no visible difference to the base, per the diagnosis.
     var invisibleUncommitted: [SnapshotChange] {
         (changeSet?.changes ?? []).filter { $0.kind == .uncommitted && changeDiagnoses[$0.id]?.kind == .imperceptible }
@@ -747,6 +772,26 @@ final class ProjectModel: ObservableObject {
     // MARK: Failures
 
     var selectedFailure: FailureItem? { failures.first { $0.id == selectedFailureID } }
+
+    /// What the Failures list shows as selected: the multi-selection, or just the focused failure.
+    var effectiveFailureSelection: Set<String> {
+        if let id = selectedFailureID, failureSelection.contains(id), failureSelection.count > 1 { return failureSelection }
+        return Set([selectedFailureID].compactMap { $0 })
+    }
+
+    /// The selected failures in list order.
+    var selectedFailures: [FailureItem] {
+        let ids = effectiveFailureSelection
+        return displayedFailures.filter { ids.contains($0.id) }
+    }
+
+    /// Takes the list's selection: the focused failure stays focused while it is selected, else the
+    /// first selected one in list order takes over.
+    func selectFailures(_ ids: Set<String>) {
+        failureSelection = ids
+        if let id = selectedFailureID, ids.contains(id) { return }
+        selectedFailureID = displayedFailures.first { ids.contains($0.id) }?.id
+    }
 
     /// Diagnoses every failure's reference/actual pair off the main thread.
     private func diagnoseFailures() {
@@ -1028,7 +1073,7 @@ final class ProjectModel: ObservableObject {
         switch tab {
         case .snapshots: if let file = selectedSnapshot { reRecord([file], granularity: .tests) }
         case .changes: if let change = selectedChange { reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
-        case .failures: if let item = selectedFailure { reRecord(failures: [item]) }
+        case .failures: if !selectedFailures.isEmpty { reRecord(failures: selectedFailures) }
         case .run: break
         }
     }

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Revert any change to the base branch from the Changes tab (committed, uncommitted, new or deleted), one at a
+  time or everything the list shows. A snapshot brought back after the branch deleted it no longer shows as new
+  when it matches the base.
+- Select several failures (⌘- or ⇧-click) to re-record or flakiness-check just those.
+- Built in Swift 6 language mode; `scripts/check-runtime-warnings.sh` fails on SwiftUI runtime warnings and runs
+  in CI.
+
 ## 0.1.1 — 2026-10-17
 
 - Use SnapshotKit as swift-snapshot-testing's diff tool: with `.snapshots(diffTool: "snapkit open")`, a

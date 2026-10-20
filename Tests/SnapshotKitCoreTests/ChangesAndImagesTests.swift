@@ -47,6 +47,42 @@ import Testing
         #expect(tip.changes.contains { $0.fileName == "same.1.png" })
     }
 
+    @Test func revertingPutsEveryKindBackTheWayTheBaseHasIt() throws {
+        let repo = try TempRepo()
+        let snaps = "Tests/AppTests/__Snapshots__"
+        try repo.write("\(snaps)/CardTests/committed.1.png", red)
+        try repo.write("\(snaps)/CardTests/uncommitted.1.png", red)
+        try repo.write("\(snaps)/ListTests/deleted.1.png", red)
+        try repo.commitAll("base")
+        try repo.git.run(["checkout", "-q", "-b", "feature"])
+        try repo.write("\(snaps)/CardTests/committed.1.png", blue)
+        try repo.write("\(snaps)/ListTests/added.1.png", blue)
+        try FileManager.default.removeItem(at: repo.url.appendingPathComponent("\(snaps)/ListTests/deleted.1.png"))
+        try repo.commitAll("feature work")
+        try repo.write("\(snaps)/CardTests/uncommitted.1.png", blue)
+        try repo.write("\(snaps)/ListTests/untracked.1.png", blue)
+
+        let set = try repo.git.snapshotChanges(baseBranch: "develop")
+        #expect(set.changes.count == 5)
+        // One first, so the others stay untouched.
+        try repo.git.revertToBase(set.changes.filter { $0.fileName == "committed.1.png" }, in: set)
+        #expect(try repo.git.snapshotChanges(baseBranch: "develop").changes.map(\.fileName).sorted()
+                == ["added.1.png", "deleted.1.png", "uncommitted.1.png", "untracked.1.png"])
+        #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent("\(snaps)/CardTests/committed.1.png").path) == red)
+
+        try repo.git.revertToBase(set.changes, in: set)
+        let left = try repo.git.snapshotChanges(baseBranch: "develop").changes
+        #expect(left.isEmpty, "\(left)")
+        #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent("\(snaps)/ListTests/deleted.1.png").path) == red)
+        #expect(!FileManager.default.fileExists(atPath: repo.url.appendingPathComponent("\(snaps)/ListTests/added.1.png").path))
+        // Nothing staged: the revert is there to review and commit.
+        #expect(try repo.git.run(["diff", "--cached", "--name-only"]).isEmpty)
+
+        // The restored file is untracked on this branch; drawn differently, it is a change again.
+        try repo.write("\(snaps)/ListTests/deleted.1.png", blue)
+        #expect(try repo.git.snapshotChanges(baseBranch: "develop").changes.map(\.kind) == [.uncommitted])
+    }
+
     @Test func filterAndNames() {
         let changes = [
             SnapshotChange(path: "T/__Snapshots__/CardTests/darkMode.1.png", kind: .committed),

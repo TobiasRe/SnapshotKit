@@ -337,6 +337,13 @@ extension AppUITests {
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
         }
 
+        /// Several failures selected: the batch detail with its two actions.
+        @Test func severalFailuresSelected() {
+            let (app, project) = makeApp(.failures)
+            project.selectFailures(Set(project.displayedFailures.map(\.id)))
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
         /// A pair opened from outside (`snapkit open`, the diff tool): its own window, the header in the
         /// title bar beside the traffic lights.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])

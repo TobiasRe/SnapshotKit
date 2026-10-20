@@ -19,7 +19,9 @@ struct FailuresTab: View {
             .frame(maxHeight: .infinity, alignment: .top)
         } detail: {
             Group {
-                if let item = project.selectedFailure {
+                if project.selectedFailures.count > 1 {
+                    BatchFailureDetail(project: project)
+                } else if let item = project.selectedFailure {
                     detail(item)
                 } else if !project.historyFlaky.isEmpty {
                     flakyHistory
@@ -92,13 +94,15 @@ struct FailuresTab: View {
 
     private var list: some View {
         let bySuite = Dictionary(grouping: project.failures, by: \.suite.identifier)
-        return List(selection: $project.selectedFailureID) {
+        // ⌘- and ⇧-click select several failures, to re-record or check them together.
+        return List(selection: Binding(get: { project.effectiveFailureSelection },
+                                       set: { project.selectFailures($0) })) {
             ForEach(bySuite.keys.sorted(), id: \.self) { suite in
                 Section {
                     ForEach(bySuite[suite] ?? []) { item in
                         FailureRow(item: item, repositoryURL: project.project.url, diagnosis: project.diagnoses[item.id])
                             .tag(item.id)
-                            .selectableRow(project.selectedFailureID == item.id)
+                            .selectableRow(project.effectiveFailureSelection.contains(item.id))
                             .contextMenu { actions(for: item) }
                     }
                 } header: {
@@ -457,5 +461,61 @@ struct VerdictTag: View {
         case .flaky: Chip(text: text, color: DS.Status.flaky)
         case .passes: Chip(text: text, color: DS.Status.passed)
         }
+    }
+}
+
+/// Several failures selected: what they are, and the two things to do with all of them at once.
+struct BatchFailureDetail: View {
+    @ObservedObject var project: ProjectModel
+
+    var body: some View {
+        let items = project.selectedFailures
+        let suites = Set(items.map(\.suite.identifier)).count
+        VStack(spacing: 0) {
+            PaneBar(height: DS.Bar.header) {
+                VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                    Text("\(items.count) failing tests selected").font(DS.Font.heading).lineLimit(1)
+                    Text("in \(suites) suite\(suites == 1 ? "" : "s")")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: DS.Space.s)
+                Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
+                    .fixedSize()
+                    .quietControl()
+                    .disabled(project.isRunning)
+                    .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
+                Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
+                    .primaryActionStyle()
+                    .fixedSize()
+                    .disabled(project.isRunning || project.environment == nil)
+                    .help("Record these tests' snapshots again, then check that they pass (⇧⌘R)")
+            }
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: DS.Space.s) {
+                    ForEach(items) { item in
+                        HStack(spacing: DS.Space.s) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(DS.Status.failed)
+                                .accessibilityHidden(true)
+                            Text(item.test.name).lineLimit(1)
+                            Text(Breadcrumb.of(module: nil, suite: item.suite.identifier.split(separator: "/").joined(separator: " › ")))
+                                .font(DS.Font.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    Text("⌘-click to add or remove a test, ⇧-click to select a range.")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, DS.Space.s)
+                }
+                .padding(DS.Space.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .background(DS.Surface.content)
     }
 }

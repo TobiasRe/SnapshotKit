@@ -6,6 +6,8 @@ import SwiftUI
 struct ChangesTab: View {
     @ObservedObject var project: ProjectModel
     @State private var pendingDiscard: SnapshotChange?
+    /// Changes waiting for the Revert confirmation: one from its menu, or everything shown.
+    @State private var pendingRevert: [SnapshotChange] = []
     @State private var confirmDiscardInvisible = false
     /// The changed snapshot shown in Quick Look (Space in the list, as in Finder).
     @State private var quickLookURL: URL?
@@ -89,6 +91,23 @@ struct ChangesTab: View {
                  ? "The new, untracked file is deleted."
                  : "The snapshot is restored to the committed version. Uncommitted edits to it are lost.")
         }
+        .confirmationDialog(
+            revertTitle,
+            isPresented: Binding(get: { !pendingRevert.isEmpty }, set: { if !$0 { pendingRevert = [] } })
+        ) {
+            Button("Revert", role: .destructive) { project.revertToBase(pendingRevert) }
+        } message: {
+            Text("Modified snapshots get \(baseName)'s image, new ones are removed and deleted ones come back. "
+                 + "Only the working tree changes: review the result and commit it.")
+        }
+    }
+
+    private var baseName: String { project.changeSet?.baseBranch ?? "the base branch" }
+
+    private var revertTitle: String {
+        pendingRevert.count == 1
+            ? "Revert \(pendingRevert[0].fileName) to \(baseName)?"
+            : "Revert \(pendingRevert.count) snapshots to \(baseName)?"
     }
 
     @ViewBuilder
@@ -116,10 +135,12 @@ struct ChangesTab: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(change.path, forType: .string)
         }
+        Divider()
         if project.canDiscard(change) {
-            Divider()
             Button("Discard Change…", role: .destructive) { pendingDiscard = change }
         }
+        Button("Revert to \(baseName)…", role: .destructive) { pendingRevert = [change] }
+            .disabled(project.isRunning)
     }
 
     /// Search, then what to compare against: level with the detail's header and info row.
@@ -183,6 +204,8 @@ struct ChangesTab: View {
                         .disabled(project.displayedChanges.allSatisfy { project.viewedChanges.contains($0.id) })
                     Button("Mark All as Not Viewed") { project.setAllViewed(false) }
                         .disabled(!project.displayedChanges.contains { project.viewedChanges.contains($0.id) })
+                    Button("Revert All Shown to \(baseName)…") { pendingRevert = project.displayedChanges }
+                        .disabled(project.displayedChanges.isEmpty || project.isRunning)
                     Divider()
                     Button("Show All") {
                         project.changeKinds = Set(SnapshotChangeKind.allCases)

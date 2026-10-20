@@ -89,6 +89,18 @@ re-recording will not fix it. Look for animations, async loading, dates or rando
 **Re-record All** in the Failures header re-records every failing suite of the last run (⌥⇧⌘R does the same
 from anywhere).
 
+## Working on several failures at once
+
+⌘-click failures to add them to the selection, ⇧-click to select a range. With more than one selected, the
+detail lists them and offers:
+
+- **Re-record N Tests** — records just those tests (not their whole suites), then verifies them. ⇧⌘R does the
+  same.
+- **Check Flakiness** — runs just those tests repeatedly and gives each a verdict.
+
+Useful when some failures are intended changes and others aren't: select the intended ones and re-record only
+those.
+
 ## Checking for flakiness
 
 **Check Flakiness** (⌥⌘R, the Failures header, or a test's ··· menu for just that test) runs the failing

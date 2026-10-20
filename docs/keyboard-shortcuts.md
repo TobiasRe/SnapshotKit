@@ -33,6 +33,7 @@
 | ↑ / ↓ | Previous / next item in the focused list |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next change or failure, wherever the focus is |
 | V (in the Changes list), ⌥⌘V | Mark the selected change as viewed and go to the next one |
+| ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
 | Space | Quick Look the selected snapshot |
 | ⌘C | Copy the selected snapshot's image |
 

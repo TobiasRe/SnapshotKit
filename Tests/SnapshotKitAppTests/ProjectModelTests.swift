@@ -257,6 +257,27 @@ extension AppUITests {
             #expect(!titles.contains("Cancel Run"))
         }
 
+        @Test func severalFailuresCanBeSelectedTogether() {
+            let model = AppFixtures.project(.failures, store: AppFixtures.store())
+            let ids = model.displayedFailures.map(\.id)
+            #expect(ids.count == 2)
+            model.selectedFailureID = ids[1]
+            model.selectFailures(Set(ids))
+            #expect(model.selectedFailureID == ids[1])                 // the focused one stays focused
+            #expect(model.selectedFailures.map(\.id) == ids)          // in list order
+            #expect(model.canReRecordSelection)
+
+            model.selectFailures([ids[0]])                              // back to one
+            #expect(model.selectedFailureID == ids[0])
+            #expect(model.selectedFailures.map(\.id) == [ids[0]])
+
+            model.selectFailures(Set(ids))
+            model.selectedFailureID = nil                               // moved away by keyboard or a jump
+            model.selectedFailureID = ids[1]
+            model.failureSelection = [ids[0]]                            // a set that no longer holds the focus
+            #expect(model.effectiveFailureSelection == [ids[1]])
+        }
+
         @Test func reRecordAllCoversEveryTestButOrphans() {
             let app = AppModel(store: AppFixtures.store())
             let model = AppFixtures.project(.library, store: app.store)

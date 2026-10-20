@@ -60,6 +60,24 @@ The detail header shows the test name and variant, its breadcrumb, its kind, and
   a new file that was never committed is deleted. Committed changes aren't touched; revert those with git.
 - **N / M** with arrows — previous and next change (⌥⌘↑ / ⌥⌘↓ work from anywhere).
 
+## Reverting a change
+
+**Revert to develop…** (in a change's ··· menu or its right-click menu) puts a snapshot back the way the base
+branch has it, whatever kind of change it is:
+
+| Kind | Revert |
+|---|---|
+| Committed or Uncommitted | the base branch's image is written back |
+| New | the file is removed |
+| Deleted | the file comes back from the base branch |
+
+**Revert All Shown to develop…** in the kinds menu does it for everything the list shows, so filter first (a
+suite, `dark`, only *New*) to revert a set. Both ask first.
+
+Only the working tree changes: nothing is staged or committed, so the reverted snapshots show up as changes of
+their own until you commit them. That's the difference to **Discard Change…**, which only undoes
+*uncommitted* edits, back to your last commit.
+
 The info row says where the change comes from: the commit that last changed it on this branch (*Changed Oct 16
 by Sample in a1b2c3d "Rename the badge"*), or *Not committed yet · compared with develop*. **Show in Library**
 jumps to the snapshot in the library.
