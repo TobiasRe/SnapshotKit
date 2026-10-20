@@ -518,5 +518,18 @@ extension AppUITests {
                 #expect(model.changeSet?.diffBase == .mergeBase)
             }
         }
+
+        /// A project added while the counts are being read gets its count too.
+        @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
+            let solid = DS.solidSurfaces
+            DS.solidSurfaces = false        // snapshot tests leave the counts out
+            defer { DS.solidSurfaces = solid }
+            let (repo, _) = try makeRepo()
+            saveLastRun(in: repo, suites: [], failed: 2)
+            let app = AppModel(store: AppFixtures.store())     // starts counting the projects it knows
+            app.open(path: repo.path)
+            for _ in 0..<200 where app.failingCounts[repo.path] == nil { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(app.failingCounts[repo.path] == 2)
+        }
     }
 }

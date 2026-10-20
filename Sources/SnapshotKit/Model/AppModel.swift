@@ -31,7 +31,7 @@ final class AppModel {
     static let runStarted = Notification.Name("SnapshotKitRunStarted")
     static let runFinished = Notification.Name("SnapshotKitRunFinished")
     @ObservationIgnored private var runObservers: [NSObjectProtocol] = []
-    @ObservationIgnored private var isRefreshingCounts = false
+    @ObservationIgnored private var countsGeneration = 0
 
     init(store: ProjectStore = ProjectStore()) {
         self.store = store
@@ -78,11 +78,9 @@ final class AppModel {
 
     /// Reads every project's last-run summary in the background (cheap: one small JSON per repo).
     func refreshFailingCounts() {
-        guard !isRefreshingCounts else { return }
-        isRefreshingCounts = true
-        let paths = projects.map(\.path)
+        countsGeneration += 1
+        let generation = countsGeneration, paths = projects.map(\.path)
         Task {
-            defer { isRefreshingCounts = false }
             let counts = await Task.detached { () -> [String: Int] in
                 var counts: [String: Int] = [:]
                 for path in paths where FileManager.default.fileExists(atPath: path + "/.git") {
@@ -90,7 +88,8 @@ final class AppModel {
                 }
                 return counts
             }.value
-            if !DS.solidSurfaces { failingCounts = counts }
+            // A newer refresh (a run finished, a project added meanwhile) has the newer counts.
+            if generation == countsGeneration, !DS.solidSurfaces { failingCounts = counts }
         }
     }
 
