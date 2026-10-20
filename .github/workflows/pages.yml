@@ -14,9 +14,9 @@ permissions:
 
 # Whole runs queue in push order, and a newer push replaces one still waiting, so the last push is the one
 # deployed. (A group on the deploy job alone let an older run's deploy, queued after a newer one's, win.)
-# A started run finishes.
+# A started run finishes. Pull requests only build, each in its own group.
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pages-{0}', github.ref) || 'pages' }}
   cancel-in-progress: false
 
 jobs:
