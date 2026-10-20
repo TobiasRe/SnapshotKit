@@ -2,8 +2,8 @@ import Foundation
 
 /// Minimal POSIX-shell word splitting (quotes and backslashes), enough to read
 /// command lines out of CI scripts.
-public enum ShellWords {
-    public static func split(_ line: String) -> [String] {
+enum ShellWords {
+    static func split(_ line: String) -> [String] {
         var words: [String] = []
         var current = ""
         var inWord = false
@@ -45,7 +45,7 @@ public enum ShellWords {
 
     /// Cuts a command line at the first unquoted shell control operator
     /// (`|`, `&&`, `;`, `>` …) so piping into a formatter does not leak arguments.
-    public static func firstCommand(_ line: String) -> String {
+    static func firstCommand(_ line: String) -> String {
         var quote: Character?
         var previous: Character = " "
         for (index, ch) in zip(line.indices, line) {

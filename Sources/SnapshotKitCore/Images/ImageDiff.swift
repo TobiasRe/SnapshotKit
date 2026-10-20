@@ -10,6 +10,7 @@ public struct PixelImage: Sendable {
     public var pixels: [UInt8]
 
     public init(width: Int, height: Int, pixels: [UInt8]) {
+        precondition(pixels.count == width * height * 4, "\(pixels.count) bytes are not \(width)×\(height) RGBA pixels")
         self.width = width
         self.height = height
         self.pixels = pixels

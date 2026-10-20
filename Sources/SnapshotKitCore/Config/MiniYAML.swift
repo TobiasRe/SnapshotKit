@@ -2,17 +2,17 @@ import Foundation
 
 /// A deliberately small YAML subset reader for `.snapshotkit.yml`:
 /// top-level `key: value` scalars, inline lists (`[a, b]`) and block lists (`- a`).
-public enum MiniYAML {
-    public enum Value: Equatable, Sendable {
+enum MiniYAML {
+    enum Value: Equatable, Sendable {
         case scalar(String)
         case list([String])
 
-        public var string: String? {
+        var string: String? {
             if case .scalar(let s) = self { return s }
             return nil
         }
 
-        public var strings: [String] {
+        var strings: [String] {
             switch self {
             case .scalar(let s): s.isEmpty ? [] : [s]
             case .list(let l): l
@@ -20,13 +20,13 @@ public enum MiniYAML {
         }
     }
 
-    public struct ParseError: Error, LocalizedError {
-        public var line: Int
-        public var message: String
-        public var errorDescription: String? { "line \(line): \(message)" }
+    struct ParseError: Error, LocalizedError {
+        var line: Int
+        var message: String
+        var errorDescription: String? { "line \(line): \(message)" }
     }
 
-    public static func parse(_ text: String) throws -> [String: Value] {
+    static func parse(_ text: String) throws -> [String: Value] {
         var result: [String: Value] = [:]
         var currentListKey: String?
         for (offset, rawLine) in text.components(separatedBy: .newlines).enumerated() {

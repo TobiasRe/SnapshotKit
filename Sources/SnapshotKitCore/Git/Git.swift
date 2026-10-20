@@ -14,11 +14,15 @@ public struct Git: Sendable {
         return Git(root: URL(fileURLWithPath: top))
     }
 
+    /// Runs `git <args>` in the repository and returns its output, trimmed; throws a
+    /// `CommandError` with git's message when it fails.
     @discardableResult
     public func run(_ args: [String]) throws -> String {
         try Shell.output(["git"] + args, in: root)
     }
 
+    /// Like `run`, but nil when git fails, for questions where failing is an answer
+    /// (no such ref, not on a branch).
     public func tryRun(_ args: [String]) -> String? {
         try? run(args)
     }

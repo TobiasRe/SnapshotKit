@@ -90,6 +90,7 @@ public enum EnvironmentValidator {
         return ["/Applications", NSHomeDirectory() + "/Applications"]
     }
 
+    /// Every Xcode in `searchDirectories` plus the one `xcode-select` points at, newest first.
     public static func installedXcodes() -> [XcodeInstall] {
         var installs: [XcodeInstall] = []
         let fm = FileManager.default
@@ -169,14 +170,14 @@ public enum EnvironmentValidator {
 
     // MARK: - Simulators
 
-    public struct SimctlListing: Decodable {
-        public struct Device: Decodable {
-            public var name: String
-            public var udid: String
-            public var state: String
-            public var isAvailable: Bool?
+    struct SimctlListing: Decodable {
+        struct Device: Decodable {
+            var name: String
+            var udid: String
+            var state: String
+            var isAvailable: Bool?
         }
-        public var devices: [String: [Device]]
+        var devices: [String: [Device]]
     }
 
     /// All available simulators, as reported by the given Xcode's simctl.

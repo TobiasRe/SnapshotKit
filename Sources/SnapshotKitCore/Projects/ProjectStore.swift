@@ -77,7 +77,7 @@ extension AppSettings {
 }
 
 /// Loads and saves `AppSettings`, and answers project-list questions.
-public final class ProjectStore: @unchecked Sendable {
+public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by `lock`.
     public static let maxRecents = 10
     public let url: URL
     private let lock = NSLock()

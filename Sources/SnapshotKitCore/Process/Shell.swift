@@ -10,6 +10,7 @@ public struct CommandResult: Sendable {
     public var trimmedOutput: String { stdout.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
+/// A command that exited non-zero; its description includes the command line and its stderr.
 public struct CommandError: Error, LocalizedError, Sendable {
     public var command: [String]
     public var result: CommandResult

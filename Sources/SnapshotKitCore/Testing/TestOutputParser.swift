@@ -39,8 +39,6 @@ public struct TestOutputParser: Sendable {
 
     public init() {}
 
-    public var completed: Int { passed + failed + skipped }
-
     public mutating func consume(_ line: String) -> [TestEvent] {
         var events: [TestEvent] = []
         func setPhase(_ p: RunPhase) {

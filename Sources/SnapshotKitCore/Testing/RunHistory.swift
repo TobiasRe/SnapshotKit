@@ -85,7 +85,7 @@ public struct HistoryPoint: Identifiable, Hashable, Sendable {
 }
 
 /// Per-project run history persisted as JSON under the SnapshotKit home directory.
-public final class RunHistory: @unchecked Sendable {
+public final class RunHistory: Sendable {
     public static let maxRecords = 100
     public let url: URL
     private let lock = NSLock()
@@ -96,6 +96,7 @@ public final class RunHistory: @unchecked Sendable {
         url = home.appendingPathComponent("history/\(name).json")
     }
 
+    /// Every recorded run, oldest first (at most `maxRecords`).
     public func load() -> [RunRecord] {
         lock.withLock { read() }
     }

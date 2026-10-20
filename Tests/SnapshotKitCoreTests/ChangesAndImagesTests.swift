@@ -107,6 +107,16 @@ import Testing
         #expect(SnapshotChangeSet.filter(changes, text: "", kinds: [.new]).map(\.suite) == ["ListTests"])
     }
 
+    @Test func baseRefPrefersTheRemoteTrackingBranch() throws {
+        let repo = try TempRepo()
+        try repo.write("a", "a")
+        try repo.commitAll("init")
+        #expect(repo.git.resolveBaseRef("develop") == "develop")
+        #expect(repo.git.resolveBaseRef("nope") == nil)
+        try repo.git.run(["update-ref", "refs/remotes/origin/develop", "HEAD"])
+        #expect(repo.git.resolveBaseRef("develop") == "origin/develop")
+    }
+
     @Test func missingBaseBranch() throws {
         let repo = try TempRepo()
         try repo.write("a", "a")

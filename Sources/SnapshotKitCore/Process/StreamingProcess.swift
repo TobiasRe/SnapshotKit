@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Cancellation sends SIGINT first (xcodebuild cleans up on SIGINT), escalating to
 /// SIGTERM and finally SIGKILL if the process does not exit.
-public final class StreamingProcess: @unchecked Sendable {
+public final class StreamingProcess: @unchecked Sendable { // `process` is set up before it starts; the state below is guarded by `lock`.
     public let executable: String
     public let arguments: [String]
     public let directory: URL?
@@ -13,7 +13,7 @@ public final class StreamingProcess: @unchecked Sendable {
     private let process = Process()
     private let lock = NSLock()
     private var _cancelled = false
-    private var continuation: AsyncStream<String>.Continuation?
+    private let continuation: AsyncStream<String>.Continuation
     private var exitContinuation: CheckedContinuation<Int32, Never>?
     private var exitStatus: Int32?
     private var finished = false
@@ -26,9 +26,7 @@ public final class StreamingProcess: @unchecked Sendable {
         self.arguments = arguments
         self.directory = directory
         self.environment = environment
-        var cont: AsyncStream<String>.Continuation!
-        lines = AsyncStream(bufferingPolicy: .unbounded) { cont = $0 }
-        continuation = cont
+        (lines, continuation) = AsyncStream.makeStream(of: String.self, bufferingPolicy: .unbounded)
     }
 
     public var commandLine: String {
@@ -52,16 +50,16 @@ public final class StreamingProcess: @unchecked Sendable {
         let buffer = LineBuffer()
         let handle = pipe.fileHandleForReading
         let readDone = DispatchSemaphore(value: 0)
-        handle.readabilityHandler = { [weak self] fh in
+        handle.readabilityHandler = { [weak self, continuation] fh in
             let data = fh.availableData
             if data.isEmpty {
                 fh.readabilityHandler = nil
-                for line in buffer.flush() { self?.continuation?.yield(line) }
+                for line in buffer.flush() { continuation.yield(line) }
                 readDone.signal()
                 self?.watchForLostTermination()
                 return
             }
-            for line in buffer.append(data) { self?.continuation?.yield(line) }
+            for line in buffer.append(data) { continuation.yield(line) }
         }
 
         process.terminationHandler = { [weak self] proc in
@@ -83,7 +81,7 @@ public final class StreamingProcess: @unchecked Sendable {
         }
         guard first else { return }
         ChildProcesses.shared.remove(process.processIdentifier)
-        continuation?.finish()
+        continuation.finish()
         lock.withLock {
             exitStatus = status
             exitContinuation?.resume(returning: status)
@@ -136,17 +134,17 @@ public final class StreamingProcess: @unchecked Sendable {
 
 /// Long-running children of this process, so they can be stopped when SnapshotKit is
 /// interrupted or quits — an orphaned xcodebuild could otherwise keep recording snapshots.
-public final class ChildProcesses: @unchecked Sendable {
-    public static let shared = ChildProcesses()
+final class ChildProcesses: @unchecked Sendable { // `pids` is guarded by `lock`.
+    static let shared = ChildProcesses()
     private let lock = NSLock()
     private var pids = Set<Int32>()
 
     func add(_ pid: Int32) { lock.withLock { _ = pids.insert(pid) } }
     func remove(_ pid: Int32) { lock.withLock { _ = pids.remove(pid) } }
-    public var running: [Int32] { lock.withLock { Array(pids) } }
+    var running: [Int32] { lock.withLock { Array(pids) } }
 
     /// Interrupts all children, waits up to `timeout` for them to exit, then kills the rest.
-    public func terminateAll(timeout: TimeInterval = 5) {
+    func terminateAll(timeout: TimeInterval = 5) {
         let children = running
         guard !children.isEmpty else { return }
         for pid in children { kill(pid, SIGINT) }
@@ -165,7 +163,7 @@ public final class ChildProcesses: @unchecked Sendable {
 }
 
 /// Splits a byte stream into lines, handling `\r` progress updates and partial UTF-8.
-final class LineBuffer: @unchecked Sendable {
+final class LineBuffer: @unchecked Sendable { // `pending` is guarded by `lock`.
     private var pending = Data()
     private let lock = NSLock()
 

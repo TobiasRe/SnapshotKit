@@ -86,7 +86,7 @@ public struct RestoreReport: Sendable {
 /// - refuses to patch files with uncommitted changes;
 /// - writes a journal *before* touching any file;
 /// - `restore()` is idempotent and also runs from signal handlers and on next launch.
-public final class RecordSession: @unchecked Sendable {
+public final class RecordSession: @unchecked Sendable { // `restored` is guarded by `lock`.
     public let repository: URL
     public let journalURL: URL
     public let journal: PatchJournal
@@ -272,7 +272,7 @@ public final class RecordSession: @unchecked Sendable {
 }
 
 /// Sessions alive in this process, restored by signal handlers and at termination.
-final class ActiveSessions: @unchecked Sendable {
+final class ActiveSessions: @unchecked Sendable { // `sessions` is guarded by `lock`.
     static let shared = ActiveSessions()
     private let lock = NSLock()
     private var sessions: [ObjectIdentifier: RecordSession] = [:]
@@ -283,7 +283,7 @@ final class ActiveSessions: @unchecked Sendable {
 }
 
 /// Repositories with an active journal, persisted so the next launch can find leftovers.
-final class PatchRegistry: @unchecked Sendable {
+final class PatchRegistry: Sendable {
     static let shared = PatchRegistry()
     private let lock = NSLock()
 

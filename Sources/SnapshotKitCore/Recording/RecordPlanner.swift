@@ -83,12 +83,15 @@ public enum RecordPlanner {
         return suite.parent.map { [$0, suite.name] } ?? [suite.name]
     }
 
+    private static let typeDecl = try! NSRegularExpression(
+        pattern: #"^([ \t]*)(?:@[\w.]+(?:\([^\n]*\))?\s+)*(?:(?:public|internal|private|fileprivate|final|open|package|nonisolated)\s+)*(?:struct|class|actor|enum)\s+(\w+)"#
+    )
+    private static let extensionDecl = try! NSRegularExpression(pattern: #"^extension\s+(\w+)"#)
+
     /// Types declared in a file, with the type of the enclosing `extension` for indented ones.
     static func typeNames(in source: String) -> [(name: String, parent: String?)] {
         var result: [(String, String?)] = []
         var currentExtension: String?
-        let typeDecl = try! NSRegularExpression(pattern: #"^([ \t]*)(?:@[\w.]+(?:\([^\n]*\))?\s+)*(?:(?:public|internal|private|fileprivate|final|open|package|nonisolated)\s+)*(?:struct|class|actor|enum)\s+(\w+)"#)
-        let extensionDecl = try! NSRegularExpression(pattern: #"^extension\s+(\w+)"#)
         for line in source.components(separatedBy: "\n") {
             let ns = line as NSString, range = NSRange(location: 0, length: ns.length)
             if let m = extensionDecl.firstMatch(in: line, range: range) {

@@ -45,7 +45,7 @@ import Testing
     }
 }
 
-private final class Counter: @unchecked Sendable {
+private final class Counter: @unchecked Sendable { // `count` is guarded by `lock`.
     private let lock = NSLock()
     private var count = 0
     var value: Int { lock.withLock { count } }
