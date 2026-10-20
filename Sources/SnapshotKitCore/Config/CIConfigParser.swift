@@ -129,6 +129,12 @@ public struct CIConfigParser {
 
     static func isResolved(_ value: String) -> Bool { !value.contains("$") }
 
+    /// The text with `#` comments removed (YAML and shell share them), so a commented-out
+    /// setting doesn't count.
+    static func withoutComments(_ text: String) -> String {
+        text.components(separatedBy: .newlines).map(MiniYAML.stripComment).joined(separator: "\n")
+    }
+
     // MARK: - Logical lines
 
     /// Joins backslash continuations and YAML-folded flag lines (`-scheme X` on its own line)
@@ -179,7 +185,8 @@ public struct CIConfigParser {
         let lines = Self.logicalLines(text)
         let rawLines = text.components(separatedBy: .newlines)
         var found: [Invocation] = []
-        for (line, index) in lines {
+        for (fullLine, index) in lines {
+            let line = MiniYAML.stripComment(fullLine) // also a commented-out command
             guard let range = line.range(of: #"(^|[\s;&|(`"'])xcodebuild(\s|$)"#, options: .regularExpression) else { continue }
             let prefix = String(line[..<range.lowerBound])
             var command = String(line[range.lowerBound...]).trimmingCharacters(in: CharacterSet(charactersIn: " ;&|(`\"'"))
@@ -245,7 +252,7 @@ public struct CIConfigParser {
 
     /// Finds the Xcode version (or Xcode path) CI selects.
     func xcodeSelection(in text: String) -> (version: String?, developerDir: String?) {
-        let expanded = expand(text)
+        let expanded = expand(Self.withoutComments(text))
         for pattern in Self.xcodeVersionPatterns {
             if let v = Self.firstCapture(pattern, in: expanded) { return (v, nil) }
         }
@@ -272,7 +279,7 @@ public struct CIConfigParser {
 
     /// The branch merge/pull requests target, when CI restricts it.
     func baseBranch(in text: String) -> String? {
-        let expanded = expand(text)
+        let expanded = expand(Self.withoutComments(text))
         for pattern in Self.mergeRequestTargetPatterns {
             if let gitlab = Self.firstCapture(pattern, in: expanded) { return gitlab }
         }

@@ -202,6 +202,21 @@ import Testing
         #expect(x.config.scheme == "Snapshots")
     }
 
+    @Test func commentedOutCommandsAreIgnored() {
+        let text = """
+        snapshots:
+          # image: macos-xcode:98.0
+          image: macos-xcode:99.1
+          script:
+            # - xcodebuild test -scheme OldSnapshots -destination 'platform=iOS Simulator,name=Old Phone'
+            - xcodebuild test -scheme Snapshots -destination 'platform=iOS Simulator,name=Example Phone'
+        """
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)])
+        #expect(x.config.scheme == "Snapshots")
+        #expect(x.config.deviceName == "Example Phone")
+        #expect(x.config.xcodeVersion == "99.1")
+    }
+
     @Test func githubInlineBranchList() {
         let p = CIConfigParser()
         #expect(p.baseBranch(in: "on:\n  pull_request:\n    branches: [ 'feature/*', trunk ]\n") == "trunk")
