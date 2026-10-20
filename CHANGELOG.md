@@ -1,21 +1,32 @@
 # Changelog
 
-## Unreleased
+All notable changes to SnapshotKit are documented in this file. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and SnapshotKit adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Hosted documentation at [tobiasre.github.io/SnapshotKit/docs](https://tobiasre.github.io/SnapshotKit/docs/),
+  linked from the website and the README.
 - Revert any change to the base branch from the Changes tab (committed, uncommitted, new or deleted), one at a
-  time or everything the list shows. A snapshot brought back after the branch deleted it no longer shows as new
-  when it matches the base.
-- Select several failures (⌘- or ⇧-click) to re-record or flakiness-check just those.
-- Built in Swift 6 language mode; `scripts/check-runtime-warnings.sh` fails on SwiftUI runtime warnings and runs
-  in CI.
+  time or everything the list shows.
+- Select several failures (⌘-click or ⇧-click) to re-record or flakiness-check just those.
 
-## 0.1.1 — 2026-10-17
+### Fixed
+- Clicking a row in the library, Changes and Failures lists selects it again; only the keyboard did before.
+- Selecting a row no longer logs SwiftUI runtime warnings ("Publishing changes from within view updates").
+- A snapshot brought back after the branch deleted it no longer shows as new when it matches the base branch.
 
-- Use SnapshotKit as swift-snapshot-testing's diff tool: with `.snapshots(diffTool: "snapkit open")`, a
-  failure message ends in a command that opens the reference and the actual image in a SnapshotKit compare
-  window, with Show in Project. Other tools can open it with a `snapshotkit://compare` link.
+## [0.1.1] - 2026-10-17
 
-## 0.1.0
+### Added
+- Use SnapshotKit as swift-snapshot-testing's diff tool: with `snapkit open` as the diff tool, a failure
+  message ends in a command that opens the reference and the actual image in a SnapshotKit compare window,
+  with Show in Project. Other tools can open it with a `snapshotkit://compare` link.
+  See [Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
+
+## [0.1.0] - 2026-10-17
 
 First public release: a macOS app and CLI for inspecting, managing and updating the reference images of
 snapshot tests built with swift-snapshot-testing.
@@ -67,9 +78,10 @@ snapshot tests built with swift-snapshot-testing.
   and one-click access to failing, pinned and recent projects.
 - The `snapkit` CLI covers the same ground: `snapshots`, `record`, `changes`, `run`, `rerecord`, `flaky`,
   `failures`, `history`, `diff`, `restore`, `config`, `projects`.
-- A small Liquid Glass design system (docs/design.md), with fallbacks for macOS 14–25: one family of 28-point
-  glass controls (icon circles, text capsules, segmented pills, fields and one accent action per region),
-  header, filter and footer bars of fixed heights that line up across panes, a "12 / 40" stepper in every
-  detail, and calm dot-and-hairline status labels.
+- A consistent Liquid Glass look, with fallbacks for macOS 14–25.
 - `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
   changes and failures, to try SnapshotKit on.
+
+[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/TobiasRe/SnapshotKit/releases/tag/v0.1.0
