@@ -571,11 +571,12 @@ extension AppUITests {
         // MARK: Operations
 
         /// A model of `repo` that can run, with `script` as xcodebuild.
-        func runnableModel(_ repo: URL, xcodebuild script: String, failures: Bool = false) throws -> ProjectModel {
+        func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil,
+                           failures: Bool = false) throws -> ProjectModel {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
-            f.environment = try AppFixtures.fakeXcode(script)
+            f.environment = try AppFixtures.fakeXcode(script, testResults: testResults)
             f.tab = .failures
             if failures {
                 f.lastResult = AppFixtures.lastResult
@@ -654,15 +655,15 @@ extension AppUITests {
         }
 
         /// A repo whose CardTests suite can be patched into record mode.
-        func makeRecordableRepo() throws -> URL {
+        func makeRecordableRepo(suite: String = "CardTests") throws -> URL {
             let (repo, _) = try makeRepo()
-            let source = "Tests/AppTests/CardTests.swift"
+            let source = "Tests/AppTests/\(suite).swift"
             try """
             import SnapshotTesting
             import Testing
 
             @Suite(.snapshots(record: .missing))
-            struct CardTests {
+            struct \(suite) {
                 @Test func card() {}
             }
             """.write(to: repo.appendingPathComponent(source), atomically: true, encoding: .utf8)
@@ -716,6 +717,31 @@ extension AppUITests {
             #expect(model.lastMessageIsError)
             #expect(model.lastMessageAction == nil)
             #expect(model.failures.map(\.id) == failures)
+        }
+
+        /// The verification after re-recording one of two failing tests runs just that one: the
+        /// other still fails, here, on disk and in the counts.
+        @Test func verifyingOneTestKeepsTheOtherFailures() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            saveLastRun(in: repo, suites: [AppFixtures.checkoutSuite, AppFixtures.profileSuite], failed: 2)
+            let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: """
+                {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Passed"}]}]}]}
+                """, failures: true)
+            let payButton = try #require(model.failures.first { $0.test.name == "payButton()" })
+            let badge = try #require(model.failures.first { $0.test.name == "badge()" })
+
+            model.reRecord(failures: [payButton])
+            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded payButton(). Verified: 1 passed.")
+            #expect(model.failures.map(\.id) == [badge.id])
+            #expect(model.failures.first?.images == badge.images)
+            #expect(model.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
+            let last = try #require(LastRun.load(repository: repo))
+            #expect(last.failed == 1)
+            #expect(last.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
         }
     }
 }

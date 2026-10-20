@@ -1182,9 +1182,7 @@ final class ProjectModel {
                 }
                 // A cancelled verification has no results; the last run's failures stay.
                 if let verifyRun = outcome.verifyRun, !verifyRun.cancelled, buildError == nil {
-                    LastRun(result: verifyRun).save(repository: project.url)
-                    lastFailingSuites = verifyRun.failingSuites
-                    setFailures(suites: verifyRun.failingSuites, images: [], source: FailureSource(label: "Verification run", date: Date(), host: "local"))
+                    applyPartialRun(verifyRun)
                     if verifyRun.succeeded {
                         message += " Verified: \(verifyRun.passed) passed."
                     } else {
@@ -1199,6 +1197,40 @@ final class ProjectModel {
                 finish(throwing: error)
             }
         }
+    }
+
+    /// Takes in a run of some tests (a re-record's verification): those tests have their new
+    /// results; the others keep the last run's, here and on disk.
+    private func applyPartialRun(_ run: TestRunResult) {
+        let ran = run.summary?.suites ?? []
+        var last = LastRun.load(repository: project.url) ?? LastRun(result: run)
+        last.failingSuites = Self.merging(ran, into: last.failingSuites).filter(\.isFailing)
+        last.failed = last.failingSuites.reduce(0) { $0 + $1.failedCount }
+        if let suites = last.suites.map({ Self.merging(ran, into: $0) }) {
+            last.suites = suites
+            last.passed = suites.reduce(0) { $0 + $1.passedCount }
+        }
+        last.save(repository: project.url)
+
+        let rerun = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
+        lastFailingSuites = Self.merging(ran, into: lastFailingSuites).filter(\.isFailing)
+        setFailures(suites: lastFailingSuites, images: failures.filter { !rerun.contains($0.id) }.flatMap(\.images),
+                    source: failureSource ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
+    }
+
+    /// `suites` with the tests that `newer` has results for replaced by those results.
+    nonisolated static func merging(_ newer: [SuiteResult], into suites: [SuiteResult]) -> [SuiteResult] {
+        var merged = suites
+        for suite in newer {
+            guard let i = merged.firstIndex(where: { $0.identifier == suite.identifier }) else {
+                merged.append(suite)
+                continue
+            }
+            let ran = Set(suite.tests.map(\.name))
+            merged[i].tests = merged[i].tests.filter { !ran.contains($0.name) } + suite.tests
+            merged[i].failureFiles += suite.failureFiles.filter { !merged[i].failureFiles.contains($0) }
+        }
+        return merged
     }
 
     /// Reruns the failing suites — or just `tests` (`Bundle/Suite/test()`) — N times.

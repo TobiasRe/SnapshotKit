@@ -83,13 +83,23 @@ enum AppFixtures {
     )
 
     /// An environment whose xcodebuild is the shell `script`, for running operations without Xcode.
-    /// `/usr/bin/xcodebuild` hands over to `$DEVELOPER_DIR/usr/bin/xcrun xcodebuild …`; the other
-    /// tools (xcresulttool) fail, as if there were no result bundle.
-    static func fakeXcode(_ script: String) throws -> TestEnvironment {
+    /// `/usr/bin/xcodebuild` and `/usr/bin/xcrun` hand over to `$DEVELOPER_DIR/usr/bin/xcrun <tool> …`.
+    /// Every run's result bundle reads as `testResults` (xcresulttool's JSON), or as unreadable.
+    static func fakeXcode(_ script: String, testResults: String? = nil) throws -> TestEnvironment {
         let app = temporaryDirectory("xcode").appendingPathComponent("Xcode.app")
         let xcrun = app.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
         try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "#!/bin/sh\n[ \"$1\" = xcodebuild ] || exit 1\n\(script)\n".write(to: xcrun, atomically: true, encoding: .utf8)
+        try """
+            #!/bin/sh
+            if [ "$1 $2 $3 $4" = "xcresulttool get test-results tests" ]; then
+            \(testResults.map { "cat <<'JSON'\n\($0)\nJSON" } ?? "exit 1")
+            exit
+            fi
+            [ "$1" = xcodebuild ] || exit 1
+            for arg; do [ "$previous" = -resultBundlePath ] && mkdir -p "$arg"; previous=$arg; done
+            \(script)
+
+            """.write(to: xcrun, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
         var fake = environment
         fake.xcode = XcodeInstall(path: app.path, version: environment.xcode.version)
