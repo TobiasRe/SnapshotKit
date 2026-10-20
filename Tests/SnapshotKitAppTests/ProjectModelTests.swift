@@ -638,6 +638,18 @@ extension AppUITests {
             #expect(model.branches.contains("release"))
         }
 
+        /// A repository deleted while open says so when checked again, instead of looking ready to run.
+        @Test func aDeletedRepositorySaysSo() async throws {
+            let (repo, _) = try makeRepo()
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            for _ in 0..<200 where model.context == nil { try await Task.sleep(for: .milliseconds(20)) }
+            try FileManager.default.removeItem(at: repo)
+            model.reload()
+            for _ in 0..<200 where model.configError == nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(model.context == nil)
+            #expect(model.configError?.contains("no folder") == true)
+        }
+
         /// A project added while the counts are being read gets its count too.
         @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
             let solid = DS.solidSurfaces

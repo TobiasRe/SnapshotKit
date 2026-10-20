@@ -89,6 +89,17 @@ struct FailureItem: Identifiable, Hashable {
     var isNewReference: Bool { test.failureMessages.contains(where: FailureAttachments.isNewReference) }
 }
 
+/// A project's folder is gone, or no longer in a git repository.
+struct RepositoryGone: LocalizedError {
+    var url: URL
+    var errorDescription: String? {
+        let name = url.path.abbreviatingWithTildeInPath
+        return FileManager.default.fileExists(atPath: url.path)
+            ? "\(name) isn't in a git repository any more."
+            : "There is no folder at \(name) any more. Was it moved or deleted?"
+    }
+}
+
 /// Where the failures on the Failures tab came from.
 struct FailureSource: Equatable {
     var label: String
@@ -295,7 +306,11 @@ final class ProjectModel {
         Task {
             let loaded = await offCooperativePool {
                 let git = Git(root: url)
-                let context = Result { try ProjectContext.load(repository: url, settings: settings) }
+                let context = Result { () throws -> ProjectContext in
+                    // A folder deleted or moved while open would read as a project with no configuration.
+                    guard Git.repository(containing: url) != nil else { throw RepositoryGone(url: url) }
+                    return try ProjectContext.load(repository: url, settings: settings)
+                }
                 return (
                     branch: git.currentBranch(),
                     branches: ProjectModel.branchList(git),
