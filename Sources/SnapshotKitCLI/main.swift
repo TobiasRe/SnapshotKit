@@ -22,6 +22,7 @@ commands:
                                                  run those suites N times; exits 1 if a test is flaky or always fails
   failures   [--repo P] [--xcresult PATH] [--out DIR]   list failures, diagnose each diff, show recent runs
   changes    [--repo P] [--base BRANCH] [--tip] [--filter TEXT]
+                                                 snapshot images that differ from the base branch
   history    [--repo P] [TEST]                   recent runs and flaky tests; TEST = Bundle/Suite/test()
   restore    [--repo P] [--force]                undo a leftover record patch; --force even when a running
                                                  SnapshotKit owns it
