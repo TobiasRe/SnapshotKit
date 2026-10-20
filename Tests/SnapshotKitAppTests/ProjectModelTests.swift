@@ -616,5 +616,38 @@ extension AppUITests {
             model.cancel()
             try await waitUntilFinished(model)
         }
+
+        /// A repo whose CardTests suite can be patched into record mode.
+        func makeRecordableRepo() throws -> URL {
+            let (repo, _) = try makeRepo()
+            let source = "Tests/AppTests/CardTests.swift"
+            try """
+            import SnapshotTesting
+            import Testing
+
+            @Suite(.snapshots(record: .missing))
+            struct CardTests {
+                @Test func card() {}
+            }
+            """.write(to: repo.appendingPathComponent(source), atomically: true, encoding: .utf8)
+            try Shell.output(["git", "add", "--", source], in: repo)
+            try Shell.output(["git", "commit", "-qm", "suite", "--", source], in: repo)
+            return repo
+        }
+
+        static let cardSuite = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [
+            TestCaseResult(name: "card()", identifier: "CardTests/card()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
+        ], failureFiles: [])
+
+        @Test func cancellingAReRecordSaysSo() async throws {
+            let repo = try makeRecordableRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun)
+            model.reRecordFailed(suites: [Self.cardSuite])
+            try await waitUntilStarted(model)
+            model.cancel()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Cancelled.")
+            #expect(try Shell.output(["git", "status", "--porcelain", "--", "Tests/AppTests/CardTests.swift"], in: repo).isEmpty)
+        }
     }
 }

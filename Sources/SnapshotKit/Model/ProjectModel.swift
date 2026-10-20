@@ -1163,7 +1163,7 @@ final class ProjectModel {
                     onStage: { stage in Task { @MainActor in self.stageLabel = stage.label } },
                     onLine: onLine, onEvent: onEvent)
                 RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: outcome.recordRun))
-                var message = "Re-recorded \(what)."
+                var message = outcome.recordRun.cancelled ? "Cancelled." : "Re-recorded \(what)."
                 var isError = false
                 if !outcome.restore.conflicts.isEmpty {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
