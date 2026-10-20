@@ -168,6 +168,23 @@ extension AppUITests {
             #expect(!model.canReRecordSelection)
         }
 
+        /// An orphan's test is gone, whichever tab it is selected on.
+        @Test func anOrphanedChangeCannotBeReRecorded() throws {
+            let model = ProjectModel(project: Project(path: AppFixtures.repository.path), store: AppFixtures.store(), autoload: false)
+            let orphan = try #require(AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }).0
+            var f = ProjectFixture()
+            f.context = AppFixtures.context
+            f.environment = AppFixtures.environment
+            f.tab = .changes
+            f.library = SnapshotLibrary(files: [orphan])
+            f.orphanIDs = [orphan.id]
+            f.changeSet = SnapshotChangeSet(baseBranch: "develop", baseRef: "develop", diffBase: .mergeBase, baseCommit: "3f1c2a9",
+                                            changes: [SnapshotChange(path: orphan.path, kind: .committed)])
+            model.apply(f)
+            #expect(model.selectedChange?.path == orphan.path)
+            #expect(!model.canReRecordSelection)
+        }
+
         @Test func listOrderFollowsFilterScopeAndSort() {
             // The order is cached between redraws; every input has to invalidate it.
             let model = AppFixtures.project(.library, store: AppFixtures.store())

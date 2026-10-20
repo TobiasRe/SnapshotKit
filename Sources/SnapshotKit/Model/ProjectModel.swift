@@ -1105,7 +1105,7 @@ final class ProjectModel {
         guard !isRunning, environment != nil else { return false }
         switch tab {
         case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
-        case .changes: return selectedChange.map { $0.kind != .deleted } ?? false
+        case .changes: return selectedChange.map { $0.kind != .deleted && !orphanIDs.contains($0.id) } ?? false
         case .failures: return selectedFailure != nil
         case .run: return false
         }
