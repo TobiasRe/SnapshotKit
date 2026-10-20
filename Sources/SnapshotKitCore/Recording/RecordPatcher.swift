@@ -33,6 +33,8 @@ public enum RecordPatcher {
     public static let marker = "snapshotkit:record"
 
     public static func patch(source: String, suite: String, file: String = "file") throws -> String {
+        // A byte order mark would hide a first-line `import XCTest` from the patterns below.
+        if source.hasPrefix("\u{FEFF}") { return "\u{FEFF}" + (try patch(source: String(source.dropFirst()), suite: suite, file: file)) }
         guard let decl = findDeclaration(of: suite, in: source) else {
             throw RecordPatchError.declarationNotFound(suite: suite, file: file)
         }

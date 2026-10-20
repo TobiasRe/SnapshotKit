@@ -131,7 +131,7 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         var files: [PatchedFile] = []
         for path in paths {
             let url = repository.appendingPathComponent(path)
-            let original = try String(contentsOf: url, encoding: .utf8)
+            let original = try text(of: url)
             var patched = original
             for target in targets where target.path == path {
                 patched = try RecordPatcher.patch(source: patched, suite: target.suite, file: path)
@@ -179,7 +179,7 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         var results: [(String, RestoreOutcome)] = []
         for file in journal.files {
             let url = repository.appendingPathComponent(file.path)
-            guard let current = try? String(contentsOf: url, encoding: .utf8) else {
+            guard let current = try? text(of: url) else {
                 results.append((file.path, .missing))
                 continue
             }
@@ -199,6 +199,14 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         try? FileManager.default.removeItem(at: journalURL)
         PatchRegistry.shared.unregister(repository)
         return RestoreReport(repository: repository, files: results)
+    }
+
+    /// A source file's text. Foundation drops a UTF-8 byte order mark when it decodes one; it's kept
+    /// here (as "\u{FEFF}"), so writing the text back restores the file byte for byte.
+    static func text(of url: URL) throws -> String {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let hasMark = (try? Data(contentsOf: url))?.starts(with: [0xEF, 0xBB, 0xBF]) == true
+        return hasMark && !text.hasPrefix("\u{FEFF}") ? "\u{FEFF}" + text : text
     }
 
     private static func backup(_ file: PatchedFile, journalURL: URL) -> String {

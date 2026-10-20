@@ -180,6 +180,18 @@ import Testing
         #expect(try repo.read(target.path) == source.replacingOccurrences(of: "card() {}", with: "card() { draw() }"))
     }
 
+    @Test func restoresAFileWithAByteOrderMarkByteForByte() throws {
+        let repo = try TempRepo()
+        let source = Data([0xEF, 0xBB, 0xBF]) + Data("import XCTest\n\nfinal class CardTests: XCTestCase {\n    func testCard() {}\n}\n".utf8)
+        try repo.write(target.path, source)
+        try repo.commitAll("init")
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        #expect(try repo.read(target.path).contains("override func invokeTest()"))
+
+        #expect(session.restore().files.map(\.outcome) == [.restored])
+        #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent(target.path).path) == source)
+    }
+
     @Test func conflictKeepsFileAndSavesBackup() throws {
         let repo = try makeRepo()
         let session = try RecordSession.begin(repository: repo.url, targets: [target])
