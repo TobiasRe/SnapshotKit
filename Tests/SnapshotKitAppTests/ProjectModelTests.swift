@@ -517,6 +517,36 @@ extension AppUITests {
             #expect(model.displayedChanges.contains(viewed))
         }
 
+        /// A filter, scope or Hide Viewed that hides the selection moves it to the first row shown, so
+        /// the detail shows what the list does; one that matches nothing leaves it be.
+        @Test func filteringKeepsTheSelectionInTheList() throws {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            let header = try #require(model.displayedSnapshots.first { $0.testName == "header" })
+            model.selectedSnapshotID = header.id
+            model.libraryFilter = "Profile"                 // still shown
+            #expect(model.selectedSnapshotID == header.id)
+            model.libraryScope = .failing                   // only badge fails
+            #expect(model.selectedSnapshot?.testName == "badge")
+            model.libraryScope = .all
+            #expect(model.selectedSnapshot?.testName == "badge")
+            model.libraryFilter = "nothing like this"
+            #expect(model.selectedSnapshot?.testName == "badge")
+            model.selectAdjacent(1)                         // nothing to move to
+            #expect(model.selectedSnapshot?.testName == "badge")
+
+            let changes = AppFixtures.project(.changes, store: AppFixtures.store())
+            changes.tab = .changes
+            changes.selectedChangeID = try #require(changes.displayedChanges.last { $0.testName == "legacyHeader" }).id
+            changes.hideViewed = true                       // legacyHeader is viewed
+            #expect(changes.selectedChange?.testName == "payButton")
+            changes.changeFilter = "Profile"
+            #expect(changes.selectedChange?.testName == "badge")
+            changes.changeKinds = [.committed]              // nothing left
+            #expect(changes.selectedChange?.testName == "badge")
+            changes.changeFilter = ""
+            #expect(changes.selectedChange?.testName == "payButton")
+        }
+
         // MARK: Viewed marks
 
         /// Marking the change on screen viewed while the list's filter hides it moves to the first unviewed one shown.
@@ -524,7 +554,7 @@ extension AppUITests {
             let model = AppFixtures.project(.changes, store: AppFixtures.store())
             let badge = try #require(model.displayedChanges.first { $0.testName == "badge" })
             model.selectedChangeID = badge.id
-            model.changeFilter = "CheckoutViewTests"        // badge is still on screen, but not in the list
+            model.changeFilter = "CheckoutViewTests"        // hides badge: the first change shown takes its place
             model.setViewed(true, for: badge)
             #expect(model.selectedChange?.testName == "payButton")
         }

@@ -124,12 +124,16 @@ final class ProjectModel {
     private(set) var orphanIDs: Set<String> = [] {
         didSet { libraryRevision &+= 1 }
     }
-    var libraryFilter = ""
+    var libraryFilter = "" {
+        didSet { if oldValue != libraryFilter { keepSnapshotSelectionShown() } }
+    }
     /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
-    var libraryScope = LibraryScope.all
+    var libraryScope = LibraryScope.all {
+        didSet { if oldValue != libraryScope { keepSnapshotSelectionShown() } }
+    }
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }
@@ -216,13 +220,19 @@ final class ProjectModel {
     }
     @ObservationIgnored private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
     private(set) var changesError: String?
-    var changeFilter = ""
-    var changeKinds = Set(SnapshotChangeKind.allCases)
+    var changeFilter = "" {
+        didSet { if oldValue != changeFilter { keepChangeSelectionShown() } }
+    }
+    var changeKinds = Set(SnapshotChangeKind.allCases) {
+        didSet { if oldValue != changeKinds { keepChangeSelectionShown() } }
+    }
     var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
     var selectedChangeID: String?
     /// Changes marked as viewed whose file hasn't changed since.
     private(set) var viewedChanges: Set<String> = []
-    var hideViewed = false
+    var hideViewed = false {
+        didSet { if oldValue != hideViewed { keepChangeSelectionShown() } }
+    }
     /// What kind of difference each change is (base vs working tree), computed in the background.
     private(set) var changeDiagnoses: [String: DiffDiagnosis] = [:]
     @ObservationIgnored private var changeDiagnoseTask: Task<Void, Never>?
@@ -597,10 +607,28 @@ final class ProjectModel {
         return now.first
     }
 
+    /// What stays selected once a filter changed what the list shows: the selection while the list
+    /// still shows it, else the first row shown. A list that shows nothing leaves it be, so typing
+    /// through a filter that matches nothing for a moment doesn't lose it.
+    private static func kept(_ selected: String?, shown: [String]) -> String? {
+        guard let first = shown.first else { return selected }
+        return selected.map(shown.contains) == true ? selected : first
+    }
+
+    private func keepSnapshotSelectionShown() {
+        let kept = Self.kept(selectedSnapshotID, shown: displayedSnapshots.map(\.id))
+        if kept != selectedSnapshotID { selectedSnapshotID = kept }
+    }
+
+    private func keepChangeSelectionShown() {
+        let kept = Self.kept(selectedChangeID, shown: displayedChanges.map(\.id))
+        if kept != selectedChangeID { selectedChangeID = kept }
+    }
+
     /// Moves the selection in the current tab's list, from anywhere in the window.
     func selectAdjacent(_ step: Int) {
         func move(_ ids: [String], _ current: String?) -> String? {
-            guard !ids.isEmpty else { return nil }
+            guard !ids.isEmpty else { return current }
             guard let current, let i = ids.firstIndex(of: current) else { return ids.first }
             return ids[min(max(i + step, 0), ids.count - 1)]
         }
