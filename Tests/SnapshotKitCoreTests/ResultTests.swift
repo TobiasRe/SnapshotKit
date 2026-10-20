@@ -86,9 +86,24 @@ import Testing
         }
     }
 
-    @Test func roleParsing() {
-        #expect(FailureAttachments.role(of: "failure_2_ABC.png")! == ("failure", 2))
-        #expect(FailureAttachments.role(of: "reference.png")! == ("reference", 0))
+    @Test func reExportReplacesOnlyTheFilesOfTheLastExport() throws {
+        let dir = testTemp("out")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let outside = testTemp("outside.png")
+        for url in [dir.appendingPathComponent("A.png"), dir.appendingPathComponent("notes.txt"), outside] {
+            try Data([1]).write(to: url)
+        }
+        let manifest = #"[{"testIdentifier": "S/t()", "attachments": [{"exportedFileName": "A.png"}, {"exportedFileName": "../\#(outside.lastPathComponent)"}]}]"#
+        try Data(manifest.utf8).write(to: dir.appendingPathComponent("manifest.json"))
+
+        FailureAttachments.removePreviousExport(in: dir)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["notes.txt"])
+        #expect(FileManager.default.fileExists(atPath: outside.path))
+    }
+
+    @Test func roleParsing() throws {
+        #expect(try #require(FailureAttachments.role(of: "failure_2_ABC.png")) == ("failure", 2))
+        #expect(try #require(FailureAttachments.role(of: "reference.png")) == ("reference", 0))
         #expect(FailureAttachments.role(of: "Complete Issue Description.txt") == nil)
     }
 

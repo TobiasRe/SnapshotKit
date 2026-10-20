@@ -42,8 +42,11 @@ public enum FailureAttachments {
     }
 
     /// Exports attachments from a result bundle into `directory` and groups snapshot images.
+    ///
+    /// `directory` may be a folder the user named, with other files in it: only the files of an
+    /// earlier export (the ones its manifest lists) are replaced.
     public static func export(resultBundle: URL, to directory: URL, developerDir: String?) throws -> [SnapshotFailureImages] {
-        try? FileManager.default.removeItem(at: directory)
+        removePreviousExport(in: directory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let result = try Shell.run(
             ["xcrun", "xcresulttool", "export", "attachments", "--path", resultBundle.path, "--output-path", directory.path],
@@ -54,6 +57,19 @@ public enum FailureAttachments {
         }
         let manifest = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
         return try parse(manifest: manifest, directory: directory)
+    }
+
+    static func removePreviousExport(in directory: URL) {
+        let manifest = directory.appendingPathComponent("manifest.json")
+        guard let data = FileManager.default.contents(atPath: manifest.path),
+              let entries = try? JSONDecoder().decode([ManifestEntry].self, from: data) else { return }
+        for attachment in entries.flatMap(\.attachments) {
+            // Only names directly in the folder: a manifest is no licence to delete anything else.
+            let name = (attachment.exportedFileName as NSString).lastPathComponent
+            guard name == attachment.exportedFileName, !name.hasPrefix(".") else { continue }
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+        try? FileManager.default.removeItem(at: manifest)
     }
 
     public static func parse(manifest: Data, directory: URL) throws -> [SnapshotFailureImages] {
