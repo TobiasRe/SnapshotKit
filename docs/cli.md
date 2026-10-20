@@ -272,7 +272,7 @@ Flaky              3✔ 2✘  AppSnapshotTests/CheckoutViewTests/summary()
 
 Verdicts: **Fails every time**, **Flaky**, **Passes**. Recorded in the history. Exits 0 when every test passes,
 1 when one is flaky or fails every time (or no result could be read). When the last run had no failures it
-prints *No failing suites to check.* and exits 0.
+prints *No failing suites to check.* and exits 0. Canceled, it prints *Cancelled.* instead of verdicts and exits 1.
 
 ## failures
 

@@ -35,11 +35,35 @@ struct Snapkit {
              sourceLocation: SourceLocation = #_sourceLocation) throws -> CommandResult {
         try #require(FileManager.default.isExecutableFile(atPath: Self.executable.path),
                      "\(Self.executable.path) is missing: build the package first", sourceLocation: sourceLocation)
-        var env = ["SNAPSHOTKIT_HOME": home.path, "NO_COLOR": "", "SNAPSHOTKIT_XCODE_SEARCH_PATHS": ""]
-        env.merge(environment) { $1 }
-        let result = try Shell.run([Self.executable.path] + arguments, in: directory ?? FileManager.default.temporaryDirectory, environment: env)
+        let result = try Shell.run([Self.executable.path] + arguments, in: directory ?? FileManager.default.temporaryDirectory,
+                                   environment: self.environment(environment))
         #expect(!(result.stdout + result.stderr).contains("\u{1B}["), "colored output on a pipe", sourceLocation: sourceLocation)
         return result
+    }
+
+    /// Runs `snapkit arguments…` and presses Ctrl-C once `marker` exists: a stand-in creates it
+    /// where the interrupt is to come.
+    func interrupted(_ arguments: String..., at marker: URL, environment: [String: String] = [:],
+                     sourceLocation: SourceLocation = #_sourceLocation) throws -> CommandResult {
+        let process = Process()
+        process.executableURL = Self.executable
+        process.arguments = arguments
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
+        process.environment = ProcessInfo.processInfo.environment.merging(self.environment(environment)) { $1 }
+        let stdout = Pipe(), stderr = Pipe()
+        (process.standardOutput, process.standardError) = (stdout, stderr)
+        try process.run()
+        let deadline = Date().addingTimeInterval(30)
+        while !FileManager.default.fileExists(atPath: marker.path), process.isRunning, Date() < deadline { usleep(20_000) }
+        #expect(FileManager.default.fileExists(atPath: marker.path), "never got to the interrupt", sourceLocation: sourceLocation)
+        kill(process.processIdentifier, SIGINT)
+        let out = stdout.fileHandleForReading.readDataToEndOfFile(), err = stderr.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return CommandResult(status: process.terminationStatus, stdout: String(decoding: out, as: UTF8.self), stderr: String(decoding: err, as: UTF8.self))
+    }
+
+    private func environment(_ extra: [String: String]) -> [String: String] {
+        ["SNAPSHOTKIT_HOME": home.path, "NO_COLOR": "", "SNAPSHOTKIT_XCODE_SEARCH_PATHS": ""].merging(extra) { $1 }
     }
 }
 

@@ -93,6 +93,19 @@ func fail(_ text: String, code: Int32 = 1) -> Never {
     exit(code)
 }
 
+/// Ends a command whose tests could not run. A Ctrl-C before `xcodebuild` started (while the scheme
+/// was looked up, say) throws `CancellationError`: a cancel like any other, not an error.
+func fail(running error: any Error) -> Never {
+    if error is CancellationError { exitCancelled() }
+    fail(error.localizedDescription)
+}
+
+/// Says so and exits 1, as every command that runs tests does when cancelled.
+func exitCancelled() -> Never {
+    say(color("33", "Cancelled."))
+    exit(1)
+}
+
 func usageError(_ text: String) -> Never {
     fail(text + "\nRun `snapkit help` for usage.", code: EX_USAGE)
 }
@@ -230,10 +243,7 @@ func record(_ result: TestRunResult, kind: RunKind, repo: URL, attachments: URL?
 /// A record run that was cancelled, or whose tests never ran (say, the build failed), recorded
 /// nothing to report: says so and exits 1.
 func exitUnlessRecorded(_ run: TestRunResult) {
-    if run.cancelled {
-        say(color("33", "Cancelled."))
-        exit(1)
-    }
+    if run.cancelled { exitCancelled() }
     if let why = run.nothingTested { fail("Nothing was recorded: \(why).") }
 }
 
@@ -262,7 +272,7 @@ func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, itera
             let out = try await runner.run(mode: iterations.map { .flakeCheck(iterations: $0) } ?? .run, onlyTesting: onlyTesting,
                                            onStage: { say(color("36", "▸ \($0.label)")) }, onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
             return (out.run, out.attachments, out.attachmentsDirectory)
-        } catch { fail(error.localizedDescription) }
+        } catch { fail(running: error) }
     }
     let runner = TestRunner(repository: ctx.repository, config: config, environment: environment(config))
     onInterrupt { runner.cancel() }
@@ -274,7 +284,7 @@ func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, itera
         let attachments = (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir,
                                                           developerDir: runner.environment.xcode.developerDir)) ?? []
         return (result, attachments, attachments.isEmpty ? nil : dir)
-    } catch { fail(error.localizedDescription) }
+    } catch { fail(running: error) }
 }
 
 /// The suites `--suite` names, else the failing suites of the last run, else those of a new run.
@@ -303,6 +313,8 @@ func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer)
     let (result, _, dir) = await runTests(ctx, remote: false, onlyTesting: nil, iterations: nil, printer: printer)
     record(result, kind: .run, repo: ctx.repository, attachments: dir)
     printSummary(result)
+    // The summary says "Cancelled."; the run found out nothing to go on with.
+    if result.cancelled { exit(1) }
     return result.failingSuites
 }
 
@@ -462,7 +474,7 @@ func main() async {
             say("Recorded.")
             exit(0)
         } catch {
-            fail(error.localizedDescription)
+            fail(running: error)
         }
 
     case "rerecord":
@@ -474,18 +486,24 @@ func main() async {
             // Recorded and verified on the remote Mac; only the new references come back.
             let runner = remoteRunner(ctx)
             onInterrupt { runner.cancel() }
+            var recordedAlready = false
             do {
                 let recorded = try await runner.run(mode: .record(suites: suites), onStage: { say(color("36", "▸ \($0.label)")) },
                                                     onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
                 record(recorded.run, kind: .record, repo: ctx.repository)
                 exitUnlessRecorded(recorded.run)
+                recordedAlready = true
                 say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
                 say("Downloaded \(recorded.downloadedSnapshots.count) snapshot(s) recorded on \(recorded.host).")
                 if o.has("--no-verify") { exit(0) }
                 let verify = try await runner.run(mode: .run, onlyTesting: suites.map(\.identifier), onStage: { say(color("36", "▸ \($0.label)")) },
                                                   onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
                 finishVerification(verify.run, repo: ctx.repository, attachments: verify.attachmentsDirectory)
-            } catch { fail(error.localizedDescription) }
+            } catch {
+                // A Ctrl-C once recorded keeps the verification from starting.
+                if error is CancellationError, recordedAlready { exitIfCancelled(verification: nil) }
+                fail(running: error)
+            }
         }
         let runner = TestRunner(repository: ctx.repository, config: ctx.config, environment: environment(ctx.config))
         let recorder = ReRecorder(runner: runner)
@@ -503,7 +521,7 @@ func main() async {
             exitIfCancelled(verification: nil, requested: !o.has("--no-verify"))
             exit(0)
         } catch {
-            fail(error.localizedDescription)
+            fail(running: error)
         }
 
     case "flaky":
@@ -516,6 +534,8 @@ func main() async {
         say("snapkit: running \(suites.map(\.identifier).joined(separator: ", ")) \(n)×")
         let (result, _, _) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: suites.map(\.identifier), iterations: n, printer: printer)
         record(result, kind: .flakeCheck, repo: ctx.repository)
+        // A cancelled check repeated its tests only partly (its bundle has what ran): no verdicts.
+        if result.cancelled { exitCancelled() }
         guard let summary = result.summary else { printSummary(result); exit(1) }
         say("")
         let verdicts = Flakiness.classify(summary)

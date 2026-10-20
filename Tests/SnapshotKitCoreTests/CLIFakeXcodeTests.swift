@@ -29,6 +29,10 @@ import Testing
 
     /// A repository with a Swift Testing suite and its reference, and the environment `snapkit`
     /// runs with: the stand-ins on the PATH and a log of the arguments `xcodebuild` got.
+    ///
+    /// With `FAKE_INTERRUPT_AT` set to `list` (the configuration names no scheme) or `test`,
+    /// `xcodebuild` creates `FAKE_INTERRUPT_MARKER` there and waits for the Ctrl-C, having written
+    /// `FAKE_RESULTS` as the results of a test run, if set.
     func setUp(fail: Bool = false, buildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
         let xcode = testTemp("Xcode").appendingPathExtension("app")
         try FileManager.default.createDirectory(at: xcode.appendingPathComponent("Contents/Developer"), withIntermediateDirectories: true)
@@ -44,11 +48,23 @@ import Testing
         let mac = try FakeMac(xcodebuild: "")
         try """
             #!/bin/bash
+            if [ "$1" = -list ]; then
+              [ "$FAKE_INTERRUPT_AT" = list ] && { touch "$FAKE_INTERRUPT_MARKER"; sleep 1; }
+              echo '{"project": {"schemes": ["App"]}}'
+              exit 0
+            fi
             echo "$*" >> "$FAKE_XCODEBUILD_LOG"
             args="$*"
             while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
             mkdir -p "$bundle"
             echo '◇ Test run started.'
+            if [ "$FAKE_INTERRUPT_AT" = test ]; then
+              [ -n "$FAKE_RESULTS" ] && echo "$FAKE_RESULTS" > "$bundle/tests.json"
+              trap 'kill $!; exit 130' INT
+              sleep 30 >/dev/null 2>&1 &
+              touch "$FAKE_INTERRUPT_MARKER"
+              wait
+            fi
             \(buildError ? #"echo "$PWD/Tests/AppTests/CardTests.swift:6:9: error: cannot find 'draw' in scope"; echo '** TEST FAILED **'; exit 65"# : "")
             if grep -q 'record: .all' Tests/AppTests/CardTests.swift; then
               printf new > \(snapshot)
@@ -182,6 +198,50 @@ import Testing
             """))
         #expect(try repo.read(snapshot) == "new")
         #expect(LastRun.load(repository: repo.url)?.failingSuites.isEmpty == true)
+    }
+
+    /// The environment that has `xcodebuild` wait for a Ctrl-C at `point` (see `setUp`).
+    func interrupting(_ env: [String: String], at point: String, marker: URL, results: String = "") -> [String: String] {
+        env.merging(["FAKE_INTERRUPT_AT": point, "FAKE_INTERRUPT_MARKER": marker.path, "FAKE_RESULTS": results]) { $1 }
+    }
+
+    let interrupted = "\nInterrupted — cancelling (press Ctrl-C again to force quit)…\n"
+
+    /// It said "The operation couldn’t be completed. (Swift.CancellationError error 1.)".
+    @Test func ctrlCWhileTheSchemeIsLookedUpCancels() throws {
+        let (repo, env, _) = try setUp()
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml").replacingOccurrences(of: "scheme: App\n", with: ""))
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("run", "--repo", repo.url.path, at: marker,
+                                             environment: interrupting(env, at: "list", marker: marker))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: environmentLine + "Cancelled.\n", stderr: interrupted))
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
+    /// Without a last run, `rerecord` runs the tests to find the failing suites; cancelled, that
+    /// run found none, and there is nothing to re-record from it.
+    @Test func ctrlCWhileFindingTheFailingSuitesCancels() throws {
+        let (repo, env, _) = try setUp()
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("rerecord", "--repo", repo.url.path, at: marker,
+                                             environment: interrupting(env, at: "test", marker: marker))
+        let bundle = try #require(snapkit.history(of: repo.url).load().last?.resultBundle)
+        #expect(Outcome(result) == Outcome(status: 1, stdout: "snapkit: no previous run recorded; running tests to find failing suites\n"
+            + environmentLine + xcodebuild(bundle) + "▸ Testing\n▸ Finished\nCancelled.\n\nResult: 0 passed, 0 failed, 0 skipped  [local]\n"
+            + "Result bundle: \(bundle)\n", stderr: interrupted))
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
+    /// A cancelled check repeated its tests only partly: it gives no verdicts.
+    @Test func ctrlCDuringAFlakinessCheckCancels() throws {
+        let (repo, env, _) = try setUp()
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("flaky", "--repo", repo.url.path, "--suite", "AppTests/CardTests", "--iterations", "3", at: marker,
+                                             environment: interrupting(env, at: "test", marker: marker, results: Self.passingTest))
+        #expect(result.status == 1)
+        #expect(result.stdout.hasSuffix("▸ Finished\nCancelled.\n"))
+        #expect(!result.stdout.contains("Passes"))
+        #expect(snapkit.history(of: repo.url).load().map(\.kind) == [.flakeCheck])
     }
 
     @Test func flakyClassifiesEveryTest() throws {
