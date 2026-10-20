@@ -100,6 +100,26 @@ import Testing
         #expect(kinds == ["größe.1.png": .uncommitted, "gelöscht.1.png": .deleted, "neu é.1.png": .new])
     }
 
+    /// On a case-insensitive file system (the macOS default) the old name still "exists" on disk.
+    @Test func caseOnlyRenameIsADeletionAndANewFileAndRevertsToTheOldName() throws {
+        let repo = try TempRepo()
+        let snaps = "Tests/AppTests/__Snapshots__/CardTests"
+        try repo.write("\(snaps)/card.1.png", red)
+        try repo.commitAll("base")
+        try repo.git.run(["checkout", "-q", "-b", "feature"])
+        try repo.git.run(["mv", "\(snaps)/card.1.png", "\(snaps)/Card.1.png"])
+        try repo.commitAll("rename")
+
+        let set = try repo.git.snapshotChanges(baseBranch: "develop")
+        let kinds = Dictionary(uniqueKeysWithValues: set.changes.map { ($0.fileName, $0.kind) })
+        #expect(kinds == ["card.1.png": .deleted, "Card.1.png": .new])
+
+        try repo.git.revertToBase(set.changes, in: set)
+        let names = try FileManager.default.contentsOfDirectory(atPath: repo.url.appendingPathComponent(snaps).path)
+        #expect(names == ["card.1.png"])
+        #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent("\(snaps)/card.1.png").path) == red)
+    }
+
     @Test func filterAndNames() {
         let changes = [
             SnapshotChange(path: "T/__Snapshots__/CardTests/darkMode.1.png", kind: .committed),

@@ -126,6 +126,7 @@ extension Git {
         // HEAD → working tree, to tell committed from uncommitted modifications.
         let sinceHead = Set(try nulSeparated(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--", "*.png"]))
         let untracked = try nulSeparated(["ls-files", "-z", "--others", "--exclude-standard", "--", "*.png"])
+        let untrackedPaths = Set(untracked)
 
         var changes: [String: SnapshotChange] = [:]
         for i in stride(from: 0, to: sinceBase.count - 1, by: 2) {
@@ -136,7 +137,9 @@ extension Git {
             case "A": kind = .new
             case "D":
                 // Gone from the index but back on disk (untracked): the untracked pass below decides.
-                if FileManager.default.fileExists(atPath: root.appendingPathComponent(path).path) { continue }
+                // (Not "is it on disk": after a case-only rename the old name finds the new file
+                // on a case-insensitive volume.)
+                if untrackedPaths.contains(path) { continue }
                 kind = .deleted
             default: kind = sinceHead.contains(path) ? .uncommitted : .committed
             }
@@ -180,13 +183,15 @@ extension Git {
     /// is removed, a deleted one comes back. Only the working tree changes (nothing is staged or
     /// committed), so the result shows as uncommitted changes to review and commit.
     public func revertToBase(_ changes: [SnapshotChange], in set: SnapshotChangeSet) throws {
-        let restore = changes.filter { $0.kind != .new }.map(\.path)
-        if !restore.isEmpty {
-            try run(["restore", "--source=\(set.baseCommit)", "--worktree", "--"] + restore)
-        }
+        // New files go first: after a case-only rename, the new name and the old one restored
+        // are the same file on a case-insensitive volume.
         for change in changes where change.kind == .new {
             let url = root.appendingPathComponent(change.path)
             if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        }
+        let restore = changes.filter { $0.kind != .new }.map(\.path)
+        if !restore.isEmpty {
+            try run(["restore", "--source=\(set.baseCommit)", "--worktree", "--"] + restore)
         }
     }
 
