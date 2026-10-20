@@ -978,11 +978,13 @@ final class ProjectModel {
         }
     }
 
-    /// Opens an `.xcresult` (e.g. downloaded from CI) and shows its failures.
-    func importResultBundle(_ url: URL) {
+    /// Opens an `.xcresult` (e.g. downloaded from CI) and shows its failures. The task ends once the
+    /// notice says how it went.
+    @discardableResult
+    func importResultBundle(_ url: URL) -> Task<Void, Never> {
         notify("Reading \(url.lastPathComponent)…")
         let repo = project.url, start = tab
-        Task {
+        return Task {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/imported/\(UUID().uuidString)")
             let result = await offCooperativePool {
                 Result { () -> (TestRunSummary, [SnapshotFailureImages]) in

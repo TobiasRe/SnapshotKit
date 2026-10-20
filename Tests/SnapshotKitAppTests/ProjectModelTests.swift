@@ -1042,6 +1042,16 @@ extension AppUITests {
             #expect(model.dockBadge == "2")
         }
 
+        /// An import that fails says why as soon as it has (a capture waits for it, then stops).
+        @Test func aFailedImportSaysWhy() async throws {
+            let model = AppFixtures.project(.failures, store: AppFixtures.store())
+            let failures = model.failures.map(\.id)
+            await model.importResultBundle(AppFixtures.temporaryDirectory("missing").appendingPathExtension("xcresult")).value
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessage?.hasPrefix("Could not read missing-") == true)
+            #expect(model.failures.map(\.id) == failures)
+        }
+
         /// Moving snapshots to the Trash that all stay says so, without claiming any moved.
         @Test func aTrashThatMovesNothingSaysSo() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())   // its files aren't on disk

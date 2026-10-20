@@ -89,8 +89,8 @@ enum WindowCapture {
                 (project.environment != nil || project.environmentError != nil || project.configError != nil) ? true : nil
             }
             if let bundle = o.importBundle {
-                project.importResultBundle(URL(fileURLWithPath: bundle))
-                _ = await waitFor(deadline: Date().addingTimeInterval(120)) { project.failureSource?.host == "imported" ? true : nil }
+                await project.importResultBundle(URL(fileURLWithPath: bundle)).value
+                if project.lastMessageIsError { log(project.lastMessage ?? "could not import \(bundle)"); exit(7) }
                 if let tab = o.tab { project.tab = tab }
             }
             if let action = o.action {
