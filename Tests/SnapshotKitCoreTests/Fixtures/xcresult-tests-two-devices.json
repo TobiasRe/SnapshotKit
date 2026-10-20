@@ -1,0 +1,309 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+      "deviceName": "SnapshotKit Samples",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24A434",
+      "osVersion": "27.0",
+      "platform": "iOS Simulator"
+    },
+    {
+      "architecture": "arm64",
+      "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+      "deviceName": "Second iPhone",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24A434",
+      "osVersion": "27.0",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/greeting.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                              "nodeType": "Failure Message",
+                              "sourceLocation": {
+                                "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                "lineNumber": 10
+                              }
+                            }
+                          ],
+                          "duration": "0,34s",
+                          "durationInSeconds": 0.3387782573699951,
+                          "name": "Repetition 1",
+                          "nodeIdentifier": "1",
+                          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                          "nodeType": "Repetition",
+                          "result": "Failed"
+                        },
+                        {
+                          "children": [
+                            {
+                              "name": "Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/greeting.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                              "nodeType": "Failure Message",
+                              "sourceLocation": {
+                                "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                "lineNumber": 10
+                              }
+                            }
+                          ],
+                          "duration": "0,2s",
+                          "durationInSeconds": 0.2043287754058838,
+                          "name": "Repetition 2",
+                          "nodeIdentifier": "2",
+                          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                          "nodeType": "Repetition",
+                          "result": "Failed"
+                        }
+                      ],
+                      "details": "iOS Simulator 27.0",
+                      "name": "iPhone 18 Pro",
+                      "nodeIdentifier": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+                      "nodeType": "Device",
+                      "result": "Failed"
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "name": "Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/greeting.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                              "nodeType": "Failure Message",
+                              "sourceLocation": {
+                                "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                "lineNumber": 10
+                              }
+                            }
+                          ],
+                          "duration": "7s",
+                          "durationInSeconds": 7.83299994468689,
+                          "name": "Repetition 1",
+                          "nodeIdentifier": "1",
+                          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                          "nodeType": "Repetition",
+                          "result": "Failed"
+                        },
+                        {
+                          "children": [
+                            {
+                              "name": "Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/greeting.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                              "nodeType": "Failure Message",
+                              "sourceLocation": {
+                                "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                "lineNumber": 10
+                              }
+                            }
+                          ],
+                          "duration": "14s",
+                          "durationInSeconds": 14.549999952316284,
+                          "name": "Repetition 2",
+                          "nodeIdentifier": "2",
+                          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                          "nodeType": "Repetition",
+                          "result": "Failed"
+                        }
+                      ],
+                      "details": "iOS Simulator 27.0",
+                      "name": "iPhone 18 Pro",
+                      "nodeIdentifier": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+                      "nodeType": "Device",
+                      "result": "Failed"
+                    }
+                  ],
+                  "duration": "0,55s",
+                  "durationInSeconds": 0.5457820296287537,
+                  "name": "greeting()",
+                  "nodeIdentifier": "GreetingViewTests/greeting()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                  "nodeType": "Test Case",
+                  "result": "Failed"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "children": [
+                                {
+                                  "name": "Issue recorded: No reference was found on disk. Automatically recorded snapshot: …\n\nopen \"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Ada.png\"\n\nRe-run \"named-name\" to assert against the newly-recorded snapshot.",
+                                  "nodeType": "Failure Message",
+                                  "sourceLocation": {
+                                    "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                    "lineNumber": 14
+                                  }
+                                }
+                              ],
+                              "duration": "0,037s",
+                              "durationInSeconds": 0.036512136459350586,
+                              "name": "Repetition 1",
+                              "nodeIdentifier": "1",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+                              "nodeType": "Repetition",
+                              "result": "Failed"
+                            },
+                            {
+                              "duration": "0,045s",
+                              "durationInSeconds": 0.044586181640625,
+                              "name": "Repetition 2",
+                              "nodeIdentifier": "2",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            }
+                          ],
+                          "details": "1/2 (50%) passed, 1/2 (50%) failed",
+                          "name": "\"Ada\"",
+                          "nodeType": "Arguments",
+                          "result": "Failed"
+                        },
+                        {
+                          "children": [
+                            {
+                              "children": [
+                                {
+                                  "name": "Issue recorded: No reference was found on disk. Automatically recorded snapshot: …\n\nopen \"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Bob.png\"\n\nRe-run \"named-name\" to assert against the newly-recorded snapshot.",
+                                  "nodeType": "Failure Message",
+                                  "sourceLocation": {
+                                    "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                                    "lineNumber": 14
+                                  }
+                                }
+                              ],
+                              "duration": "0,11s",
+                              "durationInSeconds": 0.10716485977172852,
+                              "name": "Repetition 1",
+                              "nodeIdentifier": "1",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=2abf6b98c3d12d21c92fc314a49dab5b271b49a03d177dd4a351d5ba295278e0",
+                              "nodeType": "Repetition",
+                              "result": "Failed"
+                            },
+                            {
+                              "duration": "0,11s",
+                              "durationInSeconds": 0.11219215393066406,
+                              "name": "Repetition 2",
+                              "nodeIdentifier": "2",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=2abf6b98c3d12d21c92fc314a49dab5b271b49a03d177dd4a351d5ba295278e0",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            }
+                          ],
+                          "details": "1/2 (50%) passed, 1/2 (50%) failed",
+                          "name": "\"Bob\"",
+                          "nodeType": "Arguments",
+                          "result": "Failed"
+                        }
+                      ],
+                      "details": "iOS Simulator 27.0",
+                      "name": "iPhone 18 Pro",
+                      "nodeIdentifier": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+                      "nodeType": "Device",
+                      "result": "Failed"
+                    },
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "duration": "0,012s",
+                              "durationInSeconds": 0.012401103973388672,
+                              "name": "Repetition 1",
+                              "nodeIdentifier": "1",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            },
+                            {
+                              "duration": "0,038s",
+                              "durationInSeconds": 0.03751111030578613,
+                              "name": "Repetition 2",
+                              "nodeIdentifier": "2",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            }
+                          ],
+                          "name": "\"Ada\"",
+                          "nodeType": "Arguments",
+                          "result": "Passed"
+                        },
+                        {
+                          "children": [
+                            {
+                              "duration": "0,028s",
+                              "durationInSeconds": 0.02829909324645996,
+                              "name": "Repetition 1",
+                              "nodeIdentifier": "1",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=2abf6b98c3d12d21c92fc314a49dab5b271b49a03d177dd4a351d5ba295278e0",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            },
+                            {
+                              "duration": "0,019s",
+                              "durationInSeconds": 0.01934027671813965,
+                              "name": "Repetition 2",
+                              "nodeIdentifier": "2",
+                              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=2abf6b98c3d12d21c92fc314a49dab5b271b49a03d177dd4a351d5ba295278e0",
+                              "nodeType": "Repetition",
+                              "result": "Passed"
+                            }
+                          ],
+                          "name": "\"Bob\"",
+                          "nodeType": "Arguments",
+                          "result": "Passed"
+                        }
+                      ],
+                      "details": "iOS Simulator 27.0",
+                      "name": "iPhone 18 Pro",
+                      "nodeIdentifier": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+                      "nodeType": "Device",
+                      "result": "Passed"
+                    }
+                  ],
+                  "duration": "0,05s",
+                  "durationInSeconds": 0.04975086450576782,
+                  "name": "named(name:)",
+                  "nodeIdentifier": "GreetingViewTests/named(name:)",
+                  "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)",
+                  "nodeType": "Test Case",
+                  "result": "Failed"
+                }
+              ],
+              "name": "GreetingViewTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests",
+              "nodeType": "Test Suite",
+              "result": "Failed"
+            }
+          ],
+          "name": "SampleUITests",
+          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests",
+          "nodeType": "Unit test bundle",
+          "result": "Failed"
+        }
+      ],
+      "name": "SampleUI",
+      "nodeType": "Test Plan",
+      "result": "Failed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}

@@ -116,15 +116,13 @@ public enum XCResultParser {
                 var messages: [String] = []
                 var files: [String] = []
                 collectFailures(node, messages: &messages, files: &files)
-                let outcome = TestOutcome(xcresult: node.result)
-                let repetitions = (node.children ?? []).filter { $0.nodeType == "Repetition" }.map { TestOutcome(xcresult: $0.result) }
                 let test = TestCaseResult(
                     name: node.name,
                     identifier: node.nodeIdentifier ?? (suitePath + [node.name]).joined(separator: "/"),
-                    outcome: outcome,
+                    outcome: TestOutcome(xcresult: node.result),
                     failureMessages: messages,
                     duration: node.durationInSeconds,
-                    repetitions: repetitions.isEmpty ? [outcome] : repetitions
+                    repetitions: runs(of: node)
                 )
                 if suites[key] == nil {
                     suites[key] = SuiteResult(bundle: bundleName, path: suitePath, tests: [], failureFiles: [])
@@ -150,6 +148,46 @@ public enum XCResultParser {
         }
         for node in tests.testNodes { visit(node, bundle: nil, suitePath: []) }
         return TestRunSummary(suites: order.compactMap { suites[$0] })
+    }
+
+    /// One outcome per run of a test case: per repetition, on each device and test plan
+    /// configuration. A repetition sits under the test, under a Device or Configuration node when
+    /// there are several, and under each Arguments node of a parameterized test; the cases of one
+    /// repetition are one run, which failed if any case failed.
+    static func runs(of testCase: XCResultTests.Node) -> [TestOutcome] {
+        var order: [String] = []
+        var outcomes: [String: [TestOutcome]] = [:]
+        func add(_ key: String, _ node: XCResultTests.Node) {
+            if outcomes[key] == nil { order.append(key) }
+            outcomes[key, default: []].append(TestOutcome(xcresult: node.result))
+        }
+        /// Whether `node` holds a run; a device or configuration without repetitions is one.
+        func visit(_ node: XCResultTests.Node, context: String) -> Bool {
+            var context = context
+            switch node.nodeType {
+            case "Repetition":
+                add(context + "#" + (node.nodeIdentifier ?? node.name), node)
+                return true
+            case "Device", "Test Plan Configuration":
+                context += "/" + (node.nodeIdentifier ?? node.name)
+            case "Failure Message", "Attachment", "Runtime Warning", "Skip Message", "Source Code Reference":
+                return false
+            default:
+                break
+            }
+            var found = false
+            for child in node.children ?? [] { found = visit(child, context: context) || found }
+            if !found, node.nodeType == "Device" || node.nodeType == "Test Plan Configuration" {
+                add(context, node)
+                return true
+            }
+            return found
+        }
+        guard visit(testCase, context: "") else { return [TestOutcome(xcresult: testCase.result)] }
+        return order.map { key in
+            let cases = outcomes[key]!
+            return cases.contains(.failed) ? .failed : cases.contains(.passed) ? .passed : cases[0]
+        }
     }
 
     private static func collectFailures(_ node: XCResultTests.Node, messages: inout [String], files: inout [String]) {

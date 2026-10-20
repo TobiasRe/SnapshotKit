@@ -29,6 +29,26 @@ import Testing
         #expect(flakes.first?.failed == 3)
     }
 
+    /// Xcode 27, two simulators, `-test-iterations 2`: repetitions sit under a Device node, and a
+    /// parameterized test's under its Arguments too.
+    @Test func repetitionsOnSeveralDevices() throws {
+        let summary = try XCResultParser.parse(fixture("xcresult-tests-two-devices.json"))
+        let tests = try #require(summary.suites.first?.tests)
+        #expect(tests.map(\.name) == ["greeting()", "named(name:)"])
+        // Two runs on each device; one failing case fails that run of a parameterized test.
+        #expect(tests[0].repetitions == [.failed, .failed, .failed, .failed])
+        #expect(tests[1].repetitions == [.failed, .passed, .passed, .passed])
+        #expect(tests[0].failureMessages.count == 4)
+        #expect(Flakiness.classify(summary).map(\.verdict) == [.alwaysFails, .flaky])
+    }
+
+    @Test func parameterizedTestCasesWithoutRepetitions() throws {
+        let summary = try XCResultParser.parse(fixture("xcresult-tests-parameterized.json"))
+        let named = try #require(summary.suites.first?.tests.last)
+        #expect(named.repetitions == [.failed])
+        #expect(named.failureMessages.count == 2)
+    }
+
     @Test func flakyClassification() {
         let suite = SuiteResult(bundle: "B", path: ["S"], tests: [
             TestCaseResult(name: "a()", identifier: "S/a()", outcome: .failed, failureMessages: [], repetitions: [.passed, .failed, .passed]),

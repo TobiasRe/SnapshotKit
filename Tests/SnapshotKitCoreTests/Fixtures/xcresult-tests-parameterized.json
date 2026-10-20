@@ -1,0 +1,110 @@
+{
+  "devices": [
+    {
+      "architecture": "arm64",
+      "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+      "deviceName": "SnapshotKit Samples",
+      "modelName": "iPhone 18 Pro",
+      "osBuildNumber": "24A434",
+      "osVersion": "27.0",
+      "platform": "iOS Simulator"
+    }
+  ],
+  "testNodes": [
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "name": "Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/greeting.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                      "nodeType": "Failure Message",
+                      "sourceLocation": {
+                        "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                        "lineNumber": 10
+                      }
+                    }
+                  ],
+                  "duration": "0,29s",
+                  "durationInSeconds": 0.28748416900634766,
+                  "name": "greeting()",
+                  "nodeIdentifier": "GreetingViewTests/greeting()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()",
+                  "nodeType": "Test Case",
+                  "result": "Failed"
+                },
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "name": "Issue recorded: Snapshot \"Ada\" does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Ada.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/named-name.Ada.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                          "nodeType": "Failure Message",
+                          "sourceLocation": {
+                            "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                            "lineNumber": 14
+                          }
+                        }
+                      ],
+                      "duration": "0,29s",
+                      "durationInSeconds": 0.2874629497528076,
+                      "name": "\"Ada\"",
+                      "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=a39afeed7d3319213be7a235840b3c6d3f09f2810b9c91779f34572b6b36832a",
+                      "nodeType": "Arguments",
+                      "result": "Failed"
+                    },
+                    {
+                      "children": [
+                        {
+                          "name": "Issue recorded: Snapshot \"Bob\" does not match reference.\n\n@−\n\"file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Bob.png\"\n@+\n\"file:///sim/tmp/GreetingViewTests/named-name.Bob.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+                          "nodeType": "Failure Message",
+                          "sourceLocation": {
+                            "filePath": "/path/to/repo/Tests/SampleUITests/GreetingViewTests.swift",
+                            "lineNumber": 14
+                          }
+                        }
+                      ],
+                      "duration": "0,29s",
+                      "durationInSeconds": 0.2878570556640625,
+                      "name": "\"Bob\"",
+                      "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)?args=2abf6b98c3d12d21c92fc314a49dab5b271b49a03d177dd4a351d5ba295278e0",
+                      "nodeType": "Arguments",
+                      "result": "Failed"
+                    }
+                  ],
+                  "duration": "0,29s",
+                  "durationInSeconds": 0.28766000270843506,
+                  "name": "named(name:)",
+                  "nodeIdentifier": "GreetingViewTests/named(name:)",
+                  "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)",
+                  "nodeType": "Test Case",
+                  "result": "Failed"
+                }
+              ],
+              "name": "GreetingViewTests",
+              "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests",
+              "nodeType": "Test Suite",
+              "result": "Failed"
+            }
+          ],
+          "name": "SampleUITests",
+          "nodeIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests",
+          "nodeType": "Unit test bundle",
+          "result": "Failed"
+        }
+      ],
+      "name": "SampleUI",
+      "nodeType": "Test Plan",
+      "result": "Failed"
+    }
+  ],
+  "testPlanConfigurations": [
+    {
+      "configurationId": "1",
+      "configurationName": "Test Scheme Action"
+    }
+  ]
+}
