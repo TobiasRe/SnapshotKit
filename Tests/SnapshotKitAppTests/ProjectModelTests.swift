@@ -576,5 +576,15 @@ extension AppUITests {
             model.cancel()
             try await waitUntilFinished(model)
         }
+
+        @Test func cancellingBeforeXcodebuildStartsIsNoError() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun)
+            model.runTests()
+            model.cancel()                      // xcodebuild hasn't started yet
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Cancelled.")
+            #expect(!model.lastMessageIsError)
+        }
     }
 }

@@ -957,6 +957,12 @@ final class ProjectModel {
         NotificationCenter.default.post(name: AppModel.runFinished, object: nil)
     }
 
+    /// Ends an operation that threw. A cancel before xcodebuild started throws `CancellationError`,
+    /// which is no failure.
+    private func finish(throwing error: Error) {
+        if error is CancellationError { finish(message: "Cancelled.") } else { finish(message: error.localizedDescription, isError: true) }
+    }
+
     /// Shows `message` in the notice (nil hides it), with `action` as its next step. Always sets
     /// all three, so a message never inherits the button of the one before it.
     private func notify(_ message: String?, isError: Bool = false, action: NoticeAction? = nil) {
@@ -1025,7 +1031,7 @@ final class ProjectModel {
                 }
                 completeRun(result, images: images, kind: .run, attachmentsDirectory: images.isEmpty ? nil : dir)
             } catch {
-                finish(message: error.localizedDescription, isError: true)
+                finish(throwing: error)
             }
         }
     }
@@ -1177,7 +1183,7 @@ final class ProjectModel {
                 // New references are working-tree changes: the next step is to look at them.
                 finish(message: message, isError: isError, action: .reviewChanges)
             } catch {
-                finish(message: error.localizedDescription, isError: true)
+                finish(throwing: error)
             }
         }
     }
@@ -1205,7 +1211,7 @@ final class ProjectModel {
                                                   onLine: onLine, onEvent: onEvent)
                 applyFlakeResult(result, iterations: iterations)
             } catch {
-                finish(message: error.localizedDescription, isError: true)
+                finish(throwing: error)
             }
         }
     }
@@ -1272,7 +1278,7 @@ final class ProjectModel {
                     if !out.run.cancelled { tab = .changes }
                 }
             } catch {
-                finish(message: error.localizedDescription, isError: true)
+                finish(throwing: error)
             }
         }
     }
