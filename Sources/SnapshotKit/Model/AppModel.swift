@@ -50,9 +50,9 @@ final class AppModel {
         ]
         restoreLeftoverPatches()
         refreshProjects()
+        // Opens it: an @Observable property's didSet runs in init too, unlike a stored property's.
         if let last = store.settings.lastProject, projects.contains(where: { $0.path == last }) {
             selectedPath = last
-            openSelected()
         }
     }
 
@@ -117,6 +117,8 @@ final class AppModel {
     func remove(_ project: Project) {
         store.remove(project)
         if selectedPath == project.path { selectedPath = nil }
+        // Let its model (and the model's file watcher) go, unless it is still running something.
+        if models[project.path]?.isRunning == false { models[project.path] = nil }
         refreshProjects()
     }
 
