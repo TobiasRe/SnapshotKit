@@ -409,6 +409,10 @@ private struct NativeHighlightOff: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.scheduleApply() }
 
     final class Probe: NSView {
+        /// Never a click target: it fills the row's background, so it would take every click on the
+        /// row, and the list would never select it.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             scheduleApply()
