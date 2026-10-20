@@ -135,6 +135,21 @@ import Testing
         #expect(changes.map(\.path) == ["Tests/AppTests/__Snapshots__/CardTests/card.1.png"])
     }
 
+    /// The library's order: numbers by value, so `width.25` comes before `width.100`.
+    @Test func changesAreInTheLibrarysNaturalOrder() throws {
+        let repo = try TempRepo()
+        try repo.write("README.md", "x")
+        try repo.commitAll("base")
+        let names = ["width.0.png", "width.100.png", "width.25.png", "Width.60.png"]
+        for name in names { try repo.write("Tests/AppTests/__Snapshots__/CardTests/\(name)", red) }
+
+        let set = try repo.git.snapshotChanges(baseBranch: "develop")
+        let ordered = ["width.0.png", "width.25.png", "Width.60.png", "width.100.png"]
+        #expect(set.changes.map(\.fileName) == ordered)
+        #expect(set.groups.first?.changes.map(\.fileName) == ordered)
+        #expect(SnapshotLibrary(files: set.changes.map { SnapshotFile(path: $0.path, byteSize: 0) }).files.map(\.fileName) == ordered)
+    }
+
     @Test func filterAndNames() {
         let changes = [
             SnapshotChange(path: "T/__Snapshots__/CardTests/darkMode.1.png", kind: .committed),

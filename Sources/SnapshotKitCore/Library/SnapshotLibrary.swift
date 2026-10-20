@@ -104,7 +104,7 @@ public struct SnapshotLibrary: Sendable {
     public var files: [SnapshotFile]
 
     public init(files: [SnapshotFile]) {
-        self.files = files.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        self.files = files.sorted { Self.ordered($0.path, $1.path) }
     }
 
     /// The git pathspec for snapshot images: PNGs under a `__Snapshots__` folder, where
@@ -150,7 +150,8 @@ public struct SnapshotLibrary: Sendable {
     }
 
     /// Finder-like order: case-insensitive, numbers by value (measured faster than a plain
-    /// `compare(options: [.caseInsensitive, .numeric])` here).
+    /// `compare(options: [.caseInsensitive, .numeric])` here). Every list of snapshots uses it,
+    /// so the library and the Changes list agree.
     static func ordered(_ a: String, _ b: String) -> Bool {
         a.localizedStandardCompare(b) == .orderedAscending
     }

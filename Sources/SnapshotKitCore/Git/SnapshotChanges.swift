@@ -89,8 +89,8 @@ public struct SnapshotChangeSet: Sendable {
 
     public static func group(_ changes: [SnapshotChange]) -> [SnapshotChangeGroup] {
         Dictionary(grouping: changes, by: \.suite)
-            .map { SnapshotChangeGroup(suite: $0.key, changes: $0.value.sorted { $0.path < $1.path }) }
-            .sorted { $0.suite.localizedStandardCompare($1.suite) == .orderedAscending }
+            .map { SnapshotChangeGroup(suite: $0.key, changes: $0.value.sorted { SnapshotLibrary.ordered($0.path, $1.path) }) }
+            .sorted { SnapshotLibrary.ordered($0.suite, $1.suite) }
     }
 
     /// Case-insensitive filter over path, suite and test name, optionally restricted to kinds.
@@ -167,7 +167,7 @@ extension Git {
             baseRef: baseRef,
             diffBase: diffBase,
             baseCommit: base,
-            changes: changes.values.sorted { $0.path < $1.path }
+            changes: changes.values.sorted { SnapshotLibrary.ordered($0.path, $1.path) }
         )
     }
 
