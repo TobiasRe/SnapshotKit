@@ -391,5 +391,31 @@ extension AppUITests {
             #expect(model.currentBranch == "feature")
             #expect(model.branches.prefix(1) == ["develop"])
         }
+
+        // MARK: Selection
+
+        /// The list groups by suite, so the first row is not the first path git reports.
+        @Test func loadingSelectsTheFirstRowShown() async throws {
+            let (repo, _) = try makeRepo()
+            let zebra = "Modules/Zoo/Tests/__Snapshots__/ZebraTests/zebra.1.png"
+            try FileManager.default.createDirectory(at: repo.appendingPathComponent(zebra).deletingLastPathComponent(), withIntermediateDirectories: true)
+            try AppFixtures.badged.write(to: repo.appendingPathComponent(zebra))
+            // The last run's suites in the order they ran, not the list's.
+            saveLastRun(in: repo, suites: [AppFixtures.profileSuite, AppFixtures.checkoutSuite], failed: 2)
+
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            #expect(model.displayedChanges.map(\.suite) == ["CardTests", "ZebraTests"])
+            #expect(model.selectedChangeID == model.displayedChanges.first?.id)
+            #expect(model.displayedFailures.map(\.suite.name) == ["CheckoutViewTests", "ProfileViewTests"])
+            #expect(model.selectedFailureID == model.displayedFailures.first?.id)
+        }
+
+        func saveLastRun(in repo: URL, suites: [SuiteResult], failed: Int) {
+            LastRun(result: TestRunResult(commandLine: "xcodebuild test", exitStatus: 65, cancelled: false,
+                                          resultBundle: repo.appendingPathComponent("run.xcresult"), summary: TestRunSummary(suites: suites),
+                                          passed: 0, failed: failed, skipped: 0, buildErrors: [])).save(repository: repo)
+        }
     }
 }

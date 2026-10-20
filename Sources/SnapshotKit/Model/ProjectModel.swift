@@ -546,7 +546,7 @@ final class ProjectModel {
                 diagnoseChanges(set)
                 changesError = nil
                 if selectedChangeID == nil || !set.changes.contains(where: { $0.id == selectedChangeID }) {
-                    selectedChangeID = filteredChanges.first?.id
+                    selectedChangeID = displayedChanges.first?.id
                 }
             case .failure(let error):
                 changeSet = nil
@@ -849,7 +849,7 @@ final class ProjectModel {
         failureSource = source
         diagnoseFailures()
         if selectedFailureID == nil || !failures.contains(where: { $0.id == selectedFailureID }) {
-            selectedFailureID = failures.first?.id
+            selectedFailureID = displayedFailures.first?.id
         }
     }
 
@@ -1357,7 +1357,7 @@ extension ProjectModel {
         failures = f.failures
         diagnoses = Self.diagnose(f.failures)
         failureSource = f.failureSource
-        selectedFailureID = f.failures.first?.id
+        selectedFailureID = displayedFailures.first?.id
         changeSet = f.changeSet
         changesError = f.changesError
         isLoadingChanges = false
@@ -1374,7 +1374,7 @@ extension ProjectModel {
                   let pb = b.flatMap(PixelImage.init(data:)) else { return nil }
             return (change.id, DiffDiagnosis(ImageDiff.compare(pa, pb)))
         })
-        selectedChangeID = filteredChanges.first?.id
+        selectedChangeID = displayedChanges.first?.id
     }
 }
 
