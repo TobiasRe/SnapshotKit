@@ -115,9 +115,11 @@ struct SnapshotKitCommands: Commands {
         CommandMenu("Snapshots") {
             let project = model.current
             let busy = project?.isRunning ?? true
+            // Without Xcode and a simulator nothing runs locally: the same rule as the Run tab and ⌘K.
+            let cantRun = busy || project?.environment == nil
             Button("Run Snapshot Tests") { project?.runTests() }
                 .keyboardShortcut("r")
-                .disabled(busy)
+                .disabled(cantRun)
             Divider()
             Button("Re-record Selected Test") { project?.reRecordSelection() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -127,12 +129,12 @@ struct SnapshotKitCommands: Commands {
                 .disabled(project?.selectedSnapshotFile == nil)
             Button("Re-record Failing Suites") { project?.reRecordFailed() }
                 .keyboardShortcut("r", modifiers: [.command, .shift, .option])
-                .disabled(busy || (project?.failingSuites.isEmpty ?? true))
+                .disabled(cantRun || (project?.failingSuites.isEmpty ?? true))
             Button("Re-record All Snapshot Tests…") { project?.confirmReRecordAll = true }
-                .disabled(busy || project?.environment == nil || (project?.recordableSnapshots.isEmpty ?? true))
+                .disabled(cantRun || (project?.recordableSnapshots.isEmpty ?? true))
             Button("Check Flakiness of Failing Tests") { project?.checkFlakiness() }
                 .keyboardShortcut("r", modifiers: [.command, .option])
-                .disabled(busy || (project?.failingSuites.isEmpty ?? true))
+                .disabled(cantRun || (project?.failingSuites.isEmpty ?? true))
             Divider()
             Button("Run on Remote Machine") { project?.runRemote() }
                 .keyboardShortcut("r", modifiers: [.command, .control])
@@ -161,8 +163,10 @@ struct SnapshotKitCommands: Commands {
                 Button("Next Item") { project.selectAdjacent(1) }
                     .keyboardShortcut(.downArrow, modifiers: [.command, .option])
                     .disabled(project.tab == .run)
-                Button("Toggle Viewed") {
-                    if let change = project.selectedChange { project.setViewed(!project.viewedChanges.contains(change.id), for: change) }
+                // Says which way it goes, like the list's context menu.
+                let viewed = project.selectedChange.map { project.viewedChanges.contains($0.id) } ?? false
+                Button(viewed ? "Mark as Not Viewed" : "Mark as Viewed") {
+                    if let change = project.selectedChange { project.setViewed(!viewed, for: change) }
                 }
                 .keyboardShortcut("v", modifiers: [.command, .option])
                 .disabled(project.tab != .changes || project.selectedChange == nil)

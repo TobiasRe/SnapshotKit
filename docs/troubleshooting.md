@@ -39,8 +39,8 @@ your `.gitignore` ignores the snapshot folder, git doesn’t see the files and n
 
 ## Running tests
 
-Every problem SnapshotKit finds before a run is shown in the Run tab’s header with the fix. `snapkit config`
-prints the same checks.
+Every problem SnapshotKit finds before a run is shown on the left of the Run tab, under Environment or
+Configuration, with the fix; the header offers **Check Again**. `snapkit config` prints the same checks.
 
 | Message | Fix |
 |---|---|

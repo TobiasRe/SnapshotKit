@@ -12,7 +12,7 @@
 | ⌥⌘2 | Changes tab |
 | ⌥⌘3 | Failures tab |
 | ⌥⌘4 | Run tab |
-| ⌘F | Filter the current list (Escape clears the filter, a second Escape leaves the field) |
+| ⌘F | Filter the current list (Escape clears the filter, a second Escape leaves the field); the Failures list has no filter |
 
 ## Running and recording
 
@@ -30,7 +30,8 @@
 
 | Shortcut | Action |
 |---|---|
-| ↑ / ↓ | Previous / next item in the focused list |
+| ↑ / ↓ | Previous / next item in the focused list (in the library’s grid, the arrow keys move the selection; ↑ / ↓ by a row) |
+| Return | Open the selected tile large (library grid) |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
 | V (in the Changes list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
 | ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
@@ -47,6 +48,7 @@
 | ⌘4 | Toggle |
 | Space | Flip between the images (in Toggle mode), from the list or the image |
 | ← / → | Move the slider divider (in Slider mode), from the list or the image |
+| Arrow keys | Look around a zoomed-in image (on the image; in Slider mode ← / → move the divider) |
 | ⌘= / ⌘− | Zoom in / out |
 | ⌘0 | Zoom to Fit (also: double-click the image) |
 | ⇧⌘0 | Zoom to the changed pixels |

@@ -43,7 +43,9 @@ In a narrow window the scope control becomes a *Show:* menu.
 **Sort** (the ⇅ button): **Name** groups by module and suite; **Size** (largest first) and **Recently
 Changed** show one flat list, useful for finding oversized images or what was recorded last.
 
-**Layout**: a **list** with a large preview of the selected snapshot, or a **grid** of thumbnails.
+**Layout**: a **list** with a large preview of the selected snapshot, or a **grid** of thumbnails. In the grid,
+click a tile to select it and double-click (or press Return) to open it large; the arrow keys move the
+selection, Space Quick Looks it and ⌘C copies it, as in the list.
 
 ![The library as a grid of thumbnails, with the All, Changed, Failing, Uncommitted and Orphaned scopes](images/library-grid.png)
 
@@ -54,8 +56,8 @@ the snapshot, then its variant, for example *● Uncommitted · dark*. The line 
 colored dot:
 
 - **Orphaned** — its test no longer exists,
-- otherwise its change against the base branch, the same word as on the Changes tab: **Committed**,
-  **Uncommitted**, **New** or **Deleted**,
+- otherwise its change against the base branch: **Changed** (committed on this branch; the Changes tab calls
+  it *Committed*), **Uncommitted**, **New** or **Deleted**,
 - otherwise an edit git hasn’t committed: **Modified** or **New**.
 
 A snapshot with nothing notable shows just its variant. Only failing gets a mark of its own, at the trailing

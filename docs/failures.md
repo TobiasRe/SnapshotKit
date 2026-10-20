@@ -40,7 +40,8 @@ The footer sums it up: *2 failing tests in 2 suites · 1 flaky*.
 
 ## Reading the history strip
 
-The strip shows the test’s last runs (up to twelve), oldest on the left:
+The strip shows the test’s last runs (up to twelve in the detail, the last eight in the list), oldest on the
+left:
 
 | Mark | Meaning |
 |---|---|

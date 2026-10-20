@@ -175,11 +175,14 @@ struct RunProgressRow: View {
                     .accessibilityLabel("Cancel \(project.project.name)")
             }
             Text(project.stageLabel).font(DS.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
-            if let fraction = project.progressFraction {
-                ProgressView(value: fraction)
-            } else {
-                ProgressView().progressViewStyle(.linear)
+            Group {
+                if let fraction = project.progressFraction {
+                    ProgressView(value: fraction)
+                } else {
+                    ProgressView().progressViewStyle(.linear)
+                }
             }
+            .accessibilityLabel("\(project.project.name) progress")
             HStack(spacing: DS.Space.m) {
                 // The icons carry the status colors; the numbers stay readable, as on the Run tab.
                 Label { Text("\(project.passed)") } icon: {

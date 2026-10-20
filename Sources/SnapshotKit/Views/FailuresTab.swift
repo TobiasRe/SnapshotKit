@@ -73,11 +73,11 @@ struct FailuresTab: View {
                 // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
                 Button("Re-record Failing Suites") { project.reRecordFailed() }
                     .quietControl()
-                    .disabled(project.isRunning || project.failingSuites.isEmpty)
+                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
                     .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
                 Button("Check Flakiness") { project.checkFlakiness() }
                     .quietControl()
-                    .disabled(project.isRunning || project.failingSuites.isEmpty)
+                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
                     .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
             }
         }
@@ -434,8 +434,10 @@ struct FailureRow: View {
         }
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
-        // One stop per failure: its name, chips and history read together.
+        // One stop per failure: its name, chips and history read together, and its suite, which a
+        // sighted user gets from the section header.
         .accessibilityElement(children: .combine)
+        .accessibilityValue("in \(item.suite.name)")
     }
 }
 
@@ -577,7 +579,7 @@ struct BatchFailureDetail: View {
                 Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
                     .fixedSize()
                     .quietControl()
-                    .disabled(project.isRunning)
+                    .disabled(project.isRunning || project.environment == nil)
                     .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
                 Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
                     .primaryActionStyle()
@@ -608,6 +610,7 @@ struct BatchFailureDetail: View {
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .padding(DS.Space.l)

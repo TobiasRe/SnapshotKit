@@ -19,7 +19,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   button (the same as each detail header’s) is gone, and the Run tab lists Xcode and the simulator once.
 - One main window: no New Window or window tabs; the Dock icon or the menu bar item brings it back.
 - The same names everywhere: **Re-record Failing Suites** (Failures, Run tab, menus, ⌘K), **Check Flakiness of
-  Failing Tests**, and **Zoom to Fit** for ⌘0. **Re-record All…** only ever means every snapshot.
+  Failing Tests** (just *Check Flakiness* in the Failures bar, above the failures it checks), and **Zoom to
+  Fit** for ⌘0. **Re-record All…** only ever means every snapshot.
 - Flakiness reads “2 of 5 runs passed” and the history “4 of 8 recent runs passed”; failed and passed are
   circles everywhere, and status colors sit on icons rather than whole sentences.
 - A test with more than three variants picks them from a menu instead of a wide segmented control.
@@ -36,6 +37,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   commands beside them.
 - The Failures list takes the same keys as the others: Space Quick Looks the actual image (or flips it in Toggle
   mode), ← → move the slider, ⌘C copies the image. The ⌘K palette offers **Run on Remote Machine**.
+- The library’s grid works from the keyboard: arrow keys move the selection, Return opens a tile, Space and
+  ⌘C as in the list. Zoomed in, the arrow keys look around the image. ⌘K also pins, reveals and removes the
+  open project.
+- The Base branch and Remote host fields save when you click or tab away, not only on Return.
 - VoiceOver: every row and tile is one stop that says what it shows (“payButton dark, in CheckoutViewTests,
   Uncommitted, flaky”), test results offer **Show Failure** as an action, pane titles are headings, the end of a
   run is announced, and the ⌘K palette reads the highlighted row and keeps Tab inside.
@@ -92,6 +97,12 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Opening the base version of two snapshots of the same test, or of a branch like `release/1.0`, opens the
   right image.
 - The same notice (“All 12 tests passed.”) shows again after it was closed.
+- Re-recording a snapshot that was already changed shows the new image on the Changes tab and in the library,
+  not the cached old one; an open compare window shows the new pair when it is opened again.
+- Without Xcode, ⌘R, Re-record Failing Suites and Check Flakiness are disabled in the menus and on the
+  Failures tab, as they already were on the Run tab.
+- Failure actions open and copy the attempt on screen; the library’s **Re-record N Shown** leaves out orphaned
+  snapshots instead of failing on them.
 
 ## [0.2.0] - 2026-10-20
 

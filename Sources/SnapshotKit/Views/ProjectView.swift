@@ -53,7 +53,7 @@ struct ProjectView: View {
         .confirmationDialog(ProjectModel.testCount(project.recordableSnapshots) == 1 ? "Re-record the snapshot test?"
                             : "Re-record all \(ProjectModel.testCount(project.recordableSnapshots)) snapshot tests?",
                             isPresented: $project.confirmReRecordAll) {
-            Button("Re-record All") { project.reRecordAll() }
+            Button(ProjectModel.testCount(project.recordableSnapshots) == 1 ? "Re-record" : "Re-record All") { project.reRecordAll() }
         } message: {
             Text("Every reference image is recorded again and then verified. Review the result on the Changes tab before committing.")
         }
@@ -145,6 +145,8 @@ struct RunInspector: View {
     let project: ProjectModel
     @State private var baseBranch = ""
     @State private var remoteHost = ""
+    private enum Field { case baseBranch, remoteHost }
+    @FocusState private var focused: Field?
 
     var body: some View {
         ScrollView {
@@ -206,7 +208,8 @@ struct RunInspector: View {
                                 .textFieldStyle(.plain)
                                 .fieldChrome()
                                 .accessibilityLabel("Base branch")
-                                .onSubmit { project.updateSettings { $0.baseBranch = baseBranch.isEmpty ? nil : baseBranch } }
+                                .focused($focused, equals: .baseBranch)
+                                .onSubmit(saveFields)
                         }
                         PropertyRow("Remote host", alignment: .center) {
                             TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
@@ -214,7 +217,8 @@ struct RunInspector: View {
                                 .fieldChrome()
                                 .accessibilityLabel("Remote host")
                                 .help("Remote runs sync the working tree to this Mac over SSH and run the same command there")
-                                .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
+                                .focused($focused, equals: .remoteHost)
+                                .onSubmit(saveFields)
                         }
                     }
                 } else if let error = project.configError {
@@ -233,6 +237,19 @@ struct RunInspector: View {
         .onAppear {
             baseBranch = project.settings.baseBranch ?? ""
             remoteHost = project.settings.remoteHost ?? ""
+        }
+        // Saved like any Mac field: on Return, and also when you click or tab away or leave the tab.
+        .onChange(of: focused) { saveFields() }
+        .onDisappear(perform: saveFields)
+    }
+
+    /// Stores what the fields say, if it differs from the settings (a save reloads the configuration).
+    private func saveFields() {
+        let base = baseBranch.isEmpty ? nil : baseBranch, host = remoteHost.isEmpty ? nil : remoteHost
+        guard base != project.settings.baseBranch || host != project.settings.remoteHost else { return }
+        project.updateSettings {
+            $0.baseBranch = base
+            $0.remoteHost = host
         }
     }
 
@@ -340,7 +357,15 @@ extension PropertyRow where Value == PropertyValue {
 struct PropertyValue: View {
     var text: String
     var code = false
-    var body: some View { Text(text).fontDesign(code ? .monospaced : nil).textSelection(.enabled) }
+    var body: some View {
+        if code {
+            // A name on one line, cut in the middle: wrapped, "Sample-App" broke at its hyphen and
+            // read as two words. The whole of it is in the tooltip.
+            Text(text).fontDesign(.monospaced).lineLimit(1).truncationMode(.middle).help(text).textSelection(.enabled)
+        } else {
+            Text(text).textSelection(.enabled)
+        }
+    }
 }
 
 /// Outcome first, then the actions that act on it.
@@ -489,10 +514,11 @@ struct RunStatusHeader: View {
     private func actions(compact: Bool) -> some View {
         HStack(spacing: DS.Space.s) {
             if project.isRunning {
+                // ⌘. and ⌘R belong to the Snapshots menu; a second binding here would compete with it.
                 Button("Cancel", role: .cancel) { project.cancel() }
                     .fixedSize()
                     .quietControl()
-                    .keyboardShortcut(".")
+                    .help("Cancel the run (⌘.)")
             } else {
                 GlassIconMenu(title: "More Actions", symbol: "ellipsis", help: "Re-record everything, flakiness check and remote runs") {
                     if compact && !hasProblem {
@@ -500,14 +526,14 @@ struct RunStatusHeader: View {
                     }
                     Button("Re-record All Snapshot Tests…") { project.confirmReRecordAll = true }
                         .disabled(project.recordableSnapshots.isEmpty || project.environment == nil)
-                    Button("Check Flakiness (\(project.store.settings.flakeIterations)×)") { project.checkFlakiness() }
+                    Button("Check Flakiness of Failing Tests") { project.checkFlakiness() }
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)
                     Divider()
                     Section("On \(project.config?.remoteHost ?? "Remote Machine")") {
                         Button("Run Tests") { project.runRemote() }
                         Button("Re-record Failing Suites") { project.reRecordOnRemote() }
                             .disabled(project.failingSuites.isEmpty)
-                        Button("Check Flakiness") { project.checkFlakiness(remote: true) }
+                        Button("Check Flakiness of Failing Tests") { project.checkFlakiness(remote: true) }
                             .disabled(project.failingSuites.isEmpty)
                     }
                     .disabled(!project.hasRemote)
@@ -529,8 +555,8 @@ struct RunStatusHeader: View {
                     Button("Run Tests") { project.runTests() }
                         .primaryActionStyle()
                         .fixedSize()
-                        .keyboardShortcut("r")
                         .disabled(project.environment == nil)
+                        .help("Run the snapshot tests like CI (⌘R)")
                 }
             }
         }

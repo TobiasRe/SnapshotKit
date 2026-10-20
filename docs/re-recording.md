@@ -18,8 +18,9 @@ references.
 | A test from a change or failure | its ··· menu or right-click | |
 | On the CI machine | Run tab › ··· › On *host* › Re-record Failing Suites. [Remote runs](remote-runs.md) | |
 
-Re-recording more than ten tests asks first, with the number of tests. Orphaned snapshots can’t be re-recorded:
-their test no longer exists.
+**Re-record All Snapshot Tests…** always asks first, and the library’s **Re-record N Shown…** does when it
+covers more than ten tests. Orphaned snapshots can’t be re-recorded (their test no longer exists), so those
+actions leave them out.
 
 ## What happens, step by step
 

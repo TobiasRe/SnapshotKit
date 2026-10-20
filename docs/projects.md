@@ -62,7 +62,8 @@ The sidebar has up to three sections:
 
 Each row shows the project’s initials, its name and, after a run with failures, a red dot with the number of
 failing tests. Hover a row for its full path. Right-click for **Pin**/**Unpin**, **Reveal in Finder** and
-**Remove from List** (which only removes it from SnapshotKit, never from disk).
+**Remove from List** (which only removes it from SnapshotKit, never from disk); for the open project, ⌘K
+offers the same.
 
 The **+** menu at the bottom adds projects and scan folders and rescans; the **⌘K** button opens the
 palette.
@@ -74,11 +75,12 @@ to choose; Escape to close.
 
 - **Projects** match by name first, then by path. The current project is labeled *Current*, others show
   their folder.
-- **Commands** are whatever can be done right now in the open project, each with its keyboard shortcut:
-  Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
+- **Commands** act on the open project, each with its keyboard shortcut where it has one: Run Snapshot
+  Tests, Run on Remote Machine, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
   Flakiness of Failing Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
-  Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed and Add Project…. Commands that can’t
-  run (nothing failing, a run in progress) are left out.
+  Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed, Pin/Unpin Project, Reveal Project in
+  Finder, Remove Project from List and Add Project…. A command that can’t do anything now (nothing failing,
+  no remote machine, everything viewed, a run in progress) is left out.
 
 Matching is fuzzy: `rrf` finds *Re-record Failing Suites*, `pay` finds *payments-ui*.
 

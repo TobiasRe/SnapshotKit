@@ -200,9 +200,10 @@ struct ChangesTab: View {
                     }
                     Divider()
                     Toggle(project.viewedChanges.isEmpty ? "Hide Viewed" : "Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
-                    Button("Mark All as Viewed") { project.setAllViewed(true) }
+                    let all = project.changesAreFiltered ? "All Shown" : "All"
+                    Button("Mark \(all) as Viewed") { project.setAllViewed(true) }
                         .disabled(project.displayedChanges.allSatisfy { project.viewedChanges.contains($0.id) })
-                    Button("Mark All as Not Viewed") { project.setAllViewed(false) }
+                    Button("Mark \(all) as Not Viewed") { project.setAllViewed(false) }
                         .disabled(!project.displayedChanges.contains { project.viewedChanges.contains($0.id) })
                     Button("Revert All Shown to \(baseName)…") { pendingRevert = project.displayedChanges }
                         .disabled(project.displayedChanges.isEmpty || project.isRunning)
@@ -409,6 +410,12 @@ struct ChangeOrigin: View {
     }
 }
 
+extension ProjectModel {
+    /// Whether the filter or the kinds menu hides changes, so "all" actions name what they act on:
+    /// the changes shown.
+    var changesAreFiltered: Bool { !changeFilter.isEmpty || changeKinds.count < SnapshotChangeKind.allCases.count }
+}
+
 extension SnapshotChange {
     /// The change read as a library file, for its test name and variant ("payButton", "dark").
     var file: SnapshotFile { SnapshotFile(path: path, byteSize: 0) }
@@ -551,6 +558,7 @@ struct SearchField: View {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
+                    .help("Clear the filter (Escape)")
                     .accessibilityLabel("Clear")
             }
         }

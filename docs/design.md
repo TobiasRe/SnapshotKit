@@ -44,8 +44,8 @@ can be followed between these views, and re-recording is available wherever a sn
    icon actions are glass circles (`GlassIconButton`, `GlassIconMenu`), an action with variations is a
    glass pill with a chevron (`GlassSplitButton`), and text controls are glass capsules (`quietControl()`).
    Lists, forms, logs and images stay solid. Neighboring floating glass is grouped with `GlassGroup`.
-3. **One tint.** The accent color marks the single primary action in a region (`primaryActionStyle()`,
-   which is `.glassProminent` on macOS 26). Neighboring actions are quiet glass (`quietControl()`).
+3. **One tint.** The accent color marks the single primary action in a region (`primaryActionStyle()`, an
+   accent capsule as tall as the controls beside it). Neighboring actions are quiet glass (`quietControl()`).
 4. **Color means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
    Change kinds use blue (committed), orange (uncommitted), green (new) and red (deleted).
    Status color as *text* goes through `DS.Status.text(_:)`: system colors are tuned for fills and icons, and
@@ -70,9 +70,10 @@ can be followed between these views, and re-recording is available wherever a sn
 |---|---|
 | Spacing (`DS.Space`) | 2 · 4 · 8 · 12 · 16 · 24 (4-pt grid) |
 | Bars (`DS.Bar`) | header 52 · filters 36 · footer 32: every column’s bars, so edges line up across panes |
-| Radius (`DS.Radius`) | 6 thumbnails/chips · 10 panels · 16 floating bars (concentric with the window) |
+| Radius (`DS.Radius`) | 4 monogram tiles · 6 thumbnails/chips · 10 selected tiles · 16 floating bars (concentric with the window) |
+| Controls (`DS.Control`) | capsules 28 tall, text 10 from their edge (14 in the primary button) · icons 13 · monograms 18 |
 | Surfaces (`DS.Surface`) | content · selection (grid tiles, primary 8%) · thumb (chosen segment, 10%) · hover (4%) · match (log filter hits) · hairline (separator) |
-| Panes (`DS.Pane`) | a detail is at least 440 wide; the list beside it gives way first |
+| Panes (`DS.Pane`) | a detail is at least 440 wide; the list beside it gives way first · notices and the library’s filter at most 420 · capsules over an image inset 6 × 12 |
 | Type (`DS.Font`) | heading (headline) · secondary (callout) · caption · code (mono caption) · log (mono 11) |
 | Status (`DS.Status`) | passed · failed · flaky · neutral · changed; a dot of 6 beside its label |
 
@@ -82,7 +83,6 @@ can be followed between these views, and re-recording is available wherever a sn
   a hairline and a soft shadow before that.
 - `GlassGroup`: a `GlassEffectContainer` on macOS 26 or later, a plain stack before.
 - `primaryActionStyle()`: the one accent action of a region, a role rather than a look.
-- `panel()`: a solid content panel with a hairline border. Never glass.
 - `PaneBar` / `PaneFooter`: the fixed-height bars of a column. A list has a header (search and view options),
   a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
   row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window, and the
@@ -131,8 +131,9 @@ can be followed between these views, and re-recording is available wherever a sn
 - `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn’t plainly visible
   (Invisible, Few pixels, Size changed), and offer the precision that would pass.
 - `PixelReadout`: the hover loupe, showing coordinates, both colors and their ΔE.
-- `SnapshotRow` / grid tile: thumbnail, test name, variant in code type, state chip (New, Modified, Orphaned)
-  and `StatusMarks` at the trailing edge (failing ✕, flaky ⚠, change dot). One row design for every list.
+- `SnapshotRow` / grid tile: thumbnail, test name and one status line (`SnapshotStatusLine`: a colored dot,
+  the one notable state, then the variant in code type), with a `FailingMark` at the trailing edge (failing ✕,
+  flaky ⚠). One row design for every list.
 - `SnapshotViewer`: a single image with the compare view’s zoom, pan and readout; the compare view itself
   is reused for versions and variants, so every comparison looks and behaves the same.
 - `MenuBarLabel` / `ProgressPie` / `MenuBarPanel`: the optional menu bar item. The icon is a 16 pt template

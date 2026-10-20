@@ -94,10 +94,22 @@ extension PaletteCommand {
             .init(title: "Show Run", symbol: "terminal", shortcut: "⌥⌘4") { project.tab = .run },
             .init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() },
             .init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() },
-            .init(title: "Mark All Changes as Viewed", symbol: "checkmark.circle", shortcut: nil) {
+        ]
+        if project.displayedChanges.contains(where: { !project.viewedChanges.contains($0.id) }) {
+            let title = project.changesAreFiltered ? "Mark All Shown Changes as Viewed" : "Mark All Changes as Viewed"
+            commands.append(.init(title: title, symbol: "checkmark.circle", shortcut: nil) {
                 project.tab = .changes
                 project.setAllViewed(true)
+            })
+        }
+        // The sidebar's context menu, for the keyboard.
+        let current = project.project
+        commands += [
+            .init(title: app.isPinned(current) ? "Unpin Project" : "Pin Project", symbol: "pin", shortcut: nil) { app.togglePin(current) },
+            .init(title: "Reveal Project in Finder", symbol: "folder", shortcut: nil) {
+                NSWorkspace.shared.activateFileViewerSelecting([current.url])
             },
+            .init(title: "Remove Project from List", symbol: "minus.circle", shortcut: nil) { app.remove(current) },
             .init(title: "Add Project…", symbol: "plus", shortcut: "⌘O") { app.addProjectFromPanel() },
         ]
         return commands

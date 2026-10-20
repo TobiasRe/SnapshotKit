@@ -130,8 +130,7 @@ struct CompareView: View {
         .clipped()
         .focusable()
         .focusEffectDisabled()
-        .onKeyPress(.leftArrow) { nudgeSplit(-1) }
-        .onKeyPress(.rightArrow) { nudgeSplit(1) }
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { arrow($0.key) }
         .onKeyPress(.space) {
             guard mode == .toggle else { return .ignored }
             showingAfter.toggle()
@@ -254,6 +253,21 @@ struct CompareView: View {
     }
 
     /// ← / → move the slider divider by 5% in slider mode.
+    /// In Slider mode ← → move the divider; zoomed in, the arrows look around the image.
+    private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
+        if mode == .slider, key == .leftArrow || key == .rightArrow { return nudgeSplit(key == .leftArrow ? -1 : 1) }
+        guard app.viewport.scale > 1.01 else { return .ignored }
+        let step: CGFloat = 80
+        let delta = switch key {
+        case .leftArrow: CGSize(width: step, height: 0)
+        case .rightArrow: CGSize(width: -step, height: 0)
+        case .upArrow: CGSize(width: 0, height: step)
+        default: CGSize(width: 0, height: -step)
+        }
+        withAnimation(DS.motion) { app.viewport.pan(by: delta) }
+        return .handled
+    }
+
     private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
         guard mode == .slider else { return .ignored }
         withAnimation(DS.motion) { split = min(max(split + direction * 0.05, 0), 1) }
@@ -340,6 +354,11 @@ struct CompareView: View {
 
     private func pane(_ image: NSImage?, label: String, missing: String, size: CGSize) -> some View {
         ZoomableImage(image: image, pixelSize: size, viewport: app.viewport)
+            // A canvas says nothing to VoiceOver on its own; the caption becomes its name.
+            .accessibilityElement()
+            .accessibilityLabel("\(label) image")
+            .accessibilityValue(Text(verbatim: "\(Int(size.width))×\(Int(size.height))"))
+            .accessibilityHidden(image == nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if image == nil {
@@ -347,7 +366,7 @@ struct CompareView: View {
                 }
             }
             .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }))
-            .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m) }
+            .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m).accessibilityHidden(image != nil) }
     }
 
     private func caption(_ text: String) -> some View {

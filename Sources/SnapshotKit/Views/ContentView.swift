@@ -82,8 +82,8 @@ struct WelcomeView: View {
                 Button("Add Project…") { model.addProjectFromPanel() }
                     .primaryActionStyle()
                 Button("Add Scan Folder…") { model.addScanRootFromPanel() }
-                .fixedSize()
-                .quietControl()
+                    .fixedSize()
+                    .quietControl()
             }
             Text("Or drop a repository onto this window. ⌘K finds projects and commands.")
                 .font(DS.Font.caption)
@@ -121,6 +121,8 @@ struct NoticeBanner: View {
             // Failed is a red circle everywhere; the triangle means a warning.
             Image(systemName: isError ? "xmark.circle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? DS.Status.failed : Color.secondary)
+                // Its symbol's name would sound like the close button beside it.
+                .accessibilityLabel(isError ? "Error" : "Note")
             Text(StatusNote.code(text, font: DS.Font.secondary.monospaced()))
                 .font(DS.Font.secondary)
                 .lineLimit(3)

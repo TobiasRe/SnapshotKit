@@ -278,6 +278,11 @@ struct LibraryStats {
     }
 }
 
+extension SnapshotFile {
+    /// The variant as a control or caption names it: a snapshot without one (`card.png`) is "default".
+    var variantName: String { variant.isEmpty ? "default" : variant }
+}
+
 struct SnapshotRow: View {
     /// Extra information for a flat, sorted list, where the suite header is missing.
     enum Detail { case none, size, modified }
@@ -485,6 +490,7 @@ struct SnapshotDetail: View {
                         if status.orphaned {
                             Divider()
                             Button("Move to Trash") { project.moveToTrash([file]) }
+                                .disabled(project.isRunning)
                         }
                     }
                 }
@@ -497,7 +503,7 @@ struct SnapshotDetail: View {
                 })
             if let other = comparedVariant {
                 CompareView(load: { [a = project.snapshotLoader(for: other), b = project.snapshotLoader(for: file)] in (a(), b()) },
-                            beforeLabel: other.variant, afterLabel: file.variant,
+                            beforeLabel: other.variantName, afterLabel: file.variantName,
                             identity: other.cacheKey + "~" + file.cacheKey)
             } else if let comparing {
                 let before = project.versionLoader(for: file, commit: comparing.commit), after = project.snapshotLoader(for: file)
@@ -561,20 +567,19 @@ struct SnapshotDetail: View {
             // the history, so they go in a menu that names the one shown.
             if variants.count > 1 {
                 let selection = Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 })
-                let name = { (variant: SnapshotFile) in variant.variant.isEmpty ? "default" : variant.variant }
                 if variants.count <= 3 {
-                    GlassSegmented(title: "Variant", segments: variants.map { Segment(name($0), value: $0.id) }, selection: selection)
+                    GlassSegmented(title: "Variant", segments: variants.map { Segment($0.variantName, value: $0.id) }, selection: selection)
                         .fixedSize()
                 } else {
                     Menu {
                         Picker("Variant", selection: selection) {
-                            ForEach(variants) { Text(name($0)).tag($0.id) }
+                            ForEach(variants) { Text($0.variantName).tag($0.id) }
                         }
                         .pickerStyle(.inline)
                         .labelsHidden()
                     } label: {
                         // In the segments' type: a control's label, not a file name.
-                        Text(name(file))
+                        Text(file.variantName)
                     }
                     .fixedSize()
                     .quietControl()
@@ -609,7 +614,7 @@ struct SnapshotDetail: View {
             if !others.isEmpty {
                 Section("Variants") {
                     ForEach(others) { other in
-                        Button(other.variant) { project.comparison = .variant(other) }
+                        Button(other.variantName) { project.comparison = .variant(other) }
                     }
                 }
             }
@@ -623,7 +628,7 @@ struct SnapshotDetail: View {
                 }
             }
         } label: {
-            Text(comparedVariant.map { "Comparing with \($0.variant)" }
+            Text(comparedVariant.map { "Comparing with \($0.variantName)" }
                  ?? comparing.map { "Comparing with \($0.shortCommit)" } ?? "Compare with…")
         }
         .fixedSize()
@@ -766,9 +771,58 @@ struct SnapshotGrid: View {
     /// the section header's text starts at.
     private static let columns = [GridItem(.adaptive(minimum: tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .topLeading)]
 
+    @State private var quickLookURL: URL?
+    /// Tiles per row, for ↑ and ↓.
+    @State private var perRow = 1
+    @FocusState private var focused: Bool
+
     var body: some View {
+        ScrollViewReader { proxy in
+            grid
+                .onGeometryChange(for: Int.self) { geometry in
+                    let cell = Self.tile.width + 2 * DS.Space.s + DS.Space.xs
+                    return max(1, Int((geometry.size.width - 2 * DS.Space.s + DS.Space.xs) / cell))
+                } action: { perRow = $0 }
+                // The keys of the list: arrows move the selection (↑ ↓ by a row, as far as sections
+                // allow), Return opens it, Space Quick Looks it, ⌘C copies it.
+                .focusable()
+                .focused($focused)
+                .focusEffectDisabled()
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                    switch press.key {
+                    case .leftArrow: project.selectAdjacent(-1)
+                    case .rightArrow: project.selectAdjacent(1)
+                    case .upArrow: project.selectAdjacent(-perRow)
+                    default: project.selectAdjacent(perRow)
+                    }
+                    return .handled
+                }
+                .onKeyPress(.return) {
+                    guard let file = project.selectedSnapshot else { return .ignored }
+                    open(file)
+                    return .handled
+                }
+                .onKeyPress(.space) {
+                    guard let file = project.selectedSnapshot else { return .ignored }
+                    quickLookURL = project.project.url.appendingPathComponent(file.path)
+                    return .handled
+                }
+                .quickLookPreview($quickLookURL)
+                .onCopyCommand {
+                    guard let file = project.selectedSnapshot,
+                          let item = NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) else { return [] }
+                    return [item]
+                }
+                .onChange(of: project.selectedSnapshotID) { _, id in
+                    guard let id else { return }
+                    withAnimation(DS.motion) { proxy.scrollTo(id) }
+                }
+        }
+    }
+
+    private var grid: some View {
         let tree = project.displayedTree
-        ScrollView {
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Space.l, pinnedViews: [.sectionHeaders]) {
                 if project.librarySort != .name {
                     LazyVGrid(columns: Self.columns, alignment: .leading, spacing: DS.Space.xs) {
@@ -826,7 +880,10 @@ struct SnapshotGrid: View {
         .contentShape(Rectangle())
         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
         .onTapGesture(count: 2) { open(file) }
-        .onTapGesture { project.selectedSnapshotID = file.id }
+        .onTapGesture {
+            project.selectedSnapshotID = file.id
+            focused = true
+        }
         .contextMenu {
             Button("Show Large") { open(file) }
             Divider()

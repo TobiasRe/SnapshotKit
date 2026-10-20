@@ -35,7 +35,7 @@ The left side of the Run tab shows what SnapshotKit will run and where each valu
 | **Comparison & Remote** | the **Base branch** for the Changes tab and the **Remote host** for remote runs; type to override them for this project. |
 
 When something is missing or wrong — Xcode not installed, no simulator runtime, a broken `.snapshotkit.yml` —
-the header says exactly what and how to fix it, and offers **Check Again**. See
+the inspector on the left says exactly what and how to fix it, and the header offers **Check Again**. See
 [Troubleshooting](troubleshooting.md).
 
 How the configuration is resolved, and every key of `.snapshotkit.yml`, is in [Configuration](configuration.md).

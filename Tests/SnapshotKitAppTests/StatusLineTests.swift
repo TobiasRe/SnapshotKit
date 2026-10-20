@@ -29,6 +29,12 @@ struct StatusLineTests {
         #expect(SnapshotStatusLine.state(of: SnapshotFile(path: path, byteSize: 1), SnapshotStatus()) == nil)
     }
 
+    /// A snapshot without a variant (`card.png`) still needs a name in menus and captions.
+    @Test func aSnapshotWithoutAVariantIsTheDefault() {
+        #expect(SnapshotFile(path: "Tests/AppTests/__Snapshots__/CardTests/card.png", byteSize: 1).variantName == "default")
+        #expect(SnapshotFile(path: path, byteSize: 1).variantName == "dark")
+    }
+
     /// Failing is the row's mark on the right, never its status line.
     @Test func failingIsNotAState() {
         let status = SnapshotStatus(failureID: "CardTests/card()")

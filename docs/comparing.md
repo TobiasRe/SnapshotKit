@@ -49,7 +49,7 @@ is based on. Below about 2.3, nobody can see the difference.
 The bar shows, for the pair:
 
 - a colored dot and **N% changed** — the share of pixels that differ at all,
-- the pixel size (`1,020×330`), or both sizes when they differ (`360×240 → 360×280`).
+- the pixel size (`1020×330`), or both sizes when they differ (`360×240 → 360×280`).
 
 ## The diagnosis
 

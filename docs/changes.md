@@ -84,7 +84,7 @@ Only the working tree changes: nothing is staged or committed, so the reverted s
 their own until you commit them. That’s the difference to **Discard Change…**, which only undoes
 *uncommitted* edits, back to your last commit.
 
-The info row says where the change comes from: the commit that last changed it on this branch (*Changed Oct 16
+The info row says where the change comes from: the commit that last changed it on this branch (*Changed Oct 16, 2026
 by Sample in a1b2c3d “Rename the badge”*), or *Not committed yet · compared with develop*. **Show in Library**
 jumps to the snapshot in the library.
 
