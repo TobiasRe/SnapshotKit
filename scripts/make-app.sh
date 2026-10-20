@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Builds SnapshotKit.app (and the snapkit CLI) in release mode into ./dist, plus zip archives
 # for a release. The app is ad-hoc signed; for distribution, sign and notarize with your own identity.
+#
+# Usage: scripts/make-app.sh
+#   VERSION=<version> (environment) overrides SnapshotKitVersion.current
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 VERSION="${VERSION:-$(sed -n 's/.*current = "\(.*\)".*/\1/p' Sources/SnapshotKitCore/Support/SnapshotKitVersion.swift)}"
+: "${VERSION:?no version: SnapshotKitVersion.current not found, and VERSION not set}"
 
 swift build -c release --product SnapshotKit
 swift build -c release --product snapkit

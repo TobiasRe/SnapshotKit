@@ -45,28 +45,28 @@ cleanup() {
 trap cleanup EXIT
 
 step "Build snapkit"
-(cd "$ROOT" && swift build --product snapkit 2>&1 | tail -1)
+(cd "$ROOT" && swift build --product snapkit > "$LOGS/build.log" 2>&1) || { cat "$LOGS/build.log"; exit 1; }
 SNAPKIT="$(cd "$ROOT" && swift build --product snapkit --show-bin-path)/snapkit"
 sk() { (cd "$SAMPLE" && "$SNAPKIT" "$@"); }
 
 step "Pick the local Xcode and an iPhone simulator for the sample's CI file"
 XCODE_VERSION="$(xcodebuild -version | awk 'NR==1 {print $2}')"
-read -r SIM_NAME SIM_OS < <(xcrun simctl list devices available -j | E2E_SIMULATOR="${E2E_SIMULATOR:-}" python3 -c '
-import json, os as env, sys
+# Tab-separated: simulator names contain spaces.
+IFS=$'\t' read -r SIM_NAME SIM_OS < <(xcrun simctl list devices available -j | E2E_SIMULATOR="${E2E_SIMULATOR:-}" python3 -c '
+import json, os, sys
 data = json.load(sys.stdin)["devices"]
-wanted = env.environ.get("E2E_SIMULATOR")
+wanted = os.environ.get("E2E_SIMULATOR")
 best = None
 for runtime, devices in data.items():
     if ".iOS-" not in runtime: continue
-    os = runtime.split(".iOS-")[1].replace("-", ".")
+    version = runtime.split(".iOS-")[1].replace("-", ".")
     for d in devices:
         if (d["name"] == wanted if wanted else d["name"].startswith("iPhone")) and d.get("isAvailable", True):
-            key = tuple(int(x) for x in os.split("."))
-            if best is None or key > best[0]: best = (key, d["name"], os)
+            key = tuple(int(x) for x in version.split("."))
+            if best is None or key > best[0]: best = (key, d["name"], version)
 if not best: sys.exit("no iPhone simulator available")
-print(best[1].replace(" ", " "), best[2])
+print(best[1], best[2], sep="\t")
 ')
-SIM_NAME="${SIM_NAME//$' '/ }"
 echo "Xcode $XCODE_VERSION · $SIM_NAME · iOS $SIM_OS"
 
 step "Create sample package on develop"

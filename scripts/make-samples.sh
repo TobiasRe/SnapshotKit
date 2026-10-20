@@ -25,7 +25,8 @@ DEST="$(cd "$DEST" && pwd -P)"
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 
 step "Build snapkit"
-(cd "$ROOT" && swift build --product snapkit 2>&1 | tail -1)
+(cd "$ROOT" && swift build --product snapkit > "$DEST/build.log" 2>&1) || { cat "$DEST/build.log"; exit 1; }
+rm "$DEST/build.log"
 SNAPKIT="$(cd "$ROOT" && swift build --product snapkit --show-bin-path)/snapkit"
 
 step "Use a dedicated simulator, so runs here never disturb one you are using"
@@ -50,13 +51,22 @@ SIM_ID="$(xcrun simctl list devices available -j | python3 -c "import json,sys; 
 CI_NAME="$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; print(next(t['name'] for t in json.load(sys.stdin)['devicetypes'] if t['identifier']=='$CI_DEVICE'))")"
 echo "Xcode $XCODE_VERSION · $SIM_NAME ($CI_NAME) · iOS $SIM_OS"
 
-# xcodebuild test for the package in the current directory. RECORD=all re-records every snapshot.
+# xcodebuild test for the package in the current directory, logged to $DEST/.derived/<name>.log. RECORD=all
+# re-records every snapshot. Tests fail whenever they record a reference, as most runs here do, so only a
+# package that doesn't build stops the script.
 run_tests() {
-  local name="$1" record="${2:-}"
+  local name="$1" record="${2:-}" log="$DEST/.derived/$1.log"
+  local xcodebuild=(xcodebuild -scheme "$name" -destination "platform=iOS Simulator,id=$SIM_ID"
+    -derivedDataPath "$DEST/.derived/$name" -quiet)
+  mkdir -p "$DEST/.derived"
+  if ! "${xcodebuild[@]}" build-for-testing > "$log" 2>&1; then
+    tail -30 "$log"
+    echo "✘ $name doesn't build; the full log is in $log" >&2
+    exit 1
+  fi
   local env=()
   [ -n "$record" ] && env=(TEST_RUNNER_SNAPSHOT_TESTING_RECORD="$record")
-  env ${env[@]+"${env[@]}"} xcodebuild test -scheme "$name" -destination "platform=iOS Simulator,id=$SIM_ID" \
-    -derivedDataPath "$DEST/.derived/$name" -quiet >/dev/null 2>&1 || true
+  env ${env[@]+"${env[@]}"} "${xcodebuild[@]}" test-without-building >> "$log" 2>&1 || true
 }
 
 commit() { git add -A && git commit -qm "$1"; }
@@ -64,6 +74,10 @@ commit() { git add -A && git commit -qm "$1"; }
 # Package.swift, CI workflow, .gitignore and the shared test helper for package $1.
 scaffold() {
   local name="$1" dir="$DEST/$1"
+  if [ -e "$dir" ] && [ ! -f "$dir/.git/snapshotkit-sample" ]; then
+    echo "✘ $dir exists and wasn't made by this script; move it away or choose another DEST." >&2
+    exit 1
+  fi
   rm -rf "$dir"
   mkdir -p "$dir/Sources/$name" "$dir/Tests/${name}Tests" "$dir/.github/workflows"
   cat > "$dir/Package.swift" <<EOF
@@ -137,7 +151,7 @@ func snapScreen<V: View>(_ view: V, fileID: StaticString = #fileID, file: Static
 }
 EOF
   (cd "$dir" && git init -q -b develop && git config user.email sample@example.com && git config user.name "Sample" \
-    && git config commit.gpgsign false)
+    && git config commit.gpgsign false && touch .git/snapshotkit-sample)
 }
 
 # Splits Tests/<name>Tests/<name>Tests.swift into one file per suite, as real projects have them:

@@ -21,11 +21,11 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd -P)"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-(cd "$ROOT" && swift build --product SnapshotKit 2>&1 | tail -1)
-APP="$(cd "$ROOT" && swift build --show-bin-path)/SnapshotKit"
-
 HOME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/snapkit-capture.XXXXXX")"
 trap 'rm -rf "$HOME_DIR"' EXIT
+(cd "$ROOT" && swift build --product SnapshotKit > "$HOME_DIR/build.log" 2>&1) || { cat "$HOME_DIR/build.log"; exit 1; }
+APP="$(cd "$ROOT" && swift build --show-bin-path)/SnapshotKit"
+
 export SNAPSHOTKIT_HOME="$HOME_DIR/home"
 mkdir -p "$SNAPSHOTKIT_HOME" "$HOME_DIR/projects"
 
@@ -46,7 +46,8 @@ EOF
 
 capture() {
   local name="$1"; shift
-  "$APP" --capture "$OUT/$name.png" "$@" ${APPEARANCE:+--appearance "$APPEARANCE"} 2>&1 | grep '^capture:' || true
+  # Only the app's progress lines; with pipefail, a failing app still stops the script.
+  "$APP" --capture "$OUT/$name.png" "$@" ${APPEARANCE:+--appearance "$APPEARANCE"} 2>&1 | { grep '^capture:' || true; }
 }
 
 capture 00-snapshots --project "$REPO" --tab snapshots
