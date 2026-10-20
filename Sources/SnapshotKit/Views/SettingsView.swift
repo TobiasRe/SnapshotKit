@@ -30,9 +30,9 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("Stop scanning this folder")
-                        .accessibilityLabel("Remove \(Self.abbreviated(root))")
+                        .accessibilityLabel("Remove \(root.abbreviatingWithTildeInPath)")
                     } label: {
-                        Label(Self.abbreviated(root), systemImage: "folder")
+                        Label(root.abbreviatingWithTildeInPath, systemImage: "folder")
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .help(root)
@@ -78,15 +78,14 @@ struct SettingsView: View {
         .onAppear(perform: reload)
     }
 
-    /// A folder as people say it: the home folder as "~".
-    static func abbreviated(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
-    }
-
     private func reload() {
         roots = model.store.settings.scanRoots
         iterations = model.store.settings.flakeIterations
         verify = model.store.settings.verifyAfterRecord
     }
+}
+
+extension String {
+    /// A path as people say it: the home folder as "~".
+    var abbreviatingWithTildeInPath: String { (self as NSString).abbreviatingWithTildeInPath }
 }

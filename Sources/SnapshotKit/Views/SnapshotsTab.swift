@@ -3,11 +3,12 @@ import QuickLook
 import SnapshotKitCore
 import SwiftUI
 
-/// Every snapshot in the project, grouped by test file, with a large inspector.
+/// How the library shows its snapshots: a list beside a large detail, or a grid of tiles.
 enum LibraryLayout: String {
     case list, grid
 }
 
+/// Every snapshot in the project, grouped by test file, with a large inspector.
 struct SnapshotsTab: View {
     @Bindable var project: ProjectModel
     @AppStorage("libraryLayout") private var layoutRaw = LibraryLayout.list.rawValue
@@ -146,7 +147,7 @@ struct SnapshotsTab: View {
                         if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
                     }
                     .buttonStyle(.borderless)
-                    .disabled(shown.isEmpty || project.isRunning || project.environment == nil)
+                    .disabled(project.isRunning || project.environment == nil)
                     .help("Record the tests of every snapshot shown (filter first to narrow it down), then verify")
                 }
             }
@@ -200,42 +201,24 @@ struct SnapshotsTab: View {
                 if project.librarySort != .name {
                     Section {
                         ForEach(project.displayedSnapshots) { file in
-                            SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
-                                        detail: project.librarySort == .size ? .size : .modified,
-                                        showVariant: project.showsVariant(file))
-                                .tag(file.id)
-                                .selectableRow(project.selectedSnapshotID == file.id)
-                                // The list's own drag (itemProvider), not .onDrag: a drag source on the row
-                                // takes the mouse-down, and clicking the row no longer selected it.
-                                .itemProvider { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) }
-                                .contextMenu { SnapshotActions(project: project, file: file) }
+                            row(file, detail: project.librarySort == .size ? .size : .modified)
                         }
                     } header: {
                         ListSectionHeader(title: project.librarySort == .size ? "Largest First" : "Most Recently Changed",
                                           count: project.displayedSnapshots.count)
                     }
                 } else {
-                ForEach(tree) { module in
-                    ForEach(module.suites) { suite in
-                        Section {
-                            ForEach(suite.tests) { test in
-                                ForEach(test.files) { file in
-                                    SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
-                                                showVariant: project.showsVariant(file))
-                                        .tag(file.id)
-                                        .selectableRow(project.selectedSnapshotID == file.id)
-                                        // Drag a snapshot out, e.g. into a pull request comment. The list's own
-                                        // drag (itemProvider), not .onDrag: a drag source on the row takes the
-                                        // mouse-down, and clicking the row no longer selected it.
-                                        .itemProvider { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) }
-                                        .contextMenu { SnapshotActions(project: project, file: file) }
+                    ForEach(tree) { module in
+                        ForEach(module.suites) { suite in
+                            Section {
+                                ForEach(suite.tests) { test in
+                                    ForEach(test.files) { file in row(file) }
                                 }
+                            } header: {
+                                ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
                             }
-                        } header: {
-                            ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
                         }
                     }
-                }
                 }
             }
             .onKeyPress(.space) {
@@ -259,6 +242,18 @@ struct SnapshotsTab: View {
                 }
             }
         }
+    }
+
+    private func row(_ file: SnapshotFile, detail: SnapshotRow.Detail = .none) -> some View {
+        SnapshotRow(file: file, status: project.status(of: file), load: project.snapshotLoader(for: file),
+                    detail: detail, showVariant: project.showsVariant(file))
+            .tag(file.id)
+            .selectableRow(project.selectedSnapshotID == file.id)
+            // Drag a snapshot out, e.g. into a pull request comment. The list's own drag
+            // (itemProvider), not .onDrag: a drag source on the row takes the mouse-down, and
+            // clicking the row no longer selected it.
+            .itemProvider { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) }
+            .contextMenu { SnapshotActions(project: project, file: file) }
     }
 }
 
@@ -612,11 +607,7 @@ struct SnapshotViewer: View {
                 if let probe, let color = image?.color(x: probe.x, y: probe.y) {
                     HStack(spacing: DS.Space.m) {
                         Text("x \(probe.x)  y \(probe.y)").foregroundStyle(.secondary)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(.sRGB, red: Double(color.r) / 255, green: Double(color.g) / 255,
-                                        blue: Double(color.b) / 255, opacity: Double(color.a) / 255))
-                            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color(nsColor: .separatorColor)))
-                            .frame(width: 10, height: 10)
+                        PixelSwatch(color: color)
                         Text(color.hex)
                     }
                     .font(DS.Font.code.monospacedDigit())
@@ -706,14 +697,15 @@ struct SnapshotGrid: View {
     var open: (SnapshotFile) -> Void
 
     static let tile = CGSize(width: 180, height: 124)
+    /// As many tiles as fit; each brings its own padding (the selection fill).
+    private static let columns = [GridItem(.adaptive(minimum: tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)]
 
     var body: some View {
         let tree = project.displayedTree
         ScrollView {
             LazyVStack(alignment: .leading, spacing: DS.Space.l, pinnedViews: [.sectionHeaders]) {
                 if project.librarySort != .name {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)],
-                              alignment: .leading, spacing: DS.Space.xs) {
+                    LazyVGrid(columns: Self.columns, alignment: .leading, spacing: DS.Space.xs) {
                         ForEach(project.displayedSnapshots) { tile($0) }
                     }
                     .padding(.horizontal, DS.Space.s)
@@ -721,8 +713,7 @@ struct SnapshotGrid: View {
                 ForEach(project.librarySort == .name ? tree : []) { module in
                     ForEach(module.suites) { suite in
                         Section {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)],
-                                      alignment: .leading, spacing: DS.Space.xs) {
+                            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: DS.Space.xs) {
                                 ForEach(suite.tests.flatMap(\.files)) { file in
                                     tile(file)
                                 }
@@ -732,9 +723,9 @@ struct SnapshotGrid: View {
                             .padding(.horizontal, DS.Space.s)
                         } header: {
                             ListSectionHeader(title: tree.count > 1 ? "\(module.name) › \(suite.name)" : suite.name, count: suite.fileCount)
-                            .padding(.horizontal, DS.Space.l)
-                            .padding(.vertical, DS.Space.s)
-                            .background(Color(nsColor: .windowBackgroundColor))
+                                .padding(.horizontal, DS.Space.l)
+                                .padding(.vertical, DS.Space.s)
+                                .background(Color(nsColor: .windowBackgroundColor))
                         }
                     }
                 }

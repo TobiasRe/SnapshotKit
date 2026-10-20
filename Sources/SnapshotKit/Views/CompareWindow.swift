@@ -20,7 +20,7 @@ struct CompareWindow: View {
 
     private var subtitle: String {
         guard let location else {
-            return request.reference.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            return request.reference.deletingLastPathComponent().path.abbreviatingWithTildeInPath
         }
         let module = SnapshotModules.module(forSnapshotPath: location.path)
         return location.repository.lastPathComponent + " › " + Breadcrumb.of(module: module, suite: file.suite)

@@ -67,6 +67,8 @@ struct SidebarView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Add a project or a folder to scan")
+                .accessibilityLabel("Add")
                 Spacer()
                 Button { model.showQuickSwitcher = true } label: {
                     Label("⌘K", systemImage: "magnifyingglass")
@@ -107,15 +109,15 @@ struct SidebarView: View {
             }
             // The sidebar keeps the system's selection: on its material it is already as quiet
             // as the lists' (about +15 levels in dark, like Linear's).
-            .help(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-                  + ((model.failingCounts[project.path]).map { " — \($0) failing in the last run" } ?? ""))
+            .help(project.path.abbreviatingWithTildeInPath
+                  + (model.failingCounts[project.path].map { " — \($0) failing in the last run" } ?? ""))
             .tag(tagPrefix + project.path)
-                .contextMenu {
-                    Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
-                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }
-                    Divider()
-                    Button("Remove from List") { model.remove(project) }
-                }
+            .contextMenu {
+                Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
+                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }
+                Divider()
+                Button("Remove from List") { model.remove(project) }
+            }
         }
     }
 }
@@ -134,6 +136,14 @@ struct ProjectMonogram: View {
     var body: some View {
         Text(Self.initials(name))
             .font(.system(size: 9, weight: .semibold))
+            .monogramTile()
+    }
+}
+
+extension View {
+    /// The small neutral tile of a project monogram, also behind a palette command's icon.
+    func monogramTile() -> some View {
+        self
             .foregroundStyle(Color.primary.opacity(0.7))
             .frame(width: 18, height: 18)
             .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.08)))
@@ -175,7 +185,7 @@ struct QuickSwitcherRow: View {
 
     /// The folder that holds the project, with the home folder as "~".
     static func location(_ path: String) -> String {
-        (path as NSString).deletingLastPathComponent.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        (path as NSString).deletingLastPathComponent.abbreviatingWithTildeInPath
     }
 }
 

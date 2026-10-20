@@ -54,7 +54,7 @@ struct ComparePair {
 }
 
 /// Decoded pairs keyed by the compare view's identity, so revisiting a snapshot is instant.
-final class ComparePairCache {
+enum ComparePairCache {
     final class Box { let pair: ComparePair; init(_ pair: ComparePair) { self.pair = pair } }
     /// Full-screen @3x pairs hold tens of megabytes of pixels each, so the cache is bounded by
     /// size, not only by count.
@@ -380,16 +380,25 @@ struct PixelReadout: View {
 
     private func swatch(_ color: PixelColor?, label: String) -> some View {
         HStack(spacing: DS.Space.xs) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color.map { Color(.sRGB, red: Double($0.r) / 255, green: Double($0.g) / 255, blue: Double($0.b) / 255,
-                                        opacity: Double($0.a) / 255) } ?? .clear)
-                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color(nsColor: .separatorColor)))
-                .frame(width: 10, height: 10)
+            PixelSwatch(color: color)
             Text(color?.hex ?? "none")
                 .lineLimit(1)
                 .fixedSize()
         }
         .help(label)
+    }
+}
+
+/// One pixel's colour as a small square with a hairline edge, for the pixel readouts.
+struct PixelSwatch: View {
+    var color: PixelColor?
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(color.map { Color(.sRGB, red: Double($0.r) / 255, green: Double($0.g) / 255, blue: Double($0.b) / 255,
+                                    opacity: Double($0.a) / 255) } ?? .clear)
+            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color(nsColor: .separatorColor)))
+            .frame(width: 10, height: 10)
     }
 }
 

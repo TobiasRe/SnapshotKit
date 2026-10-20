@@ -1065,7 +1065,7 @@ final class ProjectModel {
         guard canReRecordSelection else { return }
         switch tab {
         case .snapshots: if let file = selectedSnapshot { reRecord([file], granularity: .tests) }
-        case .changes: if let change = selectedChange { reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
+        case .changes: if let change = selectedChange { reRecord([change.file], granularity: .tests) }
         case .failures: if !selectedFailures.isEmpty { reRecord(failures: selectedFailures) }
         case .run: break
         }

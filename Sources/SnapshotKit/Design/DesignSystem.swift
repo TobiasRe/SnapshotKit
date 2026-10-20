@@ -273,22 +273,23 @@ extension DS {
         /// A selected grid tile and palette row: a whisper of the text colour, the same in both
         /// appearances. Lists use the system highlight instead.
         /// Stronger with Increase Contrast, where a whisper would not be seen.
-        static let selection = Color(nsColor: NSColor(name: nil) { appearance in
-            let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
-                                                            .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
-            return NSColor.labelColor.withAlphaComponent(highContrast ? 0.2 : 0.08)
-        })
+        static let selection = text(opacity: 0.08, increasedContrast: 0.2)
         /// The chosen segment of a segmented control: a little firmer than a selected row, since it
         /// sits on glass rather than on a plain column.
-        static let thumb = Color(nsColor: NSColor(name: nil) { appearance in
-            let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
-                                                            .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
-            return NSColor.labelColor.withAlphaComponent(highContrast ? 0.25 : 0.1)
-        })
+        static let thumb = text(opacity: 0.1, increasedContrast: 0.25)
         /// A row under the pointer: half the selection.
         static let hover = Color.primary.opacity(0.04)
         /// An opaque hairline, for edges drawn over something else.
         static let hairline = Color(nsColor: .separatorColor)
+
+        /// The text colour at `opacity`, or at `increasedContrast` with Increase Contrast on.
+        private static func text(opacity: CGFloat, increasedContrast: CGFloat) -> Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
+                                                                .accessibilityHighContrastDarkAqua])?.rawValue.contains("HighContrast") ?? false
+                return NSColor.labelColor.withAlphaComponent(highContrast ? increasedContrast : opacity)
+            })
+        }
     }
 }
 
@@ -404,6 +405,11 @@ private struct SelectableTile: ViewModifier {
 enum Breadcrumb {
     static func of(module: String?, suite: String) -> String {
         [module, suite].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
+    }
+
+    /// A test suite's identifier ("Bundle/Suite") read the same way.
+    static func of(identifier: String) -> String {
+        identifier.split(separator: "/").joined(separator: " › ")
     }
 }
 

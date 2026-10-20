@@ -4,16 +4,15 @@ import SwiftUI
 
 /// Small, cached preview of a snapshot for list rows. Decoding happens off the main thread.
 struct Thumbnail: View {
-    var id: String
-    var load: @Sendable () -> Data?
-    var size = CGSize(width: 48, height: 34)
+    /// The cache key: the caller's id, plus the resolution for tiles larger than a list row's.
+    let id: String
+    let size: CGSize
+    let load: @Sendable () -> Data?
 
     @State private var image: NSImage?
 
     init(id: String, size: CGSize = CGSize(width: 48, height: 34), load: @escaping @Sendable () -> Data?) {
-        // Larger tiles (the library grid) decode at their own resolution under their own key.
-        let maxPixel = ThumbnailCache.maxPixel(for: size)
-        let id = maxPixel == ThumbnailCache.defaultMaxPixel ? id : id + "@\(maxPixel)"
+        let id = ThumbnailCache.key(id, maxPixel: ThumbnailCache.maxPixel(for: size))
         self.id = id
         self.size = size
         self.load = load
@@ -60,11 +59,15 @@ enum ThumbnailCache {
     /// Decodes and caches a thumbnail synchronously (snapshot tests).
     static func preload(id: String, data: Data?, size: CGSize? = nil) {
         let maxPixel = size.map(maxPixel(for:)) ?? defaultMaxPixel
-        let key = maxPixel == defaultMaxPixel ? id : id + "@\(maxPixel)"
-        if let image = decode(data, maxPixel: maxPixel) { shared.setObject(image, forKey: key as NSString) }
+        if let image = decode(data, maxPixel: maxPixel) { shared.setObject(image, forKey: key(id, maxPixel: maxPixel) as NSString) }
     }
 
     static let defaultMaxPixel = 160
+
+    /// Larger tiles (the library grid) decode at their own resolution, under their own key.
+    static func key(_ id: String, maxPixel: Int) -> String {
+        maxPixel == defaultMaxPixel ? id : id + "@\(maxPixel)"
+    }
 
     /// Twice the tile's longer side (Retina), never below the list size.
     static func maxPixel(for size: CGSize) -> Int {

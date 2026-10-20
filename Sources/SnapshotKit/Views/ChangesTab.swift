@@ -113,7 +113,7 @@ struct ChangesTab: View {
     @ViewBuilder
     private func actions(for change: SnapshotChange) -> some View {
         if change.kind != .deleted {
-            Button("Re-record \(change.file.testName)") { project.reRecord([SnapshotFile(path: change.path, byteSize: 0)], granularity: .tests) }
+            Button("Re-record \(change.file.testName)") { project.reRecord([change.file], granularity: .tests) }
                 .disabled(project.isRunning || project.environment == nil)
             Button("Show in Library") { project.showInLibrary(path: change.path) }
                 .disabled(!project.isInLibrary(change.path))
@@ -376,7 +376,7 @@ struct ChangeOrigin: View {
             last = nil
             // A deletion may not be committed yet, so its last commit could predate it.
             guard change.kind == .committed else { return }
-            last = await project.history(of: SnapshotFile(path: change.path, byteSize: 0)).first
+            last = await project.history(of: change.file).first
         }
     }
 

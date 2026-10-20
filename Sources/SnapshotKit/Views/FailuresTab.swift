@@ -108,7 +108,7 @@ struct FailuresTab: View {
                             .contextMenu { actions(for: item) }
                     }
                 } header: {
-                    ListSectionHeader(title: suite.split(separator: "/").joined(separator: " › "), count: bySuite[suite]?.count ?? 0)
+                    ListSectionHeader(title: Breadcrumb.of(identifier: suite), count: bySuite[suite]?.count ?? 0)
                 }
             }
         }
@@ -130,7 +130,7 @@ struct FailuresTab: View {
         let shown = project.displayedFailures.map(\.id)
         return VStack(spacing: 0) {
             DetailHeader(title: item.test.name,
-                         subtitle: item.suite.identifier.split(separator: "/").joined(separator: " › "),
+                         subtitle: Breadcrumb.of(identifier: item.suite.identifier),
                          path: item.referencePaths.first,
                          position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
@@ -383,6 +383,7 @@ struct HistoryStrip: View {
     var size: Size
     /// Overrides the system setting (for tests).
     var differentiateWithoutColor: Bool?
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
 
     var body: some View {
         let d: CGFloat = size == .compact ? 6 : 9
@@ -396,8 +397,6 @@ struct HistoryStrip: View {
         .accessibilityLabel("Recent runs")
         .accessibilityValue(Self.summary(points))
     }
-
-    @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
 
     /// Filled for passed. With Differentiate Without Color on, failures are hollow and mixed
     /// runs half filled, so the pattern doesn't depend on telling red from green.
@@ -502,7 +501,7 @@ struct BatchFailureDetail: View {
                                 .foregroundStyle(DS.Status.failed)
                                 .accessibilityHidden(true)
                             Text(item.test.name).lineLimit(1)
-                            Text(Breadcrumb.of(module: nil, suite: item.suite.identifier.split(separator: "/").joined(separator: " › ")))
+                            Text(Breadcrumb.of(identifier: item.suite.identifier))
                                 .font(DS.Font.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)

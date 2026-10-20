@@ -102,11 +102,7 @@ struct PaletteCommandRow: View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: command.symbol)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.7))
-                .frame(width: 18, height: 18)
-                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.08)))
-                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(DS.Surface.hairline))
-                .accessibilityHidden(true)
+                .monogramTile()
             Text(command.title).lineLimit(1)
             Spacer(minLength: DS.Space.m)
             if let shortcut = command.shortcut {

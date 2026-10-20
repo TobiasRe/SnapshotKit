@@ -524,8 +524,8 @@ struct FormFooter: View {
     }
 }
 
+/// One of the run's counts with its status icon, read as one element ("12 passed").
 struct Count: View {
-    // Read as "12 passed".
     var value: Int
     var label: String
     var symbol: String
@@ -603,36 +603,36 @@ struct LogView: View {
     }
 
     private func output(_ lines: [String]) -> some View {
-            ScrollViewReader { proxy in
-                ScrollView(.vertical) {
-                    LazyVStack(alignment: .leading, spacing: DS.Space.xxs) {
-                        let terms = project.logFilter.lowercased().split(separator: " ").map(String.init)
-                        ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                            Text(Self.highlighted(line, terms: terms))
-                                .font(DS.Font.log)
-                                .foregroundStyle(color(for: line))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(index)
-                        }
-                    }
-                    .padding(.horizontal, DS.Space.l)
-                    .padding(.vertical, DS.Space.m)
-                }
-                .overlay {
-                    if lines.isEmpty {
-                        ContentUnavailableView(
-                            project.isRunning ? "Waiting for output" : "No output yet",
-                            systemImage: "text.alignleft",
-                            description: Text(project.isRunning ? "xcodebuild is starting…" : "Output from the next run appears here.")
-                        )
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: DS.Space.xxs) {
+                    let terms = project.logFilter.lowercased().split(separator: " ").map(String.init)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        Text(Self.highlighted(line, terms: terms))
+                            .font(DS.Font.log)
+                            .foregroundStyle(color(for: line))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .id(index)
                     }
                 }
-                .background(Color(nsColor: .textBackgroundColor))
-                .onChange(of: lines.count) { _, count in
-                    if count > 0 { proxy.scrollTo(count - 1, anchor: .bottomLeading) }
+                .padding(.horizontal, DS.Space.l)
+                .padding(.vertical, DS.Space.m)
+            }
+            .overlay {
+                if lines.isEmpty {
+                    ContentUnavailableView(
+                        project.isRunning ? "Waiting for output" : "No output yet",
+                        systemImage: "text.alignleft",
+                        description: Text(project.isRunning ? "xcodebuild is starting…" : "Output from the next run appears here.")
+                    )
                 }
             }
+            .background(Color(nsColor: .textBackgroundColor))
+            .onChange(of: lines.count) { _, count in
+                if count > 0 { proxy.scrollTo(count - 1, anchor: .bottomLeading) }
+            }
+        }
     }
 
     /// The line with what the filter matched marked, as find does.
@@ -656,8 +656,8 @@ struct LogView: View {
     }
 
     private func color(for line: String) -> Color {
-        if line.hasPrefix("✘") || line.contains(": error: ") || line.hasPrefix("** TEST FAILED") || line.hasPrefix("** BUILD FAILED") { return .red }
-        if line.hasPrefix("✔") || line.hasPrefix("** TEST SUCCEEDED") { return .green }
+        if line.hasPrefix("✘") || line.contains(": error: ") || line.hasPrefix("** TEST FAILED") || line.hasPrefix("** BUILD FAILED") { return DS.Status.failed }
+        if line.hasPrefix("✔") || line.hasPrefix("** TEST SUCCEEDED") { return DS.Status.passed }
         if line.hasPrefix("$ ") || line.hasPrefix("snapkit:") { return .accentColor }
         if line.hasPrefix("◇") || line.hasPrefix("↳") { return .primary }
         return .secondary
@@ -687,7 +687,7 @@ struct RunResultsList: View {
                     }
                 } header: {
                     HStack(spacing: DS.Space.s) {
-                        Text(suite.identifier.split(separator: "/").joined(separator: " › ")).lineLimit(1).truncationMode(.middle)
+                        Text(Breadcrumb.of(identifier: suite.identifier)).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: DS.Space.s)
                         if suite.failedCount > 0 {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))

@@ -199,8 +199,7 @@ final class AppModel {
     /// "Found 3 projects with snapshot tests in ~/Developer." or why there are none.
     nonisolated static func scanSummary(_ reports: [ProjectScanner.Report]) -> String? {
         guard !reports.isEmpty else { return nil }
-        let home = NSHomeDirectory()
-        func name(_ url: URL) -> String { url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path }
+        func name(_ url: URL) -> String { url.path.abbreviatingWithTildeInPath }
         let unreadable = reports.filter { !$0.readable }
         if !unreadable.isEmpty {
             return "SnapshotKit can't read \(unreadable.map { name($0.root) }.joined(separator: ", ")). "
