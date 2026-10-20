@@ -502,5 +502,21 @@ extension AppUITests {
             #expect(model.displayedChanges.isEmpty)
             #expect(model.selectedChange == nil)
         }
+
+        // MARK: Refreshing
+
+        /// Switching what to compare with twice in a row shows the second, whichever git finishes first.
+        @Test func theLatestRefreshWins() async throws {
+            let (repo, _) = try makeRepo()
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            for _ in 0..<10 {
+                model.diffBase = .tip
+                model.diffBase = .mergeBase
+                for _ in 0..<200 where model.isLoadingChanges { try await Task.sleep(for: .milliseconds(20)) }
+                #expect(model.changeSet?.diffBase == .mergeBase)
+            }
+        }
     }
 }

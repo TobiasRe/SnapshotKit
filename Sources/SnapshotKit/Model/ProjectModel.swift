@@ -364,16 +364,22 @@ final class ProjectModel {
 
     // MARK: Changes
 
+    /// Refreshes overlap (the file watcher, a run ending, coming back to the app); the latest one wins.
+    @ObservationIgnored private var libraryGeneration = 0
+    @ObservationIgnored private var changesGeneration = 0
+
     /// Re-indexes the snapshots in the working tree (off the main thread).
     func refreshLibrary() {
         guard fixtureImages == nil else { return }
         isLoadingLibrary = true
-        let repo = project.url
+        libraryGeneration += 1
+        let generation = libraryGeneration, repo = project.url
         Task {
             let (loaded, orphans) = await offCooperativePool { () -> (SnapshotLibrary?, Set<String>) in
                 let library = try? SnapshotLibrary.load(repository: repo)
                 return (library, library.map { SnapshotLibrary.orphans($0.files, repository: repo) } ?? [])
             }
+            guard generation == libraryGeneration else { return }
             isLoadingLibrary = false
             let shown = displayedSnapshots.map(\.id)
             library = loaded
@@ -527,13 +533,15 @@ final class ProjectModel {
 
     func refreshChanges() {
         refreshLibrary()
+        changesGeneration += 1
         guard let base = baseBranch else {
             changeSet = nil
             changesError = "No base branch. Set one in the project settings."
+            isLoadingChanges = false
             return
         }
         isLoadingChanges = true
-        let repo = project.url, against = diffBase
+        let generation = changesGeneration, repo = project.url, against = diffBase
         Task {
             let result = await offCooperativePool {
                 Result {
@@ -541,6 +549,8 @@ final class ProjectModel {
                     return (set, ReviewMarks(repository: repo).viewed(in: set.changes))
                 }
             }
+            // An earlier base branch or diff base must not land after the one now chosen.
+            guard generation == changesGeneration else { return }
             isLoadingChanges = false
             switch result {
             case .success(let (set, viewed)):
