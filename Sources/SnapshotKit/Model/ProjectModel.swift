@@ -430,9 +430,9 @@ final class ProjectModel {
             }
         }
         ThumbnailCache.shared.removeAllObjects()
-        lastMessage = "Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash."
-            + (failed.isEmpty ? "" : " Could not move \(failed.joined(separator: ", ")).")
-        lastMessageIsError = !failed.isEmpty
+        notify("Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash."
+                + (failed.isEmpty ? "" : " Could not move \(failed.joined(separator: ", "))."),
+               isError: !failed.isEmpty)
         refreshChanges()
     }
 
@@ -612,9 +612,7 @@ final class ProjectModel {
         Task {
             let location = await Task.detached { TestSourceLocator.locate(file, in: repo) }.value
             guard let location else {
-                lastMessage = "No test file found for \(file.testName) (\(file.suite).swift)."
-                lastMessageIsError = true
-                lastMessageAction = nil
+                notify("No test file found for \(file.testName) (\(file.suite).swift).", isError: true)
                 return
             }
             let url = repo.appendingPathComponent(location.path)
@@ -671,11 +669,9 @@ final class ProjectModel {
             }
             ThumbnailCache.shared.removeAllObjects()
             ComparePairCache.shared.removeAllObjects()
-            lastMessage = "Discarded the working-tree change to \(change.fileName)."
-            lastMessageIsError = false
+            notify("Discarded the working-tree change to \(change.fileName).")
         } catch {
-            lastMessage = "Could not discard \(change.fileName): \(error.localizedDescription)"
-            lastMessageIsError = true
+            notify("Could not discard \(change.fileName): \(error.localizedDescription)", isError: true)
         }
         refreshChanges()
     }
@@ -692,11 +688,9 @@ final class ProjectModel {
             switch result {
             case .success:
                 let what = changes.count == 1 ? changes[0].fileName : "\(changes.count) snapshots"
-                lastMessage = "Reverted \(what) to \(set.baseBranch). Commit the result to keep it."
-                lastMessageIsError = false
+                notify("Reverted \(what) to \(set.baseBranch). Commit the result to keep it.")
             case .failure(let error):
-                lastMessage = "Could not revert: \(error.localizedDescription)"
-                lastMessageIsError = true
+                notify("Could not revert: \(error.localizedDescription)", isError: true)
             }
             refreshChanges()
         }
@@ -724,12 +718,10 @@ final class ProjectModel {
             ComparePairCache.shared.removeAllObjects()
             switch result {
             case .success(let count):
-                lastMessage = count == 0 ? "No invisible re-records to discard."
-                    : "Discarded \(count) re-recorded snapshot\(count == 1 ? "" : "s") with no visible change."
-                lastMessageIsError = false
+                notify(count == 0 ? "No invisible re-records to discard."
+                       : "Discarded \(count) re-recorded snapshot\(count == 1 ? "" : "s") with no visible change.")
             case .failure(let error):
-                lastMessage = "Could not discard: \(error.localizedDescription)"
-                lastMessageIsError = true
+                notify("Could not discard: \(error.localizedDescription)", isError: true)
             }
             refreshChanges()
         }
@@ -854,8 +846,7 @@ final class ProjectModel {
 
     /// Opens an `.xcresult` (e.g. downloaded from CI) and shows its failures.
     func importResultBundle(_ url: URL) {
-        lastMessage = "Reading \(url.lastPathComponent)…"
-        lastMessageIsError = false
+        notify("Reading \(url.lastPathComponent)…")
         let repo = project.url
         Task {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/imported/\(UUID().uuidString)")
@@ -866,20 +857,19 @@ final class ProjectModel {
                     return (summary, images)
                 }
             }.value
-            do {
-                switch result {
-                case .success(let (summary, images)):
-                    RunHistory(repository: repo).append(RunRecord(kind: .imported, host: url.lastPathComponent, commit: nil, branch: nil, dirty: false,
-                                                                  summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: url.path))
-                    self.lastFailingSuites = summary.failingSuites
-                    self.setFailures(suites: summary.failingSuites, images: images,
-                                     source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
-                    self.lastMessage = "Imported \(summary.failed) failing test(s) from \(url.lastPathComponent)."
-                    self.tab = .failures
-                case .failure(let error):
-                    self.lastMessage = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
-                    self.lastMessageIsError = true
-                }
+            switch result {
+            case .success(let (summary, images)):
+                let runs = RunHistory(repository: repo)
+                runs.append(RunRecord(kind: .imported, host: url.lastPathComponent, commit: nil, branch: nil, dirty: false,
+                                      summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: url.path))
+                setHistory(runs.load())
+                lastFailingSuites = summary.failingSuites
+                setFailures(suites: summary.failingSuites, images: images,
+                            source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
+                notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).")
+                tab = .failures
+            case .failure(let error):
+                notify("Could not read \(url.lastPathComponent): \(error.localizedDescription)", isError: true)
             }
         }
     }
@@ -897,8 +887,7 @@ final class ProjectModel {
         currentTest = nil
         log = []
         visibleLog = []
-        lastMessage = nil
-        lastMessageIsError = false
+        notify(nil)
         NotificationCenter.default.post(name: AppModel.runStarted, object: nil)
         return true
     }
@@ -916,15 +905,21 @@ final class ProjectModel {
         operation = nil
         cancelAction = nil
         stageLabel = ""
-        lastMessage = message
-        lastMessageIsError = isError
-        lastMessageAction = action
+        notify(message, isError: isError, action: action)
         if lastResult?.summary?.suites.isEmpty == false { runPane = .results }
         setHistory(RunHistory(repository: project.url).load())
         currentBranch = Git(root: project.url).currentBranch()
         refreshChanges()
         announce(isError: isError)
         NotificationCenter.default.post(name: AppModel.runFinished, object: nil)
+    }
+
+    /// Shows `message` in the notice (nil hides it), with `action` as its next step. Always sets
+    /// all three, so a message never inherits the button of the one before it.
+    private func notify(_ message: String?, isError: Bool = false, action: NoticeAction? = nil) {
+        lastMessage = message
+        lastMessageIsError = isError
+        lastMessageAction = action
     }
 
     /// Dock badge with the failing count, and a bounce when the run ends while you're elsewhere.
@@ -1019,8 +1014,7 @@ final class ProjectModel {
     func reRecordFailed(suites: [SuiteResult]? = nil) {
         let targets = suites ?? lastFailingSuites
         guard !targets.isEmpty else {
-            lastMessage = "No failing suites to re-record. Run the tests first."
-            lastMessageIsError = true
+            notify("No failing suites to re-record. Run the tests first.", isError: true)
             return
         }
         reRecord(suites: targets, onlyTesting: nil, what: targets.map(\.name).joined(separator: ", "))
@@ -1040,14 +1034,12 @@ final class ProjectModel {
     func reRecordAll() {
         let files = recordableSnapshots
         guard !files.isEmpty else {
-            lastMessage = "No snapshot tests to re-record yet. Run the tests to record the first ones."
-            lastMessageIsError = true
+            notify("No snapshot tests to re-record yet. Run the tests to record the first ones.", isError: true)
             return
         }
         reRecord(files, granularity: .tests)
     }
 
-    /// The test behind whatever is selected on the current tab, if there is one to record.
     /// The snapshot behind the current tab's selection (a library file, a change, a failure's reference).
     var selectedSnapshotFile: SnapshotFile? {
         switch tab {
@@ -1102,8 +1094,7 @@ final class ProjectModel {
                     : tests.count == 1 ? files[0].testName : "\(tests.count) tests"
                 reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
             case .failure(let error):
-                lastMessage = "Can't re-record: \(error.localizedDescription)"
-                lastMessageIsError = true
+                notify("Can't re-record: \(error.localizedDescription)", isError: true)
             }
         }
     }
@@ -1152,8 +1143,7 @@ final class ProjectModel {
     func checkFlakiness(remote: Bool = false, tests: [String]? = nil) {
         let targets = lastFailingSuites
         guard !targets.isEmpty || tests != nil else {
-            lastMessage = "No failing suites to check. Run the tests first."
-            lastMessageIsError = true
+            notify("No failing suites to check. Run the tests first.", isError: true)
             return
         }
         let iterations = store.settings.flakeIterations
@@ -1208,8 +1198,7 @@ final class ProjectModel {
 
     func reRecordOnRemote() {
         guard !lastFailingSuites.isEmpty else {
-            lastMessage = "No failing suites to re-record. Run the tests first."
-            lastMessageIsError = true
+            notify("No failing suites to re-record. Run the tests first.", isError: true)
             return
         }
         runRemote(.remoteRecord, mode: .record(suites: lastFailingSuites), onlyTesting: nil)
@@ -1236,7 +1225,7 @@ final class ProjectModel {
                     applyFlakeResult(out.run, iterations: n)
                 case .record:
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
-                    finish(message: out.run.cancelled ? "Cancelled." : "Recorded on \(out.host); downloaded \(out.downloadedSnapshots.count) snapshot(s). Review them in Changes.")
+                    finish(message: out.run.cancelled ? "Cancelled." : "Recorded on \(out.host); downloaded \(out.downloadedSnapshots.count) snapshot\(out.downloadedSnapshots.count == 1 ? "" : "s"). Review them in Changes.")
                     if !out.run.cancelled { tab = .changes }
                 }
             } catch {
@@ -1350,9 +1339,7 @@ extension ProjectModel {
         recomputeVisibleLog()
         lastResult = f.lastResult
         runPane = f.operation == nil ? .results : .output
-        lastMessage = f.lastMessage
-        lastMessageIsError = f.lastMessageIsError
-        lastMessageAction = f.lastMessageAction
+        notify(f.lastMessage, isError: f.lastMessageIsError, action: f.lastMessageAction)
         startedAt = f.startedAt
         lastDuration = f.lastDuration
         lastFailingSuites = f.failingSuites
