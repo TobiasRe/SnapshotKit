@@ -624,6 +624,20 @@ extension AppUITests {
             }
         }
 
+        /// A branch checked out outside the app shows once the changes refresh (as on coming back to the app).
+        @Test func aBranchCheckedOutElsewhereShowsOnRefresh() async throws {
+            let (repo, _) = try makeRepo()
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            #expect(model.currentBranch == "feature")
+            try Shell.output(["git", "checkout", "-q", "-b", "release"], in: repo)
+            model.refreshChanges()
+            for _ in 0..<200 where model.currentBranch != "release" { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(model.currentBranch == "release")
+            #expect(model.branches.contains("release"))
+        }
+
         /// A project added while the counts are being read gets its count too.
         @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
             let solid = DS.solidSurfaces

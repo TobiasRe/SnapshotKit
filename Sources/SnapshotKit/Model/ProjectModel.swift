@@ -306,6 +306,7 @@ final class ProjectModel {
             }
             // A newer reload (e.g. a quick second settings change) wins.
             guard generation == reloadGeneration else { return }
+            // With the configuration, so the window never shows one without the other.
             currentBranch = loaded.branch
             branches = loaded.branches
             modules = loaded.modules
@@ -394,6 +395,7 @@ final class ProjectModel {
     /// Refreshes overlap (the file watcher, a run ending, coming back to the app); the latest one wins.
     @ObservationIgnored private var libraryGeneration = 0
     @ObservationIgnored private var changesGeneration = 0
+    @ObservationIgnored private var branchesGeneration = 0
 
     /// Re-indexes the snapshots in the working tree (off the main thread).
     func refreshLibrary() {
@@ -414,6 +416,23 @@ final class ProjectModel {
             if !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
                 selectedSnapshotID = Self.replacement(for: selectedSnapshotID, shown: shown, now: displayedSnapshots.map(\.id))
             }
+        }
+    }
+
+    /// Re-reads the checked-out branch and the branch list (off the main thread): either can change
+    /// outside the app, with a checkout in the terminal or a branch deleted on the remote.
+    private func refreshBranches() {
+        guard fixtureImages == nil else { return }
+        branchesGeneration += 1
+        let generation = branchesGeneration, repo = project.url
+        Task {
+            let (branch, all) = await offCooperativePool { () -> (String?, [String]) in
+                let git = Git(root: repo)
+                return (git.currentBranch(), ProjectModel.branchList(git))
+            }
+            guard generation == branchesGeneration else { return }
+            if branch != currentBranch { currentBranch = branch }
+            if all != branches { branches = all }
         }
     }
 
@@ -560,6 +579,7 @@ final class ProjectModel {
 
     func refreshChanges() {
         refreshLibrary()
+        refreshBranches()
         changesGeneration += 1
         guard let base = baseBranch else {
             changeSet = nil
@@ -1006,7 +1026,6 @@ final class ProjectModel {
         notify(message, isError: isError, action: action)
         if lastResult?.summary?.suites.isEmpty == false { runPane = .results }
         setHistory(RunHistory(repository: project.url).load())
-        currentBranch = Git(root: project.url).currentBranch()
         refreshChanges()
         announce(isError: isError)
         NotificationCenter.default.post(name: AppModel.runFinished, object: nil)
