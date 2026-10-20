@@ -104,12 +104,12 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
     }
 
     /// Runs kept per repository, each a result bundle with its exported attachments.
-    public static let keptResults = 10
+    static let keptResults = 10
 
     /// Where a repository's result bundles and failure images go: its git directory (per worktree,
     /// never committed, not shared with other repositories and not emptied by macOS like the
     /// temporary folder), or the temporary folder outside a repository.
-    public static func resultsDirectory(for repository: URL) -> URL {
+    static func resultsDirectory(for repository: URL) -> URL {
         let base = (try? Git(root: repository).gitDirectory().appendingPathComponent("snapshotkit"))
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit")
         return base.appendingPathComponent("results", isDirectory: true)
@@ -132,6 +132,7 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
     }
 
+    /// Leaves the newest `keptResults - 1` runs (room for the next one) and the runs named in `kept`.
     static func pruneResults(in dir: URL, keeping kept: Set<String>) {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey]) else { return }
