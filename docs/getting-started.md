@@ -109,7 +109,7 @@ Press ⌘K at any time to jump to a project or run a command by name.
 | App settings: scan folders, pins, recents, preferences, and per-project choices (base branch, remote host, test target) | `~/Library/Application Support/SnapshotKit/settings.json` (Settings › Show in Finder) |
 | Run history (every run, for flakiness and the history strips) | `~/Library/Application Support/SnapshotKit/history/` |
 | Per-clone state: the last run, Viewed marks, a record patch in progress | the repository's `.git/snapshotkit/` folder (`last-run.json`, `viewed.json`, `record-patch.json`), so it never shows up in `git status` |
-| Run results and failure images | the repository's git directory (`.git/snapshotkit/results/`) |
+| Run results and failure images | the repository's git directory (`.git/snapshotkit/results/`): the newest 10 runs, and always the last run's |
 | Project configuration you choose to commit | `.snapshotkit.yml` at the repository root. See [Configuration](configuration.md). |
 
 `SNAPSHOTKIT_HOME` points the app and the CLI at another settings folder, which is useful for scripts and

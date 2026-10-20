@@ -39,6 +39,13 @@ The Run tab and the notice follow each stage:
    [Check Flakiness](failures.md#checking-for-flakiness)). Turn verification off under Settings › Verify
    after re-recording.
 
+The verification updates the last run instead of replacing it: the tests it ran get their new outcome, and
+every other failure of the last run stays on the Failures tab, so you can work through them one at a time.
+
+When the build fails or no test runs, nothing is recorded and the notice says why: *Nothing was recorded: the
+build failed (…).* (`snapkit record` and `rerecord` exit 1). A canceled re-record says *Cancelled.*; the
+sources are restored, and the last run's failures stay as they were.
+
 The new PNGs are now uncommitted changes. Review them on the [Changes](changes.md) tab — *Discard…* drops the
 ones with no visible change — and commit.
 
@@ -90,7 +97,7 @@ The patch is never left behind:
 | You cancel (⌘., Cancel) | the run stops and the sources are restored. |
 | You quit SnapshotKit | restored on quit. |
 | `snapkit` gets Ctrl-C, SIGTERM, SIGHUP or SIGQUIT | child processes are stopped, sources restored, then it exits. The first Ctrl-C cancels gracefully; a second forces it. |
-| The app or `snapkit` crashes, or the Mac restarts | the next launch of either restores it: *Restored a record patch left by an interrupted run.* |
+| The app or `snapkit` crashes, or the Mac restarts | the next launch of either restores it: *Restored a record patch left by an interrupted run: …* (`snapkit`: *snapkit: restored leftover record patch in …*) |
 
 How it works: before touching a file, SnapshotKit writes a journal to `.git/snapshotkit/record-patch.json` with
 each file's original and patched text (and registers the repository in `active-patches.json` in its settings

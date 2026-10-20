@@ -76,7 +76,7 @@ to choose; Escape to close.
   their folder.
 - **Commands** are whatever can be done right now in the open project, each with its keyboard shortcut:
   Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
-  Flakiness of Failed Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
+  Flakiness of Failing Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
   Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed and Add Project…. Commands that can't
   run (nothing failing, a run in progress) are left out.
 
@@ -84,7 +84,7 @@ Matching is fuzzy: `rrf` finds *Re-record Failing Suites*, `pay` finds *payments
 
 ## The window
 
-A project window has a toolbar and four tabs:
+SnapshotKit has one main window. A project shows in it with a toolbar and four tabs:
 
 | Tab | Shortcut | What it shows |
 |---|---|---|
@@ -97,11 +97,14 @@ The tab labels carry counts: *Snapshots (26)*, *Changes (16)*, *Failures (3)*. T
 name; the subtitle is the current branch and, when it isn't the base branch, the base branch it is compared
 with (`feature/checkout → develop`).
 
-The toolbar holds:
+Besides the tabs, the toolbar holds **Run** (▶, ⌘R): run the snapshot tests the way CI does. Its arrow offers
+**Re-record Failing Suites** and **Re-record All Snapshot Tests…**. While a run is going, it becomes
+**Cancel** (⌘.). To re-record the selected test, use the camera button in its detail header, or ⇧⌘R from
+anywhere.
 
-- the **camera** button — re-record the test of whatever is selected (⇧⌘R),
-- **Run** (▶, ⌘R) — run the snapshot tests the way CI does. Its arrow offers **Re-record Failing Suites** and
-  **Re-record All Snapshot Tests…**. While a run is going, it becomes **Cancel** (⌘.).
+There is no second main window to open (only the compare windows of the [diff tool](diff-tool.md)). Closing
+the last window quits SnapshotKit, unless the [menu bar item](menu-bar.md) is on: then it keeps running, and
+the Dock icon or the menu bar item brings the window back.
 
 The list column on the left of Snapshots, Changes and Failures has one width shared by all three tabs; drag
 the divider to change it.

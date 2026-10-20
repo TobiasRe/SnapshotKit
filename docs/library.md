@@ -17,7 +17,7 @@ swift-snapshot-testing stores each reference as
 | Module (test target) | `ShopTests` | section headers (`ShopTests › CheckoutTests`) and the breadcrumb |
 | Suite (test file) | `CheckoutTests` | section headers |
 | Test name | `payButton` | the row title |
-| Variant | `dark` | under the title, in code type: the `named:` argument or the counter (`1`, `2`…) |
+| Variant | `dark` | on the line under the title, in code type: the `named:` argument or the counter (`1`, `2`…) |
 
 Variants of one test (`payButton.dark`, `payButton.light`) sit next to each other, light before dark and
 small devices before large ones.
@@ -49,15 +49,17 @@ Changed** show one flat list, useful for finding oversized images or what was re
 
 ## Rows and tiles
 
-Each row has a thumbnail, the test name, the variant and, when it matters, a state label:
+Each row (and each grid tile) has a thumbnail, the test name and one quiet status line: what's notable about
+the snapshot, then its variant, for example *● Uncommitted · dark*. The line names one state at most, with a
+colored dot:
 
-- **New** — not committed yet,
-- **Modified** — changed in the working tree,
-- **Orphaned** — its test no longer exists.
+- **Orphaned** — its test no longer exists,
+- otherwise its change against the base branch, the same word as on the Changes tab: **Committed**,
+  **Uncommitted**, **New** or **Deleted**,
+- otherwise an edit git hasn't committed: **Modified** or **New**.
 
-Marks at the trailing edge tell you where else the snapshot appears: a red ✕ when its test failed in the last
-run, an orange ⚠ when the test is flaky, a colored dot when it is in the Changes list. Click a mark to jump
-to that failure or change.
+A snapshot with nothing notable shows just its variant. Only failing gets a mark of its own, at the trailing
+edge (on a tile, its top corner): a red ✕ when its test failed in the last run, an orange ⚠ when it is flaky.
 
 A test's variants are listed under one title; the variant is left out when a test has only one.
 
@@ -65,25 +67,28 @@ A test's variants are listed under one title; the variant is left out when a tes
 
 Selecting a snapshot shows it large on the right.
 
-**Header** — the test name and variant, the breadcrumb (`ShopTests › CheckoutTests`), a state label
-(Changed, Failing, Modified…), and the actions:
+**Header** — the test name and variant, the breadcrumb (`ShopTests › CheckoutTests`), status chips, and the
+actions. The chips are **Failing** (or **Flaky**) when its test failed in the last run, and the same word as the
+row's status line (*Uncommitted*, *New*, *Orphaned*…). Click **Failing** to compare it with the actual image on
+the Failures tab, or a change's chip to review it on the Changes tab.
 
 - **Re-record** (camera): records this test again, then verifies it. Its arrow offers **Re-record Test** and
   **Re-record Suite** (every test in the file). See [Re-recording](re-recording.md).
-- **···**: Open Test in Xcode (⌥⌘O, at the test function), Open in Default App, Reveal in Finder, Copy Image,
-  Copy Path, and Move to Trash for orphaned snapshots.
+- **···**: Re-record *test*, Re-record Suite *suite*, Open Test in Xcode (⌥⌘O, at the test function), Open in
+  Default App, Reveal in Finder, Copy Image, Copy Path, and Move to Trash for orphaned snapshots.
 - **12 / 40** with arrows (⌥⌘↑ / ⌥⌘↓): where you are in the list, and the way through it.
 
 **Info row** — the snapshot's history from git: how many committed versions it has, and when, by whom and in
 which commit it was last changed. Next to it:
 
-- the **variant** switch (dark / light, iPhoneSE / iPhone13ProMax…), when the test has several,
+- the **variant** switch (dark / light, iPhoneSE / iPhone13ProMax…), when the test has several: up to three
+  side by side, more in a menu that names the one shown,
 - **Compare with…**: compare this snapshot side by side (or in any [compare mode](comparing.md)) with one of
   its other variants or with any earlier committed version.
 
 **Viewer** — the image on a checkerboard (so transparency shows), with its pixel size and file size and the
-zoom controls. Pinch or ⌘= / ⌘− to zoom, drag to pan, double-click or ⌘0 to fit. Hover to read the pixel
-under the pointer.
+zoom controls. Pinch or ⌘= / ⌘− to zoom, drag to pan, double-click or ⌘0 (Zoom to Fit) to fit. Hover to read
+the pixel under the pointer.
 
 ## Working with snapshots
 

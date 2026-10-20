@@ -93,7 +93,7 @@ last run.
 | ⌘F | Filter the list (Escape clears the filter, then leaves the field) |
 | ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
-| ⌘= / ⌘− / ⌘0 | Zoom in / out / fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to reset |
+| ⌘= / ⌘− / ⌘0 | Zoom in / out / to fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to fit |
 | ⇧⌘0 | Zoom to the changed pixels |
 | ← / → | Move the slider divider (or drag its knob) |
 | Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
@@ -183,7 +183,7 @@ references are rendered where CI compares them. See
 [Remote runs](https://tobiasre.github.io/SnapshotKit/docs/remote-runs/).
 
 **Noise or a real change?** Every difference is classified as invisible, a few pixels, size changed or visible,
-with the `perceptualPrecision` or `precision` that would pass. See
+with the `perceptualPrecision`, `precision` or both that would pass. See
 [Comparing images](https://tobiasre.github.io/SnapshotKit/docs/comparing/#the-diagnosis).
 
 ## Screenshots

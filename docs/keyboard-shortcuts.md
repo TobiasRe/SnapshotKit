@@ -1,6 +1,6 @@
 # Keyboard shortcuts
 
-## Projects and windows
+## Projects and tabs
 
 | Shortcut | Action |
 |---|---|
@@ -48,7 +48,7 @@
 | Space | Flip between the images (in Toggle mode) |
 | ← / → | Move the slider divider (in Slider mode) |
 | ⌘= / ⌘− | Zoom in / out |
-| ⌘0 | Fit (also: double-click the image) |
+| ⌘0 | Zoom to Fit (also: double-click the image) |
 | ⇧⌘0 | Zoom to the changed pixels |
 
 Trackpad: pinch to zoom, two-finger drag to pan. Mouse: drag to pan.

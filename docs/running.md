@@ -7,7 +7,8 @@ way a test that passes in SnapshotKit passes in CI, and references recorded here
 ## Starting a run
 
 - **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar's ▶, or **Run Tests** on the Run tab.
-- **⌘.** or **Cancel** stops it (the run is terminated and any record patch is restored).
+- **⌘.** or **Cancel** stops it (the run is terminated and any record patch is restored). A canceled run
+  says *Cancelled.* and leaves the last run's failures as they were.
 
 The **Run** tab (⌥⌘4) shows the run as it happens:
 
@@ -28,9 +29,9 @@ The left side of the Run tab shows what SnapshotKit will run and where each valu
 
 | Section | Shows |
 |---|---|
-| **Environment** | the Xcode version and path that will be used, and the simulator (with its state, e.g. *Booted*). |
+| **Environment** | the Xcode version (and build) that will be used, *Not pinned by CI* when CI doesn't name one, and the simulator with its state (e.g. *Booted*). |
 | **Scope** | **Test target**: *What CI runs* (default), or one test target with snapshots, to run only its tests. |
-| **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection, Xcode and device, each with its source (*.gitlab-ci.yml*, *.github/workflows/snapshots.yml · SIMULATOR*, *.snapshotkit.yml*…), and notes about anything SnapshotKit had to guess or couldn't read. |
+| **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection and working directory. A footer names the CI files they come from; a value from somewhere else (*.snapshotkit.yml*, a script) names its source. Notes say what SnapshotKit had to guess or couldn't read. Until Xcode and the simulator are found, it also shows the Xcode and device that were asked for. |
 | **Comparison & Remote** | the **Base branch** for the Changes tab and the **Remote host** for remote runs; type to override them for this project. |
 
 When something is missing or wrong — Xcode not installed, no simulator runtime, a broken `.snapshotkit.yml` —

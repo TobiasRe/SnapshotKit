@@ -28,7 +28,7 @@ rather than wrapping.
 |---|---|
 | Zoom in / out | ⌘= / ⌘−, pinch, or the **−** / **+** buttons |
 | Pick a level | click the level (*Fit*, *2.0×*…) for Fit, 2×, 4×, 8×, 16× |
-| Fit | ⌘0, or double-click the image |
+| Fit | ⌘0 (View › Zoom to Fit), or double-click the image |
 | Pan | drag with the mouse or two fingers |
 | Zoom to the change | ⇧⌘0, or the ⌖ button: frames the changed pixels |
 
@@ -63,7 +63,7 @@ When a difference isn't obvious, a note above the bar says what kind it is. Snap
 | Identical | no pixel differs and the size is the same | *The images are pixel-identical.* | |
 | Size changed | width or height differ | *The image size changed, so the device, scale or layout differs from the reference.* | |
 | **Invisible** | pixels differ, but none by ΔE 2.3 or more | *No visible difference (largest ΔE 0.5), typical of rendering on another machine or OS version.* | the `perceptualPrecision` that would pass |
-| **Few pixels** | fewer than 0.1% of pixels differ visibly | *3 visible pixels changed in a 4×2 px area: often anti-aliasing, a caret or a timestamp.* | the `precision` that would pass |
+| **Few pixels** | fewer than 0.1% of pixels differ visibly | *3 visible pixels changed in a 4×2 px area: often anti-aliasing, a caret or a timestamp.* | the `precision` that would pass, with a `perceptualPrecision` when other pixels differ invisibly |
 | Visible | anything else | *Visible change in a 105×58 area at 847, 136.* | |
 
 Visible changes speak for themselves, so the note only appears for *Invisible*, *Few pixels* and *Size
@@ -71,13 +71,18 @@ changed*.
 
 The suggested value is rounded down so that it really passes:
 
-- *Invisible*: `perceptualPrecision = 1 − largest ΔE / 100`, to two decimals (largest ΔE 0.5 → `0.99`),
-- *Few pixels*: `precision = 1 − changed pixels / all pixels`, to four decimals.
+- *Invisible*: `perceptualPrecision = 1 − largest ΔE / 100`, to two decimals (largest ΔE 0.5 → `0.99`), and
+  never more than `0.99`: at `1` swift-snapshot-testing compares exactly, and these images differ.
+- *Few pixels*, when no other pixel differs: `precision = 1 − changed pixels / all pixels`, to four decimals.
+- *Few pixels* over invisible rendering noise (the other pixels differ by less than ΔE 2.3): both, e.g.
+  `precision: 0.9997, perceptualPrecision: 0.97`. The `perceptualPrecision` (1 − 2.3 / 100, rounded down)
+  lets the noise pass, so `precision` only has to allow for the visible pixels. On its own, `precision` would
+  have to count the noise too and come out near `0`, which passes anything; that is never suggested.
 
-**Copy** puts `perceptualPrecision: 0.99` (or `precision: …`) on the clipboard, ready to paste into
-`.image(precision:perceptualPrecision:)`. Prefer fixing the cause when you can: an *Invisible* failure usually
-means the reference was recorded on a different machine, GPU or OS version than the one comparing it. Record
-where CI runs (see [remote runs](remote-runs.md)) rather than loosening every test.
+The button with the suggestion copies it (`perceptualPrecision: 0.99`, `precision: …` or both), ready to
+paste into `.image(precision:perceptualPrecision:)`. Prefer fixing the cause when you can: an *Invisible*
+failure usually means the reference was recorded on a different machine, GPU or OS version than the one
+comparing it. Record where CI runs (see [remote runs](remote-runs.md)) rather than loosening every test.
 
 ## The same view everywhere
 

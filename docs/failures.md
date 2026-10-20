@@ -15,9 +15,9 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Failures header): choose an `.xcresult` downloaded from CI. |
 
-The header says which one you're looking at (*Last run · local · Oct 16, 2026 at 7:48 PM*, *Imported
-ci.xcresult*…). Its arrow menu also offers **Open Result Bundle in Xcode** and **Reveal Result Bundle in
-Finder**.
+The header says which one you're looking at: *Last run* over *local · Oct 16, 2026 at 7:48 PM*, or the
+bundle's name (*ci.xcresult*) over *imported · …*. Its arrow menu also offers **Open Result Bundle in Xcode**
+and **Reveal Result Bundle in Finder**.
 
 SnapshotKit reads the result bundle with `xcresulttool`, exports the failure attachments (reference, failure
 and difference images that swift-snapshot-testing attaches) and matches each failure to its reference image
@@ -32,7 +32,7 @@ such, and recording it is the fix.
 Failing tests are grouped by test target and suite (`AppSnapshotTests › CheckoutViewTests`). Each row has:
 
 - the snapshot's thumbnail and the test name,
-- labels: a **verdict** from a flakiness check (*Flaky · 3/5 runs failed*, *Fails every time*), and the
+- labels: a **verdict** from a flakiness check (*Flaky · 2 of 5 runs passed*, *Fails every time*), and the
   **diagnosis** of the difference (*Invisible*, *Few pixels*, *Size changed*),
 - a **history strip**: one mark per recent run of the test.
 
@@ -46,7 +46,7 @@ The strip shows the test's last runs (up to twelve), oldest on the left:
 |---|---|
 | green | passed |
 | red | failed |
-| orange | mixed: repetitions in one run disagreed (a flakiness check) |
+| orange | mixed: repetitions in one run disagreed (a flakiness check, or one run on several devices) |
 
 A **flaky** test reads as a broken pattern (green, red, green…). A **regression** reads as a clean switch from
 green to red. With *Differentiate without color* on (System Settings › Accessibility › Display), the marks
@@ -64,16 +64,30 @@ also differ in shape.
 
 **Info row** — the most useful thing known about the failure, in this order:
 
-1. after a flakiness check or with run history: the verdict and the strip, e.g. *Flaky — 4 of 8 passed, 1
-   mixed*,
+1. after a flakiness check or with run history: the verdict and the strip, e.g. *Flaky* and *4 of 8 recent
+   runs passed, 1 mixed*,
 2. otherwise the diagnosis of the difference (*No visible difference (largest ΔE 0.5)…*),
 3. otherwise *First failure on record*.
 
 **Message** — the first line of the failure message, and for a flaky test the advice: *Passes sometimes, so
 re-recording will not fix it. Look for animations, async loading, dates or random data.*
 
-**Compare** — reference and actual in the [compare view](comparing.md), labeled *Reference* and *Actual* with the device (*Actual · iPhone 16 Pro*). When the run repeated the test
-(a flakiness check), a **Repetition** picker (*Run 1 of 5*…) shows each attempt.
+**Compare** — reference and actual in the [compare view](comparing.md), labeled *Reference* and *Actual* with
+the device (*Actual · iPhone 16 Pro*). When the run repeated the test (a flakiness check), a **Repetition**
+picker (*Run 1 of 5*…) shows each attempt.
+
+## Several devices and parameterized tests
+
+A test that ran on several simulators (several `-destination`s, or test plan configurations) or with several
+arguments (a parameterized Swift Testing test) is one row, and fails when it failed anywhere:
+
+- Each device's run counts as a run of the test, so a test that failed on one of two simulators shows
+  *1 of 2 runs passed* and its history strip marks that run orange (mixed); a flakiness check on two
+  simulators counts both. A parameterized test's cases are one run, which failed if any case failed.
+- The detail compares the images of the first device and test case that failed; *Actual · iPhone 16 Pro* says
+  which device. The images of the other devices and cases are kept, but the app doesn't show them yet:
+  `snapkit failures` lists them all, each labeled with its device and arguments (see
+  [the CLI reference](cli.md#failures)).
 
 ## What to do with a failure
 
@@ -82,7 +96,7 @@ re-recording will not fix it. Look for animations, async loading, dates or rando
 | **Visible** change you intended | the UI changed on purpose | Re-record (⇧⌘R), then review on the Changes tab and commit. |
 | **Visible** change you didn't intend | a regression | Fix the code; don't re-record. |
 | **Invisible** | the reference was recorded on another machine, GPU or OS version | Record where CI runs ([remote runs](remote-runs.md)), or relax `perceptualPrecision` to the suggested value. Re-recording locally just moves the problem to CI. |
-| **Few pixels** | anti-aliasing, a blinking caret, a timestamp | Make the view deterministic, or relax `precision` to the suggested value. |
+| **Few pixels** | anti-aliasing, a blinking caret, a timestamp | Make the view deterministic, or relax `precision` (with `perceptualPrecision`, when there is rendering noise too) to the suggested values. |
 | **Size changed** | another device, scale or layout | Check the test's device and the simulator CI uses. |
 | **Flaky** | the test isn't deterministic | Find the animation, async load, date or random value. Re-recording won't help. |
 
@@ -116,7 +130,7 @@ Each test gets a verdict:
 | **Flaky** | it passed and failed |
 | **Passes** | it never failed this time: it may have been flaky before, or fixed |
 
-The notice sums it up: *5× on local: 1 fail every time, 1 flaky, 0 pass.*
+The notice sums it up: *5× on local: 1 fails every time, 1 flaky, 0 pass.*
 
 ## Run history
 

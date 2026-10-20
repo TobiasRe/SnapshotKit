@@ -26,12 +26,12 @@ Click the icon for a panel:
 ![The menu bar panel](images/menubar-panel-light.png)
 
 **Running** — for every project with a run in progress: its name, what it's doing (*Running tests*,
-*Re-recording on ci-mac*…), a progress bar, the passed and failed counts so far, the test running now, and ⊗ to
-cancel it.
+*ci-mac: Syncing working tree*…), a progress bar, the passed and failed counts so far, the test running now,
+and ⊗ to cancel it.
 
-**Projects** — your failing projects first (with *3 failing*), then pinned and recent ones. Click a project to
-open it in the window; click ▶ to run its snapshot tests right away (the project opens and starts running once
-its environment is checked).
+**Projects** — your failing projects first (with a red dot and the failing count, as in the sidebar), then
+pinned and recent ones. Click a project to open it in the window; click ▶ to run its snapshot tests right away
+(the project opens and starts running once its environment is checked).
 
 **Footer** — **Open SnapshotKit** brings the window forward, **Settings…** opens the settings, **Quit** quits.
 
