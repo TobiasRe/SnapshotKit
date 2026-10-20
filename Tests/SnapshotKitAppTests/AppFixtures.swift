@@ -146,8 +146,11 @@ enum AppFixtures {
         let items = [
             FailureItem(
                 suite: checkoutSuite, test: pay,
-                images: [SnapshotFailureImages(testIdentifier: pay.identifier, repetition: 1, index: 0, reference: ref, failure: act,
-                                               difference: nil, device: "Example Phone")],
+                // A flakiness check: it failed in runs 2, 3 and 5 of 5, each with its own images.
+                images: [2, 3, 5].map {
+                    SnapshotFailureImages(testIdentifier: pay.identifier, repetition: $0, index: 0, reference: ref, failure: act,
+                                          difference: nil, device: "Example Phone")
+                },
                 referencePaths: ["\(snapshotDir)/CheckoutViewTests/payButton.1.png"],
                 verdict: .flaky,
                 historyFlaky: FlakySignal(test: "AppSnapshotTests/CheckoutViewTests/payButton()", passes: 3, failures: 4, failingHosts: ["ci-mac"]),
@@ -168,7 +171,7 @@ enum AppFixtures {
             let failure = item.images.first?.failure
             ThumbnailCache.preload(id: "failure:\(item.id)#\(failure?.path ?? "")", data: failure.flatMap { try? Data(contentsOf: $0) })
             let pair = ComparePair.make(before: try? Data(contentsOf: item.images[0].reference!), after: try? Data(contentsOf: item.images[0].failure!))
-            ComparePairCache.store(pair, for: item.id + "#1")
+            ComparePairCache.store(pair, for: item.id + "#\(item.images[0].repetition)")
         }
         return items
     }

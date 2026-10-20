@@ -123,6 +123,8 @@ struct FailuresTab: View {
     private func detail(_ item: FailureItem) -> some View {
         let reps = Array(Set(item.images.map(\.repetition))).sorted()
         let rep = reps.contains(repetition) ? repetition : (reps.first ?? 1)
+        // Attempts are numbered among all runs of the test, not only the failing ones with images.
+        let runs = max(item.test.repetitions.count, reps.last ?? 1)
         let image = item.images.first { $0.repetition == rep }
         let referenceURL = image?.reference ?? item.referencePaths.first.map { project.project.url.appendingPathComponent($0) }
         let failureURL = image?.failure
@@ -169,12 +171,19 @@ struct FailuresTab: View {
                 }
                 Spacer(minLength: DS.Space.s)
                 if reps.count > 1 {
-                    Picker("Repetition", selection: $repetition) {
-                        ForEach(reps, id: \.self) { Text("Run \($0) of \(reps.count)").tag($0) }
+                    Menu {
+                        Picker("Repetition", selection: $repetition) {
+                            ForEach(reps, id: \.self) { Text("Run \($0) of \(runs)").tag($0) }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    } label: {
+                        Text("Run \(rep) of \(runs)")
                     }
-                    .labelsHidden()
                     .fixedSize()
+                    .quietControl()
                     .accessibilityLabel("Repetition")
+                    .help("Which attempt of the flakiness check to show")
                 }
             }
             .font(DS.Font.caption)
