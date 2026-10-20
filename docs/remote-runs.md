@@ -50,7 +50,7 @@ remote runs.
 
 ## Re-recording remotely
 
-**Run tab › ··· › On <host> › Re-record Failed** (or `snapkit rerecord --remote`):
+**Run tab › ··· › On *host* › Re-record Failed** (or `snapkit rerecord --remote`):
 
 - Your files are **never patched**. The record patch is applied to the remote copy only, and the original sources
   are put back there after the run.
@@ -60,7 +60,7 @@ remote runs.
 
 ## Checking flakiness remotely
 
-**Run tab › ··· › On <host> › Check Flakiness** (or `snapkit flaky --remote`) repeats the failing tests on the
+**Run tab › ··· › On *host* › Check Flakiness** (or `snapkit flaky --remote`) repeats the failing tests on the
 remote Mac. A test that fails on CI but passes on your Mac often shows its true colours there.
 
 ## A local "remote"

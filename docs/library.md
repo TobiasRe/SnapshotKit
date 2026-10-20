@@ -45,6 +45,8 @@ Changed** show one flat list, useful for finding oversized images or what was re
 
 **Layout**: a **list** with a large preview of the selected snapshot, or a **grid** of thumbnails.
 
+![The library as a grid of thumbnails, with the All, Changed, Failing, Uncommitted and Orphaned scopes](images/library-grid.png)
+
 ## Rows and tiles
 
 Each row has a thumbnail, the test name, the variant and, when it matters, a state label:
@@ -70,7 +72,7 @@ Selecting a snapshot shows it large on the right.
   **Re-record Suite** (every test in the file). See [Re-recording](re-recording.md).
 - **···**: Open Test in Xcode (⌥⌘O, at the test function), Open in Default App, Reveal in Finder, Copy Image,
   Copy Path, and Move to Trash for orphaned snapshots.
-- **12 / 40** with ⌃↑/↓ arrows: where you are in the list, and the way through it.
+- **12 / 40** with arrows (⌥⌘↑ / ⌥⌘↓): where you are in the list, and the way through it.
 
 **Info row** — the snapshot's history from git: how many committed versions it has, and when, by whom and in
 which commit it was last changed. Next to it:

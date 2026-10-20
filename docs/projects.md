@@ -35,8 +35,10 @@ scanning skips:
 - hidden folders,
 - bundles and packages: `.app`, `.xcodeproj`, `.xcworkspace`, `.xcassets`, `.bundle`, `.framework`, and
   anything macOS treats as a package (such as a Photos library),
-- dependency and build folders: `node_modules`, `Pods`, `Carthage`, `DerivedData`, `build`, `vendor`,
-- the home folder's `Library`, `Applications`, `Music`, `Movies`, `Pictures` and `Public`,
+- dependency and build folders: `node_modules`, `Pods`, `Carthage`, `DerivedData`, `.build`, `build`,
+  `vendor`,
+- folders named `Library`, `Applications`, `Music`, `Movies`, `Pictures` or `Public` (at any level, not only
+  in the home folder),
 - the inside of a repository once it is found (nested repositories aren't searched).
 
 Scanning `~` typically takes a few seconds.
@@ -107,7 +109,7 @@ the divider to change it.
 ## Notices
 
 When something finishes — a run, a re-record, a scan — a notice floats at the bottom right of the window
-with the outcome and, where there is one, the next step (*Show Failures* after a failing run, *Show Changes*
+with the outcome and, where there is one, the next step (*Show Failures* after a failing run, *Review Changes*
 after a re-record). It fades after a few seconds unless it reports a problem. Notices never push the panes
 around.
 

@@ -8,7 +8,7 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 
 - **Finder and System Settings:** the sidebar is the system's glass material, never painted over. The
   layering stays quiet and consistent across every pane.
-- **Safari and OpenMark:** the toolbar floats above the document and recedes when you don't need it.
+- **Safari:** the toolbar floats above the document and recedes when you don't need it.
 - **Photos and Preview:** editing and zoom controls float as glass over the image, not in a strip above it.
 - **Calendar:** headers softly blur the content scrolling beneath them.
 - **Kaleidoscope and other image-diff tools:** comparing images needs more than side by side. A one-up *toggle*
@@ -40,7 +40,7 @@ can be followed between these views, and re-recording is available wherever a sn
 1. **Chrome is glass, content is solid.** Use the system toolbar and sidebar as they are. Lists, forms,
    logs and images sit on solid backgrounds.
 2. **Glass for controls, never for content.** Controls that float over images (compare mode, zoom, captions,
-   the slider knob) and the controls in pane headers are Liquid Glass, as Linear rings its toolbar icons:
+   the slider knob) and the controls in pane headers are Liquid Glass:
    icon actions are glass circles (`GlassIconButton`, `GlassIconMenu`), an action with variations is a
    glass pill with a chevron (`GlassSplitButton`), and text controls are glass capsules (`quietControl()`).
    Lists, forms, logs and images stay solid. Neighbouring floating glass is grouped with `GlassGroup`.

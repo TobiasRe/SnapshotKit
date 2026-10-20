@@ -270,7 +270,8 @@ For an invisible or tiny difference the diagnosis ends with *Would pass with pre
 | `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). **The folder is replaced.** |
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
-*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* Exits 0.
+*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* Exits 0 after listing, failures or not; 1
+when there is no bundle or it can't be read.
 
 ## history
 
@@ -283,14 +284,15 @@ the tests flagged as flaky because they passed and failed on the same commit:
 
 ```
 $ snapkit history
-16.10.2026, 19:48  run        local        10✔ 3✘  00ec4128+dirty
+10/16/2026, 7:48 PM  run        local        10✔ 3✘  00ec4128+dirty
 No flaky signals.
 ```
 
 When there are flaky signals, the second part reads *Flaky (passed and failed on the same commit):* followed by
 each test, its passes and failures, the hosts it failed on and its strip. Dates follow your system's format.
 
-With TEST (`Bundle/Suite/test()`): that test's strip (up to 30 runs, oldest first) and one line per run. Kinds:
+With TEST (`Bundle/Suite/test()`): the same runs and flaky signals, then that test's strip (up to 30 runs,
+oldest first) and one line per run. Kinds:
 `run`, `record`, `verify`, `flakeCheck`, `imported`. Exits 0.
 
 ## diff

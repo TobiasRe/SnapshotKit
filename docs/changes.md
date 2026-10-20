@@ -52,8 +52,8 @@ slider), this branch or the working tree on the right.
 
 The detail header shows the test name and variant, its breadcrumb, its kind, and:
 
-- **Viewed** — mark it reviewed (V in the list, ⌥⌘V anywhere). ⌥⌘V also moves to the next change, so you
-  can go through a branch with one shortcut.
+- **Viewed** — mark it reviewed, or unmark it: V in the list and ⌥⌘V anywhere toggle the mark. Marking a
+  change as viewed also moves to the next unviewed change, so you can go through a branch with one shortcut.
 - **···** — Re-record the test, Show in Library, Open Test in Xcode, Open in Default App, Reveal in Finder,
   open the base branch's version, Copy Side-by-Side Image, Mark as Viewed, Copy Path, and **Discard
   Change…**, which undoes a working-tree change after asking: an uncommitted change is restored from `HEAD`,

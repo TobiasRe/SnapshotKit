@@ -11,12 +11,12 @@ references.
 | What | Where | Shortcut |
 |---|---|---|
 | The selected test | camera button in a detail header or the toolbar; Snapshots › Re-record Selected Test | ⇧⌘R |
-| The selected test's whole suite | the camera button's arrow › Re-record Suite | |
-| Every failing test of the last run | Failures › Re-record All; the Run button's arrow; Run tab › Re-record Failed | ⌥⇧⌘R |
+| The selected test's whole suite | the camera button's arrow › Re-record Suite *name* | |
+| The failing suites of the last run | **Re-record All** in the Failures header; the Run button's arrow › **Re-record Failing Tests**; **Re-record Failed** on the Run tab; Snapshots › Re-record Failing Tests | ⌥⇧⌘R |
 | What the library shows | the library footer's **Re-record All…** / **Re-record N Shown…** (filter first, e.g. `dark`) | |
 | Every snapshot test in the project | the Run button's arrow › **Re-record All Snapshot Tests…**; Snapshots menu; ⌘K | |
 | A test from a change or failure | its ··· menu or right-click | |
-| On the CI machine | Run tab › ··· › On <host> › Re-record Failed. [Remote runs](remote-runs.md) | |
+| On the CI machine | Run tab › ··· › On *host* › Re-record Failed. [Remote runs](remote-runs.md) | |
 
 Re-recording more than ten tests asks first, with the number of tests. Orphaned snapshots can't be re-recorded:
 their test no longer exists.
@@ -44,23 +44,24 @@ ones with no visible change — and commit.
 
 ## The patch
 
-Every inserted or changed line ends with the marker comment `// snapshotkit:record`, so it's easy to spot.
+A line SnapshotKit inserts ends with the marker comment `// snapshotkit:record`, so it's easy to spot. An
+existing `@Suite` attribute is edited in place instead and gets no marker.
 
 **Swift Testing** — record mode is set through the suite's `.snapshots` trait:
 
 ```swift
-// No @Suite yet: one is added above the type
+// No @Suite yet: one is added above the type, with the marker
 @Suite(.snapshots(record: .all)) // snapshotkit:record
 struct CheckoutViewTests { … }
 
-// @Suite without arguments
-@Suite(.snapshots(record: .all)) // snapshotkit:record
+// @Suite without arguments: edited in place
+@Suite(.snapshots(record: .all))
 
 // @Suite(.serialized): the trait is appended
-@Suite(.serialized, .snapshots(record: .all)) // snapshotkit:record
+@Suite(.serialized, .snapshots(record: .all))
 
 // An existing .snapshots(diffTool: …): record is added; an existing record: value is replaced
-@Suite(.snapshots(record: .all, diffTool: .ksdiff)) // snapshotkit:record
+@Suite(.snapshots(record: .all, diffTool: .ksdiff))
 ```
 
 **XCTest** — an `invokeTest` override is added to the test case:

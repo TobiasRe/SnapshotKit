@@ -80,8 +80,9 @@ or whose snapshot names are built at run time, can look orphaned. Don't trash th
 
 ## The record patch
 
-**My test file still contains `// snapshotkit:record`.**
-That shouldn't survive a run. Restore it: open SnapshotKit or run `snapkit restore` in the repository. If the file
+**My test file still contains `// snapshotkit:record`, or a `record: .all` in its `@Suite`.**
+That shouldn't survive a run. (SnapshotKit marks the lines it inserts with the comment, but edits an existing
+`@Suite` in place, so a leftover there has no marker.) Restore it: open SnapshotKit or run `snapkit restore` in the repository. If the file
 changed too much to restore automatically, the original is in `.git/snapshotkit/backups/`.
 
 **"A re-record is already in progress for …"**

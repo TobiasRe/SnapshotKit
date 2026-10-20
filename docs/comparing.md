@@ -53,6 +53,8 @@ The bar shows, for the pair:
 
 ## The diagnosis
 
+![The Difference mode with the note "No visible difference (largest ΔE 0.5)" and a button to copy perceptualPrecision: 0.99](images/diagnosis.png)
+
 When a difference isn't obvious, a note above the bar says what kind it is. SnapshotKit measures every pixel's
 ΔE and classifies the pair, in this order:
 

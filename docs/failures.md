@@ -15,7 +15,7 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Failures header): choose an `.xcresult` downloaded from CI. |
 
-The header says which one you're looking at (*Last run · local · Jan 15, 2027 at 8:00 AM*, *Imported
+The header says which one you're looking at (*Last run · local · Oct 16, 2026 at 7:48 PM*, *Imported
 ci.xcresult*…). Its arrow menu also offers **Open Result Bundle in Xcode** and **Reveal Result Bundle in
 Finder**.
 
@@ -58,7 +58,7 @@ also differ in shape.
 
 - **Re-record** (camera, ⇧⌘R): records this test again, then verifies it. The arrow offers **Re-record
   Test** and **Re-record Suite**.
-- **···**: Check Flakiness of This Test, Re-record Test / Suite, Open Test in Xcode, Show Reference in
+- **···**: Check Flakiness of This Test, Re-record *test* / Re-record Suite *suite*, Open Test in Xcode, Show Reference in
   Library, Reveal Reference in Finder, Open Actual Image, Copy Side-by-Side Image, Copy Test Identifier, Copy
   Failure Message.
 
@@ -72,8 +72,8 @@ also differ in shape.
 **Message** — the first line of the failure message, and for a flaky test the advice: *Passes sometimes, so
 re-recording will not fix it. Look for animations, async loading, dates or random data.*
 
-**Compare** — reference and actual in the [compare view](comparing.md), labelled *Reference* and *Actual ·
-<device>*. When the run repeated the test (a flakiness check), a **Repetition** picker shows each attempt.
+**Compare** — reference and actual in the [compare view](comparing.md), labelled *Reference* and *Actual* with the device (*Actual · iPhone 16 Pro*). When the run repeated the test
+(a flakiness check), a **Repetition** picker (*Run 1 of 5*…) shows each attempt.
 
 ## What to do with a failure
 

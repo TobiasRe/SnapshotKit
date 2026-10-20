@@ -11,7 +11,7 @@ the reference images the tests record and the results they produce.
 | What | Requirement |
 |---|---|
 | Mac | Apple silicon, macOS 14 or later. Liquid Glass controls on macOS 26 and later; earlier versions get the same layout with flat controls. |
-| Xcode | Whatever your project's tests need. SnapshotKit runs `xcodebuild test` the way your CI does (Swift packages too, through their scheme) and uses the Xcode version CI pins, when that version is installed. |
+| Xcode | Xcode 16 or later (SnapshotKit reads results with `xcresulttool get test-results`), and whatever your project's tests need. SnapshotKit runs `xcodebuild test` the way your CI does (Swift packages too, through their scheme) and uses the Xcode version CI pins, when that version is installed. |
 | Projects | Git repositories with snapshot tests built on swift-snapshot-testing (Swift Testing or XCTest). |
 
 Browsing, reviewing changes and comparing images need nothing but the repository. Running and re-recording
@@ -36,10 +36,13 @@ your `PATH`:
 
 ```bash
 unzip snapkit-0.1.1-macos-arm64.zip
+sudo mkdir -p /usr/local/bin
 sudo mv snapkit /usr/local/bin/
-xattr -d com.apple.quarantine /usr/local/bin/snapkit
+xattr -d com.apple.quarantine /usr/local/bin/snapkit 2>/dev/null || true
 snapkit --version
 ```
+
+The `xattr` line removes the quarantine flag a browser download adds; without it, macOS may block the binary.
 
 The CLI is optional: the app does everything on its own. See [the CLI reference](cli.md).
 

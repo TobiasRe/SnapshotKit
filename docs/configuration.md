@@ -36,10 +36,11 @@ From lowest to highest — a later source overrides an earlier one, field by fie
 1. **CI variables** — values found in variables your CI defines (`SCHEME: Shop`, `SIMULATOR: iPhone 16 Pro`).
 2. **The CI command line** — the arguments of the `xcodebuild` call your CI makes.
 3. **`.snapshotkit.yml`** — every key it sets.
-4. **Defaults**, for anything still unset: the base branch from git, the only workspace or project in the
-   repository, the scheme from `xcodebuild -list`.
-5. **Per-project settings in the app** (and `snapkit` options): the base branch and remote host you typed on
+4. **Per-project settings in the app** (and `snapkit` options): the base branch and remote host you typed on
    the Run tab, and the test target you picked. These are personal and not committed.
+
+Anything still unset falls back to defaults: the base branch from git, the only workspace or project in the
+repository, the scheme from `xcodebuild -list`.
 
 ## What SnapshotKit reads from CI
 
@@ -157,13 +158,14 @@ typo shows up in `snapkit config`.
 
 ## The base branch
 
-The branch the Changes tab compares with, in order:
+The branch the Changes tab compares with, highest priority first:
 
-1. the GitLab merge request target your CI checks (`$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"`),
-2. the GitHub `pull_request:` / `pull_request_target:` branches (the first without wildcards),
-3. `baseBranch` in `.snapshotkit.yml`,
-4. `origin/HEAD`, else the first of `develop`, `main`, `master` that exists locally or on `origin`,
-5. the base branch chosen in the app (Changes › branch menu, or Run tab), which overrides all of the above.
+1. the base branch chosen in the app (the Changes tab's branch menu, or the Run tab),
+2. `baseBranch` in `.snapshotkit.yml`,
+3. the target branch your CI uses: the GitLab merge request target it checks
+   (`$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"`), or the GitHub `pull_request:` /
+   `pull_request_target:` branches (the first without wildcards),
+4. `origin/HEAD`, else the first of `develop`, `main`, `master` that exists locally or on `origin`.
 
 When comparing, `origin/<branch>` is used if it exists, so fetch to see the latest state.
 
