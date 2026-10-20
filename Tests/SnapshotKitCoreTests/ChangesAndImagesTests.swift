@@ -173,7 +173,8 @@ import Testing
     /// code to type (in backticks) keeps straight quotes.
     @Test func messagesUseTypographicQuotes() {
         let errors: [any LocalizedError] = [
-            SnapshotChangeError.baseBranchNotFound("develop"),
+            SnapshotChangeError.baseBranchNotFound("develop"), SnapshotChangeError.noCommits,
+            SnapshotChangeError.noMergeBase("origin/develop", shallow: true), SnapshotChangeError.noMergeBase("origin/develop", shallow: false),
             RecordPatchError.declarationNotFound(suite: "CardTests", file: "CardTests.swift"),
             RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "CardTests.swift"),
             RecordPatchError.suiteFileNotFound("CardTests"),
@@ -185,6 +186,29 @@ import Testing
             #expect(!prose.contains("'") && !prose.contains("\""), "\(prose)")
         }
         #expect(SnapshotChangeError.baseBranchNotFound("develop").errorDescription?.hasPrefix("Base branch “develop” was not found") == true)
+    }
+
+    /// CI checks out with `--depth 1`: the base branch is there, where this branch left it isn't.
+    @Test func aShallowCloneWithoutTheMergeBaseSaysHowToGetIt() throws {
+        let origin = try TempRepo()
+        try origin.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", red)
+        try origin.commitAll("base")
+        try origin.git.run(["checkout", "-q", "-b", "feature"])
+        try origin.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", blue)
+        try origin.commitAll("feature")
+        let clone = testTemp("shallow")
+        try Shell.output(["git", "clone", "-q", "--depth", "1", "--no-single-branch", "--branch", "feature", "file://" + origin.url.path, clone.path])
+        let git = Git(root: clone)
+
+        #expect(throws: SnapshotChangeError.noMergeBase("origin/develop", shallow: true)) { try git.snapshotChanges(baseBranch: "develop") }
+        #expect(SnapshotChangeError.noMergeBase("origin/develop", shallow: true).errorDescription?.contains("git fetch --unshallow") == true)
+        #expect(try git.snapshotChanges(baseBranch: "develop", against: .tip).changes.count == 1)
+    }
+
+    @Test func aRepositoryWithoutCommitsHasNothingToCompare() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", red)
+        #expect(throws: SnapshotChangeError.noCommits) { try repo.git.snapshotChanges(baseBranch: "develop") }
     }
 
     @Test func missingBaseBranch() throws {

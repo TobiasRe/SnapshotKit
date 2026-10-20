@@ -104,13 +104,23 @@ public struct SnapshotChangeSet: Sendable {
     }
 }
 
-public enum SnapshotChangeError: Error, LocalizedError {
+public enum SnapshotChangeError: Error, LocalizedError, Equatable {
     case baseBranchNotFound(String)
+    /// Where this branch left the base branch isn't known: the clone is shallow, or the histories
+    /// are unrelated.
+    case noMergeBase(String, shallow: Bool)
+    case noCommits
 
     public var errorDescription: String? {
         switch self {
         case .baseBranchNotFound(let branch):
             "Base branch “\(branch)” was not found locally or on origin. Fetch it or choose a different base branch."
+        case .noMergeBase(let ref, shallow: true):
+            "This shallow clone doesn’t have the commit where the branch left \(ref). Fetch the history (`git fetch --unshallow`), or compare with the branch tip."
+        case .noMergeBase(let ref, shallow: false):
+            "This branch has no history in common with \(ref). Compare with the branch tip, or choose a different base branch."
+        case .noCommits:
+            "This repository has no commits yet, so there is nothing to compare with."
         }
     }
 }
@@ -119,8 +129,16 @@ extension Git {
     /// Lists the snapshots (the library's PNGs) that differ between the base (merge-base or tip of
     /// `baseBranch`) and the working tree.
     public func snapshotChanges(baseBranch: String, against diffBase: DiffBase = .mergeBase) throws -> SnapshotChangeSet {
+        guard refExists("HEAD") else { throw SnapshotChangeError.noCommits }
         guard let baseRef = resolveBaseRef(baseBranch) else { throw SnapshotChangeError.baseBranchNotFound(baseBranch) }
-        let base = diffBase == .mergeBase ? try mergeBase(baseRef) : try run(["rev-parse", baseRef])
+        let base: String
+        if diffBase == .tip {
+            base = try run(["rev-parse", baseRef])
+        } else if let mergeBase = try? mergeBase(baseRef) {
+            base = mergeBase
+        } else {
+            throw SnapshotChangeError.noMergeBase(baseRef, shallow: tryRun(["rev-parse", "--is-shallow-repository"]) == "true")
+        }
         let snapshots = SnapshotLibrary.pathspec
 
         // Base → working tree (includes staged and unstaged edits of tracked files): status, path, status, path…
