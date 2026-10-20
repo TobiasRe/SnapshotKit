@@ -67,6 +67,20 @@ import Testing
         #expect(!String(decoding: try Data(contentsOf: url), as: UTF8.self).contains("/private"))
     }
 
+    /// An older version could save one project under two spellings of its path. The settings saved
+    /// under the canonical one, which this version writes, win; not whichever the dictionary
+    /// happened to list first (that changed from launch to launch).
+    @Test func settingsSavedUnderTwoSpellingsOfAPathKeepTheCanonicalOnes() throws {
+        let app = testTemp("app")
+        try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+        let url = testTemp("settings").appendingPathExtension("json")
+        for order in [["/private" + app.path, app.path], [app.path, "/private" + app.path]] {
+            let entries = order.map { #""\#($0)": {"baseBranch": "\#($0 == app.path ? "current" : "old")"}"# }
+            try Data(#"{"projectSettings": {\#(entries.joined(separator: ", "))}}"#.utf8).write(to: url)
+            #expect(ProjectStore(url: url).settings.projectSettings == [app.path: ProjectSettings(baseBranch: "current")])
+        }
+    }
+
     /// The first `last-run.json`: no `suites`. A re-record's verification is still merged into it.
     @Test func lastRunFromTheFirstVersion() throws {
         let repo = try TempRepo()

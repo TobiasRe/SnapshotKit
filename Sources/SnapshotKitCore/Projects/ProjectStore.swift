@@ -73,7 +73,14 @@ extension AppSettings {
         s.pinned = norm(pinned)
         s.recents = norm(recents)
         s.lastProject = lastProject.map { Project(path: $0).path }
-        s.projectSettings = Dictionary(projectSettings.map { (Project(path: $0.key).path, $0.value) }, uniquingKeysWith: { a, _ in a })
+        // Spellings of one project's path (saved by older versions) keep the settings saved under
+        // the canonical one, which this version writes; else the first by path, never a random one.
+        var merged: [String: ProjectSettings] = [:]
+        for (key, value) in projectSettings.sorted(by: { $0.key < $1.key }) {
+            let path = Project(path: key).path
+            if merged[path] == nil || key == path { merged[path] = value }
+        }
+        s.projectSettings = merged
         return s
     }
 }
