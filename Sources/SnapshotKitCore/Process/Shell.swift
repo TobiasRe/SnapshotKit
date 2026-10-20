@@ -164,6 +164,7 @@ extension Pipe {
 /// Runs blocking work (a `Shell` call, say) on a thread of its own and waits for it without
 /// blocking: Swift concurrency's pool has a thread per core, and work that sits in `waitpid` or
 /// `read` there starves every other task.
+@discardableResult
 func offCooperativePool<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
     try await withCheckedThrowingContinuation { continuation in
         Thread { continuation.resume(with: Result { try work() }) }.start()

@@ -42,7 +42,7 @@ public struct RemoteRunResult: Sendable {
 ///
 /// Local files are never patched: in record mode the patched sources are uploaded only
 /// to the remote copy.
-public final class RemoteRunner: @unchecked Sendable {
+public final class RemoteRunner: @unchecked Sendable { // `process` and `cancelled` are guarded by `lock`.
     public let repository: URL
     public let config: SnapshotConfig
     public let transport: RemoteTransport
@@ -101,7 +101,8 @@ public final class RemoteRunner: @unchecked Sendable {
         let output: String
         do {
             output = try transport.run(Self.preflightScript)
-        } catch RemoteError.commandFailed(let host, _, let message) {
+        } catch RemoteError.commandFailed(let host, _, status: 255, let message) {
+            // ssh exits 255 when it can't connect or log in; any other status is the script's.
             throw RemoteError.unreachable(host: host, output: message)
         }
         let info = Self.parsePreflight(output)
@@ -130,7 +131,8 @@ public final class RemoteRunner: @unchecked Sendable {
         if let dir = config.remoteDirectory, !dir.isEmpty {
             return dir.hasPrefix("~/") ? home + dir.dropFirst(1) : dir
         }
-        let name = repository.lastPathComponent
+        // rsync hands remote paths to the remote shell, so the default stays clear of anything it would split.
+        let name = repository.lastPathComponent.replacingOccurrences(of: "[^A-Za-z0-9._-]", with: "-", options: .regularExpression)
         let hash = String(UInt(bitPattern: repository.standardizedFileURL.path.stableHash), radix: 36)
         return "\(home)/.snapshotkit/workspaces/\(name)-\(hash)"
     }
@@ -162,6 +164,10 @@ public final class RemoteRunner: @unchecked Sendable {
 
     // MARK: Run
 
+    /// Runs the tests on the remote machine: checks its Xcode and simulator, syncs the working tree,
+    /// runs `xcodebuild` there with streamed output, and copies the results back (and, in record
+    /// mode, the new references into the working tree). Throws `CancellationError` when cancelled
+    /// before the tests started.
     public func run(
         mode: RemoteMode,
         onlyTesting: [String]? = nil,
@@ -170,37 +176,59 @@ public final class RemoteRunner: @unchecked Sendable {
         onEvent: @escaping @Sendable (TestEvent, TestOutputParser) -> Void = { _, _ in }
     ) async throws -> RemoteRunResult {
         onStage(.connecting)
-        let (environment, info) = try preflight()
+        let (environment, info) = try await offCooperativePool { try self.preflight() }
         onLine("snapkit: \(transport.label): Xcode \(environment.xcode.version), \(environment.simulator.name) (\(environment.simulator.platform) \(environment.simulator.osVersion))")
         try checkCancelled()
 
         let dir = remoteDirectory(home: info.home)
         onStage(.syncing)
-        try sync(to: dir)
+        try await offCooperativePool { try self.sync(to: dir) }
         onLine("snapkit: synced working tree to \(transport.label):\(dir)")
         try checkCancelled()
 
-        var selection = onlyTesting
-        var additional: [String] = []
-        var patchedPaths: [String] = []
+        guard case .record(let suites) = mode else {
+            return try await runTests(mode: mode, onlyTesting: onlyTesting, environment: environment, dir: dir,
+                                      onStage: onStage, onLine: onLine, onEvent: onEvent)
+        }
+        onStage(.patching)
+        let patched = try await offCooperativePool { try self.uploadPatchedSources(for: suites, to: dir) }
+        // From here on, every way out puts the original sources back on the remote copy.
+        do {
+            let result = try await runTests(mode: mode, onlyTesting: suites.map(\.identifier), environment: environment, dir: dir,
+                                            onStage: onStage, onLine: onLine, onEvent: onEvent)
+            await restoreSources(patched, in: dir)
+            return result
+        } catch {
+            await restoreSources(patched, in: dir)
+            throw error
+        }
+    }
+
+    private func runTests(
+        mode: RemoteMode, onlyTesting: [String]?, environment: TestEnvironment, dir: String,
+        onStage: @escaping @Sendable (RemoteStage) -> Void,
+        onLine: @escaping @Sendable (String) -> Void,
+        onEvent: @escaping @Sendable (TestEvent, TestOutputParser) -> Void
+    ) async throws -> RemoteRunResult {
         let stateDir = dir + "/.snapshotkit"
+        var additional: [String] = []
         switch mode {
         case .run:
             break
         case .flakeCheck(let iterations):
             additional = Flakiness.arguments(iterations: iterations)
-        case .record(let suites):
-            onStage(.patching)
-            patchedPaths = try uploadPatchedSources(for: suites, to: dir)
-            selection = suites.map(\.identifier)
-            _ = try transport.run("mkdir -p \(Shell.quote(stateDir)) && touch \(Shell.quote(stateDir + "/record-marker"))")
+        case .record:
+            // What the run writes after this marker is what was recorded.
+            try await offCooperativePool {
+                try self.transport.run("mkdir -p \(Shell.quote(stateDir)) && touch \(Shell.quote(stateDir + "/record-marker"))")
+            }
         }
 
-        let scheme = try remoteScheme(environment: environment, dir: dir)
+        let scheme = try await offCooperativePool { try self.remoteScheme(environment: environment, dir: dir) }
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let bundle = "\(stateDir)/results/\(stamp).xcresult"
         let args = TestRunner.arguments(config: config, scheme: scheme, destination: environment.destination,
-                                        resultBundlePath: bundle, onlyTesting: selection, additional: additional)
+                                        resultBundlePath: bundle, onlyTesting: onlyTesting, additional: additional)
         let workDir = config.workingDirectory.map { dir + "/" + $0 } ?? dir
         let script = "cd \(Shell.quote(workDir)) && mkdir -p \(Shell.quote(stateDir + "/results")) && "
             + "export DEVELOPER_DIR=\(Shell.quote(environment.xcode.developerDir)) && exec xcodebuild "
@@ -225,15 +253,14 @@ public final class RemoteRunner: @unchecked Sendable {
         onEvent(.phase(.finished), parser)
 
         onStage(.collecting)
-        // Put the original sources back on the remote copy right away.
-        if !patchedPaths.isEmpty { try? transport.upload(files: patchedPaths, from: repository, to: dir) }
-
-        let summary = try? collectSummary(bundle: bundle, environment: environment, remoteDir: dir)
+        let summary = try? await offCooperativePool { try self.collectSummary(bundle: bundle, environment: environment, remoteDir: dir) }
         let attachmentsDir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/remote-attachments/\(stamp)")
-        let attachments = (try? collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)) ?? []
+        let attachments = (try? await offCooperativePool {
+            try self.collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)
+        }) ?? []
         var downloaded: [String] = []
         if case .record = mode, !process.isCancelled {
-            downloaded = try downloadRecordedSnapshots(dir: dir, stateDir: stateDir)
+            downloaded = try await offCooperativePool { try self.downloadRecordedSnapshots(dir: dir, stateDir: stateDir) }
             for path in downloaded { onLine("snapkit: downloaded \(path)") }
         }
         onStage(.done)
@@ -256,6 +283,13 @@ public final class RemoteRunner: @unchecked Sendable {
                                downloadedSnapshots: downloaded)
     }
 
+    /// Uploads the local (unpatched) versions of `paths` over the patched ones.
+    private func restoreSources(_ paths: [String], in dir: String) async {
+        try? await offCooperativePool { try self.transport.upload(files: paths, from: self.repository, to: dir) }
+    }
+
+    /// Stops the remote `xcodebuild` (interrupting it, then escalating), or keeps a run that is
+    /// still preparing from starting it.
     public func cancel() {
         let p: StreamingProcess? = lock.withLock {
             cancelled = true

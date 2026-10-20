@@ -69,13 +69,62 @@ import Testing
         #expect(RemoteRunner.mapPath("/Users/ci/w/a.swift", from: "/Users/ci/w", to: "/repo") == "/repo/a.swift")
     }
 
-    @Test func sshCommandShape() {
-        let ssh = SSHTransport(host: "ci-mac")
+    @Test func sshCommandShape() throws {
+        let ssh = try SSHTransport(host: "ci-mac")
         let (exe, args) = ssh.command(for: "echo 'hi'", interactive: true)
         #expect(exe == "ssh")
         #expect(args.contains("-tt"))
         #expect(args.contains("BatchMode=yes"))
-        #expect(args.last == #"/bin/bash -lc 'echo '\''hi'\'''"#)
-        #expect(ssh.rsyncLocation("/x") == "ci-mac:/x")
+        #expect(args.suffix(3) == ["--", "ci-mac", #"/bin/bash -lc 'echo '\''hi'\'''"#])
+        #expect(try ssh.rsyncLocation("/x") == "ci-mac:/x")
     }
+
+    @Test func refusesHostsSshWouldReadAsOptions() throws {
+        for host in ["-oProxyCommand=touch /tmp/pwned", "ci mac", "ci\tmac", "ci\u{7}", ""] {
+            #expect(throws: RemoteError.invalidHost(host)) { try SSHTransport(host: host) }
+        }
+        var config = SnapshotConfig()
+        config.remoteHost = "-oProxyCommand=x"
+        #expect(throws: RemoteError.self) { try config.remoteTransport() }
+        #expect(try SSHTransport(host: "ci@mac-1.local").label == "ci@mac-1.local")
+    }
+
+    @Test func refusesRemotePathsTheRemoteShellWouldSplit() throws {
+        let ssh = try SSHTransport(host: "ci")
+        #expect(throws: RemoteError.unsafeRemotePath(host: "ci", path: "/Users/ci/My App")) { try ssh.rsyncLocation("/Users/ci/My App") }
+        // The default folder never needs quoting, whatever the repository is called.
+        let runner = RemoteRunner(repository: URL(fileURLWithPath: "/repos/My Äpp (2)"), config: SnapshotConfig(), transport: ssh)
+        let dir = runner.remoteDirectory(home: "/Users/ci")
+        #expect(try ssh.rsyncLocation(dir) == "ci:" + dir)
+        #expect(dir.hasPrefix("/Users/ci/.snapshotkit/workspaces/My-"))
+    }
+
+    @Test func onlySshsOwnFailureMeansUnreachable() throws {
+        let unreachable = RemoteRunner(repository: URL(fileURLWithPath: "/r"), config: SnapshotConfig(), transport: FailingTransport(status: 255))
+        #expect(throws: RemoteError.unreachable(host: "fake", output: "boom")) { try unreachable.preflight() }
+        let failing = RemoteRunner(repository: URL(fileURLWithPath: "/r"), config: SnapshotConfig(), transport: FailingTransport(status: 1))
+        #expect(throws: RemoteError.commandFailed(host: "fake", script: RemoteRunner.preflightScript, status: 1, output: "boom")) {
+            try failing.preflight()
+        }
+    }
+
+    @Test func syncsNonASCIIPaths() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/__Snapshots__/ÜbersichtTests/größe.1.png", "x")
+        try repo.commitAll("init")
+        try repo.write("Sources/Café.swift", "x")
+        let runner = RemoteRunner(repository: repo.url, config: SnapshotConfig(), transport: LocalDirectoryTransport())
+        #expect(try runner.filesToSync().sorted() == ["Sources/Café.swift", "Tests/__Snapshots__/ÜbersichtTests/größe.1.png"])
+    }
+}
+
+/// A remote whose every command fails with `status`.
+private struct FailingTransport: RemoteTransport {
+    var status: Int32
+    var label: String { "fake" }
+    func command(for script: String, interactive: Bool) -> (executable: String, arguments: [String]) {
+        ("/bin/sh", ["-c", "echo boom >&2; exit \(status)"])
+    }
+    func rsyncLocation(_ remotePath: String) -> String { remotePath }
+    var rsyncArguments: [String] { [] }
 }
