@@ -18,14 +18,32 @@ public enum TestSourceLocator {
         return TestSourceLocation(path: path, line: line(ofTest: file.testName, in: source))
     }
 
-    /// The line of `func name(` (or of a parameterized test's function, whose snapshots are named
-    /// "function-label").
+    /// The line of the function a snapshot's test name comes from. swift-snapshot-testing names
+    /// snapshots after `#function` with every run of non-word characters made a "-": `payButton`,
+    /// a parameterized `sized(width:)` gives "sized-width", a raw identifier `` `pay button` `` "pay-button".
     static func line(ofTest name: String, in source: String) -> Int? {
-        let function = name.split(separator: "-").first.map(String.init) ?? name
-        for (index, line) in source.components(separatedBy: "\n").enumerated()
-        where line.contains("func \(function)(") || line.contains("func `\(function)`(") {
-            return index + 1
+        functions(in: source).first { isFunction($0.name, ofTest: name) }?.line
+    }
+
+    /// Every function declared in `source`, its name as it appears in snapshot names.
+    static func functions(in source: String) -> [(name: String, line: Int)] {
+        source.components(separatedBy: "\n").enumerated().flatMap { index, line in
+            let ns = line as NSString
+            return functionName.matches(in: line, range: NSRange(location: 0, length: ns.length)).map {
+                (sanitized(ns.substring(with: $0.range(at: 1))), index + 1)
+            }
         }
-        return nil
+    }
+
+    static func isFunction(_ function: String, ofTest name: String) -> Bool {
+        name == function || name.hasPrefix(function + "-")
+    }
+
+    private static let functionName = try! NSRegularExpression(pattern: #"\bfunc\s+(`[^`]+`|\w+)\s*(?:<[^>\n]*>)?\s*\("#)
+
+    /// swift-snapshot-testing's `sanitizePathComponent`.
+    private static func sanitized(_ name: String) -> String {
+        name.replacingOccurrences(of: #"\W+"#, with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 }

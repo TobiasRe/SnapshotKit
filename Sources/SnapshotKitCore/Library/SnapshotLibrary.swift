@@ -166,20 +166,19 @@ public struct SnapshotLibrary: Sendable {
     /// name in it. Leftovers of renamed or deleted tests that nothing records or checks any more.
     public static func orphans(_ files: [SnapshotFile], repository: URL) -> Set<String> {
         let swiftFiles = Git(root: repository).lsFiles(["*.swift"])
-        var sources: [String: String?] = [:]   // test file path → contents (nil if unreadable)
+        var functions: [String: [String]?] = [:]   // test file path → its functions (nil if unreadable)
         var orphans = Set<String>()
         for file in files {
             guard let path = try? RecordPlanner.testFile(for: file, among: swiftFiles, repository: repository) else {
                 orphans.insert(file.id)
                 continue
             }
-            if sources[path] == nil {
-                sources[path] = .some(try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8))
+            if functions[path] == nil {
+                functions[path] = .some((try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8))
+                    .map { TestSourceLocator.functions(in: $0).map(\.name) })
             }
-            guard let text = sources[path] ?? nil else { continue }
-            // A parameterized test's snapshots are named "function-label".
-            let function = file.testName.split(separator: "-").first.map(String.init) ?? file.testName
-            if !text.contains("func \(function)(") && !text.contains("func `\(function)`(") { orphans.insert(file.id) }
+            guard let declared = functions[path] ?? nil else { continue }
+            if !declared.contains(where: { TestSourceLocator.isFunction($0, ofTest: file.testName) }) { orphans.insert(file.id) }
         }
         return orphans
     }

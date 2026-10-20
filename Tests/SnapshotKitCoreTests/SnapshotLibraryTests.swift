@@ -137,6 +137,27 @@ import Testing
         #expect(orphans == ["\(dir)/CardTests/expanded.1.png", "\(dir)/GoneTests/row.1.png"])
     }
 
+    /// `#function` is "pay button(width:)" there, which swift-snapshot-testing turns into "pay-button-width".
+    @Test func testsNamedWithRawIdentifiersOwnTheirSnapshots() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardTests.swift", """
+            import Testing
+            @Suite struct CardTests {
+                @Test func `pay button`() {}
+                @Test(arguments: [1]) func `sized card`(width: Int) {}
+            }
+            """)
+        let dir = "Tests/AppTests/__Snapshots__/CardTests"
+        for name in ["pay-button.1.png", "sized-card-width.1.png", "pay.1.png"] {
+            try repo.write("\(dir)/\(name)", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        }
+        try repo.commitAll("base")
+        let library = try SnapshotLibrary.load(repository: repo.url)
+        #expect(SnapshotLibrary.orphans(library.files, repository: repo.url) == ["\(dir)/pay.1.png"])
+        let sized = try #require(library.files.first { $0.fileName == "sized-card-width.1.png" })
+        #expect(TestSourceLocator.locate(sized, in: repo.url)?.line == 4)
+    }
+
     /// SnapshotKit's own snapshot tests: every reference belongs to a test.
     @Test func noFalsePositivesInThisRepository() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
