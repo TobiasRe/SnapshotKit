@@ -84,7 +84,7 @@ public enum RecordPatcher {
 
     static func patchSwiftTesting(source: String, decl: Declaration) -> String {
         // The suite's own attributes sit between the previous `{`/`}` (or file start) and the keyword.
-        let searchStart = source[..<decl.lineStart].lastIndex(where: { $0 == "{" || $0 == "}" }).map { source.index(after: $0) } ?? source.startIndex
+        let searchStart = lastScopeBrace(in: source, before: decl.lineStart).map { source.index(after: $0) } ?? source.startIndex
         let attributeRegion = source[searchStart..<decl.keywordStart]
 
         if let suiteRange = attributeRegion.range(of: #"@Suite\b"#, options: [.regularExpression, .backwards]) {
@@ -167,6 +167,28 @@ public enum RecordPatcher {
     }
 
     // MARK: Scanning helpers
+
+    /// The last `{` or `}` before `end` that opens or closes a scope: not one in a comment or string
+    /// (a doc comment's example), nor in parentheses (a closure in an attribute's arguments).
+    static func lastScopeBrace(in text: String, before end: String.Index) -> String.Index? {
+        var last: String.Index?
+        var depth = 0
+        var i = text.startIndex
+        while i < end {
+            if let next = endOfCommentOrString(in: text, at: i) {
+                i = next
+                continue
+            }
+            switch text[i] {
+            case "(": depth += 1
+            case ")": depth = max(depth - 1, 0)
+            case "{", "}": if depth == 0 { last = i }
+            default: break
+            }
+            i = text.index(after: i)
+        }
+        return last
+    }
 
     /// Index of the `)` matching the `(` at `open`, skipping comments and string literals.
     static func matchingParen(in text: String, open: String.Index) -> String.Index? {

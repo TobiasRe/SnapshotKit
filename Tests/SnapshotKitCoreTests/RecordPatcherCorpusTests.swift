@@ -195,6 +195,17 @@ import Testing
                 @Test func card() {}
             }
             """),
+        Case(name: "a diff tool closure in the trait", source: #"""
+            import Testing
+
+            @Suite(.snapshots(record: .failed, diffTool: .init { a, b in "ksdiff \(a.path(percentEncoded: false)) \(b.path)" }))
+            struct CardTests {}
+            """#, patched: #"""
+            import Testing
+
+            @Suite(.snapshots(record: .all, diffTool: .init { a, b in "ksdiff \(a.path(percentEncoded: false)) \(b.path)" }))
+            struct CardTests {}
+            """#),
         Case(name: "a comment between @Suite and the type", source: """
             import Testing
 
@@ -206,6 +217,19 @@ import Testing
 
             @Suite(.snapshots(record: .all))
             // Cards in every size.
+            struct CardTests {}
+            """),
+        Case(name: "a doc comment with braces between @Suite and the type", source: """
+            import Testing
+
+            @Suite(.snapshots(record: .missing))
+            /// Draws `{ }` placeholders.
+            struct CardTests {}
+            """, patched: """
+            import Testing
+
+            @Suite(.snapshots(record: .all))
+            /// Draws `{ }` placeholders.
             struct CardTests {}
             """),
         Case(name: "a type named like the suite with more after it comes first", source: """
