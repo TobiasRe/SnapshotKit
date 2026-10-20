@@ -158,19 +158,22 @@ public final class RunHistory: @unchecked Sendable {
         return Array(points.sorted { $0.date < $1.date }.suffix(limit))
     }
 
+    /// Records that can't be decoded (say, written by a newer version) are skipped, and the file is
+    /// copied aside before the next write drops them.
     private func read() -> [RunRecord] {
-        guard let data = FileManager.default.contents(atPath: url.path) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([RunRecord].self, from: data)) ?? []
+        guard let entries = StateFile.read([Lenient<RunRecord>].self, from: url, decoder: decoder) else { return [] }
+        let records = entries.compactMap(\.value)
+        if records.count < entries.count { StateFile.keepCopy(of: url) }
+        return records
     }
 
     private func write(_ records: [RunRecord]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? encoder.encode(records).write(to: url, options: .atomic)
+        StateFile.write(records, to: url, encoder: encoder)
     }
 }
 

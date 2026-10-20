@@ -294,13 +294,11 @@ public final class PatchRegistry: @unchecked Sendable {
     }
 
     private func load() -> [String] {
-        guard let data = FileManager.default.contents(atPath: url.path) else { return [] }
-        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        StateFile.read([String].self, from: url) ?? []
     }
 
     private func save(_ paths: [String]) {
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(paths).write(to: url, options: .atomic)
+        StateFile.write(paths, to: url)
     }
 }
 

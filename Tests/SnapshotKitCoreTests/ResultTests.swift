@@ -203,6 +203,31 @@ import Testing
         #expect(loaded.count == RunHistory.maxRecords)
         #expect(loaded.last?.commit == "c\(RunHistory.maxRecords + 4)")
     }
+
+    @Test func skipsUnreadableRecordsAndKeepsACopyOfTheFile() throws {
+        let history = RunHistory(repository: URL(fileURLWithPath: "/some/repo"), home: testTemp("history"))
+        history.append(record("c1", .passed))
+        let original = try Data(contentsOf: history.url)
+        var json = try #require(try JSONSerialization.jsonObject(with: original) as? [Any])
+        json.append(["kind": "fromTheFuture"])
+        try JSONSerialization.data(withJSONObject: json).write(to: history.url)
+
+        #expect(history.load().map(\.commit) == ["c1"])
+        history.append(record("c2", .passed))
+        #expect(history.load().map(\.commit) == ["c1", "c2"])
+        let copy = try Data(contentsOf: history.url.appendingPathExtension("corrupt"))
+        #expect(try #require(try JSONSerialization.jsonObject(with: copy) as? [Any]).count == 2)
+    }
+
+    @Test func anUnreadableFileIsCopiedAsideNotOverwritten() throws {
+        let history = RunHistory(repository: URL(fileURLWithPath: "/some/repo"), home: testTemp("history"))
+        try FileManager.default.createDirectory(at: history.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("not json".utf8).write(to: history.url)
+
+        history.append(record("c1", .passed))
+        #expect(history.load().map(\.commit) == ["c1"])
+        #expect(try String(contentsOf: history.url.appendingPathExtension("corrupt"), encoding: .utf8) == "not json")
+    }
 }
 
 extension RunRecord {

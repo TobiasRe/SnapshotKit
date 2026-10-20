@@ -40,6 +40,28 @@ import Testing
         #expect(!reloaded.isPinned(c))
     }
 
+    @Test func twoStoresOnOneFileKeepEachOthersChanges() {
+        let app = makeStore()
+        let cli = ProjectStore(url: app.url)
+        app.togglePin(Project(path: "/repos/a"))
+        cli.markOpened(Project(path: "/repos/b"))
+        app.update { $0.flakeIterations = 9 }
+
+        let reloaded = ProjectStore(url: app.url)
+        #expect(reloaded.settings.pinned == ["/repos/a"])
+        #expect(reloaded.settings.recents == ["/repos/b"])
+        #expect(reloaded.settings.flakeIterations == 9)
+    }
+
+    @Test func anUnreadableSettingsFileIsKept() throws {
+        let url = testTemp("settings").appendingPathExtension("json")
+        try Data(#"{"pinned": "not a list"}"#.utf8).write(to: url)
+        let store = ProjectStore(url: url)
+        store.togglePin(Project(path: "/repos/a"))
+        #expect(ProjectStore(url: url).settings.pinned == ["/repos/a"])
+        #expect(try String(contentsOf: url.appendingPathExtension("corrupt"), encoding: .utf8) == #"{"pinned": "not a list"}"#)
+    }
+
     @Test func partialSettingsFileUsesDefaults() throws {
         let settings = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"pinned": ["/a"]}"#.utf8))
         #expect(settings.pinned == ["/a"])

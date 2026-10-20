@@ -85,15 +85,19 @@ public final class ProjectStore: @unchecked Sendable {
 
     public init(url: URL = SnapshotKitPaths.home.appendingPathComponent("settings.json")) {
         self.url = url
-        cached = (Self.read(url) ?? AppSettings()).normalized()
+        cached = Self.read(url) ?? AppSettings()
     }
 
     public var settings: AppSettings { lock.withLock { cached } }
 
+    /// Applies `change` to the settings as they are on disk now, not as this store last saw them:
+    /// the app and `snapkit` both write the file.
     public func update(_ change: (inout AppSettings) -> Void) {
         lock.withLock {
-            change(&cached)
-            Self.write(cached, to: url)
+            var settings = Self.read(url) ?? cached
+            change(&settings)
+            Self.write(settings, to: url)
+            cached = settings
         }
     }
 
@@ -178,15 +182,13 @@ public final class ProjectStore: @unchecked Sendable {
     // MARK: IO
 
     static func read(_ url: URL) -> AppSettings? {
-        guard let data = FileManager.default.contents(atPath: url.path) else { return nil }
-        return try? JSONDecoder().decode(AppSettings.self, from: data)
+        StateFile.read(AppSettings.self, from: url)?.normalized()
     }
 
     static func write(_ settings: AppSettings, to url: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? encoder.encode(settings).write(to: url, options: .atomic)
+        StateFile.write(settings, to: url, encoder: encoder)
     }
 }
 
