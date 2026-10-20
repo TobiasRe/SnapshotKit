@@ -2,15 +2,18 @@
 
 # SnapshotKit
 
+**The companion app for projects that test with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).**
+
 [![CI](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml/badge.svg)](https://github.com/TobiasRe/SnapshotKit/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/TobiasRe/SnapshotKit)](https://github.com/TobiasRe/SnapshotKit/releases/latest)
+![Platform: macOS 14+ · Apple silicon](https://img.shields.io/badge/macOS-14%2B%20%C2%B7%20Apple%20silicon-lightgrey)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **[Website](https://tobiasre.github.io/SnapshotKit/) · [Documentation](https://tobiasre.github.io/SnapshotKit/docs/) · [Download](https://github.com/TobiasRe/SnapshotKit/releases/latest) · [Changelog](CHANGELOG.md)**
 
 ![SnapshotKit comparing a changed snapshot side by side: the same screen on the base branch and on the feature branch](docs/images/compare.png)
 
-**The companion app for projects that test with [swift-snapshot-testing](https://github.com/pointfreeco/swift-snapshot-testing).**
-Your tests keep recording reference images as they do today; SnapshotKit, a macOS app with a menu bar item and
+Your tests keep recording reference images as they do today. SnapshotKit, a macOS app with a menu bar item and
 the `snapkit` CLI, works with them, with no package to add and no test code to change:
 
 - **Browse and inspect** every snapshot in a project by module, test file and test, as a list with a large
@@ -28,24 +31,46 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
   `precision`/`perceptualPrecision` that would pass, flakiness checks and each test's recent runs.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 
-Runs on macOS 14 or later and needs Xcode 16 or later for the projects it tests (for
-`xcresulttool get test-results`). Building SnapshotKit itself needs Xcode 26 or later.
+## How it fits with swift-snapshot-testing
+
+1. **You test with swift-snapshot-testing**: `assertSnapshot(of: view, as: .image)` in Swift Testing or XCTest.
+2. **The tests record reference images**: PNGs in `__Snapshots__` folders next to the test files, committed to
+   your repository.
+3. **SnapshotKit works with them**: it finds the images, reads how CI runs the tests, shows changes and
+   failures, and re-records by switching swift-snapshot-testing's record mode on and off for you.
+
+SnapshotKit isn't a snapshot testing library and doesn't replace swift-snapshot-testing. New to snapshot
+testing? Start with [Point-Free's library](https://github.com/pointfreeco/swift-snapshot-testing), then come back.
 
 ## Install
 
-**From a release:** download `SnapshotKit-<version>-macos-arm64.zip` (and optionally the `snapkit` CLI) from
-[Releases](https://github.com/TobiasRe/SnapshotKit/releases), unzip, and move `SnapshotKit.app` to
-Applications. The app is ad-hoc signed, not notarized, so macOS blocks the first launch: open it once, then
-choose **Open Anyway** in System Settings › Privacy & Security, or run
-`xattr -dr com.apple.quarantine SnapshotKit.app`.
+SnapshotKit runs on **Apple silicon Macs with macOS 14 or later**. The projects it tests need Xcode 16 or later
+(for `xcresulttool get test-results`).
 
-**From source:**
+**The app:** download `SnapshotKit-<version>-macos-arm64.zip` from the
+[latest release](https://github.com/TobiasRe/SnapshotKit/releases/latest), unzip it, and move
+`SnapshotKit.app` to Applications. The app is ad-hoc signed, not notarized, so macOS blocks the first launch:
+open it once, then choose **Open Anyway** in System Settings › Privacy & Security, or run
+`xattr -dr com.apple.quarantine /Applications/SnapshotKit.app`.
+
+**The `snapkit` CLI (optional):** download `snapkit-<version>-macos-arm64.zip` from the same release and put the
+binary on your `PATH`:
+
+```bash
+unzip snapkit-0.1.1-macos-arm64.zip
+sudo mkdir -p /usr/local/bin && sudo mv snapkit /usr/local/bin/
+xattr -d com.apple.quarantine /usr/local/bin/snapkit 2>/dev/null || true
+```
+
+**From source** (Xcode 26 or later):
 
 ```bash
 git clone https://github.com/TobiasRe/SnapshotKit.git && cd SnapshotKit
 scripts/make-app.sh          # builds dist/SnapshotKit.app and dist/snapkit
 open dist/SnapshotKit.app
 ```
+
+See [Getting started](https://tobiasre.github.io/SnapshotKit/docs/getting-started/) for the details.
 
 ## Quick start
 
@@ -55,11 +80,11 @@ Folder, or drop a folder that isn't a repository). Scanning looks six folders de
 found. A project opens on its snapshot library. The sidebar shows each project's failing count from its
 last run.
 
-| | |
+| Shortcut | Action |
 |---|---|
 | ⌘R | Run snapshot tests |
 | ⇧⌘R | Re-record the selected test (snapshot, change or failure) |
-| ⌥⇧⌘R | Re-record all failing tests |
+| ⌥⇧⌘R | Re-record the failing suites of the last run |
 | ⌥⌘R | Check flakiness of failing tests |
 | ⌃⌘R | Run on the remote machine |
 | ⌘. | Cancel |
@@ -74,27 +99,29 @@ last run.
 | Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
 | ⌘C | Copy the selected snapshot (in a list) |
 | ⌥⌘O | Open the selected snapshot's test in Xcode, at its function |
-| ⌥⌘↓ / ⌥⌘↑ | Next / previous failure or change, wherever the focus is |
-| V (in the list), ⌥⌘V | Mark a change as viewed and go to the next one |
+| ⌥⌘↓ / ⌥⌘↑ | Next / previous snapshot, change or failure, wherever the focus is |
+| V (in the list), ⌥⌘V | Toggle a change's *Viewed* mark; marking it viewed goes to the next one |
 
 In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
 snapshots; sort by size or recency; switch between list and grid. A snapshot's detail lists its variants
-and committed versions to compare against, and links to its change or failure. **Re-record Shown** records
-everything the filter shows (say, every `dark` variant). The arrow beside the toolbar's Run button
-re-records all failing tests or every snapshot test in one step.
+and committed versions to compare against, and links to its change or failure. The footer's
+**Re-record All…** (or **Re-record N Shown…** when filtered) records everything the list shows (say, every
+`dark` variant). The arrow beside the toolbar's Run button re-records the failing tests or every snapshot test
+in one step.
+
+Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
+comparison, open or reveal it, or jump to it in another view. The Changes tab picks the base branch from a
+menu and can revert any change to it. The Dock icon shows the failing count, and bounces when a run finishes
+in the background.
 
 **Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie
 as tests complete (with a done/total count) and otherwise shows the failing count. Its panel shows live
 progress for every running project with Cancel, and your failing, pinned and recent projects to open or run
 in one click. With it on, SnapshotKit keeps running when you close its window.
 
-Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
-comparison, open or reveal it, or jump to it in another view. Right-click a failing test to check just
-that test for flakiness. The Changes tab picks the base branch from a menu, and you can switch to comparing
-against the branch tip. The dock icon shows the failing count, and bounces when a run finishes in the
-background.
+## The command line
 
-The same features are on the command line:
+The same features are in `snapkit`:
 
 ```bash
 snapkit snapshots --sort size             # every snapshot with size and state, plus totals
@@ -111,6 +138,8 @@ snapkit open reference.png failure.png                # the same, then compare t
 snapkit changes --filter dark
 snapkit run --remote      # on the machine in remoteHost
 ```
+
+See [the CLI reference](https://tobiasre.github.io/SnapshotKit/docs/cli/).
 
 ### Use SnapshotKit as your diff tool
 
@@ -139,100 +168,35 @@ The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from X
 run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. See
 [Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
 
-## Configuration
+## How it works
 
-SnapshotKit reads `.gitlab-ci.yml` (plus local `include:` files), `.github/workflows/*.yml`, and shell
-scripts those call. From the `xcodebuild … test` invocation that looks most like a snapshot job, it takes
-`-scheme`, `-workspace`/`-project`, `-testPlan`, `-destination` (device and OS), `-only-testing` and
-`-skip-testing`, plus a preceding `cd`. Variables (`$VAR`, `${VAR}`, `${{ env.VAR }}`) are expanded.
-The Xcode version comes from `xcode-version:`, `Xcode_X.Y.app` paths, `*XCODE*VERSION*` variables,
-`xcodes select`, or image tags. The base branch comes from the MR/PR target branch, or else from `origin/HEAD`
-(falling back to `develop`/`main`/`master`).
+**Configuration.** SnapshotKit reads `.gitlab-ci.yml`, `.github/workflows/*.yml` and the scripts they call, and
+runs `xcodebuild` with the same scheme, test plan, test selection, simulator and Xcode version; anything can be
+overridden in `.snapshotkit.yml`. See [Configuration](https://tobiasre.github.io/SnapshotKit/docs/configuration/).
 
-When the test command isn't in the repository, for example because the job comes from a template in another
-project (`include: project:`, `remote:`, `template:` or `component:`), SnapshotKit falls back to common CI variable
-names: `SNAPSHOT_TEST_SCHEME`, `TEST_SCHEME` or `SCHEME`; a variable holding a `.xcodeproj` or `.xcworkspace`;
-`TEST_PLAN`; `SIMULATOR_DEVICE`, `DEVICE` or `DESTINATION` written as `iPhone 16 Pro (18.0)`, `iPhone 16 Pro,OS=18.0`
-or a full destination; and `XCODE_VERSION` in forms like `Xcode-26.5.0`. Each setting shows which variable it came
-from, and a note says which template the job comes from.
+**Re-recording.** SnapshotKit switches swift-snapshot-testing's record mode on in the test source, runs just the
+chosen tests, restores the source (also on cancel, quit, a signal, or at the next launch after a crash), and
+runs the tests again to verify. See [Re-recording](https://tobiasre.github.io/SnapshotKit/docs/re-recording/).
 
-If Xcode or the simulator is missing, you get an error saying what is required, by which file, what is installed, and how to fix it.
+**Remote runs.** With `remoteHost` set, it runs, re-records and checks flakiness on another Mac over SSH, so
+references are rendered where CI compares them. See
+[Remote runs](https://tobiasre.github.io/SnapshotKit/docs/remote-runs/).
 
-Anything can be overridden in `.snapshotkit.yml` at the repository root:
-
-```yaml
-xcode: "<version>"          # or developerDir: /Applications/Xcode.app
-device: <simulator name>
-os: "<iOS version>"         # or latest
-scheme: App
-workspace: App.xcworkspace  # or project: App.xcodeproj
-testPlan: SnapshotTests
-onlyTesting: [AppSnapshotTests]
-skipTesting: []
-baseBranch: develop
-workingDirectory: .
-extraArguments: -configuration Debug
-remoteHost: ci-mac-1        # SSH host or ~/.ssh/config alias
-remoteDirectory: ~/snapshotkit/app
-```
-
-Per-project settings in the app (base branch, remote host, module) override both. App settings are stored as
-JSON in `~/Library/Application Support/SnapshotKit/` (`SNAPSHOTKIT_HOME` overrides the location).
+**Noise or a real change?** Every difference is classified as invisible, a few pixels, size changed or visible,
+with the `perceptualPrecision` or `precision` that would pass. See
+[Comparing images](https://tobiasre.github.io/SnapshotKit/docs/comparing/#the-diagnosis).
 
 ## Screenshots
 
-| | |
+| The library | Changes |
 |---|---|
 | ![The library as a grid](docs/images/library-grid.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
 | The library as a contact sheet: every snapshot at a glance | Changes since the base branch, with *Viewed* marks |
+
+| Failures | Diagnosis |
+|---|---|
 | ![Failures with triage labels and run-history strips](docs/images/triage.png) | ![The diagnosis for an invisible difference](docs/images/diagnosis.png) |
 | Failures: what kind of difference each one is, and its recent runs | Rendering noise, explained, with the precision that would pass |
-
-## Noise or a real change?
-
-Hover an image to read the pixel under the pointer on both sides and their colour difference (CIE94 ΔE, the
-measure `perceptualPrecision` uses; below about 2.3 nobody can see it). Every comparison is classified:
-
-- **Invisible**: pixels differ, none visibly. Typical of a reference recorded on another machine, GPU or OS
-  version. Re-recording locally just moves the problem, so record where CI runs, or relax `perceptualPrecision`
-  to the suggested value.
-- **Few pixels**: a handful of visible pixels, often anti-aliasing, a caret or a timestamp.
-- **Size changed**: a different device, scale or layout.
-
-The Failures list shows this next to each test, along with a strip of its recent runs (green passed, red failed,
-orange when repetitions disagreed). A flaky test reads as a broken pattern, a regression as a clean switch to red.
-
-## How re-record works
-
-1. **What to record.** For failing tests, the suites come from the last run (`.git/snapshotkit/last-run.json`,
-   shared by the app and CLI). For snapshots picked in the library, SnapshotKit reads the test file named after
-   the snapshot's folder to find the suite type and the test (`Suite/test()` for Swift Testing, `Suite/test` for
-   XCTest; a parameterized test records its whole suite).
-2. SnapshotKit finds each suite's source file (from the failure location, or by searching for its declaration).
-   It **refuses** to continue if any of those files has uncommitted changes.
-3. It writes a journal with the original contents to `.git/snapshotkit/record-patch.json`, then patches the record trait:
-   - Swift Testing: `@Suite(.snapshots(record: .all))` (it adds the attribute or trait, or replaces an existing `record:` value).
-   - XCTest: an `invokeTest()` override wrapping the test in `withSnapshotTesting(record: .all)`.
-4. It runs only those suites or tests (`-only-testing:Target/Suite[/test()]`), then restores the files. It then
-   runs them again without the patch to verify the new references.
-
-The patch is always undone: on success, error, cancel, Ctrl-C, `SIGTERM`/`SIGHUP` (child `xcodebuild` is stopped
-first), and app quit. If the process is killed outright, the next launch of the app or any `snapkit` command restores it.
-If a patched file was edited during the run, only SnapshotKit's change is removed and your edits are kept. If that is
-impossible, the file is left alone, the original is saved under `.git/snapshotkit/backups/`, and you get a warning.
-
-## Remote runs
-
-With `remoteHost` set, SnapshotKit uses key-based SSH (it never asks for passwords) and does the following:
-
-1. Checks that the remote has the Xcode and simulator CI expects.
-2. Rsyncs the working tree (tracked and untracked, not ignored files) to a cache directory.
-3. Runs the same `xcodebuild` command there with streamed output. Cancelling stops the remote run.
-4. Brings back the results and failure images.
-
-**Re-record on remote** patches only the remote copy and downloads the newly recorded PNGs into your working tree,
-so you get references rendered on the CI machine. `remoteHost: local` uses a local directory instead of SSH,
-which is handy for trying the workflow out.
 
 ## Development
 
@@ -274,4 +238,4 @@ off-screen without activating the app.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Not affiliated with Point-Free.
