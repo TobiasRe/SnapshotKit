@@ -21,8 +21,10 @@ public struct Project: Codable, Hashable, Identifiable, Sendable {
     public var id: String { path }
     public var url: URL { URL(fileURLWithPath: path, isDirectory: true) }
 
+    /// Symlinks are resolved: a repository opened through one is the repository git (and so
+    /// `snapkit`) reports, with the same settings and history.
     public init(path: String) {
-        self.path = (path as NSString).standardizingPath
+        self.path = URL.canonicalPath((path as NSString).expandingTildeInPath)
     }
 }
 

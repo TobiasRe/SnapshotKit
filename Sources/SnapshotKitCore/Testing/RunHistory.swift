@@ -91,7 +91,7 @@ public final class RunHistory: Sendable {
     private let lock = NSLock()
 
     public init(repository: URL, home: URL = SnapshotKitPaths.home) {
-        let key = repository.standardizedFileURL.path
+        let key = URL.canonicalPath(repository.path) // one history however the repository was reached
         let name = key.split(separator: "/").suffix(2).joined(separator: "-") + "-" + String(UInt(bitPattern: key.stableHash), radix: 36)
         url = home.appendingPathComponent("history/\(name).json")
     }

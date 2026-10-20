@@ -79,6 +79,24 @@ import Testing
         #expect(store.allProjects.count == 1)
     }
 
+    /// A repository opened through a symlink (`~/code` → `/Volumes/Work/code`) is the one `git` and
+    /// `snapkit` see: the same project, settings and history.
+    @Test func aSymlinkedPathIsTheRepositoryItPointsTo() throws {
+        let repo = try TempRepo()
+        try repo.write("README.md", "x")
+        try repo.commitAll("init")
+        let link = testTemp("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: repo.url)
+
+        #expect(Project(path: link.path) == Project(path: repo.url.path))
+        let store = ProjectStore(url: testTemp("settings").appendingPathExtension("json"))
+        store.updateSettings(for: Project(path: link.path)) { $0.baseBranch = "main" }
+        let cliRepository = try #require(Git.repository(containing: link)).root
+        #expect(store.settings(for: Project(path: cliRepository.path)).baseBranch == "main")
+        #expect(RunHistory(repository: link).url == RunHistory(repository: cliRepository).url)
+        #expect(try ProjectContext.load(repository: link).repository.path == cliRepository.path)
+    }
+
     @Test func nameMatchesBeatPathMatches() {
         let projects = [Project(path: "/tmp/payments/design-system"), Project(path: "/tmp/x/payments-ui")]
         #expect(FuzzyMatcher.rank(projects, query: "pay", primary: \.name, secondary: \.path).map(\.name)
