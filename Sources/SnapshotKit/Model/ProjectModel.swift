@@ -114,6 +114,8 @@ final class ProjectModel {
     /// Local branches plus origin's, for choosing the base branch.
     private(set) var branches: [String] = []
     var tab: ProjectTab = .snapshots
+    /// Whether the window shows this project (set by the app model).
+    @ObservationIgnored var isShown = false
 
     // Library
     private(set) var library: SnapshotLibrary? {
@@ -239,6 +241,8 @@ final class ProjectModel {
     private(set) var isLoadingChanges = false
 
     @ObservationIgnored private var cancelAction: (() -> Void)?
+    /// The tab the current operation was started from.
+    @ObservationIgnored private var operationTab: ProjectTab?
     private let lineBuffer = LineBatcher()
     private var lastFailingSuites: [SuiteResult] = []
 
@@ -925,7 +929,7 @@ final class ProjectModel {
     /// Opens an `.xcresult` (e.g. downloaded from CI) and shows its failures.
     func importResultBundle(_ url: URL) {
         notify("Reading \(url.lastPathComponent)…")
-        let repo = project.url
+        let repo = project.url, start = tab
         Task {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/imported/\(UUID().uuidString)")
             let result = await offCooperativePool {
@@ -946,8 +950,9 @@ final class ProjectModel {
                 flakeResults = []
                 setFailures(suites: summary.failingSuites, images: images,
                             source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
-                notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).")
-                tab = .failures
+                notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).",
+                       action: .showFailures)
+                moveOn(to: .failures, from: start)
             case .failure(let error):
                 notify("Could not read \(url.lastPathComponent): \(error.localizedDescription)", isError: true)
             }
@@ -959,6 +964,7 @@ final class ProjectModel {
     private func begin(_ op: RunOperation) -> Bool {
         guard operation == nil else { return false }
         operation = op
+        operationTab = tab
         startedAt = Date()
         stageLabel = op.label
         runPane = .output
@@ -1008,6 +1014,12 @@ final class ProjectModel {
         lastMessageIsError = isError
         lastMessageAction = action
         messageID &+= 1
+    }
+
+    /// Shows `next` once an action is done, if the user is still where they started it (on `start`,
+    /// in this project). If they went elsewhere meanwhile, they stay there: the notice offers it.
+    private func moveOn(to next: ProjectTab, from start: ProjectTab?) {
+        if isShown, tab == start { tab = next }
     }
 
     /// Dock badge with the failing count, and a bounce when the run ends while you're elsewhere.
@@ -1323,8 +1335,10 @@ final class ProjectModel {
         }
         let flaky = flakeResults.filter { $0.verdict == .flaky }.count
         let always = flakeResults.filter { $0.verdict == .alwaysFails }.count
-        finish(message: "\(iterations)× on \(result.host): \(always) fail every time, \(flaky) flaky, \(flakeResults.count - always - flaky) pass.")
-        tab = .failures
+        let start = operationTab
+        finish(message: "\(iterations)× on \(result.host): \(always) fail every time, \(flaky) flaky, \(flakeResults.count - always - flaky) pass.",
+               action: .showFailures)
+        moveOn(to: .failures, from: start)
     }
 
     func runRemote() {
@@ -1362,9 +1376,12 @@ final class ProjectModel {
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
                     if let why = out.run.nothingTested {
                         finish(message: "Nothing was recorded: \(why).", isError: true)
+                    } else if out.run.cancelled {
+                        finish(message: "Cancelled.")
                     } else {
-                        finish(message: out.run.cancelled ? "Cancelled." : "Recorded on \(out.host); downloaded \(out.downloadedSnapshots.count) snapshot\(out.downloadedSnapshots.count == 1 ? "" : "s"). Review them in Changes.")
-                        if !out.run.cancelled { tab = .changes }
+                        let start = operationTab, count = out.downloadedSnapshots.count
+                        finish(message: "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", action: .reviewChanges)
+                        moveOn(to: .changes, from: start)
                     }
                 }
             } catch {

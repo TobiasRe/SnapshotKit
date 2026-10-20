@@ -10,7 +10,12 @@ final class AppModel {
     var selectedPath: String? {
         didSet { if oldValue != selectedPath { openSelected() } }
     }
-    private(set) var current: ProjectModel?
+    private(set) var current: ProjectModel? {
+        didSet {
+            oldValue?.isShown = false
+            current?.isShown = true
+        }
+    }
     var showQuickSwitcher = false
     private(set) var isScanning = false
     private(set) var startupNotice: String?

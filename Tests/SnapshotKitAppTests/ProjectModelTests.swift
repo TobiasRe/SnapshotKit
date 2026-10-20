@@ -806,6 +806,32 @@ extension AppUITests {
             return dir
         }
 
+        /// A flakiness check moves on to the failures when it ends only if the user is still where
+        /// they started it; otherwise the notice offers them.
+        @Test func aFinishedCheckLeavesAUserWhoMovedOnWhereTheyAre() async throws {
+            let (repo, _) = try makeRepo()
+            let app = AppModel(store: AppFixtures.store())
+            let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.payButtonFailed, failures: true)
+            app.show(model)
+            model.tab = .run
+            model.checkFlakiness()
+            try await waitUntilFinished(model)
+            #expect(model.tab == .failures)
+
+            model.tab = .run
+            model.checkFlakiness()
+            model.tab = .changes                            // moved to another tab meanwhile
+            try await waitUntilFinished(model)
+            #expect(model.tab == .changes)
+            #expect(model.lastMessageAction == .showFailures)
+
+            model.tab = .run
+            model.checkFlakiness()
+            app.show(AppFixtures.project(.library, store: app.store))   // and to another project
+            try await waitUntilFinished(model)
+            #expect(model.tab == .run)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
