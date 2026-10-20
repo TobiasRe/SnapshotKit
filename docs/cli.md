@@ -37,17 +37,19 @@ uses the repository’s root (`git rev-parse --show-toplevel`). Outside a reposi
 git repository*; a `--repo` folder that doesn’t exist: *error: no such folder: …*. Without `git`: *error: `git`
 was not found on the PATH (…). Install Xcode or its command line tools (`xcode-select --install`).*
 
-**Configuration.** Commands that run tests read the CI files, `.snapshotkit.yml` and the per-project settings
-the app stores, in that order. See [Configuration](configuration.md). `snapshots`, `diff`, `open`, `restore`
-and `projects` don’t need it.
+**Configuration.** `config`, the commands that run tests, and `changes`, `failures` and `history` read the CI
+files, `.snapshotkit.yml` and the per-project settings the app stores, in that order, and exit 1 when the
+configuration can’t be read. See [Configuration](configuration.md). `snapshots`, `diff`, `open`, `restore` and
+`projects` don’t need it.
 
 **Options** come after the command, in any order. Repeating an option keeps the last value, except `--only`
 and `--suite`, which collect every value. An option the command doesn’t take, a missing or malformed value, or
 an extra argument is an error (exit status 64).
 
 **Output.** Color only when writing to a terminal, and never with `NO_COLOR` set. Errors go to standard error
-as `error: …`, and so do notes and warnings (a restored record patch, *Interrupted…*). Progress lines
-start with `▸`, SnapshotKit’s own notes with `snapkit:`. Test output is shortened to what matters (suites,
+as `error: …`, and so do warnings (a restored record patch, *Interrupted…*). Everything else goes to standard
+output: progress lines start with `▸`, SnapshotKit’s notes on what it does with `snapkit:` (*snapkit: using
+failing suites from the last run…*). Test output is shortened to what matters (suites,
 failures, errors, the summary); `--verbose` prints everything `xcodebuild` prints.
 
 **Exit status.**
@@ -107,7 +109,7 @@ your working tree, grouped by folder, each with its kind: **Committed** (on this
 | Option | |
 |---|---|
 | `--base BRANCH` | compare with this branch instead of the configured or detected one |
-| `--tip` | compare with the base branch’s tip instead of the merge-base |
+| `--tip` | compare with the base branch’s tip instead of the merge-base (what changed there since you branched shows as **Committed** too) |
 | `--filter TEXT` | only paths containing every word |
 
 ```
@@ -264,12 +266,13 @@ setting, default 5 — each repetition in a fresh process, and prints a verdict 
 
 ```
 snapkit: running AppSnapshotTests/CheckoutViewTests 5×
-Fails every time   0✔ 5✘  CheckoutViewTests/payButton()
-Flaky              3✔ 2✘  CheckoutViewTests/summary()
+Fails every time   0✔ 5✘  AppSnapshotTests/CheckoutViewTests/payButton()
+Flaky              3✔ 2✘  AppSnapshotTests/CheckoutViewTests/summary()
 ```
 
 Verdicts: **Fails every time**, **Flaky**, **Passes**. Recorded in the history. Exits 0 when every test passes,
-1 when one is flaky or fails every time (or no result could be read).
+1 when one is flaky or fails every time (or no result could be read). When the last run had no failures it
+prints *No failing suites to check.* and exits 0.
 
 ## failures
 
@@ -361,7 +364,8 @@ Visible change in a 105×58 area at 847, 136.
 
 For invisible or tiny differences it adds *Would pass with: perceptualPrecision: 0.99* (or `precision: …`, or
 both).
-`-o OUT.png` writes the difference image (changed pixels in magenta). Exits 0 when the images are identical, 1
+Identical images print *identical*. `-o OUT.png` writes the difference image (changed pixels in magenta).
+Exits 0 when the images are identical, 1
 when they differ, 2 when one can’t be read or `-o` can’t be written. See [Comparing images](comparing.md#the-diagnosis).
 
 ## open
@@ -379,7 +383,7 @@ name as swift-snapshot-testing’s diff tool — see [Using SnapshotKit as your 
 
 Without either, it opens the installed SnapshotKit.app by its bundle id. Missing files: *no such file: …*. No
 app: *Couldn’t open SnapshotKit. Install SnapshotKit.app from https://github.com/TobiasRe/SnapshotKit/releases,
-or pass --app PATH.* (exit 1). Otherwise exits 0, whether or not the images differ.
+or pass --app PATH.* (exit 1); with `--app` or `SNAPSHOTKIT_APP`, *Couldn’t open SnapshotKit at PATH. …*. Otherwise exits 0, whether or not the images differ.
 
 ## restore
 
@@ -400,7 +404,7 @@ snapkit projects [list]
 
 `scan` adds the folders as scan folders (in the app’s settings), rescans every scan folder and lists the
 projects found: *5 project(s) with snapshot tests (looked 6 folders deep).* Folders macOS doesn’t allow it to
-read are named. `list` prints the app’s projects: pinned (📌) first, then recent, then the rest. See
+read are named; a folder that doesn’t exist is an error (*no such folder: …*, exit 1) and isn’t added. `list` prints the app’s projects: pinned (📌) first, then recent, then the rest. See
 [Projects and scanning](projects.md).
 
 ## Environment variables

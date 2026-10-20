@@ -44,7 +44,7 @@ The filter bar has three menus:
 - **Branch** (⑂ `develop`): pick another base branch, or **Use Detected Branch** to go back to automatic.
 - **Merge-base / Branch tip**: compare with the point where your branch left the base branch (the default:
   only your branch’s changes, what a pull request shows), or with the base branch’s current tip (also shows
-  what changed there since you branched).
+  what changed there since you branched, labeled **Committed** like your own commits).
 - **Kinds** (*All*): show or hide Committed, Uncommitted, New and Deleted; **Hide Viewed**; **Mark All as
   Viewed** / **Mark All as Not Viewed**.
 
