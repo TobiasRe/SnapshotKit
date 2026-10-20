@@ -21,6 +21,8 @@ public struct CommandError: Error, LocalizedError, Sendable {
 }
 
 /// Runs short commands synchronously and captures stdout/stderr.
+///
+/// These calls block until the command exits; async code runs them through `offCooperativePool`.
 public enum Shell {
     /// Runs `arguments[0]` (resolved through `/usr/bin/env`) with the remaining arguments.
     @discardableResult
@@ -30,6 +32,34 @@ public enum Shell {
         environment: [String: String]? = nil,
         input: Data? = nil
     ) throws -> CommandResult {
+        let (status, out, err) = try execute(arguments, in: directory, environment: environment, input: input)
+        return CommandResult(status: status, stdout: String(decoding: out, as: UTF8.self), stderr: String(decoding: err, as: UTF8.self))
+    }
+
+    /// Like `run`, but throws when the command exits non-zero and returns trimmed stdout.
+    @discardableResult
+    public static func output(
+        _ arguments: [String],
+        in directory: URL? = nil,
+        environment: [String: String]? = nil
+    ) throws -> String {
+        let result = try run(arguments, in: directory, environment: environment)
+        guard result.succeeded else { throw CommandError(command: arguments, result: result) }
+        return result.trimmedOutput
+    }
+
+    /// Raw stdout bytes, for binary output such as `git show <rev>:<png>`.
+    public static func data(_ arguments: [String], in directory: URL? = nil) throws -> Data {
+        let (status, out, err) = try execute(arguments, in: directory, environment: nil, input: nil)
+        guard status == 0 else {
+            throw CommandError(command: arguments, result: CommandResult(status: status, stdout: "", stderr: String(decoding: err, as: UTF8.self)))
+        }
+        return out
+    }
+
+    private static func execute(
+        _ arguments: [String], in directory: URL?, environment: [String: String]?, input: Data?
+    ) throws -> (status: Int32, stdout: Data, stderr: Data) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
@@ -49,8 +79,16 @@ public enum Shell {
         err.closeWriteEndInParent()
         if let input, let inPipe {
             try? inPipe.fileHandleForReading.close()
-            inPipe.fileHandleForWriting.write(input)
-            try? inPipe.fileHandleForWriting.close()
+            let handle = inPipe.fileHandleForWriting
+            // A child that exits without reading all of it must not take us down with SIGPIPE;
+            // the write fails with EPIPE instead.
+            _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)
+            // Written while the output is drained below: a child that fills its output pipe before
+            // it has read all its input would otherwise wait for us while we wait for it.
+            Thread {
+                try? handle.write(contentsOf: input)
+                try? handle.close()
+            }.start()
         }
 
         // Drain both pipes concurrently so a full stderr buffer cannot block stdout. A dedicated
@@ -66,45 +104,7 @@ public enum Shell {
         let outData = out.fileHandleForReading.readDataToEndOfFile()
         errDone.wait()
         waitForExit(process, exited)
-
-        return CommandResult(
-            status: process.terminationStatus,
-            stdout: String(decoding: outData, as: UTF8.self),
-            stderr: String(decoding: errData.value, as: UTF8.self)
-        )
-    }
-
-    /// Like `run`, but throws when the command exits non-zero and returns trimmed stdout.
-    @discardableResult
-    public static func output(
-        _ arguments: [String],
-        in directory: URL? = nil,
-        environment: [String: String]? = nil
-    ) throws -> String {
-        let result = try run(arguments, in: directory, environment: environment)
-        guard result.succeeded else { throw CommandError(command: arguments, result: result) }
-        return result.trimmedOutput
-    }
-
-    /// Raw stdout bytes, for binary output such as `git show <rev>:<png>`.
-    public static func data(_ arguments: [String], in directory: URL? = nil) throws -> Data {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = arguments
-        if let directory { process.currentDirectoryURL = directory }
-        let out = Pipe.private()
-        process.standardOutput = out
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        let exited = exitSemaphore(for: process)
-        try process.run()
-        out.closeWriteEndInParent()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        waitForExit(process, exited)
-        guard process.terminationStatus == 0 else {
-            throw CommandError(command: arguments, result: CommandResult(status: process.terminationStatus, stdout: "", stderr: ""))
-        }
-        return data
+        return (process.terminationStatus, outData, errData.value)
     }
 
     /// `Process.waitUntilExit()` spins the current run loop, which re-enters AppKit/SwiftUI
@@ -133,7 +133,7 @@ public enum Shell {
 }
 
 /// Bytes handed from the reader thread back to the caller.
-private final class LockedData: @unchecked Sendable {
+private final class LockedData: @unchecked Sendable { // `data` is only touched under `lock`.
     private let lock = NSLock()
     private var data = Data()
     var value: Data {
@@ -158,5 +158,14 @@ extension Pipe {
     /// The child has its own copy now; ours must go, or reading never sees end-of-file.
     func closeWriteEndInParent() {
         try? fileHandleForWriting.close()
+    }
+}
+
+/// Runs blocking work (a `Shell` call, say) on a thread of its own and waits for it without
+/// blocking: Swift concurrency's pool has a thread per core, and work that sits in `waitpid` or
+/// `read` there starves every other task.
+func offCooperativePool<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in
+        Thread { continuation.resume(with: Result { try work() }) }.start()
     }
 }
