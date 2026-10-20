@@ -10,9 +10,12 @@ struct TempRepo {
         url = testTemp("repo")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try git.run(["init", "-q", "-b", branch])
-        try git.run(["config", "user.email", "tests@example.com"])
-        try git.run(["config", "user.name", "Tests"])
-        try git.run(["config", "commit.gpgsign", "false"])
+        // Written rather than set with three more `git config` runs: a few hundred repositories
+        // are made per test run.
+        let config = try FileHandle(forWritingTo: url.appendingPathComponent(".git/config"))
+        defer { try? config.close() }
+        try config.seekToEnd()
+        try config.write(contentsOf: Data("[user]\n\temail = tests@example.com\n\tname = Tests\n[commit]\n\tgpgsign = false\n".utf8))
     }
 
     func write(_ path: String, _ text: String) throws {
