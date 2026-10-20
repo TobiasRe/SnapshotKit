@@ -1062,5 +1062,32 @@ extension AppUITests {
             let images = try #require(model.failures.first { $0.id == payButton.id }?.images.first)
             #expect(images.failure.flatMap { try? Data(contentsOf: $0) } == AppFixtures.actual)
         }
+
+        /// After a relaunch, a test whose re-record still fails shows its verification's images, and
+        /// the failure the verification didn't run the full run's.
+        @Test func relaunchingAfterAVerificationShowsEachFailuresImages() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let full = AppFixtures.temporaryDirectory("full")
+            try FileManager.default.createDirectory(at: full, withIntermediateDirectories: true)
+            for name in ["pay.png", "badge.png"] { try AppFixtures.badged.write(to: full.appendingPathComponent(name)) }
+            try Data("""
+                [{"testIdentifier": "CheckoutViewTests/payButton()", "attachments": [{"exportedFileName": "pay.png", "suggestedHumanReadableName": "failure_0_A.png"}]},
+                 {"testIdentifier": "ProfileViewTests/badge()", "attachments": [{"exportedFileName": "badge.png", "suggestedHumanReadableName": "failure_0_B.png"}]}]
+                """.utf8).write(to: full.appendingPathComponent("manifest.json"))
+            LastRun(result: AppFixtures.lastResult, attachmentsDirectory: full).save(repository: repo)
+            let model = try runnableModel(repo, xcodebuild: Self.recordsThenFails, testResults: Self.payButtonFailed,
+                                          attachments: try payButtonAttachments(), failures: true)
+            model.reRecord(failures: [try #require(model.failures.first { $0.test.name == "payButton()" })])
+            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            try await waitUntilFinished(model)
+
+            let relaunched = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            for _ in 0..<200 where relaunched.failures.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
+            func image(_ test: String) -> Data? {
+                relaunched.failures.first { $0.test.name == test }?.images.first?.failure.flatMap { try? Data(contentsOf: $0) }
+            }
+            #expect(image("payButton()") == AppFixtures.actual)
+            #expect(image("badge()") == AppFixtures.badged)
+        }
     }
 }

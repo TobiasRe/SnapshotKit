@@ -13,6 +13,10 @@ public struct LastRun: Codable, Sendable {
     /// Every suite of the run, passing ones included, for the Run tab's results after a
     /// relaunch. Missing in files written by older versions.
     public var suites: [SuiteResult]?
+    /// The folder with a failing test's images (by `Bundle/Suite/test()`) when it is not the run's
+    /// own: a partial run re-ran some tests, and the others' images are still the earlier run's. An
+    /// empty path: the run that last ran the test exported none. Missing in older files.
+    public var testAttachments: [String: String]?
 
     public init(result: TestRunResult, attachmentsDirectory: URL? = nil) {
         date = Date()
@@ -38,39 +42,88 @@ public struct LastRun: Codable, Sendable {
         // copied from: what is in its own results folder wins.
         let results = TestRunner.resultsDirectory(for: repository)
         func here(_ path: String?) -> String? {
-            guard let path else { return nil }
+            guard let path, !path.isEmpty else { return path }
             let local = results.appendingPathComponent((path as NSString).lastPathComponent).path
             return FileManager.default.fileExists(atPath: local) ? local : path
         }
         last.resultBundle = here(last.resultBundle)
         last.attachmentsDirectory = here(last.attachmentsDirectory)
+        last.testAttachments = last.testAttachments?.mapValues { here($0) ?? $0 }
         return last
     }
 
     /// Takes in `run` as the repository's last run. A cancelled run changes nothing: it has no results
     /// to speak of. A `partial` run of some tests (a re-record's verification) replaces only those
-    /// tests' results; its bundle becomes the last run's when no failure is left outside it.
+    /// tests' results and images; its bundle becomes the last run's when no failure is left outside it.
     public static func update(with run: TestRunResult, partial: Bool = false, attachmentsDirectory: URL? = nil, repository: URL) {
         guard !run.cancelled else { return }
         guard partial, var last = load(repository: repository) else {
             LastRun(result: run, attachmentsDirectory: attachmentsDirectory).save(repository: repository)
             return
         }
-        let ran = run.summary?.suites ?? []
-        last.date = Date()
-        last.failingSuites = SuiteResult.merging(ran, into: last.failingSuites).filter(\.isFailing)
-        last.failed = last.failingSuites.reduce(0) { $0 + $1.failedCount }
-        if let suites = last.suites.map({ SuiteResult.merging(ran, into: $0) }) {
-            last.suites = suites
-            last.passed = suites.reduce(0) { $0 + $1.passedCount }
-        }
-        let ranSuites = Set(ran.map(\.identifier))
-        if last.failingSuites.allSatisfy({ ranSuites.contains($0.identifier) }) {
-            last.host = run.host
-            last.resultBundle = run.resultBundle.path
-            last.attachmentsDirectory = attachmentsDirectory?.path
-        }
+        last.merge(run, attachmentsDirectory: attachmentsDirectory)
         last.save(repository: repository)
+    }
+
+    /// Replaces the results of the tests `run` ran by its own; every failing test keeps the images of
+    /// the run that last ran it.
+    mutating func merge(_ run: TestRunResult, attachmentsDirectory newImages: URL?) {
+        let ran = run.summary?.suites ?? []
+        let ranTests = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
+        let earlier = self
+        date = Date()
+        failingSuites = SuiteResult.merging(ran, into: failingSuites).filter(\.isFailing)
+        failed = failingSuites.reduce(0) { $0 + $1.failedCount }
+        if let all = suites.map({ SuiteResult.merging(ran, into: $0) }) {
+            suites = all
+            passed = all.reduce(0) { $0 + $1.passedCount }
+        }
+        let failing = Self.failingTests(in: failingSuites)
+        if failing.allSatisfy(ranTests.contains) {
+            host = run.host
+            resultBundle = run.resultBundle.path
+            attachmentsDirectory = newImages?.path
+        }
+        var folders: [String: String] = [:]
+        for test in failing {
+            folders[test] = ranTests.contains(test) ? newImages?.path ?? "" : earlier.imagesPath(for: test) ?? ""
+        }
+        let own = runImagesPath ?? ""
+        let elsewhere = folders.filter { $0.value != own }
+        testAttachments = elsewhere.isEmpty ? nil : elsewhere
+    }
+
+    private static func failingTests(in suites: [SuiteResult]) -> [String] {
+        suites.flatMap { suite in suite.tests.filter { $0.outcome == .failed }.map { suite.identifier + "/" + $0.name } }
+    }
+
+    /// The run's own images: the exported folder, else the one next to its bundle (older files name none).
+    private var runImagesPath: String? {
+        attachmentsDirectory ?? resultBundle.map { ($0 as NSString).deletingPathExtension + ".attachments" }
+    }
+
+    private func imagesPath(for test: String) -> String? {
+        testAttachments?[test] ?? runImagesPath
+    }
+
+    /// The folder with the failure images of `test` (`Bundle/Suite/test()`), if any.
+    public func attachmentsDirectory(for test: String) -> URL? {
+        imagesPath(for: test).flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+    }
+
+    /// The failing tests' images, each test's from the run that last ran it.
+    public func failureImages() -> [SnapshotFailureImages] {
+        var tests: [URL: Set<String>] = [:]
+        for suite in failingSuites {
+            for test in suite.tests where test.outcome == .failed {
+                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name) { tests[folder, default: []].insert(test.identifier) }
+            }
+        }
+        return tests.sorted { $0.key.path < $1.key.path }.flatMap { folder, identifiers -> [SnapshotFailureImages] in
+            guard let manifest = FileManager.default.contents(atPath: folder.appendingPathComponent("manifest.json").path),
+                  let images = try? FailureAttachments.parse(manifest: manifest, directory: folder) else { return [] }
+            return images.filter { identifiers.contains($0.testIdentifier) }
+        }
     }
 
     public func save(repository: URL) {

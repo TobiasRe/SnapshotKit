@@ -374,13 +374,7 @@ final class ProjectModel {
         restoredSuites = last.suites ?? []
         passed = last.passed
         failed = last.failed
-        let attachmentsDir = last.attachmentsDirectory.map { URL(fileURLWithPath: $0) }
-            ?? last.resultBundle.map { URL(fileURLWithPath: $0).deletingPathExtension().appendingPathExtension("attachments") }
-        var images: [SnapshotFailureImages] = []
-        if let dir = attachmentsDir, let manifest = try? Data(contentsOf: dir.appendingPathComponent("manifest.json")) {
-            images = (try? FailureAttachments.parse(manifest: manifest, directory: dir)) ?? []
-        }
-        setFailures(suites: last.failingSuites, images: images,
+        setFailures(suites: last.failingSuites, images: last.failureImages(),
                     source: FailureSource(label: "Last run", date: last.date, host: last.host,
                                           resultBundle: last.resultBundle.map { URL(fileURLWithPath: $0) }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }))
     }
