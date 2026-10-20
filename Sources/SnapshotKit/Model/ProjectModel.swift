@@ -1361,20 +1361,22 @@ final class ProjectModel {
             return
         }
         // Merge, so checking one test keeps verdicts for the others.
+        let checked = Flakiness.classify(summary)
         var merged = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        for r in Flakiness.classify(summary) { merged[r.id] = r }
+        for r in checked { merged[r.id] = r }
         flakeResults = merged.values.sorted { $0.id < $1.id }
         lastResult = result
-        passed = flakeResults.reduce(0) { $0 + $1.passed }
-        failed = flakeResults.reduce(0) { $0 + $1.failed }
+        passed = checked.reduce(0) { $0 + $1.passed }
+        failed = checked.reduce(0) { $0 + $1.failed }
         failures = failures.map { item in
             var item = item
             item.verdict = flakeResults.first { $0.id == item.id }?.verdict
             return item
         }
-        let flaky = flakeResults.filter { $0.verdict == .flaky }.count
-        let always = flakeResults.filter { $0.verdict == .alwaysFails }.count
-        let passing = flakeResults.count - always - flaky
+        // What this check found: earlier checks' verdicts are not its news.
+        let flaky = checked.filter { $0.verdict == .flaky }.count
+        let always = checked.filter { $0.verdict == .alwaysFails }.count
+        let passing = checked.count - always - flaky
         let start = operationTab
         finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, \(flaky) flaky, "
                 + "\(passing) pass\(passing == 1 ? "es" : "").",

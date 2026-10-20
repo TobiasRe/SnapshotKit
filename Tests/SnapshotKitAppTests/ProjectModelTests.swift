@@ -706,7 +706,7 @@ extension AppUITests {
 
         /// A model of `repo` that can run, with `script` as xcodebuild.
         func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil, attachments: URL? = nil,
-                           failures: Bool = false) throws -> ProjectModel {
+                           failures: Bool = false, flakeResults: [FlakeResult] = []) throws -> ProjectModel {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
@@ -717,6 +717,7 @@ extension AppUITests {
                 f.failingSuites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
                 f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures"))
             }
+            f.flakeResults = flakeResults
             model.apply(f)
             return model
         }
@@ -975,6 +976,20 @@ extension AppUITests {
             model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
             try await waitUntilFinished(model)
             #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
+        }
+
+        /// Checking one test again says what that check found, not what earlier checks of other tests did.
+        @Test func aFlakinessCheckCountsOnlyTheTestsItChecked() async throws {
+            let (repo, _) = try makeRepo()
+            let earlier = FlakeResult(suite: AppFixtures.profileSuite.identifier, test: "badge()", passed: 5, failed: 0, verdict: .passes)
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed, failures: true,
+                                          flakeResults: [earlier])
+            model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
+            #expect((model.passed, model.failed) == (0, 1))
+            // The earlier verdict stays.
+            #expect(model.flakeResults.map(\.id).contains(earlier.id))
         }
 
         /// A cancelled flakiness check says so and leaves the verdicts as they were, as a cancelled run does.

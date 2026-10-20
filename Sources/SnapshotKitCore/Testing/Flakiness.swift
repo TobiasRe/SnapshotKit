@@ -24,6 +24,14 @@ public struct FlakeResult: Hashable, Codable, Sendable, Identifiable {
     public var failed: Int
     public var verdict: FlakeVerdict
     public var id: String { suite + "/" + test }
+
+    public init(suite: String, test: String, passed: Int, failed: Int, verdict: FlakeVerdict) {
+        self.suite = suite
+        self.test = test
+        self.passed = passed
+        self.failed = failed
+        self.verdict = verdict
+    }
 }
 
 /// Classifies tests from a run made with `-test-iterations N`.
