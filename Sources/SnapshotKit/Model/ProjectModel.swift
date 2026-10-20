@@ -317,6 +317,7 @@ final class ProjectModel {
             case .failure(let error):
                 context = nil
                 configError = error.localizedDescription
+                detectedBaseBranch = nil
             }
             validateEnvironment()
             loadLastRun()
@@ -324,8 +325,13 @@ final class ProjectModel {
         }
     }
 
+    /// Checks Xcode and the simulator the configuration asks for; without one, there is nothing to check.
     func validateEnvironment() {
-        guard let config else { return }
+        guard let config else {
+            environment = nil
+            environmentError = nil
+            return
+        }
         Task {
             let result = await offCooperativePool { Result { try EnvironmentValidator.validate(config) } }
             switch result {

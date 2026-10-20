@@ -443,6 +443,20 @@ extension AppUITests {
             #expect(model.branches.prefix(1) == ["develop"])
         }
 
+        /// When the configuration breaks, the Xcode and simulator checked for it go too: nothing can
+        /// run with them.
+        @Test func aBrokenConfigurationForgetsTheEnvironment() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 0")
+            #expect(model.environment != nil)
+            try "scheme:\n  nested: value\n".write(to: repo.appendingPathComponent(".snapshotkit.yml"), atomically: true, encoding: .utf8)
+            model.reload()
+            for _ in 0..<200 where model.configError == nil { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(model.configError != nil)
+            #expect(model.environment == nil)
+            #expect(model.environmentError == nil)
+        }
+
         // MARK: Selection
 
         /// The list groups by suite, so the first row is not the first path git reports.
