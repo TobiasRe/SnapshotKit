@@ -505,9 +505,11 @@ func main() async {
 
     case "flaky":
         let ctx = context(o)
+        // Checked first: finding the failing suites can mean running every test.
+        let requested = iterations(o)
         let suites = await failingSuites(ctx, o: o, printer: printer)
         guard !suites.isEmpty else { say("No failing suites to check."); exit(0) }
-        let n = iterations(o) ?? ProjectStore().settings.flakeIterations
+        let n = requested ?? ProjectStore().settings.flakeIterations
         say("snapkit: running \(suites.map(\.identifier).joined(separator: ", ")) \(n)×")
         let (result, _, _) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: suites.map(\.identifier), iterations: n, printer: printer)
         record(result, kind: .flakeCheck, repo: ctx.repository)

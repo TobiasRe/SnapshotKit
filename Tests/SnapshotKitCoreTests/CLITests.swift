@@ -52,6 +52,8 @@ import Testing
         UsageCase(arguments: ["snapshots", "--repo", "REPO", "--sort", "name"], message: "--sort takes size or recent, not 'name'"),
         UsageCase(arguments: ["run", "--repo", "REPO", "--iterations", "1"], message: "--iterations needs a whole number of at least 2, not '1'"),
         UsageCase(arguments: ["run", "--repo", "REPO", "--iterations", "many"], message: "--iterations needs a whole number of at least 2, not 'many'"),
+        // Before looking for failing suites: without a last run, that means running every test first.
+        UsageCase(arguments: ["flaky", "--repo", "REPO", "--iterations", "1"], message: "--iterations needs a whole number of at least 2, not '1'"),
         UsageCase(arguments: ["rerecord", "--repo", "REPO", "--suite", "CardTests"],
                   message: "--suite CardTests: name its test target too, as in --suite AppTests/CardTests"),
     ])
