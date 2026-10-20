@@ -73,8 +73,9 @@ also differ in shape.
 re-recording will not fix it. Look for animations, async loading, dates or random data.*
 
 **Compare** — reference and actual in the [compare view](comparing.md), labeled *Reference* and *Actual* with
-the device (*Actual · iPhone 16 Pro*). When the run repeated the test (a flakiness check), a **Repetition**
-picker (*Run 1 of 5*…) shows each attempt.
+the device (*Actual · iPhone 16 Pro*). When a test failed more than once (in a flakiness check, on several
+devices, or in several test cases), a picker in the info row shows each attempt, named by what tells it
+apart: *Run 2 of 5*, *iPhone SE · Run 2 of 5*, *“dark” · Snapshot 1*.
 
 ## Several devices and parameterized tests
 
@@ -84,10 +85,9 @@ arguments (a parameterized Swift Testing test) is one row, and fails when it fai
 - Each device’s run counts as a run of the test, so a test that failed on one of two simulators shows
   *1 of 2 runs passed* and its history strip marks that run orange (mixed); a flakiness check on two
   simulators counts both. A parameterized test’s cases are one run, which failed if any case failed.
-- The detail compares the images of the first device and test case that failed; *Actual · iPhone 16 Pro* says
-  which device. The images of the other devices and cases are kept, but the app doesn’t show them yet:
-  `snapkit failures` lists them all, each labeled with its device and arguments (see
-  [the CLI reference](cli.md#failures)).
+- The detail's picker lists every device and test case that failed, with runs counted per device (a 5×
+  check on two simulators is *Run 3 of 5* on each). `snapkit failures` lists them too, each labeled with its
+  device and arguments (see [the CLI reference](cli.md#failures)).
 
 ## What to do with a failure
 
