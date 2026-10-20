@@ -5,7 +5,7 @@ import SwiftUI
 /// The menu bar icon: a pie that fills as tests complete while something runs; otherwise the app
 /// symbol, with the failing count from the last runs.
 struct MenuBarLabel: View {
-    @Bindable var model: AppModel
+    let model: AppModel
 
     var body: some View {
         if let path = model.runningPaths.first, let project = model.projectModel(path: path) {
@@ -22,7 +22,7 @@ struct MenuBarLabel: View {
 }
 
 private struct RunningMenuBarLabel: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
 
     var body: some View {
         HStack(spacing: DS.Space.xs) {
@@ -155,7 +155,7 @@ struct MenuBarPanel: View {
 
 /// One running project: what it's doing, how far along, and Cancel.
 struct RunProgressRow: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var open: () -> Void
 
     var body: some View {

@@ -364,7 +364,7 @@ struct SnapshotStateChip: View {
 
 /// Actions on one snapshot, for the context menu and the detail header.
 struct SnapshotActions: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var file: SnapshotFile
 
     var body: some View {
@@ -398,7 +398,7 @@ struct SnapshotCanvasTopKey: PreferenceKey {
 
 /// One snapshot, large: zoom, pan and read pixels, with what it is and where it lives.
 struct SnapshotDetail: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var file: SnapshotFile
     @State private var versions: [SnapshotVersion]?
     private var comparing: SnapshotVersion? {
@@ -702,7 +702,7 @@ enum SnapshotImageCache {
 
 /// A contact sheet of the library: every snapshot as a tile, grouped by test file.
 struct SnapshotGrid: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var open: (SnapshotFile) -> Void
 
     static let tile = CGSize(width: 180, height: 124)

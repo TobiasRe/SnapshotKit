@@ -4,7 +4,7 @@ import SwiftUI
 
 struct FailuresTab: View {
     @Environment(AppModel.self) private var app
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     @State private var repetition = 1
 
     var body: some View {
@@ -466,7 +466,7 @@ struct VerdictTag: View {
 
 /// Several failures selected: what they are, and the two things to do with all of them at once.
 struct BatchFailureDetail: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
 
     var body: some View {
         let items = project.selectedFailures

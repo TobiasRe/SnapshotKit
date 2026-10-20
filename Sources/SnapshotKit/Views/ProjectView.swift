@@ -120,7 +120,7 @@ struct ProjectView: View {
 // MARK: - Run tab
 
 struct RunTab: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
 
     var body: some View {
         ListDetailSplit(minWidth: 300) {
@@ -139,7 +139,7 @@ struct RunTab: View {
 /// What will run, where, and how it was configured: a compact property list, labels in one
 /// column and values in the next, like an inspector.
 struct RunInspector: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     @State private var baseBranch = ""
     @State private var remoteHost = ""
 
@@ -337,7 +337,7 @@ struct PropertyValue: View {
 
 /// Outcome first, then the actions that act on it.
 struct RunStatusHeader: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -666,7 +666,7 @@ struct LogView: View {
 
 /// The last run's tests by suite, failing suites first. Failed tests open on the Failures tab.
 struct RunResultsList: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var suites: [SuiteResult]
 
     var body: some View {

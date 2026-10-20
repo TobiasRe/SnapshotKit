@@ -357,7 +357,7 @@ struct ChangesTab: View {
 /// when, why), or that it isn't committed yet. Until the history is read, and when there is none,
 /// it says what is compared instead.
 struct ChangeOrigin: View {
-    @Bindable var project: ProjectModel
+    let project: ProjectModel
     var change: SnapshotChange
     @State private var last: SnapshotVersion?
     @Environment(\.locale) private var locale
