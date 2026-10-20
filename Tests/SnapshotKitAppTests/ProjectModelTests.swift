@@ -438,5 +438,19 @@ extension AppUITests {
             #expect(model.selectedChangeID == names[2])
             #expect(model.selectedSnapshotID == names[2])
         }
+
+        /// ⌥⌘↓ and a jump from the Run tab focus one failure, even inside a multi-selection.
+        @Test func movingTheFocusEndsAMultiSelection() {
+            let model = AppFixtures.project(.failures, store: AppFixtures.store())
+            let ids = model.displayedFailures.map(\.id)
+            model.selectedFailureID = ids[0]
+            model.selectFailures(Set(ids))
+            model.selectAdjacent(1)
+            #expect(model.selectedFailures.map(\.id) == [ids[1]])
+
+            model.selectFailures(Set(ids))
+            model.showFailure(ids[0])
+            #expect(model.selectedFailures.map(\.id) == [ids[0]])
+        }
     }
 }

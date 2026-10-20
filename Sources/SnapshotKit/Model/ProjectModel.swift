@@ -591,7 +591,7 @@ final class ProjectModel {
             return ids[min(max(i + step, 0), ids.count - 1)]
         }
         switch tab {
-        case .failures: selectedFailureID = move(displayedFailures.map(\.id), selectedFailureID)
+        case .failures: focusFailure(move(displayedFailures.map(\.id), selectedFailureID))
         case .changes: selectedChangeID = move(displayedChanges.map(\.id), selectedChangeID)
         case .snapshots: selectedSnapshotID = move(displayedSnapshots.map(\.id), selectedSnapshotID)
         case .run: break
@@ -601,8 +601,14 @@ final class ProjectModel {
     /// Shows a test from the run results on the Failures tab.
     func showFailure(_ id: String) {
         guard failures.contains(where: { $0.id == id }) else { return }
-        selectedFailureID = id
+        focusFailure(id)
         tab = .failures
+    }
+
+    /// Selects just this failure, even when it was one of several selected.
+    private func focusFailure(_ id: String?) {
+        selectedFailureID = id
+        failureSelection = []
     }
 
     /// Marks a change as viewed (or not). Marking moves on to the next unviewed change, so a
