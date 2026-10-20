@@ -364,6 +364,22 @@ import Testing
         #expect(try EnvironmentValidator.selectSimulator(for: config, from: sims, xcode: installs[0]).osVersion == "99.0")
     }
 
+    /// Snapshots differ between OS versions: a booted simulator only wins on the runtime asked for.
+    @Test func latestIsTheNewestRuntimeEvenWhenAnOlderOneIsBooted() throws {
+        let sims = try EnvironmentValidator.parseSimulators(Data("""
+            {"devices": {
+              "com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "Example Phone", "udid": "NEW", "state": "Shutdown"}],
+              "com.apple.CoreSimulator.SimRuntime.iOS-98-4": [{"name": "Example Phone", "udid": "OLD", "state": "Booted"}]
+            }}
+            """.utf8))
+        var config = SnapshotConfig()
+        config.deviceName = "Example Phone"
+        for os in [nil, "latest"] {
+            config.osVersion = os
+            #expect(try EnvironmentValidator.selectSimulator(for: config, from: sims, xcode: installs[0]).udid == "NEW")
+        }
+    }
+
     @Test func simulatorErrorsAreSpecific() throws {
         let sims = try EnvironmentValidator.parseSimulators(Data(Self.simctl.utf8))
         var config = SnapshotConfig()

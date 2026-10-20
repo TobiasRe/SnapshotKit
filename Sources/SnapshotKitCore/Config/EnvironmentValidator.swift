@@ -231,11 +231,13 @@ public enum EnvironmentValidator {
                 throw EnvironmentError.simulatorMissing(name: name, platform: platform, os: os, available: Array(Set(onRuntime.map(\.name))).sorted())
             }
         } else {
-            candidates = onPlatform.filter { $0.name == name }
-            if candidates.isEmpty {
+            let named = onPlatform.filter { $0.name == name }
+            guard let newest = named.first?.osVersion else {
                 let latest = onPlatform.first?.osVersion ?? "latest"
                 throw EnvironmentError.simulatorMissing(name: name, platform: platform, os: latest, available: Array(Set(onPlatform.map(\.name))).sorted())
             }
+            // The newest runtime with that device, as xcodebuild picks it (simulators come newest first).
+            candidates = named.filter { $0.osVersion == newest }
         }
         // Prefer an already booted device to save boot time.
         return candidates.first { $0.state == "Booted" } ?? candidates[0]
