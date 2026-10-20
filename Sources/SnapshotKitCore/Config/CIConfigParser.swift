@@ -61,16 +61,18 @@ public struct CIConfigParser {
     // MARK: - Variables
 
     private static let assignment = try! NSRegularExpression(
-        pattern: #"^\s*(?:-\s+)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_-]*)\s*(?::\s+|=)(.*)$"#
+        pattern: #"^\s*(?:-\s+)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_-]*)\s*(?::(?:\s+|$)|=)(.*)$"#
     )
 
     /// Collects `KEY: value`, `KEY=value` and `export KEY=value` definitions. First wins.
     static func collectVariables(_ text: String, into variables: inout [String: String]) {
-        for line in text.components(separatedBy: .newlines) {
+        let lines = text.components(separatedBy: .newlines)
+        for (index, line) in lines.enumerated() {
             let ns = line as NSString
             guard let m = assignment.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { continue }
             let key = ns.substring(with: m.range(at: 1))
             var value = MiniYAML.stripComment(ns.substring(with: m.range(at: 2))).trimmingCharacters(in: .whitespaces)
+            if value.isEmpty, let item = firstListItem(after: index, in: lines) { value = "[\(item)]" }
             if value.isEmpty || value.hasPrefix("|") || value.hasPrefix(">") || value.hasPrefix("&") || value.hasPrefix("*") { continue }
             if value.hasPrefix("["), value.hasSuffix("]") {
                 // Matrix-style lists: use the first entry.
@@ -81,6 +83,16 @@ public struct CIConfigParser {
             }
             if variables[key] == nil { variables[key] = value }
         }
+    }
+
+    /// The first item of a block list under a `key:` line (`- '16.2'`), unless the items are
+    /// mappings (`- uses: …`).
+    private static func firstListItem(after index: Int, in lines: [String]) -> String? {
+        guard let next = lines.dropFirst(index + 1).first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return nil }
+        let item = MiniYAML.stripComment(next).trimmingCharacters(in: .whitespaces)
+        guard item.hasPrefix("- "), assignment.firstMatch(in: item, range: NSRange(location: 0, length: (item as NSString).length)) == nil
+        else { return nil }
+        return String(item.dropFirst(2))
     }
 
     private static let reference = try! NSRegularExpression(

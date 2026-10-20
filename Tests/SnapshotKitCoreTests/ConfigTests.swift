@@ -175,6 +175,27 @@ import Testing
         #expect(x.notes.isEmpty)
     }
 
+    @Test func matrixBlockListsUseTheirFirstValue() {
+        let text = """
+        jobs:
+          snapshots:
+            strategy:
+              matrix:
+                xcode:
+                  - '99.3'
+                  - '99.4'
+                device: [Example Phone, Other Phone]
+            steps:
+              - uses: maxim-lobanov/setup-xcode@v1
+                with:
+                  xcode-version: ${{ matrix.xcode }}
+              - run: xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=${{ matrix.device }}'
+        """
+        let x = CIConfigParser.extract(from: [.init(name: "ci.yml", text: text)])
+        #expect(x.config.xcodeVersion == "99.3")
+        #expect(x.config.deviceName == "Example Phone")
+    }
+
     @Test func githubInlineBranchList() {
         let p = CIConfigParser()
         #expect(p.baseBranch(in: "on:\n  pull_request:\n    branches: [ 'feature/*', trunk ]\n") == "trunk")
