@@ -103,25 +103,43 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         throw ConfigError.missingScheme
     }
 
-    /// Result bundles kept in the temporary results folder; older ones are deleted.
-    static let keptResultBundles = 30
+    /// Runs kept per repository, each a result bundle with its exported attachments.
+    public static let keptResults = 10
 
-    public static func newResultBundleURL() -> URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/results", isDirectory: true)
+    /// Where a repository's result bundles and failure images go: its git directory (per worktree,
+    /// never committed, not shared with other repositories and not emptied by macOS like the
+    /// temporary folder), or the temporary folder outside a repository.
+    public static func resultsDirectory(for repository: URL) -> URL {
+        let base = (try? Git(root: repository).gitDirectory().appendingPathComponent("snapshotkit"))
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit")
+        return base.appendingPathComponent("results", isDirectory: true)
+    }
+
+    /// A path for the next run's result bundle, after making room for it: the newest runs stay,
+    /// and always the last run's, whose failures the app and `snapkit failures` show.
+    public static func newResultBundleURL(for repository: URL) -> URL {
+        let dir = resultsDirectory(for: repository)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        pruneResults(in: dir)
+        let last = LastRun.load(repository: repository)
+        pruneResults(in: dir, keeping: Set([last?.resultBundle, last?.attachmentsDirectory].compactMap { $0.map(runName) }))
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         return dir.appendingPathComponent("\(stamp)-\(UUID().uuidString.prefix(8)).xcresult")
     }
 
-    static func pruneResults(in dir: URL) {
+    /// A run's files share a name: `<name>.xcresult` and `<name>.attachments` (only the latter for
+    /// a remote run, whose bundle stays on the remote machine).
+    private static func runName(_ path: String) -> String {
+        URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+    }
+
+    static func pruneResults(in dir: URL, keeping kept: Set<String>) {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.creationDateKey]) else { return }
         func created(_ url: URL) -> Date { (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
-        let bundles = entries.filter { $0.pathExtension == "xcresult" }.sorted { created($0) > created($1) }
-        for old in bundles.dropFirst(keptResultBundles) {
-            try? fm.removeItem(at: old)
-            try? fm.removeItem(at: old.deletingPathExtension().appendingPathExtension("attachments"))
+        let runs = Dictionary(grouping: entries.filter { ["xcresult", "attachments"].contains($0.pathExtension) }) { runName($0.path) }
+        let newestFirst = runs.sorted { $0.value.map(created).max()! > $1.value.map(created).max()! }
+        for (name, files) in newestFirst.dropFirst(keptResults - 1) where !kept.contains(name) {
+            for file in files { try? fm.removeItem(at: file) }
         }
     }
 
@@ -134,7 +152,7 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         onEvent: @escaping @Sendable (TestEvent, TestOutputParser) -> Void = { _, _ in }
     ) async throws -> TestRunResult {
         let scheme = try await offCooperativePool { try self.resolveScheme() }
-        let bundle = Self.newResultBundleURL()
+        let bundle = Self.newResultBundleURL(for: repository)
         let process = StreamingProcess(
             executable: "xcodebuild",
             arguments: arguments(scheme: scheme, onlyTesting: onlyTesting, resultBundle: bundle, additional: additionalArguments),

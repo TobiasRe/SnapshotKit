@@ -254,7 +254,8 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
 
         onStage(.collecting)
         let summary = try? await offCooperativePool { try self.collectSummary(bundle: bundle, environment: environment, remoteDir: dir) }
-        let attachmentsDir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/remote-attachments/\(stamp)")
+        // Kept with the repository's local runs; the bundle itself stays on the remote machine.
+        let attachmentsDir = TestRunner.newResultBundleURL(for: repository).deletingPathExtension().appendingPathExtension("attachments")
         let attachments = (try? await offCooperativePool {
             try self.collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)
         }) ?? []

@@ -488,8 +488,12 @@ func main() async {
     case "failures":
         let ctx = context(o)
         let bundle: URL
+        let last = LastRun.load(repository: ctx.repository)
         if let path = o.value("--xcresult") { bundle = URL(fileURLWithPath: path) }
-        else if let last = LastRun.load(repository: ctx.repository)?.resultBundle, last.hasSuffix(".xcresult"), FileManager.default.fileExists(atPath: last) { bundle = URL(fileURLWithPath: last) }
+        else if let path = last?.resultBundle, path.hasSuffix(".xcresult"), FileManager.default.fileExists(atPath: path) { bundle = URL(fileURLWithPath: path) }
+        else if let last, last.host == "local", let path = last.resultBundle {
+            fail("The last run's results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
+        }
         else { fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).") }
         let out = o.value("--out").map { URL(fileURLWithPath: $0) } ?? bundle.deletingPathExtension().appendingPathExtension("attachments")
         do {

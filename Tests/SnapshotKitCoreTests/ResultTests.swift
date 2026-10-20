@@ -160,6 +160,41 @@ import Testing
     }
 }
 
+@Suite struct ResultStorageTests {
+    /// What xcodebuild does with the path it is given.
+    func newBundle(in repo: TempRepo) throws -> URL {
+        let bundle = TestRunner.newResultBundleURL(for: repo.url)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        return bundle
+    }
+
+    @Test func runsInOneRepositoryNeverRemoveAnothersResults() throws {
+        let a = try TempRepo(), b = try TempRepo()
+        let bundleOfA = try newBundle(in: a)
+        #expect(bundleOfA.path.hasPrefix(try a.git.gitDirectory().path + "/"))
+        for _ in 0...TestRunner.keptResults { _ = try newBundle(in: b) }
+        #expect(FileManager.default.fileExists(atPath: bundleOfA.path))
+    }
+
+    @Test func keepsTheNewestRunsAndTheLastRunsBundle() throws {
+        let repo = try TempRepo()
+        let last = try newBundle(in: repo)
+        let attachments = last.deletingPathExtension().appendingPathExtension("attachments")
+        try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
+        LastRun(result: TestRunResult(commandLine: "", exitStatus: 1, cancelled: false, resultBundle: last, summary: nil,
+                                      passed: 0, failed: 1, skipped: 0, buildErrors: []),
+                attachmentsDirectory: attachments).save(repository: repo.url)
+        let older = try newBundle(in: repo)
+        for _ in 0..<TestRunner.keptResults { _ = try newBundle(in: repo) }
+
+        #expect(FileManager.default.fileExists(atPath: last.path))
+        #expect(FileManager.default.fileExists(atPath: attachments.path))
+        #expect(!FileManager.default.fileExists(atPath: older.path))
+        let kept = try FileManager.default.contentsOfDirectory(atPath: last.deletingLastPathComponent().path)
+        #expect(kept.filter { $0.hasSuffix(".xcresult") }.count == TestRunner.keptResults + 1)
+    }
+}
+
 @Suite struct RunHistoryTests {
     func record(_ commit: String, _ outcome: TestOutcome, host: String = "local", dirty: Bool = false) -> RunRecord {
         var r = RunRecord(kind: .run, host: host, commit: commit, branch: "b", dirty: dirty, summary: nil,
