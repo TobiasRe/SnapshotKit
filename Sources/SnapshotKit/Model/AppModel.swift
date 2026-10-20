@@ -58,7 +58,7 @@ final class AppModel {
 
     /// A record patch can survive a crash or force quit; undo it before anything else.
     private func restoreLeftoverPatches() {
-        let reports = RecordSession.restoreAllLeftovers().filter { !$0.files.isEmpty }
+        let reports = RecordSession.restoreAllLeftovers().reports.filter { !$0.files.isEmpty }
         guard !reports.isEmpty else { return }
         startupNotice = "Restored a record patch left by an interrupted run:\n" + reports.map(\.summary).joined(separator: "\n")
     }

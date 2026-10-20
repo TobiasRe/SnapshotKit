@@ -89,7 +89,7 @@ public struct RestoreReport: Sendable {
 public final class RecordSession: @unchecked Sendable {
     public let repository: URL
     public let journalURL: URL
-    public private(set) var journal: PatchJournal
+    public let journal: PatchJournal
     private let lock = NSLock()
     private var restored = false
 
@@ -229,15 +229,31 @@ public final class RecordSession: @unchecked Sendable {
         return restore(journal: journal, repository: repository, journalURL: url)
     }
 
+    /// What `restoreAllLeftovers()` did.
+    public struct LeftoverRestore: Sendable {
+        public var reports: [RestoreReport]
+        /// Repositories whose leftover patch couldn't be restored, e.g. because its journal is unreadable.
+        public var failures: [(repository: URL, error: any Error)]
+    }
+
     /// Restores leftovers in every repository that registered a patch (used at app/CLI launch).
-    public static func restoreAllLeftovers() -> [RestoreReport] {
-        PatchRegistry.shared.repositories().compactMap { repo in
+    /// A patch that a running SnapshotKit process still owns is left alone, and isn't a failure.
+    public static func restoreAllLeftovers() -> LeftoverRestore {
+        var result = LeftoverRestore(reports: [], failures: [])
+        for repo in PatchRegistry.shared.repositories() {
             guard FileManager.default.fileExists(atPath: repo.path) else {
                 PatchRegistry.shared.unregister(repo)
-                return nil
+                continue
             }
-            return try? restoreLeftover(repository: repo)
+            do {
+                if let report = try restoreLeftover(repository: repo) { result.reports.append(report) }
+            } catch RecordPatchError.patchAlreadyActive {
+                continue
+            } catch {
+                result.failures.append((repo, error))
+            }
         }
+        return result
     }
 
     /// Process IDs get reused; only treat a live PID as an owner if it is one of ours.
@@ -267,13 +283,13 @@ final class ActiveSessions: @unchecked Sendable {
 }
 
 /// Repositories with an active journal, persisted so the next launch can find leftovers.
-public final class PatchRegistry: @unchecked Sendable {
-    public static let shared = PatchRegistry()
+final class PatchRegistry: @unchecked Sendable {
+    static let shared = PatchRegistry()
     private let lock = NSLock()
 
     var url: URL { SnapshotKitPaths.home.appendingPathComponent("active-patches.json") }
 
-    public func repositories() -> [URL] {
+    func repositories() -> [URL] {
         lock.withLock { load().map { URL(fileURLWithPath: $0) } }
     }
 

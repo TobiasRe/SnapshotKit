@@ -240,8 +240,12 @@ func failingSuites(_ ctx: ProjectContext, o: Options, printer: Printer) async ->
 func main() async {
     let o = parse(Array(CommandLine.arguments.dropFirst()))
     InterruptGuard.install { report in FileHandle.standardError.write(Data(("snapkit: " + report.summary + "\n").utf8)) }
-    for report in RecordSession.restoreAllLeftovers() where !report.files.isEmpty {
+    let leftovers = RecordSession.restoreAllLeftovers()
+    for report in leftovers.reports where !report.files.isEmpty {
         say(color("33", "snapkit: restored leftover record patch in \(report.repository.path):\n  ") + report.summary.replacingOccurrences(of: "\n", with: "\n  "))
+    }
+    for failure in leftovers.failures {
+        say(color("31", "snapkit: could not restore the record patch in \(failure.repository.path): ") + failure.error.localizedDescription)
     }
     let printer = Printer(verbose: o.has("--verbose"))
 

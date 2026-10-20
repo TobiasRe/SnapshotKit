@@ -150,7 +150,7 @@ import Testing
         try encoder.encode(journal).write(to: session.journalURL)
         ActiveSessions.shared.remove(session)
 
-        let reports = RecordSession.restoreAllLeftovers().filter { $0.repository.standardizedFileURL.path == repo.url.standardizedFileURL.path }
+        let reports = RecordSession.restoreAllLeftovers().reports.filter { $0.repository.standardizedFileURL.path == repo.url.standardizedFileURL.path }
         #expect(reports.first?.files.map(\.outcome) == [.restored])
         #expect(try repo.read(target.path) == Self.suiteSource)
         #expect(try RecordSession.restoreLeftover(repository: repo.url) == nil)
@@ -158,13 +158,63 @@ import Testing
 
     @Test func refusesWhileAnotherProcessOwnsThePatch() throws {
         let repo = try makeRepo()
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        ActiveSessions.shared.remove(session)
+        // A live process named like the CLI owns the journal.
+        let owner = try Self.startProcess(named: "snapkit")
+        defer { owner.terminate() }
+        var journal = session.journal
+        journal.processIdentifier = owner.processIdentifier
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(journal).write(to: session.journalURL)
+
+        #expect(throws: RecordPatchError.patchAlreadyActive(repo.url.path)) {
+            try RecordSession.restoreLeftover(repository: repo.url)
+        }
+        let all = RecordSession.restoreAllLeftovers()
+        #expect(!all.reports.contains { $0.repository.path == repo.url.path })
+        #expect(!all.failures.contains { $0.repository.path == repo.url.path })
+        #expect(try repo.read(target.path).contains("record: .all"))
+
+        let forced = try #require(try RecordSession.restoreLeftover(repository: repo.url, force: true))
+        #expect(forced.files.map(\.outcome) == [.restored])
+        #expect(try repo.read(target.path) == Self.suiteSource)
+    }
+
+    @Test func reportsLeftoversThatCannotBeRestored() throws {
+        let repo = try makeRepo()
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        ActiveSessions.shared.remove(session)
+        try Data("not a journal".utf8).write(to: session.journalURL)
+
+        let failures = RecordSession.restoreAllLeftovers().failures.filter { $0.repository.path == repo.url.path }
+        #expect(failures.count == 1)
+        try FileManager.default.removeItem(at: session.journalURL)
+        try repo.git.run(["checkout", "--", target.path])
+    }
+
+    @Test func beginRestoresALeftoverOfThisProcessFirst() throws {
+        let repo = try makeRepo()
         _ = try RecordSession.begin(repository: repo.url, targets: [target])
-        // Our own PID is alive, so an explicit leftover restore from "another process" must not
-        // fire — but begin() from the same process restores and re-patches safely.
         let second = try RecordSession.begin(repository: repo.url, targets: [target])
         #expect(try repo.read(target.path).contains("record: .all"))
         second.restore()
         #expect(try repo.read(target.path) == Self.suiteSource)
+    }
+
+    /// `sleep`, started through a link called `name`, which is what `ps` reports. (A copy of a system
+    /// binary outside /bin gets killed by macOS soon after it starts.)
+    static func startProcess(named name: String) throws -> Process {
+        let dir = testTemp("bin")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let executable = dir.appendingPathComponent(name)
+        try FileManager.default.createSymbolicLink(at: executable, withDestinationURL: URL(fileURLWithPath: "/bin/sleep"))
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["30"]
+        try process.run()
+        return process
     }
 
     @Test func locatesSuiteFromFailureFileOrSearch() throws {
