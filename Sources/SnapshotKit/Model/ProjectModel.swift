@@ -927,6 +927,7 @@ final class ProjectModel {
         runPane = .output
         phase = .preparing
         passed = 0; failed = 0; skipped = 0
+        expectedTotal = nil
         currentTest = nil
         log = []
         visibleLog = []

@@ -601,5 +601,20 @@ extension AppUITests {
             #expect(model.failingSuites.count == 2)
             #expect(LastRun.load(repository: repo) == nil)
         }
+
+        /// A re-record's progress is not measured against the last full run's test count.
+        @Test func reRecordingForgetsTheLastRunsTotal() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
+            model.runTests()                    // expects as many tests as the last run had
+            #expect(model.expectedTotal == 3)
+            model.cancel()
+            try await waitUntilFinished(model)
+            model.reRecordFailed()
+            #expect(model.isRunning)
+            #expect(model.expectedTotal == nil)
+            model.cancel()
+            try await waitUntilFinished(model)
+        }
     }
 }
