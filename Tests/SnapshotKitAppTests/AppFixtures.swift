@@ -235,8 +235,23 @@ enum AppFixtures {
 
     /// The defaults that hosted views read and write through `@AppStorage`, emptied by `resetDefaults()`,
     /// so a test sees neither an earlier test's compare mode or layout nor the test runner's own defaults.
-    static let defaults = UserDefaults(suiteName: defaultsSuite)!
-    private static let defaultsSuite = "SnapshotKitAppTests"
+    ///
+    /// One suite per test process: the user's defaults are shared by every process, so a run in another
+    /// checkout at the same time would otherwise reset or set them in the middle of this one's snapshots.
+    /// Those of earlier runs are removed once their process has ended.
+    static let defaults: UserDefaults = {
+        let preferences = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
+        for file in (try? FileManager.default.contentsOfDirectory(atPath: preferences.path)) ?? []
+        where file.hasPrefix(defaultsPrefix) && file.hasSuffix(".plist") {
+            let suite = String(file.dropLast(".plist".count))
+            if let pid = Int32(suite.dropFirst(defaultsPrefix.count)), pid != getpid(), kill(pid, 0) == 0 { continue }
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: preferences.appendingPathComponent(file))
+        }
+        return UserDefaults(suiteName: defaultsSuite)!
+    }()
+    private static let defaultsPrefix = "SnapshotKitAppTests."
+    private static let defaultsSuite = defaultsPrefix + "\(getpid())"
 
     static func resetDefaults() {
         defaults.removePersistentDomain(forName: defaultsSuite)
