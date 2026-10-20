@@ -80,8 +80,16 @@ import Testing
     }
 
     @Test func nameMatchesBeatPathMatches() {
-        let projects = [Project(path: "/tmp/snapkit-capture/projects/design-system"), Project(path: "/tmp/x/payments-ui")]
-        #expect(FuzzyMatcher.rank(projects, query: "pay", primary: \.name, secondary: \.path).first?.name == "payments-ui")
+        let projects = [Project(path: "/tmp/payments/design-system"), Project(path: "/tmp/x/payments-ui")]
+        #expect(FuzzyMatcher.rank(projects, query: "pay", primary: \.name, secondary: \.path).map(\.name)
+                == ["payments-ui", "design-system"])
+    }
+
+    @Test func pathsMatchOnlyWhatWasTyped() {
+        // p…a…y scattered over "snapkit-capture/projects/design-system" is no reason to list it.
+        let projects = [Project(path: "/tmp/snapkit-capture/projects/design-system")]
+        #expect(FuzzyMatcher.rank(projects, query: "pay", primary: \.name, secondary: \.path).isEmpty)
+        #expect(FuzzyMatcher.rank(projects, query: "projects/des", primary: \.name, secondary: \.path).count == 1)
     }
 
     @Test func recentsAreCapped() {

@@ -34,15 +34,23 @@ public enum FuzzyMatcher {
         return score - c.count / 10
     }
 
+    /// A path matches only where the typed text appears in it as typed ("work/app", "payments"):
+    /// letters scattered over a long path would match almost anything.
+    public static func pathScore(_ query: String, in path: String) -> Int? {
+        let typed = query.lowercased().filter { !$0.isWhitespace }
+        guard !typed.isEmpty, path.lowercased().contains(typed) else { return nil }
+        return score(query, in: path)
+    }
+
     /// Ranks by a primary key (e.g. the project name) and falls back to a secondary key
-    /// (e.g. its path) with a large penalty, so name matches always come first.
+    /// (e.g. its path, matched with `pathScore`) with a large penalty, so name matches always come first.
     public static func rank<T>(_ items: [T], query: String, primary: (T) -> String, secondary: (T) -> String) -> [T] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return items }
         var scored: [(index: Int, item: T, score: Int)] = []
         for (index, item) in items.enumerated() {
             if let s = score(query, in: primary(item)) {
                 scored.append((index, item, s + 1000))
-            } else if let s = score(query, in: secondary(item)) {
+            } else if let s = pathScore(query, in: secondary(item)) {
                 scored.append((index, item, s))
             }
         }

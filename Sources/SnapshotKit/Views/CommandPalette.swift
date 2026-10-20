@@ -33,7 +33,7 @@ enum PaletteItem: Identifiable {
         for (i, project) in projects.enumerated() {
             if let s = FuzzyMatcher.score(query, in: project.name) {
                 scored.append((.project(project), s + 1000, i))
-            } else if let s = FuzzyMatcher.score(query, in: project.path) {
+            } else if let s = FuzzyMatcher.pathScore(query, in: project.path) {
                 scored.append((.project(project), s, i))
             }
         }
