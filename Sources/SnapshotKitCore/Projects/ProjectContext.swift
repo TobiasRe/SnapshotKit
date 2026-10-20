@@ -91,6 +91,32 @@ public struct LastRun: Codable, Sendable {
         return last
     }
 
+    /// Takes in `run` as the repository's last run. A cancelled run changes nothing: it has no results
+    /// to speak of. A `partial` run of some tests (a re-record's verification) replaces only those
+    /// tests' results; its bundle becomes the last run's when no failure is left outside it.
+    public static func update(with run: TestRunResult, partial: Bool = false, attachmentsDirectory: URL? = nil, repository: URL) {
+        guard !run.cancelled else { return }
+        guard partial, var last = load(repository: repository) else {
+            LastRun(result: run, attachmentsDirectory: attachmentsDirectory).save(repository: repository)
+            return
+        }
+        let ran = run.summary?.suites ?? []
+        last.date = Date()
+        last.failingSuites = SuiteResult.merging(ran, into: last.failingSuites).filter(\.isFailing)
+        last.failed = last.failingSuites.reduce(0) { $0 + $1.failedCount }
+        if let suites = last.suites.map({ SuiteResult.merging(ran, into: $0) }) {
+            last.suites = suites
+            last.passed = suites.reduce(0) { $0 + $1.passedCount }
+        }
+        let ranSuites = Set(ran.map(\.identifier))
+        if last.failingSuites.allSatisfy({ ranSuites.contains($0.identifier) }) {
+            last.host = run.host
+            last.resultBundle = run.resultBundle.path
+            last.attachmentsDirectory = attachmentsDirectory?.path
+        }
+        last.save(repository: repository)
+    }
+
     public func save(repository: URL) {
         guard let url = try? Self.url(for: repository) else { return }
         let encoder = JSONEncoder()

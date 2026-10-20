@@ -79,6 +79,21 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
     public var identifier: String { ([bundle] + path).joined(separator: "/") }
     public var id: String { identifier }
 
+    /// `suites` with the tests that `newer` has results for replaced by those results.
+    public static func merging(_ newer: [SuiteResult], into suites: [SuiteResult]) -> [SuiteResult] {
+        var merged = suites
+        for suite in newer {
+            guard let i = merged.firstIndex(where: { $0.identifier == suite.identifier }) else {
+                merged.append(suite)
+                continue
+            }
+            let ran = Set(suite.tests.map(\.name))
+            merged[i].tests = merged[i].tests.filter { !ran.contains($0.name) } + suite.tests
+            merged[i].failureFiles += suite.failureFiles.filter { !merged[i].failureFiles.contains($0) }
+        }
+        return merged
+    }
+
     public var failedCount: Int { tests.filter { $0.outcome == .failed }.count }
     public var passedCount: Int { tests.filter { $0.outcome == .passed }.count }
     public var isFailing: Bool { failedCount > 0 }
