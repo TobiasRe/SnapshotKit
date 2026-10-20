@@ -1069,10 +1069,14 @@ final class ProjectModel {
         if isShown, tab == start { tab = next }
     }
 
-    /// Dock badge with the failing count, and a bounce when the run ends while you're elsewhere.
+    /// What the Dock badge says: the failing tests, as Failures lists them (not a flakiness check's
+    /// failed repetitions).
+    var dockBadge: String? { failures.isEmpty ? nil : "\(failures.count)" }
+
+    /// Dock badge, and a bounce when the run ends while you're elsewhere.
     private func announce(isError: Bool) {
         guard NSApp != nil, !DS.solidSurfaces else { return }
-        NSApp.dockTile.badgeLabel = failed > 0 ? "\(failed)" : nil
+        NSApp.dockTile.badgeLabel = dockBadge
         if !NSApp.isActive { NSApp.requestUserAttention(isError ? .criticalRequest : .informationalRequest) }
     }
 

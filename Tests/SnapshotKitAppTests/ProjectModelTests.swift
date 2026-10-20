@@ -995,6 +995,24 @@ extension AppUITests {
             #expect(LastRun.load(repository: repo) == nil)
         }
 
+        /// The Dock badge counts the failing tests, not a flakiness check's failed repetitions.
+        @Test func theDockBadgeCountsFailingTests() async throws {
+            let (repo, _) = try makeRepo()
+            // payButton() fails in 3 of 5 repetitions; badge() still fails too.
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: """
+                {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Failed",
+                     "children": [{"nodeType": "Repetition", "name": "1", "result": "Failed"}, {"nodeType": "Repetition", "name": "2", "result": "Passed"},
+                                  {"nodeType": "Repetition", "name": "3", "result": "Failed"}, {"nodeType": "Repetition", "name": "4", "result": "Passed"},
+                                  {"nodeType": "Repetition", "name": "5", "result": "Failed"}]}]}]}]}
+                """, failures: true)
+            model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
+            try await waitUntilFinished(model)
+            #expect(model.failures.count == 2)
+            #expect(model.dockBadge == "2")
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
