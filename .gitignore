@@ -4,3 +4,7 @@
 *.xcresult
 /build/
 /dist/
+.venv/
+__pycache__/
+_site/
+*.profraw

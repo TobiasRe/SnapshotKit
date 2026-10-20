@@ -1,4 +1,5 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
+// 6.2 comes with Xcode 26, the first with the macOS 26 SDK the app builds against: older Xcodes stop here.
 import PackageDescription
 
 let package = Package(
