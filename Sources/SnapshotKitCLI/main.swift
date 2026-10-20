@@ -215,6 +215,11 @@ func record(_ result: TestRunResult, kind: RunKind, repo: URL, attachments: URL?
     if kind == .run { LastRun(result: result, attachmentsDirectory: attachments).save(repository: repo) }
 }
 
+/// A record run whose tests never ran (say, the build failed) recorded nothing: says why and exits 1.
+func failIfNothingRecorded(_ run: TestRunResult) {
+    if let why = run.nothingTested { fail("Nothing was recorded: \(why).") }
+}
+
 func warnAboutConflicts(_ report: RestoreReport) {
     for conflict in report.conflicts {
         warn("WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)", color: "31")
@@ -418,6 +423,7 @@ func main() async {
                                                       onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
             warnAboutConflicts(outcome.restore)
+            failIfNothingRecorded(outcome.recordRun)
             if let verify = outcome.verifyRun {
                 record(verify, kind: .verify, repo: ctx.repository)
                 say(verify.succeeded ? color("32", "Recorded and verified: \(verify.passed) passed.")
@@ -443,6 +449,7 @@ func main() async {
                 let recorded = try await runner.run(mode: .record(suites: suites), onStage: { say(color("36", "▸ \($0.label)")) },
                                                     onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
                 record(recorded.run, kind: .record, repo: ctx.repository)
+                failIfNothingRecorded(recorded.run)
                 say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
                 say("Downloaded \(recorded.downloadedSnapshots.count) snapshot(s) recorded on \(recorded.host).")
                 if recorded.run.cancelled || o.has("--no-verify") { exit(recorded.run.cancelled ? 1 : 0) }
@@ -459,9 +466,10 @@ func main() async {
                                                       onStage: { say(color("36", "▸ \($0.label)")) },
                                                       onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
+            warnAboutConflicts(outcome.restore)
+            failIfNothingRecorded(outcome.recordRun)
             say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
             say("Patched and restored: \(outcome.patchedFiles.joined(separator: ", "))")
-            warnAboutConflicts(outcome.restore)
             if let verify = outcome.verifyRun { finishVerification(verify, repo: ctx.repository) }
             exit(outcome.recordRun.cancelled ? 1 : 0)
         } catch {

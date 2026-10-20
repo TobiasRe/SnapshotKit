@@ -78,8 +78,10 @@ public final class ReRecorder: @unchecked Sendable { // `currentRunner` and `can
         onLine("snapkit: " + report.summary.replacingOccurrences(of: "\n", with: "\nsnapkit: "))
 
         var verifyRun: TestRunResult?
-        if verify && !recordRun.cancelled {
-            let verifier = TestRunner(repository: runner.repository, config: runner.config, environment: runner.environment)
+        // A cancelled run, or one whose tests never ran (a failed build), recorded nothing to verify.
+        if verify && !recordRun.cancelled && recordRun.nothingTested == nil {
+            let verifier = TestRunner(repository: runner.repository, config: runner.config, environment: runner.environment,
+                                      xcodebuild: runner.xcodebuild)
             // Checked and published together, so a cancel() in between can't miss the verifier.
             let cancelled = lock.withLock {
                 currentRunner = verifier

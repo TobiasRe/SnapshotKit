@@ -29,6 +29,13 @@ public struct TestRunResult: Sendable {
     }
 
     public var succeeded: Bool { exitStatus == 0 && !cancelled }
+
+    /// Why no test ran, when none did: the build failed, or nothing matched what was asked for.
+    /// Nil when tests ran, or the run was cancelled. A record run like that recorded nothing.
+    public var nothingTested: String? {
+        guard !cancelled, passed + failed + skipped == 0 else { return nil }
+        return buildErrors.first.map { "the build failed (\($0))" } ?? "no test ran"
+    }
     public var failingSuites: [SuiteResult] { summary?.failingSuites ?? [] }
 }
 
@@ -42,10 +49,18 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
     private var process: StreamingProcess?
     private var cancelRequested = false
 
-    public init(repository: URL, config: SnapshotConfig, environment: TestEnvironment) {
+    /// What runs the tests: `xcodebuild` from the PATH, or a stand-in in tests.
+    let xcodebuild: String
+
+    public convenience init(repository: URL, config: SnapshotConfig, environment: TestEnvironment) {
+        self.init(repository: repository, config: config, environment: environment, xcodebuild: "xcodebuild")
+    }
+
+    init(repository: URL, config: SnapshotConfig, environment: TestEnvironment, xcodebuild: String) {
         self.repository = repository
         self.config = config
         self.environment = environment
+        self.xcodebuild = xcodebuild
     }
 
     public var workingDirectory: URL {
@@ -84,7 +99,7 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
     /// The configured scheme, or the only scheme `xcodebuild -list` reports.
     public func resolveScheme() throws -> String {
         if let scheme = config.scheme { return scheme }
-        var args = ["xcodebuild", "-list", "-json"]
+        var args = [xcodebuild, "-list", "-json"]
         if let workspace = config.workspace { args += ["-workspace", workspace] }
         else if let project = config.project { args += ["-project", project] }
         let result = try Shell.run(args, in: workingDirectory, environment: environment.processEnvironment)
@@ -155,7 +170,7 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         let scheme = try await offCooperativePool { try self.resolveScheme() }
         let bundle = Self.newResultBundleURL(for: repository)
         let process = StreamingProcess(
-            executable: "xcodebuild",
+            executable: xcodebuild,
             arguments: arguments(scheme: scheme, onlyTesting: onlyTesting, resultBundle: bundle, additional: additionalArguments),
             directory: workingDirectory,
             environment: environment.processEnvironment

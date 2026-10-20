@@ -192,6 +192,27 @@ import Testing
         #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent(target.path).path) == source)
     }
 
+    /// Here, not in a suite of its own: it patches a file, which `restoreAllLeftovers()` in the tests
+    /// above would undo under it.
+    @Test func aBuildThatFailsRecordsNothingAndIsNotVerified() async throws {
+        let repo = try makeRepo()
+        let xcodebuild = testTemp("xcodebuild")
+        try "#!/bin/sh\necho '/repo/Tests/AppTests/CardTests.swift:6:9: error: cannot find draw in scope'\nexit 65\n"
+            .write(to: xcodebuild, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcodebuild.path)
+        var config = SnapshotConfig()
+        config.scheme = "App"
+        let environment = TestEnvironment(xcode: XcodeInstall(path: "/Applications/Xcode.app", version: "99.0"),
+                                          simulator: Simulator(name: "Example Phone", udid: "X", osVersion: "99.0", platform: "iOS", state: "Shutdown"),
+                                          xcodeIsDefault: true)
+        let runner = TestRunner(repository: repo.url, config: config, environment: environment, xcodebuild: xcodebuild.path)
+
+        let outcome = try await ReRecorder(runner: runner).reRecord(suites: [SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [], failureFiles: [])])
+        #expect(outcome.recordRun.nothingTested == "the build failed (CardTests.swift:6:9: cannot find draw in scope)")
+        #expect(outcome.verifyRun == nil)
+        #expect(try repo.read(target.path) == Self.suiteSource)
+    }
+
     @Test func conflictKeepsFileAndSavesBackup() throws {
         let repo = try makeRepo()
         let session = try RecordSession.begin(repository: repo.url, targets: [target])
