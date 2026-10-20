@@ -221,7 +221,7 @@ public enum RecordPatcher {
     /// Where the comment or string literal starting at `i` ends, or nil if none starts there.
     /// Handles `//` and (nested) `/* */` comments, escapes, multi-line `"""` and raw `#"…"#`
     /// strings; an interpolation's own strings are not told apart.
-    private static func endOfCommentOrString(in text: String, at i: String.Index) -> String.Index? {
+    static func endOfCommentOrString(in text: String, at i: String.Index) -> String.Index? {
         let rest = text[i...]
         if rest.hasPrefix("//") { return rest.firstIndex(where: \.isNewline) ?? text.endIndex } // "\r\n" is one Character
         if rest.hasPrefix("/*") {

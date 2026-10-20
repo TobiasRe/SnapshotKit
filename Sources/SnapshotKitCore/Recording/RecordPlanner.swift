@@ -34,6 +34,7 @@ public enum RecordPlanner {
         var only: [String] = [], listed = Set<String>()
         // A suite's snapshots share its test file, which is parsed once for all of them.
         var parsed: [String: (text: String, suite: SuiteResult, isXCTest: Bool)] = [:]
+        var nested: [String: Bool] = [:]   // "<key>#<test>" → declared in a type inside the suite
         for file in files {
             let source = try sources.testFile(for: file)
             let key = file.module + "/" + source
@@ -55,8 +56,13 @@ public enum RecordPlanner {
                 id = suite.identifier
             case .tests:
                 // A parameterized test's snapshot name ("name-label") can't be turned back into its
-                // full identifier ("name(label:)"), so its whole suite runs instead.
-                if file.testName.contains("-") || !text.contains("func \(file.testName)(") {
+                // full identifier ("name(label:)"), so its whole suite runs instead. So does a test of
+                // a suite nested in the file's suite: its identifier goes through that suite.
+                let test = key + "#" + file.testName
+                if !file.testName.contains("-"), text.contains("func \(file.testName)("), nested[test] == nil {
+                    nested[test] = isDeclaredInANestedType(file.testName, suite: suite.name, in: text)
+                }
+                if file.testName.contains("-") || !text.contains("func \(file.testName)(") || nested[test] == true {
                     id = suite.identifier
                 } else {
                     id = suite.identifier + "/" + file.testName + (isXCTest ? "" : "()")
@@ -68,6 +74,33 @@ public enum RecordPlanner {
         let suiteIDs = Set(only.filter { suites[$0] != nil })
         only = only.filter { id in suiteIDs.contains(id) || !suiteIDs.contains(where: { id.hasPrefix($0 + "/") }) }
         return RecordSelection(suites: order.compactMap { suites[$0] }, onlyTesting: only)
+    }
+
+    /// Whether the suite's body declares `func <test>(` only inside braces of its own (a nested
+    /// suite), not directly. Comments and strings don't count; a test declared outside the body
+    /// (in an extension) isn't nested.
+    static func isDeclaredInANestedType(_ test: String, suite: String, in source: String) -> Bool {
+        guard let decl = RecordPatcher.findDeclaration(of: suite, in: source),
+              let close = RecordPatcher.matchingBrace(in: source, open: decl.bodyOpen) else { return false }
+        let declaration = "func \(test)("
+        var depth = 0, inside = false
+        var i = source.index(after: decl.bodyOpen)
+        while i < close {
+            if let next = RecordPatcher.endOfCommentOrString(in: source, at: i) {
+                i = next
+                continue
+            }
+            switch source[i] {
+            case "{": depth += 1
+            case "}": depth -= 1
+            case "f" where source[i...].hasPrefix(declaration):
+                if depth == 0 { return false }
+                inside = true
+            default: break
+            }
+            i = source.index(after: i)
+        }
+        return inside
     }
 
     /// The suite's path for `-only-testing`: the type named like the file if there is one, else the

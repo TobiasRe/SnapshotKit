@@ -74,6 +74,36 @@ import Testing
         #expect(orphanSources.reads == 2)
     }
 
+    /// swift-snapshot-testing names the folder after the file, so a test in a suite nested in the
+    /// file's suite looks like one of the outer suite's. `-only-testing:AppTests/CardTests/badge()`
+    /// would run nothing; the outer suite runs it. A comment naming the test is no declaration.
+    @Test func aTestInANestedSuiteRunsTheOuterSuite() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardTests.swift", """
+            import Testing
+
+            @Suite struct CardTests {
+                @Suite struct Dark {
+                    @Test func badge() {}
+                }
+                @Test func plain() {}
+                // func badge() is in Dark
+            }
+
+            extension CardTests {
+                @Test func extra() {}
+            }
+            """)
+        try repo.commitAll("tests")
+        func only(_ names: String...) throws -> [String] {
+            try RecordPlanner.plan(names.map { file("CardTests", $0) }, granularity: .tests, repository: repo.url).onlyTesting
+        }
+        #expect(try only("plain.1") == ["AppTests/CardTests/plain()"])
+        #expect(try only("badge.1") == ["AppTests/CardTests"])
+        #expect(try only("extra.1") == ["AppTests/CardTests/extra()"])  // an extension's tests are the suite's
+        #expect(try only("plain.1", "badge.1") == ["AppTests/CardTests"])
+    }
+
     @Test func missingTestFileIsAnError() throws {
         let repo = try repo()
         #expect(throws: RecordPatchError.self) {
