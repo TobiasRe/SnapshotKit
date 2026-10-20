@@ -202,8 +202,10 @@ struct PaneBar<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
+        // The same inset as list rows, section headers and the detail's bars: one leading edge
+        // from the search field down to the footer.
         HStack(spacing: DS.Space.s) { content }
-            .padding(.horizontal, DS.Space.m)
+            .padding(.horizontal, DS.Space.l)
             .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
     }
 }
@@ -412,9 +414,16 @@ enum Breadcrumb {
         [module, suite].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
     }
 
-    /// A test suite's identifier ("Bundle/Suite") read the same way.
-    static func of(identifier: String) -> String {
-        identifier.split(separator: "/").joined(separator: " › ")
+    /// A test suite's identifier ("Bundle/Suite") read the same way. A section header names the
+    /// bundle (the test target) only when its list has several, as the library names modules.
+    static func of(identifier: String, showingBundle: Bool = true) -> String {
+        let parts = identifier.split(separator: "/")
+        return (showingBundle || parts.count < 2 ? parts[...] : parts.dropFirst()).joined(separator: " › ")
+    }
+
+    /// Whether suites from these identifiers span more than one bundle.
+    static func severalBundles(_ identifiers: some Sequence<String>) -> Bool {
+        Set(identifiers.map { $0.split(separator: "/").first.map(String.init) ?? $0 }).count > 1
     }
 }
 

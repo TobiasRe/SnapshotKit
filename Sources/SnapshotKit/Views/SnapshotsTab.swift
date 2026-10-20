@@ -139,15 +139,16 @@ struct SnapshotsTab: View {
                 Spacer(minLength: DS.Space.s)
                 let shown = project.displayedSnapshots
                 if project.libraryScope == .orphaned && !shown.isEmpty {
+                    // A quiet glass control, like every bulk action: grey text alone didn't read as one.
                     Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
-                        .buttonStyle(.borderless)
+                        .quietControl()
                         .disabled(project.isRunning)
                         .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
                 } else if !shown.isEmpty {
                     Button(shownTitle(shown)) {
                         if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
                     }
-                    .buttonStyle(.borderless)
+                    .quietControl()
                     .disabled(project.isRunning || project.environment == nil)
                     .help("Record the tests of every snapshot shown (filter first to narrow it down), then verify")
                 }

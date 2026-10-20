@@ -109,7 +109,8 @@ struct FailuresTab: View {
                             .contextMenu { actions(for: item) }
                     }
                 } header: {
-                    ListSectionHeader(title: Breadcrumb.of(identifier: suite), count: bySuite[suite]?.count ?? 0)
+                    ListSectionHeader(title: Breadcrumb.of(identifier: suite, showingBundle: Breadcrumb.severalBundles(bySuite.keys)),
+                                      count: bySuite[suite]?.count ?? 0)
                 }
             }
         }

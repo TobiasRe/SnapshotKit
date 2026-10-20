@@ -38,7 +38,7 @@ struct ProjectView: View {
                              },
                              onClose: { dismissedMessage = id })
                     .frame(maxWidth: 420)
-                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
+                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
                     .padding(.bottom, 64)
                     .padding(.trailing, DS.Space.l)
                     .transition(.opacity)
@@ -707,7 +707,8 @@ struct RunResultsList: View {
                     }
                 } header: {
                     HStack(spacing: DS.Space.s) {
-                        Text(Breadcrumb.of(identifier: suite.identifier)).lineLimit(1).truncationMode(.middle)
+                        Text(Breadcrumb.of(identifier: suite.identifier, showingBundle: Breadcrumb.severalBundles(shown.map(\.0.identifier))))
+                            .lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: DS.Space.s)
                         if suite.failedCount > 0 {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))

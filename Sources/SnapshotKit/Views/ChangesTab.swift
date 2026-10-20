@@ -229,12 +229,17 @@ struct ChangesTab: View {
     private var footer: some View {
         if let set = project.changeSet {
             PaneFooter {
-                // "18 changes", or "5 of 18" while filtered.
+                // "18 changes", or "5 of 18" while filtered; when narrow, the commit goes first, then
+                // the base branch, instead of cutting words in the middle.
                 let shown = project.filteredChanges.count, total = set.changes.count
-                Text((total == 0 ? "" : shown == total ? "\(total) change\(total == 1 ? "" : "s") · " : "\(shown) of \(total) · ")
-                     + "vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                let count = total == 0 ? nil : shown == total ? "\(total) change\(total == 1 ? "" : "s")" : "\(shown) of \(total)"
+                let base = "vs \(set.baseRef)"
+                ViewThatFits(in: .horizontal) {
+                    Text([count, base + " @ \(set.baseCommit.prefix(7))"].compactMap { $0 }.joined(separator: " · "))
+                    Text([count, base].compactMap { $0 }.joined(separator: " · "))
+                    Text(count ?? base)
+                }
+                .lineLimit(1)
                 Spacer(minLength: DS.Space.s)
                 if !set.changes.isEmpty {
                     let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
@@ -279,7 +284,7 @@ struct ChangesTab: View {
                     .quietControl()
                     .help("Restore them to the committed version, so only real changes get committed")
             }
-            .padding(.horizontal, DS.Space.m)
+            .padding(.horizontal, DS.Space.l)
             .padding(.vertical, DS.Space.s)
             Divider()
         }

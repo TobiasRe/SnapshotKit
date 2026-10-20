@@ -40,7 +40,7 @@ struct ContentView: View {
             if let notice = model.startupNotice {
                 NoticeBanner(text: notice, isError: false, onClose: { model.dismissStartupNotice() })
                     .frame(maxWidth: 520)
-                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
+                    .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
                     .padding()
             }
         }
