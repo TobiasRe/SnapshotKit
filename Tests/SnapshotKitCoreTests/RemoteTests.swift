@@ -49,6 +49,22 @@ import Testing
         #expect(fm.fileExists(atPath: remote + "/.build/keep"))
     }
 
+    @Test func syncsTheFilesOfSubmodules() throws {
+        let library = try TempRepo()
+        try library.write("Sources/Lib.swift", "lib")
+        try library.commitAll("lib")
+        let repo = try TempRepo()
+        try repo.write("App.swift", "app")
+        try repo.git.run(["-c", "protocol.file.allow=always", "submodule", "add", "-q", library.url.path, "Vendor/Lib"])
+        try repo.commitAll("init")
+
+        let runner = RemoteRunner(repository: repo.url, config: SnapshotConfig(), transport: LocalDirectoryTransport())
+        #expect(try runner.filesToSync().sorted() == [".gitmodules", "App.swift", "Vendor/Lib/Sources/Lib.swift"])
+        let remote = testTemp("remote").path
+        try runner.sync(to: remote)
+        #expect(FileManager.default.fileExists(atPath: remote + "/Vendor/Lib/Sources/Lib.swift"))
+    }
+
     @Test func uploadsPatchedSourcesWithoutTouchingLocalFiles() throws {
         let repo = try TempRepo()
         try repo.write("Tests/AppTests/CardTests.swift", RecordSessionTests.suiteSource)

@@ -140,8 +140,13 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
     // MARK: Sync
 
     /// Tracked and untracked-but-not-ignored files: exactly what a CI checkout plus local edits contains.
+    /// Includes the files of submodules (git otherwise lists a submodule as one entry), though not
+    /// their untracked files.
     public func filesToSync() throws -> [String] {
-        try Git(root: repository).nulSeparated(["ls-files", "-z", "-co", "--exclude-standard"]).filter {
+        let git = Git(root: repository)
+        let tracked = try git.nulSeparated(["ls-files", "-z", "--cached", "--recurse-submodules"])
+        let untracked = try git.nulSeparated(["ls-files", "-z", "--others", "--exclude-standard"])
+        return (tracked + untracked).filter {
             FileManager.default.fileExists(atPath: repository.appendingPathComponent($0).path)
         }
     }
