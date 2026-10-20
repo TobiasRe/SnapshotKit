@@ -52,11 +52,12 @@ public struct LastRun: Codable, Sendable {
         return last
     }
 
-    /// Takes in `run` as the repository's last run. A cancelled run changes nothing: it has no results
-    /// to speak of. A `partial` run of some tests (a re-record's verification) replaces only those
-    /// tests' results and images; its bundle becomes the last run's when no failure is left outside it.
+    /// Takes in `run` as the repository's last run. A cancelled run changes nothing, nor does one in
+    /// which no test ran (the build failed): they have no results to speak of. A `partial` run of some
+    /// tests (a re-record's verification) replaces only those tests' results and images; its bundle
+    /// becomes the last run's when no failure is left outside it.
     public static func update(with run: TestRunResult, partial: Bool = false, attachmentsDirectory: URL? = nil, repository: URL) {
-        guard !run.cancelled else { return }
+        guard !run.cancelled, run.nothingTested == nil else { return }
         guard partial, var last = load(repository: repository) else {
             LastRun(result: run, attachmentsDirectory: attachmentsDirectory).save(repository: repository)
             return

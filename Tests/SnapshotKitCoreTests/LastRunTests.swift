@@ -69,6 +69,18 @@ import Testing
         #expect(LastRun.load(repository: repo.url)?.resultBundle == "/results/full.xcresult")
     }
 
+    /// A run whose tests didn't build found out nothing about them: the failures stay to fix.
+    @Test func aRunInWhichNoTestRanLeavesTheLastRunAlone() throws {
+        let repo = try TempRepo()
+        LastRun.update(with: Self.run([Self.suite("CardTests", .failed)], bundle: "full"), repository: repo.url)
+        let buildFailed = TestRunResult(commandLine: "", exitStatus: 65, cancelled: false, resultBundle: URL(fileURLWithPath: "/results/broken.xcresult"),
+                                        summary: nil, passed: 0, failed: 0, skipped: 0, buildErrors: ["Card.swift:6:9: cannot find 'draw' in scope"])
+        LastRun.update(with: buildFailed, repository: repo.url)
+        LastRun.update(with: buildFailed, partial: true, repository: repo.url)
+        #expect(LastRun.load(repository: repo.url)?.failingSuites.map(\.name) == ["CardTests"])
+        #expect(LastRun.load(repository: repo.url)?.resultBundle == "/results/full.xcresult")
+    }
+
     /// A folder as `xcresulttool export attachments` leaves it, with one image pair for each test.
     static func attachments(_ tests: [String]) throws -> URL {
         let dir = testTemp("run").appendingPathExtension("attachments")

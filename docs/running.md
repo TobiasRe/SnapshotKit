@@ -8,7 +8,8 @@ way a test that passes in SnapshotKit passes in CI, and references recorded here
 
 - **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar’s ▶, or **Run Tests** on the Run tab.
 - **⌘.** or **Cancel** stops it (the run is terminated and any record patch is restored). A canceled run
-  says *Cancelled.* and leaves the last run’s failures as they were.
+  says *Cancelled.* and leaves the last run’s failures as they were, as does a run whose build fails (*Build
+  failed: …*).
 
 The **Run** tab (⌥⌘4) shows the run as it happens:
 

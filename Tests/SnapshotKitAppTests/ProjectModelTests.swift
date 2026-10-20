@@ -1024,6 +1024,23 @@ extension AppUITests {
             #expect(none.lastMessageIsError)
         }
 
+        /// A run whose tests don't build found out nothing about them: the failures stay, here and on disk.
+        @Test func aRunThatDoesNotBuildKeepsTheFailures() async throws {
+            let (repo, _) = try makeRepo()
+            saveLastRun(in: repo, suites: [AppFixtures.checkoutSuite, AppFixtures.profileSuite], failed: 2)
+            let model = try runnableModel(repo, xcodebuild: """
+                echo "\(repo.path)/Tests/AppTests/CardTests.swift:7:9: error: cannot find 'card' in scope"
+                exit 65
+                """, failures: true)
+            let failures = model.failures.map(\.id)
+            model.runTests()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Build failed: CardTests.swift:7:9: cannot find 'card' in scope")
+            #expect(model.failures.map(\.id) == failures)
+            #expect(model.failingSuites.count == 2)
+            #expect(LastRun.load(repository: repo)?.failed == 2)
+        }
+
         /// A flakiness check's summary reads right for one test.
         @Test func aFlakinessCheckOfOneTestReadsRight() async throws {
             let (repo, _) = try makeRepo()

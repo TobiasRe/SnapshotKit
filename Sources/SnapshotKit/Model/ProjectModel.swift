@@ -1185,8 +1185,9 @@ final class ProjectModel {
         skipped = result.skipped
         RunHistory(repository: project.url).append(RunRecord.make(kind: kind, host: result.host, repository: project.url, result: result))
         setHistory(RunHistory(repository: project.url).load())
-        // A cancelled run has no results to speak of; the last run's failures stay.
-        if kind == .run, !result.cancelled {
+        // A cancelled run has no results to speak of, nor one in which no test ran (the build failed):
+        // the last run's failures stay.
+        if kind == .run, !result.cancelled, result.nothingTested == nil {
             fullRunTotal = result.summary?.total
             LastRun.update(with: result, attachmentsDirectory: attachmentsDirectory, repository: project.url)
             lastFailingSuites = result.failingSuites

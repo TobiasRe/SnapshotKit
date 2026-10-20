@@ -181,6 +181,20 @@ import Testing
         #expect(try repo.read("Tests/AppTests/CardTests.swift") == RecordSessionTests.suiteSource)
     }
 
+    /// Tests that don't build have no failures to find: not "Nothing to re-record" and exit 0.
+    @Test func findingTheFailingSuitesWhenTheBuildFails() throws {
+        let (repo, env, _) = try setUp(buildError: true)
+        let failed = "error: Could not find the failing suites: the build failed (CardTests.swift:6:9: cannot find 'draw' in scope).\n"
+        for command in ["rerecord", "flaky"] {
+            let result = try snapkit(command, "--repo", repo.url.path, environment: env)
+            #expect(result.status == 1)
+            #expect(result.stdout.contains("Build errors:\n  CardTests.swift:6:9: cannot find 'draw' in scope\n"))
+            #expect(result.stderr == failed)
+        }
+        // Neither did the run take the last run's place.
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
     @Test func rerecordTheLastRunsFailingSuites() throws {
         let (repo, env, _) = try setUp()
         LastRun.update(with: LastRunTests.run([SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [

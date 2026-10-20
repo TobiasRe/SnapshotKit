@@ -181,7 +181,8 @@ Failure images: 2 (see `snapkit failures`)
 
 plus up to ten build errors when the build failed. A canceled run starts the summary with *Cancelled.* The run
 is added to the history and, without `--iterations`, remembered as the last run, which the app’s Failures tab
-and `rerecord` / `failures` use. A canceled run isn’t: the last run’s failures stay as they were.
+and `rerecord` / `failures` use. A canceled run isn’t, nor one in which no test ran (the build failed): the last
+run’s failures stay as they were.
 
 Exits 0 when the tests passed, 1 when they failed, the build failed or the run was canceled.
 
@@ -235,7 +236,8 @@ snapkit rerecord [--repo PATH] [--suite ID]… [--no-verify] [--remote [HOST]] [
 Re-records **whole failing suites**, then verifies them.
 
 - Without `--suite`: the failing suites of the last run (*snapkit: using failing suites from the last run
-  (local, 10:42)*). If there’s no last run, it runs the tests first to find them.
+  (local, 10:42)*). If there’s no last run, it runs the tests first to find them; when that build fails:
+  *Could not find the failing suites: the build failed (…).* (exit 1).
 - `--suite ID` (repeatable): these suites (`Bundle/Suite`); a bare suite name works when the last run had it.
 - `--remote [HOST]`: record on the remote Mac; your files aren’t patched, the new PNGs are downloaded, then
   verified on the remote Mac (unless `--no-verify`). See [Remote runs](remote-runs.md).

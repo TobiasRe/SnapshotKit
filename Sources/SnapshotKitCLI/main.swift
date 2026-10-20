@@ -313,8 +313,9 @@ func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer)
     let (result, _, dir) = await runTests(ctx, remote: false, onlyTesting: nil, iterations: nil, printer: printer)
     record(result, kind: .run, repo: ctx.repository, attachments: dir)
     printSummary(result)
-    // The summary says "Cancelled."; the run found out nothing to go on with.
+    // The summary says "Cancelled." or shows the build errors; the run found out nothing to go on with.
     if result.cancelled { exit(1) }
+    if let why = result.nothingTested { fail("Could not find the failing suites: \(why).") }
     return result.failingSuites
 }
 
