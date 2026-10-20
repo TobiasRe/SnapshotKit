@@ -320,7 +320,7 @@ enum AppFixtures {
         return store
     }
 
-    enum Scenario { case library, failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
+    enum Scenario { case library, manyVariants, failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
 
     /// How payButton.dark.png evolved: recorded, restyled, then re-recorded.
     static let snapshotVersions = [
@@ -355,12 +355,15 @@ enum AppFixtures {
         f.currentBranch = "feature/checkout-redesign"
         f.changeSet = changeSet
         f.changeImages = Dictionary(uniqueKeysWithValues: changes.map { ($0.0.path, ($0.1, $0.2)) })
-        for (file, data) in libraryImages {
-            f.snapshotImages[file.path] = data
-            ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data)
-            ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data, size: SnapshotGrid.tile)
-            if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: "\(file.path)#\(file.byteSize)") }
+        func add(_ images: [(SnapshotFile, Data)]) {
+            for (file, data) in images {
+                f.snapshotImages[file.path] = data
+                ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data)
+                ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data, size: SnapshotGrid.tile)
+                if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: "\(file.path)#\(file.byteSize)") }
+            }
         }
+        add(libraryImages)
         f.library = SnapshotLibrary(files: libraryImages.map(\.0))
         f.orphanIDs = ["\(snapshotDir)/ProfileViewTests/oldAvatar.1.png"]
         let payButton = libraryImages[0].0.path
@@ -375,6 +378,15 @@ enum AppFixtures {
         switch scenario {
         case .library:
             f.tab = .snapshots
+        case .manyVariants:
+            f.tab = .snapshots
+            // payButton in light and dark at three text sizes: more variants than fit side by side.
+            let sizes = ["large-dark", "large-light", "xl-dark", "xl-light"].map {
+                (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/payButton.\($0).png", byteSize: 50_000),
+                 screen(accent: $0.hasSuffix("dark") ? .systemIndigo : .systemBlue, titleWidth: 0.7))
+            }
+            add(sizes)
+            f.library = SnapshotLibrary(files: libraryImages.map(\.0) + sizes.map(\.0))
         case .failedRun:
             f.tab = .run
             f.passed = 1

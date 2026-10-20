@@ -5,7 +5,8 @@ import SwiftUI
 struct ProjectView: View {
     @Bindable var project: ProjectModel
     /// The message the user closed (or that timed out); a new message shows again.
-    @State private var dismissedMessage: String?
+    /// The `messageID` of the notice that was closed or faded.
+    @State private var dismissedMessage: Int?
 
     var body: some View {
         Group {
@@ -25,26 +26,27 @@ struct ProjectView: View {
         // The outcome of the last action floats over the image area (above the compare toolbar)
         // instead of pushing every pane down. The Run tab says it in its own header.
         .overlay(alignment: .bottomTrailing) {
-            if let message = project.lastMessage, message != dismissedMessage, !project.isRunning, project.tab != .run {
+            if let message = project.lastMessage, project.messageID != dismissedMessage, !project.isRunning, project.tab != .run {
+                let id = project.messageID
                 NoticeBanner(text: message, isError: project.lastMessageIsError,
                              action: project.lastMessageAction.flatMap { action in
                                  // No need to offer the tab you're on.
                                  action.tab == project.tab ? nil : (action.title, {
-                                     dismissedMessage = message
+                                     dismissedMessage = id
                                      project.tab = action.tab
                                  })
                              },
-                             onClose: { dismissedMessage = message })
+                             onClose: { dismissedMessage = id })
                     .frame(maxWidth: 420)
                     .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous))
                     .padding(.bottom, 64)
                     .padding(.trailing, DS.Space.l)
                     .transition(.opacity)
-                    .task(id: message) {
+                    .task(id: id) {
                         // Information fades; an error stays until it is closed.
                         guard !project.lastMessageIsError, !DS.solidSurfaces else { return }
                         try? await Task.sleep(for: .seconds(8))
-                        withAnimation(DS.motion) { dismissedMessage = message }
+                        withAnimation(DS.motion) { dismissedMessage = id }
                     }
             }
         }

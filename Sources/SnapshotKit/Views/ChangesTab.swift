@@ -116,7 +116,7 @@ struct ChangesTab: View {
     private func actions(for change: SnapshotChange) -> some View {
         if change.kind != .deleted {
             Button("Re-record \(change.file.testName)") { project.reRecord([change.file], granularity: .tests) }
-                .disabled(project.isRunning || project.environment == nil)
+                .disabled(project.isRunning || project.environment == nil || project.orphanIDs.contains(change.id))
             Button("Show in Library") { project.showInLibrary(path: change.path) }
                 .disabled(!project.isInLibrary(change.path))
             Button("Open Test in Xcode") { project.openTestInXcode(change.file) }

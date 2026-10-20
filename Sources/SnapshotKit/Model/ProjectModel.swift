@@ -160,6 +160,8 @@ final class ProjectModel {
     private(set) var lastMessageIsError = false
     /// Where the last message leads (the notice offers it as a button).
     private(set) var lastMessageAction: NoticeAction?
+    /// Counts messages, so the same text said again ("All 12 tests passed.") is a new notice.
+    private(set) var messageID = 0
     var showFullLog = false { didSet { recomputeVisibleLog() } }
     var logFilter = "" { didSet { recomputeVisibleLog() } }
     /// The log lines currently shown, kept up to date incrementally instead of re-filtering
@@ -912,6 +914,8 @@ final class ProjectModel {
                                       summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: url.path))
                 setHistory(runs.load())
                 lastFailingSuites = summary.failingSuites
+                // Verdicts belong to the runs they came from, not to another machine's bundle.
+                flakeResults = []
                 setFailures(suites: summary.failingSuites, images: images,
                             source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
                 notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).")
@@ -975,6 +979,7 @@ final class ProjectModel {
         lastMessage = message
         lastMessageIsError = isError
         lastMessageAction = action
+        messageID &+= 1
     }
 
     /// Dock badge with the failing count, and a bounce when the run ends while you're elsewhere.

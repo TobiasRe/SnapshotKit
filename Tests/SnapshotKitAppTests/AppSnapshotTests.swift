@@ -94,6 +94,13 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        /// More variants than a segmented control holds: the info row picks them from a menu.
+        @Test func snapshotWithManyVariants() {
+            let (app, project) = makeApp(.manyVariants)
+            #expect(project.variants(of: project.displayedSnapshots[0]).count == 6)
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
         @Test func snapshotsBySize() {
             let (app, project) = makeApp(.library)
             project.librarySort = .size
