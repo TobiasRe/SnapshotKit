@@ -83,7 +83,7 @@ in the **Snapshots** menu, some under other names:
 |---|---|---|---|
 | **Re-record Failed** | Re-record Failing Suites | ⌥⇧⌘R | re-records the failing suites of the last run, then verifies. [Re-recording](re-recording.md) |
 | ··· › **Re-record All Snapshot Tests…** | Re-record All Snapshot Tests… | | re-records every snapshot test, after asking. |
-| ··· › **Check Flakiness (5×)** | Check Flakiness of Failed Tests | ⌥⌘R | runs the failing tests repeatedly. [Flakiness](failures.md#checking-for-flakiness) |
+| ··· › **Check Flakiness (5×)** | Check Flakiness of Failing Tests | ⌥⌘R | runs the failing tests repeatedly. [Flakiness](failures.md#checking-for-flakiness) |
 | ··· › On *host* › **Run Tests** | Run on Remote Machine | ⌃⌘R | the same run on another Mac over SSH. [Remote runs](remote-runs.md) |
 | ··· › On *host* › **Re-record Failed** / **Check Flakiness** | | | the same, remotely. |
 

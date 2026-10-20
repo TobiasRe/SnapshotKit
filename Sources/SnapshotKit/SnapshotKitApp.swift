@@ -10,7 +10,8 @@ struct SnapshotKitApp: App {
     private let menuBar = AppModel.shared.menuBar
 
     var body: some Scene {
-        WindowGroup("SnapshotKit", id: "main") {
+        // One window: every view of it shows the same model, so a second one would only mirror it.
+        Window("SnapshotKit", id: "main") {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 980, minHeight: 620)
@@ -73,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Taken as the Apple event itself: SwiftUI would otherwise route it to a scene and open
     /// another main window instead of a compare window.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // A single-window app: no window tabs, nor their View menu items.
+        NSWindow.allowsAutomaticWindowTabbing = false
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(openURL(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))
@@ -127,7 +130,7 @@ struct SnapshotKitCommands: Commands {
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
             Button("Re-record All Snapshot Tests…") { project?.confirmReRecordAll = true }
                 .disabled(busy || project?.environment == nil || (project?.recordableSnapshots.isEmpty ?? true))
-            Button("Check Flakiness of Failed Tests") { project?.checkFlakiness() }
+            Button("Check Flakiness of Failing Tests") { project?.checkFlakiness() }
                 .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
             Divider()
@@ -174,7 +177,7 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("=")
             Button("Zoom Out") { model.viewport.zoomOut() }
                 .keyboardShortcut("-")
-            Button("Actual Size / Fit") { model.viewport.reset() }
+            Button("Zoom to Fit") { model.viewport.reset() }
                 .keyboardShortcut("0")
             Button("Zoom to Change") { model.zoomToChangeRequest += 1 }
                 .keyboardShortcut("0", modifiers: [.command, .shift])
