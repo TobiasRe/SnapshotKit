@@ -465,5 +465,17 @@ extension AppUITests {
             #expect(model.selectedChangeID == viewed.id)
             #expect(model.displayedChanges.contains(viewed))
         }
+
+        // MARK: Viewed marks
+
+        /// Marking the change on screen viewed while the list's filter hides it moves to the first unviewed one shown.
+        @Test func markingAHiddenSelectionViewedMovesToTheFirstShown() throws {
+            let model = AppFixtures.project(.changes, store: AppFixtures.store())
+            let badge = try #require(model.displayedChanges.first { $0.testName == "badge" })
+            model.selectedChangeID = badge.id
+            model.changeFilter = "CheckoutViewTests"        // badge is still on screen, but not in the list
+            model.setViewed(true, for: badge)
+            #expect(model.selectedChange?.testName == "payButton")
+        }
     }
 }

@@ -622,8 +622,9 @@ final class ProjectModel {
             ReviewMarks(repository: project.url).set(viewed, for: change, keepingOnly: changeSet?.changes ?? [])
         }
         guard viewed, selectedChangeID == change.id else { return }
-        let start = order.firstIndex(of: change) ?? 0
-        let next = (order[(start + 1)...] + order[..<start]).first { !viewedChanges.contains($0.id) }
+        // The ones after it, then from the top; all of them when a filter hides it from the list.
+        let rest = order.firstIndex(of: change).map { order[($0 + 1)...] + order[..<$0] } ?? order[...]
+        let next = rest.first { !viewedChanges.contains($0.id) }
         if let next { selectedChangeID = next.id } else if hideViewed { selectedChangeID = nil }
     }
 
