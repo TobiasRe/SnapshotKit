@@ -58,7 +58,9 @@ struct ChangesTab: View {
                         CompareView(load: project.imageLoader(for: change),
                                     beforeLabel: "\(project.changeSet?.baseBranch ?? "Base") · \(project.diffBase.label.lowercased())",
                                     afterLabel: change.kind == .uncommitted || change.kind == .new ? "Working tree" : "This branch",
-                                    identity: change.id + "#" + (project.changeSet?.baseCommit ?? "") + "#\(change.kind)")
+                                    identity: change.id + "#" + (project.changeSet?.baseCommit ?? "") + "#\(change.kind)",
+                                    beforeMissing: "Added on this branch.",
+                                    afterMissing: "Deleted on this branch.")
                     }
                 } else if project.changesError != nil {
                     ContentUnavailableView("Choose a Base Branch", systemImage: "arrow.triangle.branch",
@@ -227,7 +229,9 @@ struct ChangesTab: View {
     private var footer: some View {
         if let set = project.changeSet {
             PaneFooter {
-                Text((set.changes.isEmpty ? "" : "\(project.filteredChanges.count) of \(set.changes.count) · ")
+                // "18 changes", or "5 of 18" while filtered.
+                let shown = project.filteredChanges.count, total = set.changes.count
+                Text((total == 0 ? "" : shown == total ? "\(total) change\(total == 1 ? "" : "s") · " : "\(shown) of \(total) · ")
                      + "vs \(set.baseRef) @ \(set.baseCommit.prefix(7))")
                     .lineLimit(1)
                     .truncationMode(.middle)

@@ -209,7 +209,9 @@ struct FailuresTab: View {
                 CompareView(load: { (referenceURL.flatMap { try? Data(contentsOf: $0) }, failureURL.flatMap { try? Data(contentsOf: $0) }) },
                             beforeLabel: "Reference",
                             afterLabel: "Actual · \(image?.device ?? project.failureSource?.host ?? "run")",
-                            identity: item.id + "#\(rep)")
+                            identity: item.id + "#\(rep)",
+                            beforeMissing: "No reference was recorded yet.",
+                            afterMissing: "This run's images are no longer kept. Run the tests again to see what the test draws.")
             } else {
                 ContentUnavailableView("No Images Attached", systemImage: "photo.badge.exclamationmark",
                                        description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))

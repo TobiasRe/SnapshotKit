@@ -66,11 +66,8 @@ struct ProjectView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
-            ToolbarItem(placement: .primaryAction) {
-                Button("Re-record Selected Test", systemImage: "camera") { project.reRecordSelection() }
-                    .disabled(!project.canReRecordSelection)
-                    .help("Re-record the test of the selected snapshot, change or failure (⇧⌘R)")
-            }
+            // No re-record button here: each detail header has one beside what it records, and ⇧⌘R
+            // works from anywhere.
             ToolbarItem(placement: .primaryAction) {
                 if project.isRunning {
                     Button("Cancel", systemImage: "stop.fill") { project.cancel() }
@@ -148,7 +145,7 @@ struct RunInspector: View {
             VStack(alignment: .leading, spacing: DS.Space.xl) {
                 PropertySection("Environment") { environment }
 
-                PropertySection("Scope", footer: "Pick a single test target to run only its snapshot tests.") {
+                PropertySection("Scope") {
                     PropertyRow("Test target", alignment: .center) {
                         // A glass menu like the Changes filters, not a system pop-up button.
                         Menu {
@@ -169,6 +166,7 @@ struct RunInspector: View {
                         .quietControl()
                         .disabled(project.isRunning)
                         .accessibilityLabel("Test target")
+                        .help("Run the snapshot tests of one test target only")
                     }
                 }
 
@@ -187,14 +185,16 @@ struct RunInspector: View {
                         if let p = c.project { PropertyRow("Project", value: p, source: source(.project)) }
                         if let plan = c.testPlan { PropertyRow("Test plan", value: plan, source: source(.testPlan)) }
                         if !c.onlyTesting.isEmpty { PropertyRow("Only testing", value: c.onlyTesting.joined(separator: ", "), source: source(.onlyTesting)) }
-                        PropertyRow("Xcode", value: c.xcodeVersion ?? c.developerDir ?? "Selected Xcode", source: source(.xcodeVersion) ?? source(.developerDir))
-                        PropertyRow("Device", value: c.deviceName.map { $0 + (c.osVersion.map { " · \($0)" } ?? "") }, source: source(.deviceName))
+                        // Once found, Environment shows the Xcode and simulator in use; until then, what's asked for.
+                        if project.environment == nil {
+                            PropertyRow("Xcode", value: c.xcodeVersion ?? c.developerDir ?? "Selected Xcode", source: source(.xcodeVersion) ?? source(.developerDir))
+                            PropertyRow("Device", value: c.deviceName.map { $0 + (c.osVersion.map { " · \($0)" } ?? "") }, source: source(.deviceName))
+                        }
                         if let wd = c.workingDirectory { PropertyRow("Directory", value: wd, source: source(.workingDirectory)) }
                     }
 
                     PropertySection("Comparison & Remote",
-                                    footer: (project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git"). " } ?? "")
-                                        + "Remote runs sync the working tree to that Mac over SSH and run the same command there.") {
+                                    footer: project.detectedBaseBranch.map { "Detected \($0) from \(ctx.config.source(of: .baseBranch) ?? "git")." }) {
                         PropertyRow("Base branch", alignment: .center) {
                             TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
                                 .textFieldStyle(.plain)
@@ -207,6 +207,7 @@ struct RunInspector: View {
                                 .textFieldStyle(.plain)
                                 .fieldChrome()
                                 .accessibilityLabel("Remote host")
+                                .help("Remote runs sync the working tree to this Mac over SSH and run the same command there")
                                 .onSubmit { project.updateSettings { $0.remoteHost = remoteHost.isEmpty ? nil : remoteHost } }
                         }
                     }
@@ -361,6 +362,7 @@ struct RunStatusHeader: View {
                             Text(subtitle)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                                .help(project.isRunning ? "" : project.lastResult?.commandLine ?? "")
                         }
                     }
                     .font(DS.Font.caption)
@@ -390,7 +392,10 @@ struct RunStatusHeader: View {
                 if hasCounts {
                     Count(value: project.passed, label: "passed", symbol: "checkmark.circle.fill", color: DS.Status.passed)
                     Count(value: project.failed, label: "failed", symbol: "xmark.circle.fill", color: DS.Status.failed)
-                    Count(value: project.skipped, label: "skipped", symbol: "minus.circle.fill", color: DS.Status.neutral)
+                    // Most runs skip nothing; a count of zero would only add noise.
+                    if project.skipped > 0 {
+                        Count(value: project.skipped, label: "skipped", symbol: "minus.circle.fill", color: DS.Status.neutral)
+                    }
                 } else {
                     // Three zeros say nothing; say that instead, in the same place.
                     Text("No results yet").foregroundStyle(.tertiary)
@@ -453,8 +458,9 @@ struct RunStatusHeader: View {
         if project.isRunning { return project.phase.label + "…" }
         if project.configError != nil { return "Fix the problem shown on the left, then try again." }
         if project.environmentError != nil { return "Install what's missing, then check again." }
-        if let result = project.lastResult {
-            return (project.lastDuration.map { "Took \(Self.elapsed($0)) · " } ?? "") + result.commandLine
+        // The command itself is long and cut in the middle here; it's in the tooltip and the output.
+        if project.lastResult != nil, let duration = project.lastDuration {
+            return "Took \(Self.elapsed(duration))"
         }
         if let source = project.failureSource {
             return "\(source.label) on \(source.host), \(source.date.formatted(Self.dateStyle))"
@@ -692,7 +698,9 @@ struct RunResultsList: View {
                         if suite.failedCount > 0 {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))
                         }
-                        Text("\(suite.passedCount) passed").foregroundStyle(.tertiary)
+                        if suite.passedCount > 0 {
+                            Text("\(suite.passedCount) passed").foregroundStyle(.tertiary)
+                        }
                     }
                     .monospacedDigit()
                     .font(DS.Font.caption.weight(.semibold))

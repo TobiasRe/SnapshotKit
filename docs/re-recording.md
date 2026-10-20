@@ -10,7 +10,7 @@ references.
 
 | What | Where | Shortcut |
 |---|---|---|
-| The selected test | camera button in a detail header or the toolbar; Snapshots › Re-record Selected Test | ⇧⌘R |
+| The selected test | camera button in a detail header; Snapshots › Re-record Selected Test | ⇧⌘R |
 | The selected test's whole suite | the camera button's arrow › Re-record Suite *name* | |
 | The failing suites of the last run | **Re-record All** in the Failures header; the Run button's arrow › **Re-record Failing Suites**; **Re-record Failed** on the Run tab; Snapshots › Re-record Failing Suites | ⌥⇧⌘R |
 | What the library shows | the library footer's **Re-record All…** / **Re-record N Shown…** (filter first, e.g. `dark`) | |

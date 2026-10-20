@@ -257,7 +257,7 @@ struct SnapshotsTab: View {
     }
 }
 
-/// "312 snapshots · 148 tests · 4 modules · 48.2 MB"
+/// "312 snapshots · 148 tests · 4 modules · 48.2 MB"; the module count only when there are several.
 struct LibraryStats {
     var library: SnapshotLibrary
     init(_ library: SnapshotLibrary) { self.library = library }
@@ -266,7 +266,7 @@ struct LibraryStats {
         let modules = Set(library.files.map(\.module)).count
         let size = SnapshotLibrary.formatSize(library.totalBytes)
         return "\(library.files.count) snapshot\(library.files.count == 1 ? "" : "s") · \(library.testCount) test\(library.testCount == 1 ? "" : "s") · "
-            + "\(modules) module\(modules == 1 ? "" : "s") · \(size)"
+            + (modules > 1 ? "\(modules) modules · " : "") + size
     }
 }
 
@@ -288,16 +288,11 @@ struct SnapshotRow: View {
                 if detail != .none {
                     Text(file.suite).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                HStack(spacing: DS.Space.xs) {
-                    if showVariant && !file.variant.isEmpty {
-                        Text(file.variant).font(DS.Font.code).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    if file.state != .clean { SnapshotStateChip(state: file.state) }
-                    if status.orphaned { Chip(text: "Orphaned", color: DS.Status.neutral).help("Its test no longer exists") }
-                }
+                statusLine
             }
             Spacer(minLength: DS.Space.s)
-            StatusMarks(status: status)
+            // Only failing gets a mark of its own: the line above already says how it changed.
+            StatusMarks(status: SnapshotStatus(failureID: status.failureID, verdict: status.verdict))
             switch detail {
             case .size:
                 Text(SnapshotLibrary.formatSize(file.byteSize))
@@ -318,6 +313,31 @@ struct SnapshotRow: View {
                             + (file.state == .clean ? "" : ", \(SnapshotStateChip.label(file.state))")
                             + (status.failureID == nil ? "" : ", failing")
                             + (status.change.map { ", \($0.label.lowercased()) change" } ?? ""))
+    }
+}
+
+extension SnapshotRow {
+    /// What's notable about the snapshot, then its variant, on one quiet line like a change's row:
+    /// "● Uncommitted · dark". One state at most: orphaned, else its change against the base
+    /// branch, else an edit git hasn't committed.
+    private var statusLine: some View {
+        let state: (label: String, color: Color, help: String)? =
+            if status.orphaned { ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
+            else if let change = status.change { (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
+            else if file.state != .clean { (SnapshotStateChip.label(file.state), file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet") }
+            else { nil }
+        let variant = showVariant && !file.variant.isEmpty ? file.variant : nil
+        return HStack(spacing: DS.Space.xs) {
+            if let state {
+                Circle().fill(state.color).frame(width: DS.Status.mark, height: DS.Status.mark)
+            }
+            (Text(state?.label ?? "") + Text(state != nil && variant != nil ? " · " : "")
+                + Text(variant ?? "").font(DS.Font.code))
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .help(state?.help ?? "")
     }
 }
 

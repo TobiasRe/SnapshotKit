@@ -78,6 +78,9 @@ struct CompareView: View {
     var beforeLabel: String
     var afterLabel: String
     var identity: String
+    /// Why a side has no image, in the caller's terms ("Added on this branch.").
+    var beforeMissing: String
+    var afterMissing: String
 
     @AppStorage("compareMode") private var modeRaw = CompareMode.sideBySide.rawValue
     @State private var pair: ComparePair?
@@ -88,11 +91,14 @@ struct CompareView: View {
     /// The image pixel under the pointer, for the readout.
     @State private var probe: PixelProbe?
 
-    init(load: @escaping @Sendable () -> (Data?, Data?), beforeLabel: String, afterLabel: String, identity: String) {
+    init(load: @escaping @Sendable () -> (Data?, Data?), beforeLabel: String, afterLabel: String, identity: String,
+         beforeMissing: String = "There is no image on this side.", afterMissing: String = "There is no image on this side.") {
         self.load = load
         self.beforeLabel = beforeLabel
         self.afterLabel = afterLabel
         self.identity = identity
+        self.beforeMissing = beforeMissing
+        self.afterMissing = afterMissing
         _pair = State(initialValue: ComparePairCache.shared.object(forKey: identity as NSString)?.pair)
     }
 
@@ -250,9 +256,9 @@ struct CompareView: View {
         switch mode {
         case .sideBySide:
             HStack(spacing: 0) {
-                pane(pair.before, label: beforeLabel, size: pair.pixelSize)
+                pane(pair.before, label: beforeLabel, missing: beforeMissing, size: pair.pixelSize)
                 Rectangle().fill(Color(nsColor: .separatorColor)).frame(width: 1)
-                pane(pair.after, label: afterLabel, size: pair.pixelSize)
+                pane(pair.after, label: afterLabel, missing: afterMissing, size: pair.pixelSize)
             }
         case .slider:
             GeometryReader { geo in
@@ -278,7 +284,8 @@ struct CompareView: View {
                 }
             }
         case .toggle:
-            pane(showingAfter ? pair.after : pair.before, label: showingAfter ? afterLabel : beforeLabel, size: pair.pixelSize)
+            pane(showingAfter ? pair.after : pair.before, label: showingAfter ? afterLabel : beforeLabel,
+                 missing: showingAfter ? afterMissing : beforeMissing, size: pair.pixelSize)
                 .overlay(alignment: .topTrailing) {
                     Button { showingAfter.toggle() } label: {
                         Label("Flip", systemImage: "arrow.left.arrow.right")
@@ -295,7 +302,7 @@ struct CompareView: View {
         case .difference:
             pane(pair.diff ?? pair.after ?? pair.before,
                  label: pair.diff == nil ? "Only one side exists" : "Changed pixels",
-                 size: pair.pixelSize)
+                 missing: afterMissing, size: pair.pixelSize)
         }
     }
 
@@ -319,12 +326,12 @@ struct CompareView: View {
             .onHover { inside in (inside ? NSCursor.resizeLeftRight : NSCursor.arrow).set() }
     }
 
-    private func pane(_ image: NSImage?, label: String, size: CGSize) -> some View {
+    private func pane(_ image: NSImage?, label: String, missing: String, size: CGSize) -> some View {
         ZoomableImage(image: image, pixelSize: size, viewport: app.viewport)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if image == nil {
-                    ContentUnavailableView("No Image", systemImage: "photo", description: Text("This side doesn't exist."))
+                    ContentUnavailableView("No Image", systemImage: "photo", description: Text(missing))
                 }
             }
             .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }))
