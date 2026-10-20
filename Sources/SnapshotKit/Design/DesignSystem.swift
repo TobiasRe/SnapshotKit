@@ -36,6 +36,11 @@ enum DS {
         static let footer: CGFloat = 32
     }
 
+    enum Pane {
+        /// A detail beside its list never gets narrower than this; the list gives way first.
+        static let minDetailWidth: CGFloat = 440
+    }
+
     /// Header controls: icon buttons are circles of this size, text controls capsules of this height.
     enum Control {
         static let height: CGFloat = 28
@@ -43,21 +48,21 @@ enum DS {
     }
 
     enum Font {
-        /// Pane titles ("1 failing test in the last run").
-        static let title = SwiftUI.Font.title3.weight(.semibold)
         /// Row and detail titles.
         static let heading = SwiftUI.Font.headline
-        static let body = SwiftUI.Font.body
         static let secondary = SwiftUI.Font.callout
         static let caption = SwiftUI.Font.caption
         /// Paths, identifiers, commands and log output.
         static let code = SwiftUI.Font.system(.caption, design: .monospaced)
         static let log = SwiftUI.Font.system(size: 11, design: .monospaced)
-        static let count = SwiftUI.Font.body.monospacedDigit().weight(.medium)
     }
 
     /// Color only ever means status. Structure uses system label/separator colors.
     enum Status {
+        /// The dot beside a status label.
+        static let dot: CGFloat = 6
+        /// A status dot standing on its own (a change's kind in a row), a little larger to be seen.
+        static let mark: CGFloat = 7
         static let passed = Color.green
         static let failed = Color.red
         static let flaky = Color.orange
@@ -178,7 +183,7 @@ struct Chip: View {
 
     var body: some View {
         HStack(spacing: DS.Space.xs) {
-            Circle().fill(color).frame(width: 6, height: 6)
+            Circle().fill(color).frame(width: DS.Status.dot, height: DS.Status.dot)
             Text(text)
         }
         .font(.caption2.weight(.medium))
@@ -277,6 +282,8 @@ extension DS {
         /// The chosen segment of a segmented control: a little firmer than a selected row, since it
         /// sits on glass rather than on a plain column.
         static let thumb = text(opacity: 0.1, increasedContrast: 0.25)
+        /// A filter match in the log: a soft tint, so the line's own color stays readable on it.
+        static let match = Color.yellow.opacity(0.35)
         /// A row under the pointer: half the selection.
         static let hover = Color.primary.opacity(0.04)
         /// An opaque hairline, for edges drawn over something else.
@@ -424,8 +431,6 @@ struct ListDetailSplit<List: View, Detail: View>: View {
 
     static var idealWidth: Double { 400 }
     static var maxWidth: Double { 520 }
-    /// The detail never gets narrower than this; the list gives way first.
-    static var minDetailWidth: Double { 440 }
 
     var body: some View {
         GeometryReader { geo in
@@ -458,7 +463,7 @@ struct ListDetailSplit<List: View, Detail: View>: View {
     }
 
     static func clamp(_ width: Double, min minWidth: Double, available: Double) -> Double {
-        let upper = Swift.max(minWidth, Swift.min(maxWidth, available - minDetailWidth))
+        let upper = Swift.max(minWidth, Swift.min(maxWidth, available - DS.Pane.minDetailWidth))
         return Swift.min(Swift.max(width, minWidth), upper)
     }
 }

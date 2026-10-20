@@ -107,7 +107,7 @@ struct SnapshotKitCommands: Commands {
             Button("Open Test in Xcode") { if let file = project?.selectedSnapshotFile { project?.openTestInXcode(file) } }
                 .keyboardShortcut("o", modifiers: [.command, .option])
                 .disabled(project?.selectedSnapshotFile == nil)
-            Button("Re-record Failing Tests") { project?.reRecordFailed() }
+            Button("Re-record Failing Suites") { project?.reRecordFailed() }
                 .keyboardShortcut("r", modifiers: [.command, .shift, .option])
                 .disabled(busy || (project?.failingSuites.isEmpty ?? true))
             Button("Re-record All Snapshot Tests…") { project?.confirmReRecordAll = true }

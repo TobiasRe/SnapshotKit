@@ -75,12 +75,12 @@ to choose; Escape to close.
 - **Projects** match by name first, then by path. The current project is labeled *Current*, others show
   their folder.
 - **Commands** are whatever can be done right now in the open project, each with its keyboard shortcut:
-  Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Tests, Check
+  Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
   Flakiness of Failed Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
   Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed and Add Project…. Commands that can't
   run (nothing failing, a run in progress) are left out.
 
-Matching is fuzzy: `rrf` finds *Re-record Failing Tests*, `pay` finds *payments-ui*.
+Matching is fuzzy: `rrf` finds *Re-record Failing Suites*, `pay` finds *payments-ui*.
 
 ## The window
 
@@ -100,7 +100,7 @@ with (`feature/checkout → develop`).
 The toolbar holds:
 
 - the **camera** button — re-record the test of whatever is selected (⇧⌘R),
-- **Run** (▶, ⌘R) — run the snapshot tests the way CI does. Its arrow offers **Re-record Failing Tests** and
+- **Run** (▶, ⌘R) — run the snapshot tests the way CI does. Its arrow offers **Re-record Failing Suites** and
   **Re-record All Snapshot Tests…**. While a run is going, it becomes **Cancel** (⌘.).
 
 The list column on the left of Snapshots, Changes and Failures has one width shared by all three tabs; drag

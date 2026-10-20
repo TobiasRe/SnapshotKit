@@ -253,7 +253,7 @@ extension AppUITests {
             let model = AppFixtures.project(.failedRun, store: app.store)
             app.show(model)
             let titles = PaletteCommand.available(app: app).map(\.title)
-            #expect(titles.contains("Re-record Failing Tests"))
+            #expect(titles.contains("Re-record Failing Suites"))
             #expect(!titles.contains("Cancel Run"))
         }
 

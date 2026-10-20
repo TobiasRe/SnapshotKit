@@ -45,7 +45,7 @@ can be followed between these views, and re-recording is available wherever a sn
    glass pill with a chevron (`GlassSplitButton`), and text controls are glass capsules (`quietControl()`).
    Lists, forms, logs and images stay solid. Neighboring floating glass is grouped with `GlassGroup`.
 3. **One tint.** The accent color marks the single primary action in a region (`primaryActionStyle()`,
-   which is `.glassProminent` on macOS 26). Neighboring actions use `secondaryActionStyle()` (`.glass`).
+   which is `.glassProminent` on macOS 26). Neighboring actions are quiet glass (`quietControl()`).
 4. **Color means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
    Change kinds use blue (committed), orange (uncommitted), green (new) and red (deleted).
    Status color as *text* goes through `DS.Status.text(_:)`: system colors are tuned for fills and icons, and
@@ -71,16 +71,17 @@ can be followed between these views, and re-recording is available wherever a sn
 | Spacing (`DS.Space`) | 2 · 4 · 8 · 12 · 16 · 24 (4-pt grid) |
 | Bars (`DS.Bar`) | header 52 · filters 36 · footer 32: every column's bars, so edges line up across panes |
 | Radius (`DS.Radius`) | 6 thumbnails/chips · 10 panels · 16 floating bars (concentric with the window) |
-| Surfaces (`DS.Surface`) | content · selection (primary 8%) · hairline (separator) |
-| Type (`DS.Font`) | title (title3 semibold) · heading (headline) · body · secondary (callout) · caption · code (mono caption) · log (mono 11) · count (monospaced digits) |
-| Status (`DS.Status`) | passed · failed · flaky · neutral · changed |
+| Surfaces (`DS.Surface`) | content · selection (grid tiles, primary 8%) · thumb (chosen segment, 10%) · hover (4%) · match (log filter hits) · hairline (separator) |
+| Panes (`DS.Pane`) | a detail is at least 440 wide; the list beside it gives way first |
+| Type (`DS.Font`) | heading (headline) · secondary (callout) · caption · code (mono caption) · log (mono 11) |
+| Status (`DS.Status`) | passed · failed · flaky · neutral · changed; dot 6 beside a label, mark 7 on its own |
 
 ## Components
 
 - `floatingGlass(in:)` / `floatingGlassCapsule()`: Liquid Glass on macOS 26 or later, `.regularMaterial` with
   a hairline and a soft shadow before that.
 - `GlassGroup`: a `GlassEffectContainer` on macOS 26 or later, a plain stack before.
-- `primaryActionStyle()` / `secondaryActionStyle()`: button roles, not looks.
+- `primaryActionStyle()`: the one accent action of a region, a role rather than a look.
 - `panel()`: a solid content panel with a hairline border. Never glass.
 - `PaneBar` / `PaneFooter`: the fixed-height bars of a column. A list has a header (search and view options),
   a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
@@ -141,7 +142,9 @@ can be followed between these views, and re-recording is available wherever a sn
 
 ## Enforcement
 
-- **Every view uses the tokens.** The only literal left is one layout offset.
+- **Every view uses the tokens** for spacing, radii, bar and control heights, type, status colors and
+  surfaces. Literals are left only for sizes that belong to one component (a window's default size, the
+  slider knob, the welcome icon), where a token would be a name used once.
 - **Snapshot tests** (`Tests/SnapshotKitAppTests`) render every pane, state and compare mode in light and
   dark at a 99.9% pixel tolerance, so visual changes have to be re-recorded on purpose.
   Off-screen rendering can't composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there

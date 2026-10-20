@@ -72,7 +72,7 @@ struct ChangesTab: View {
                     DS.Surface.content
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
         .confirmationDialog("Discard \(project.invisibleUncommitted.count) re-recorded snapshots with no visible change?",
                             isPresented: $confirmDiscardInvisible) {
@@ -533,7 +533,7 @@ struct KindBadge: View {
     var body: some View {
         switch style {
         case .dot:
-            Circle().fill(color).frame(width: 7, height: 7)
+            Circle().fill(color).frame(width: DS.Status.mark, height: DS.Status.mark)
                 .help(kind.label)
         case .label:
             Chip(text: kind.label, color: color)

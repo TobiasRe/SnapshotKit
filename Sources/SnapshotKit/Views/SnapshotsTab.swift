@@ -71,7 +71,7 @@ struct SnapshotsTab: View {
                                            description: Text("Select a snapshot to inspect it."))
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

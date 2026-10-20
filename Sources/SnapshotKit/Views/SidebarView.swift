@@ -95,7 +95,7 @@ struct SidebarView: View {
                     // badge would be a plain grey number).
                     if let failing = model.failingCounts[project.path], failing > 0 {
                         HStack(spacing: DS.Space.xs) {
-                            Circle().fill(DS.Status.failed).frame(width: 6, height: 6)
+                            Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
                             Text("\(failing)").monospacedDigit()
                         }
                         .font(DS.Font.caption)

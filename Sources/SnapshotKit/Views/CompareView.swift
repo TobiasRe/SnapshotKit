@@ -174,7 +174,7 @@ struct CompareView: View {
                 HStack(spacing: DS.Space.xs + 1) {
                     Circle()
                         .fill(stats.isIdentical ? DS.Status.passed : DS.Status.changed)
-                        .frame(width: 7, height: 7)
+                        .frame(width: DS.Status.dot, height: DS.Status.dot)
                     Text(stats.isIdentical
                          ? "Identical"
                          : String(format: "%.2f%% changed", stats.changedFraction * 100))
@@ -367,7 +367,7 @@ struct PixelReadout: View {
                 let delta = a.perceptualDistance(to: b)
                 Text(a == b ? "same" : String(format: "ΔE %.1f", delta))
                     .foregroundStyle(a == b ? Color.secondary : DS.Status.text(delta < 2.3 ? DS.Status.flaky : DS.Status.changed))
-                    .help("CIE94 colour difference. Below 2.3 is invisible to the eye.")
+                    .help("CIE94 color difference. Below 2.3 is invisible to the eye.")
             }
         }
         .font(DS.Font.code.monospacedDigit())

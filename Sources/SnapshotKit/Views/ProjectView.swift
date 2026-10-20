@@ -78,7 +78,7 @@ struct ProjectView: View {
                 } else {
                     // Run, with the two bulk re-records one click away under its chevron.
                     Menu {
-                        Button("Re-record Failing Tests", systemImage: "camera.badge.ellipsis") { project.reRecordFailed() }
+                        Button("Re-record Failing Suites", systemImage: "camera.badge.ellipsis") { project.reRecordFailed() }
                             .disabled(project.failingSuites.isEmpty)
                         Button("Re-record All Snapshot Tests…", systemImage: "camera.on.rectangle") { project.confirmReRecordAll = true }
                             .disabled(project.recordableSnapshots.isEmpty)
@@ -648,7 +648,7 @@ struct LogView: View {
                 let length = lower.distance(from: range.lowerBound, to: range.upperBound)
                 let from = text.index(text.startIndex, offsetByCharacters: start)
                 let to = text.index(from, offsetByCharacters: length)
-                text[from..<to].backgroundColor = Color.yellow.opacity(0.35)
+                text[from..<to].backgroundColor = DS.Surface.match
                 search = range.upperBound
             }
         }

@@ -33,7 +33,7 @@ struct FailuresTab: View {
                     DS.Surface.content
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

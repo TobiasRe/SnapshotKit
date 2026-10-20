@@ -229,7 +229,7 @@ struct QuickProjectRow: View {
         .padding(.horizontal, DS.Space.m)
         .padding(.vertical, DS.Space.xs + 1)
         .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
-            .fill(hovering ? Color.primary.opacity(0.06) : .clear)
+            .fill(hovering ? DS.Surface.hover : .clear)
             .padding(.horizontal, DS.Space.xs))
         .onHover { hovering = $0 }
     }

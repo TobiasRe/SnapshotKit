@@ -106,7 +106,7 @@ In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommi
 snapshots; sort by size or recency; switch between list and grid. A snapshot's detail lists its variants
 and committed versions to compare against, and links to its change or failure. The footer's
 **Re-record All…** (or **Re-record N Shown…** when filtered) records everything the list shows (say, every
-`dark` variant). The arrow beside the toolbar's Run button re-records the failing tests or every snapshot test
+`dark` variant). The arrow beside the toolbar's Run button re-records the failing suites or every snapshot test
 in one step.
 
 Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
