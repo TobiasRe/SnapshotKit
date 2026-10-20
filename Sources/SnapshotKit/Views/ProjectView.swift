@@ -457,7 +457,6 @@ struct RunStatusHeader: View {
         return "Ready to run"
     }
 
-    static let dateStyle = Date.FormatStyle(date: .abbreviated, time: .shortened)
 
     static func elapsed(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded())
@@ -473,7 +472,7 @@ struct RunStatusHeader: View {
             return "Took \(Self.elapsed(duration))"
         }
         if let source = project.failureSource {
-            return "\(source.label) on \(source.host), \(source.date.formatted(Self.dateStyle))"
+            return "\(source.label) on \(source.host), \(source.date.formatted(DS.Dates.moment))"
         }
         return "Runs the snapshot tests exactly like CI."
     }
@@ -676,8 +675,9 @@ struct LogView: View {
     }
 
     private func color(for line: String) -> Color {
-        if line.hasPrefix("✘") || line.contains(": error: ") || line.hasPrefix("** TEST FAILED") || line.hasPrefix("** BUILD FAILED") { return DS.Status.failed }
-        if line.hasPrefix("✔") || line.hasPrefix("** TEST SUCCEEDED") { return DS.Status.passed }
+        // Text in a status color: the text variants keep 4.5:1 on the log's background.
+        if line.hasPrefix("✘") || line.contains(": error: ") || line.hasPrefix("** TEST FAILED") || line.hasPrefix("** BUILD FAILED") { return DS.Status.text(DS.Status.failed) }
+        if line.hasPrefix("✔") || line.hasPrefix("** TEST SUCCEEDED") { return DS.Status.text(DS.Status.passed) }
         if line.hasPrefix("$ ") || line.hasPrefix("snapkit:") { return .accentColor }
         if line.hasPrefix("◇") || line.hasPrefix("↳") { return .primary }
         return .secondary
@@ -711,7 +711,11 @@ struct RunResultsList: View {
                             .lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: DS.Space.s)
                         if suite.failedCount > 0 {
-                            Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))
+                            // The dot carries the color, as a project's failing count does.
+                            HStack(spacing: DS.Space.xs) {
+                                Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
+                                Text("\(suite.failedCount) failed")
+                            }
                         }
                         if suite.passedCount > 0 {
                             Text("\(suite.passedCount) passed").foregroundStyle(.secondary)

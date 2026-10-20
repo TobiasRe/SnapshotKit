@@ -11,7 +11,9 @@ enum LibraryLayout: String {
 /// Every snapshot in the project, grouped by test file, with a large inspector.
 struct SnapshotsTab: View {
     @Bindable var project: ProjectModel
+    @Environment(AppModel.self) private var app
     @AppStorage("libraryLayout") private var layoutRaw = LibraryLayout.list.rawValue
+    @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
     @State private var confirmRecordShown = false
     @State private var confirmTrashOrphans = false
     /// The snapshot shown in Quick Look (Space in the list, as in Finder).
@@ -98,7 +100,7 @@ struct SnapshotsTab: View {
                 ], selection: $layoutRaw)
                 .fixedSize()
             }
-            PaneBar(height: DS.Bar.filters) {
+            FilterBar {
                 // Counts when they fit, then without, then a menu: never wraps or clips.
                 ViewThatFits(in: .horizontal) {
                     scopeSegments(counts: true)
@@ -114,7 +116,6 @@ struct SnapshotsTab: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.bottom, DS.Space.xs)
         }
         .confirmationDialog(project.displayedSnapshots.count == 1 ? "Move the orphaned snapshot to the Trash?"
                             : "Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
@@ -188,9 +189,11 @@ struct SnapshotsTab: View {
 
     private func testCount(_ files: [SnapshotFile]) -> Int { ProjectModel.testCount(files) }
 
+    /// "…" only when a confirmation follows (more than `confirmAbove` tests); a few run at once.
     private func shownTitle(_ files: [SnapshotFile]) -> String {
         let all = files.count == (project.library?.files.count ?? 0)
-        return all ? "Re-record All…" : "Re-record \(testCount(files)) Shown…"
+        let ellipsis = testCount(files) > Self.confirmAbove ? "…" : ""
+        return (all ? "Re-record All" : "Re-record \(testCount(files)) Shown") + ellipsis
     }
 
     @ViewBuilder
@@ -224,8 +227,18 @@ struct SnapshotsTab: View {
                 }
             }
             .onKeyPress(.space) {
+                // While comparing in Toggle mode Space flips the images; otherwise it's Quick Look.
+                if project.comparison != nil, compareMode == CompareMode.toggle.rawValue {
+                    app.passToCompare(.flip)
+                    return .handled
+                }
                 guard let file = project.selectedSnapshot else { return .ignored }
                 quickLookURL = project.project.url.appendingPathComponent(file.path)
+                return .handled
+            }
+            .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+                guard project.comparison != nil, compareMode == CompareMode.slider.rawValue else { return .ignored }
+                app.passToCompare(press.key == .leftArrow ? .left : .right)
                 return .handled
             }
             .quickLookPreview($quickLookURL)
@@ -301,7 +314,7 @@ struct SnapshotRow: View {
                     .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
             case .modified:
                 if let modified = file.modified {
-                    Text(modified, format: .dateTime.day().month(.abbreviated).hour().minute())
+                    Text(modified, format: DS.Dates.moment)
                         .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             case .none:
@@ -338,7 +351,14 @@ struct SnapshotStatusLine: View {
     /// The one state the line names, if any, with its color and tooltip.
     nonisolated static func state(of file: SnapshotFile, _ status: SnapshotStatus) -> (label: String, color: Color, help: String)? {
         if status.orphaned { return ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
-        if let change = status.change { return (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
+        if let change = status.change {
+            // In the library "Committed" would read as unchanged: a change committed on this branch
+            // is "Changed" here, as the scope filter says. (The Changes tab, where everything is a
+            // change, keeps Committed and Uncommitted apart.)
+            let label = change == .committed ? "Changed" : change.label
+            return (label, DS.Status.color(for: change), change == .committed
+                    ? "Changed in a commit on this branch" : "\(change.label) change against the base branch")
+        }
         guard file.state != .clean else { return nil }
         return (SnapshotStatusLine.label(file.state),
                 file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet")
@@ -424,7 +444,7 @@ struct SnapshotDetail: View {
 
     /// "Oct 12, 2026" in the view's locale (not the process's), like `Text(date, format:)`.
     private func day(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+        date.formatted(DS.Dates.day.locale(locale))
     }
 
     var body: some View {
@@ -549,7 +569,6 @@ struct SnapshotDetail: View {
             }
             compareMenu(variants: variants)
         }
-        .padding(.bottom, DS.Space.xs)
         .background(DS.Surface.content)
     }
 
@@ -729,8 +748,10 @@ struct SnapshotGrid: View {
     var open: (SnapshotFile) -> Void
 
     static let tile = CGSize(width: 180, height: 124)
-    /// As many tiles as fit; each brings its own padding (the selection fill).
-    private static let columns = [GridItem(.adaptive(minimum: tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .top)]
+    /// As many tiles as fit; each brings its own padding (the selection fill). Leading in their
+    /// cells: centered, the spare width of an adaptive column pushed the first tile off the edge
+    /// the section header's text starts at.
+    private static let columns = [GridItem(.adaptive(minimum: tile.width + 2 * DS.Space.s), spacing: DS.Space.xs, alignment: .topLeading)]
 
     var body: some View {
         let tree = project.displayedTree

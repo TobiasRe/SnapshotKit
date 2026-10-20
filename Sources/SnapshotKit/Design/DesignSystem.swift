@@ -18,6 +18,14 @@ enum DS {
         static let xl: CGFloat = 24
     }
 
+    /// Dates come in two kinds: a commit's day, and the moment a run happened or a file changed.
+    enum Dates {
+        /// "Oct 16, 2026" (in the user's region's order).
+        static let day = Date.FormatStyle.dateTime.day().month(.abbreviated).year()
+        /// "Oct 16, 2026 at 7:48 PM".
+        static let moment = Date.FormatStyle(date: .abbreviated, time: .shortened)
+    }
+
     /// Concentric radii: thumbnails and chips sit inside panels, panels inside the window.
     enum Radius {
         static let small: CGFloat = 6
@@ -207,6 +215,17 @@ struct PaneBar<Content: View>: View {
         HStack(spacing: DS.Space.s) { content }
             .padding(.horizontal, DS.Space.l)
             .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+    }
+}
+
+/// The filters under a list's header. Its 4-point bottom gap matches `DetailInfoRow`'s, so the
+/// hairlines under the two continue across the window; built in, so no screen can forget it.
+struct FilterBar<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        PaneBar(height: DS.Bar.filters) { content }
+            .padding(.bottom, DS.Space.xs)
     }
 }
 

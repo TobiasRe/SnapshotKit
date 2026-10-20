@@ -34,7 +34,7 @@
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
 | V (in the Changes list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
 | ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
-| Space | Quick Look the selected snapshot |
+| Space | Quick Look the selected snapshot (while comparing in Toggle mode, it flips the images instead) |
 | ⌘C | Copy the selected snapshot’s image |
 
 ## Comparing
@@ -45,8 +45,8 @@
 | ⌘2 | Slider |
 | ⌘3 | Difference |
 | ⌘4 | Toggle |
-| Space | Flip between the images (in Toggle mode) |
-| ← / → | Move the slider divider (in Slider mode) |
+| Space | Flip between the images (in Toggle mode), from the list or the image |
+| ← / → | Move the slider divider (in Slider mode), from the list or the image |
 | ⌘= / ⌘− | Zoom in / out |
 | ⌘0 | Zoom to Fit (also: double-click the image) |
 | ⇧⌘0 | Zoom to the changed pixels |

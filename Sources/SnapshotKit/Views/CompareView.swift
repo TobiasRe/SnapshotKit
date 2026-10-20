@@ -138,6 +138,13 @@ struct CompareView: View {
             return .handled
         }
         .onChange(of: app.zoomToChangeRequest) { zoomToChange() }
+        .onChange(of: app.compareKey) { _, request in
+            switch request.key {
+            case .flip: if mode == .toggle { showingAfter.toggle() }
+            case .left: _ = nudgeSplit(-1)
+            case .right: _ = nudgeSplit(1)
+            }
+        }
         .task(id: identity) {
             if let cached = ComparePairCache.shared.object(forKey: identity as NSString) {
                 pair = cached.pair
@@ -200,7 +207,7 @@ struct CompareView: View {
                     // Verbatim: sizes and coordinates are not quantities ("1.284" reads as a decimal).
                     Text(verbatim: "\(a.width)×\(a.height) → \(b.width)×\(b.height)")
                         .font(DS.Font.caption.monospacedDigit())
-                        .foregroundStyle(DS.Status.text(DS.Status.changed))
+                        .foregroundStyle(.secondary)
                         .fixedSize()
                         .help("The image size changed: a different device, scale or layout")
                 } else {

@@ -23,6 +23,13 @@ final class AppModel {
     var viewport = Viewport()
     /// Bumped by View ▸ Zoom to Change; the visible compare view frames the changed pixels.
     var zoomToChangeRequest = 0
+    /// A key the list beside the visible compare view passes on to it: Space flips the images in
+    /// Toggle mode, ← and → move the slider, so they work without focusing the image.
+    private(set) var compareKey = CompareKeyRequest(key: .flip, count: 0)
+
+    func passToCompare(_ key: CompareKeyRequest.Key) {
+        compareKey = CompareKeyRequest(key: key, count: compareKey.count + 1)
+    }
     /// Failing test count per project path, from each repository's last run.
     var failingCounts: [String: Int] = [:]
 
@@ -313,4 +320,11 @@ final class MenuBarSetting {
         self.store = store
         isShown = store.settings.showMenuBarItem
     }
+}
+
+/// See `AppModel.passToCompare(_:)`; `count` makes the same key pressed twice a new request.
+struct CompareKeyRequest: Equatable {
+    enum Key { case flip, left, right }
+    var key: Key
+    var count: Int
 }

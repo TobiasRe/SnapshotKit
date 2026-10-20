@@ -16,7 +16,8 @@ struct StatusLineTests {
         // Re-recorded on a branch that already changed it: "Uncommitted" against the base, not "Modified".
         let file = SnapshotFile(path: path, byteSize: 1, state: .modified)
         #expect(SnapshotStatusLine.state(of: file, SnapshotStatus(change: .uncommitted))?.label == "Uncommitted")
-        #expect(SnapshotStatusLine.state(of: file, SnapshotStatus(change: .committed))?.label == "Committed")
+        // "Committed" alone would read as unchanged; in the library a committed change is "Changed".
+        #expect(SnapshotStatusLine.state(of: file, SnapshotStatus(change: .committed))?.label == "Changed")
     }
 
     @Test func withoutAChangeTheWorkingTreeStateShows() {

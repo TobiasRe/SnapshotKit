@@ -35,6 +35,10 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key><string>SnapshotKit</string>
+  <!-- The app is in English: without these, dates and numbers came out in the system's language
+       ("17. Okt. 2026" in an English sentence). The user's region still sets their order. -->
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key><array><string>en</string></array>
   <key>CFBundleDisplayName</key><string>SnapshotKit</string>
   <key>CFBundleIdentifier</key><string>org.snapshotkit.SnapshotKit</string>
   <key>CFBundleExecutable</key><string>SnapshotKit</string>

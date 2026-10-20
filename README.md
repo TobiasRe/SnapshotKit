@@ -95,8 +95,8 @@ last run.
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / to fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to fit |
 | ⇧⌘0 | Zoom to the changed pixels |
-| ← / → | Move the slider divider (or drag its knob) |
-| Space | Quick Look the selected snapshot (in a list); flip between the images in toggle mode |
+| ← / → | Move the slider divider in Slider mode (or drag its knob) |
+| Space | Quick Look the selected snapshot; in Toggle mode, flip between the images |
 | ⌘C | Copy the selected snapshot (in a list) |
 | ⌥⌘O | Open the selected snapshot’s test in Xcode, at its function |
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous snapshot, change or failure, wherever the focus is |

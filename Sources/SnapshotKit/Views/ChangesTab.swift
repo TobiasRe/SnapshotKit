@@ -5,6 +5,8 @@ import SwiftUI
 
 struct ChangesTab: View {
     @Bindable var project: ProjectModel
+    @Environment(AppModel.self) private var app
+    @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
     @State private var pendingDiscard: SnapshotChange?
     /// Changes waiting for the Revert confirmation: one from its menu, or everything shown.
     @State private var pendingRevert: [SnapshotChange] = []
@@ -62,9 +64,6 @@ struct ChangesTab: View {
                                     beforeMissing: "Added on this branch.",
                                     afterMissing: "Deleted on this branch.")
                     }
-                } else if project.changesError != nil {
-                    ContentUnavailableView("Choose a Base Branch", systemImage: "arrow.triangle.branch",
-                                           description: Text("Pick the branch your merge requests target from the base branch menu above the list."))
                 } else if !project.displayedChanges.isEmpty {
                     // Only when there is something to select; an empty list (nothing changed, all
                     // viewed and hidden, nothing matching) says why on its own.
@@ -152,7 +151,7 @@ struct ChangesTab: View {
                     project.refreshChanges()
                 }
             }
-            PaneBar(height: DS.Bar.filters) {
+            FilterBar {
                 Menu {
                     ForEach(project.branches, id: \.self) { branch in
                         Button {
@@ -220,7 +219,6 @@ struct ChangesTab: View {
                 .accessibilityLabel("Change kinds: \(kindsLabel)")
             }
             .controlSize(.small)
-            .padding(.bottom, DS.Space.xs)
         }
     }
 
@@ -265,7 +263,6 @@ struct ChangesTab: View {
                 .disabled(change.kind == .deleted || !project.isInLibrary(change.path))
                 .help("Open this snapshot in the library, with its variants and history")
         }
-        .padding(.bottom, DS.Space.xs)
         .background(DS.Surface.content)
     }
 
@@ -326,8 +323,18 @@ struct ChangesTab: View {
                 }
             }
             .onKeyPress(.space) {
+                // In Toggle mode Space flips the images beside the list; otherwise it's Quick Look.
+                if compareMode == CompareMode.toggle.rawValue, project.selectedChange != nil {
+                    app.passToCompare(.flip)
+                    return .handled
+                }
                 guard let change = project.selectedChange, change.kind != .deleted else { return .ignored }
                 quickLookURL = project.fileURL(for: change)
+                return .handled
+            }
+            .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+                guard compareMode == CompareMode.slider.rawValue, project.selectedChange != nil else { return .ignored }
+                app.passToCompare(press.key == .leftArrow ? .left : .right)
                 return .handled
             }
             .quickLookPreview($quickLookURL)
@@ -394,7 +401,7 @@ struct ChangeOrigin: View {
         guard let last else {
             return Text("\(project.changeSet?.baseBranch ?? "Base") at \(project.diffBase.label.lowercased()) → this branch")
         }
-        return Text("Changed \(last.date.formatted(.dateTime.day().month(.abbreviated).locale(locale))) by \(last.author) in ")
+        return Text("Changed \(last.date.formatted(DS.Dates.day.locale(locale))) by \(last.author) in ")
             + Text(last.shortCommit).font(DS.Font.code)
             + Text(" “\(last.subject)”")
     }
@@ -494,11 +501,13 @@ struct DetailInfoRow<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
+        // The 4-point gap under it matches `FilterBar`'s, so the hairline below continues the list's.
         HStack(spacing: DS.Space.m) { content }
             .controlSize(.small)
             .font(DS.Font.secondary)
             .padding(.horizontal, DS.Space.l)
             .frame(maxWidth: .infinity, minHeight: DS.Bar.filters, maxHeight: DS.Bar.filters, alignment: .leading)
+            .padding(.bottom, DS.Space.xs)
             .background(DS.Surface.content)
     }
 }

@@ -48,7 +48,7 @@ struct FailuresTab: View {
                         .font(DS.Font.heading)
                         .lineLimit(1)
                     if let source = project.failureSource {
-                        (Text("\(source.host) · ") + Text(source.date, format: .dateTime.day().month(.abbreviated).year().hour().minute()))
+                        (Text("\(source.host) · ") + Text(source.date, format: DS.Dates.moment))
                             .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -66,7 +66,7 @@ struct FailuresTab: View {
                     }
                 }
             }
-            PaneBar(height: DS.Bar.filters) {
+            FilterBar {
                 // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
                 Button("Re-record Failing Suites") { project.reRecordFailed() }
                     .quietControl()
@@ -77,7 +77,6 @@ struct FailuresTab: View {
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
                     .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
             }
-            .padding(.bottom, DS.Space.xs)
         }
         .controlSize(.small)
     }
@@ -116,9 +115,13 @@ struct FailuresTab: View {
             }
         }
         .overlay {
-            if project.failures.isEmpty {
-                ContentUnavailableView("Nothing Failing", systemImage: "checkmark.circle",
+            // "Nothing failing" only once there are results to say it about.
+            if project.failures.isEmpty, project.failureSource == nil {
+                ContentUnavailableView("No Results Yet", systemImage: "play.circle",
                                        description: Text("Run the tests, or import a result bundle from CI."))
+            } else if project.failures.isEmpty {
+                ContentUnavailableView("Nothing Failing", systemImage: "checkmark.circle",
+                                       description: Text("Every test passed."))
             }
         }
     }
@@ -209,7 +212,6 @@ struct FailuresTab: View {
                 }
             }
             .font(DS.Font.caption)
-            .padding(.bottom, DS.Space.xs)
             .background(DS.Surface.content)
             Divider()
             if let message = item.test.failureMessages.first {
@@ -487,7 +489,7 @@ struct HistoryStrip: View {
         case .run, .record: ""
         }
         let commit = point.commit.map { " · " + $0.prefix(7) } ?? ""
-        return "\(result)\(kind) · \(point.host)\(commit) · \(point.date.formatted(date: .abbreviated, time: .shortened))"
+        return "\(result)\(kind) · \(point.host)\(commit) · \(point.date.formatted(DS.Dates.moment))"
     }
 }
 
@@ -534,8 +536,10 @@ struct BatchFailureDetail: View {
                     .primaryActionStyle()
                     .fixedSize()
                     .disabled(project.isRunning || project.environment == nil)
-                    .help("Record these tests' snapshots again, then check that they pass (⇧⌘R)")
+                    .help("Record these tests’ snapshots again, then check that they pass (⇧⌘R)")
             }
+            // Header controls are small everywhere, as in every other detail header.
+            .controlSize(.small)
             // An info row like every detail's, so the hairline under it continues the list's.
             DetailInfoRow {
                 Text("⌘-click to add or remove a test, ⇧-click to select a range.")
