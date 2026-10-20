@@ -108,7 +108,7 @@ enum CompareWindows {
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 420)
-        window.contentView = NSHostingView(rootView: view.environment(AppModel.shared))
+        window.contentView = NSHostingView(rootView: view.environment(AppModel.shared).defaultAppStorage(.app))
         window.center()
         window.setFrameAutosaveName("CompareWindow")
         windows[request] = window

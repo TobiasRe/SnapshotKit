@@ -130,8 +130,8 @@ final class ProjectModel {
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
     var libraryScope = LibraryScope.all
-    var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
-        didSet { UserDefaults.standard.set(librarySort.rawValue, forKey: "librarySort") }
+    var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
+        didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }
     var selectedSnapshotID: String? {
         didSet {

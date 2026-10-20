@@ -16,12 +16,14 @@ struct SnapshotKitApp: App {
                 .frame(minWidth: 980, minHeight: 620)
         }
         .defaultSize(width: 1400, height: 880)
+        .defaultAppStorage(.app)
         .commands { SnapshotKitCommands(model: model) }
 
         Settings {
             SettingsView()
                 .environment(model)
         }
+        .defaultAppStorage(.app)
 
         // Optional (Settings > General): run progress and quick access from the menu bar.
         MenuBarExtra(isInserted: Binding(get: { menuBar.isShown },
@@ -34,7 +36,20 @@ struct SnapshotKitApp: App {
             MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.window)
+        .defaultAppStorage(.app)
     }
+}
+
+extension UserDefaults {
+    /// Where the app keeps view settings (compare mode, layout, column width). A `--capture` run gets
+    /// a scratch suite, so showing a screen in some mode never changes the user's own choice.
+    /// `nonisolated(unsafe)`: UserDefaults is thread-safe, just not marked Sendable.
+    nonisolated(unsafe) static let app: UserDefaults = {
+        guard CaptureOptions.parse(CommandLine.arguments) != nil else { return .standard }
+        let name = "org.snapshotkit.SnapshotKit.capture"
+        UserDefaults.standard.removePersistentDomain(forName: name)
+        return UserDefaults(suiteName: name) ?? .standard
+    }()
 }
 
 extension AppModel {

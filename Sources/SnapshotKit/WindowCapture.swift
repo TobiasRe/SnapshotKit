@@ -78,7 +78,7 @@ enum WindowCapture {
             log("no window appeared"); exit(3)
         }
         window.setFrame(NSRect(x: -30000, y: -30000, width: o.size.width, height: o.size.height), display: true)
-        if let mode = o.compare { UserDefaults.standard.set(mode.rawValue, forKey: "compareMode") }
+        if let mode = o.compare { UserDefaults.app.set(mode.rawValue, forKey: "compareMode") }
 
         if let project = model.current {
             if let tab = o.tab { project.tab = tab }
