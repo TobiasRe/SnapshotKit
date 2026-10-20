@@ -78,7 +78,7 @@ extension AppUITests {
             app.show(project)
             let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 700), styleMask: [.borderless], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
-            let hosting = NSHostingView(rootView: ProjectView(project: project).environmentObject(app).frame(width: 1100, height: 700))
+            let hosting = NSHostingView(rootView: ProjectView(project: project).environment(app).frame(width: 1100, height: 700))
             window.contentView = hosting
             for _ in 0..<3 { hosting.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date().addingTimeInterval(0.15)) }
             return hosting

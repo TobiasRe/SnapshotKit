@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Observation
 import SnapshotKitCore
 
 /// Which snapshots the library shows.
@@ -97,42 +98,42 @@ struct FailureSource: Equatable {
     var resultBundle: URL?
 }
 
-@MainActor
-final class ProjectModel: ObservableObject {
+@MainActor @Observable
+final class ProjectModel {
     let project: Project
     let store: ProjectStore
 
     // Configuration
-    @Published private(set) var context: ProjectContext?
-    @Published private(set) var configError: String?
-    @Published private(set) var environment: TestEnvironment?
-    @Published private(set) var environmentError: String?
-    @Published private(set) var modules: [String] = []
-    @Published private(set) var detectedBaseBranch: String?
-    @Published private(set) var currentBranch: String?
+    private(set) var context: ProjectContext?
+    private(set) var configError: String?
+    private(set) var environment: TestEnvironment?
+    private(set) var environmentError: String?
+    private(set) var modules: [String] = []
+    private(set) var detectedBaseBranch: String?
+    private(set) var currentBranch: String?
     /// Local branches plus origin's, for choosing the base branch.
-    @Published private(set) var branches: [String] = []
-    @Published var tab: ProjectTab = .snapshots
+    private(set) var branches: [String] = []
+    var tab: ProjectTab = .snapshots
 
     // Library
-    @Published private(set) var library: SnapshotLibrary? {
+    private(set) var library: SnapshotLibrary? {
         didSet { libraryRevision &+= 1 }
     }
-    @Published private(set) var isLoadingLibrary = false
+    private(set) var isLoadingLibrary = false
     /// Snapshots whose test no longer exists, by id.
-    @Published private(set) var orphanIDs: Set<String> = [] {
+    private(set) var orphanIDs: Set<String> = [] {
         didSet { libraryRevision &+= 1 }
     }
-    @Published var libraryFilter = ""
+    var libraryFilter = ""
     /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
-    @Published var focusFilterRequest = 0
+    var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
-    @Published var confirmReRecordAll = false
-    @Published var libraryScope = LibraryScope.all
-    @Published var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
+    var confirmReRecordAll = false
+    var libraryScope = LibraryScope.all
+    var librarySort = LibrarySort(rawValue: UserDefaults.standard.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.standard.set(librarySort.rawValue, forKey: "librarySort") }
     }
-    @Published var selectedSnapshotID: String? {
+    var selectedSnapshotID: String? {
         didSet {
             guard oldValue != selectedSnapshotID else { return }
             // Keep comparing variants while stepping through the same test's variants.
@@ -142,60 +143,60 @@ final class ProjectModel: ObservableObject {
         }
     }
     /// What is shown next to the selected snapshot: an earlier version or another variant.
-    @Published var comparison: SnapshotComparison?
+    var comparison: SnapshotComparison?
 
     // Running
-    @Published private(set) var operation: RunOperation?
-    @Published private(set) var stageLabel: String = ""
-    @Published private(set) var phase: RunPhase = .preparing
-    @Published private(set) var passed = 0
-    @Published private(set) var failed = 0
-    @Published private(set) var skipped = 0
-    @Published private(set) var expectedTotal: Int?
-    @Published private(set) var currentTest: String?
-    @Published private(set) var log: [String] = []
-    @Published private(set) var lastResult: TestRunResult?
-    @Published private(set) var lastMessage: String?
-    @Published private(set) var lastMessageIsError = false
+    private(set) var operation: RunOperation?
+    private(set) var stageLabel: String = ""
+    private(set) var phase: RunPhase = .preparing
+    private(set) var passed = 0
+    private(set) var failed = 0
+    private(set) var skipped = 0
+    private(set) var expectedTotal: Int?
+    private(set) var currentTest: String?
+    private(set) var log: [String] = []
+    private(set) var lastResult: TestRunResult?
+    private(set) var lastMessage: String?
+    private(set) var lastMessageIsError = false
     /// Where the last message leads (the notice offers it as a button).
-    @Published private(set) var lastMessageAction: NoticeAction?
-    @Published var showFullLog = false { didSet { recomputeVisibleLog() } }
-    @Published var logFilter = "" { didSet { recomputeVisibleLog() } }
+    private(set) var lastMessageAction: NoticeAction?
+    var showFullLog = false { didSet { recomputeVisibleLog() } }
+    var logFilter = "" { didSet { recomputeVisibleLog() } }
     /// The log lines currently shown, kept up to date incrementally instead of re-filtering
     /// thousands of lines on every UI update during a run.
-    @Published private(set) var visibleLog: [String] = []
+    private(set) var visibleLog: [String] = []
     /// When the current operation started (drives the elapsed-time display).
-    @Published private(set) var startedAt: Date?
+    private(set) var startedAt: Date?
     /// How long the last operation took.
-    @Published private(set) var lastDuration: TimeInterval?
+    private(set) var lastDuration: TimeInterval?
 
     // Failures
-    @Published private(set) var failures: [FailureItem] = [] {
+    private(set) var failures: [FailureItem] = [] {
         didSet {
             failureByPath = [:]
             for item in failures { for path in item.referencePaths where failureByPath[path] == nil { failureByPath[path] = item } }
         }
     }
-    @Published private(set) var failureSource: FailureSource?
-    @Published var selectedFailureID: String?
+    private(set) var failureSource: FailureSource?
+    var selectedFailureID: String?
     /// Failures selected together with ⌘- or ⇧-click. `selectedFailureID` stays the one in focus;
     /// a set that no longer contains it (the selection moved by keyboard) no longer counts.
-    @Published var failureSelection: Set<String> = []
-    @Published private(set) var flakeResults: [FlakeResult] = []
-    @Published private(set) var historyFlaky: [FlakySignal] = []
+    var failureSelection: Set<String> = []
+    private(set) var flakeResults: [FlakeResult] = []
+    private(set) var historyFlaky: [FlakySignal] = []
     /// What kind of difference each failure is (first repetition), computed in the background.
-    @Published private(set) var diagnoses: [String: DiffDiagnosis] = [:]
-    private var diagnoseTask: Task<Void, Never>?
+    private(set) var diagnoses: [String: DiffDiagnosis] = [:]
+    @ObservationIgnored private var diagnoseTask: Task<Void, Never>?
     /// All suites of the last run, read back from disk at launch (before any run in this session).
-    @Published private(set) var restoredSuites: [SuiteResult] = []
+    private(set) var restoredSuites: [SuiteResult] = []
     /// The suites the Run tab's results list shows.
     var resultSuites: [SuiteResult] { lastResult?.summary?.suites ?? restoredSuites }
     /// Output while running, results once there are some.
-    @Published var runPane = RunPane.results
-    @Published private(set) var history: [RunRecord] = []
+    var runPane = RunPane.results
+    private(set) var history: [RunRecord] = []
 
     // Changes
-    @Published private(set) var changeSet: SnapshotChangeSet? {
+    private(set) var changeSet: SnapshotChangeSet? {
         didSet { changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a }) }
     }
     /// Lookups for the library's status marks, rebuilt when changes or failures change.
@@ -211,21 +212,21 @@ final class ProjectModel: ObservableObject {
     private struct LibraryOrderKey: Equatable {
         var revision: Int, filter: String, scope: LibraryScope, sort: LibrarySort
     }
-    private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
-    @Published private(set) var changesError: String?
-    @Published var changeFilter = ""
-    @Published var changeKinds = Set(SnapshotChangeKind.allCases)
-    @Published var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
-    @Published var selectedChangeID: String?
+    @ObservationIgnored private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
+    private(set) var changesError: String?
+    var changeFilter = ""
+    var changeKinds = Set(SnapshotChangeKind.allCases)
+    var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
+    var selectedChangeID: String?
     /// Changes marked as viewed whose file hasn't changed since.
-    @Published private(set) var viewedChanges: Set<String> = []
-    @Published var hideViewed = false
+    private(set) var viewedChanges: Set<String> = []
+    var hideViewed = false
     /// What kind of difference each change is (base vs working tree), computed in the background.
-    @Published private(set) var changeDiagnoses: [String: DiffDiagnosis] = [:]
-    private var changeDiagnoseTask: Task<Void, Never>?
-    @Published private(set) var isLoadingChanges = false
+    private(set) var changeDiagnoses: [String: DiffDiagnosis] = [:]
+    @ObservationIgnored private var changeDiagnoseTask: Task<Void, Never>?
+    private(set) var isLoadingChanges = false
 
-    private var cancelAction: (() -> Void)?
+    @ObservationIgnored private var cancelAction: (() -> Void)?
     private let lineBuffer = LineBatcher()
     private var lastFailingSuites: [SuiteResult] = []
 
@@ -247,7 +248,7 @@ final class ProjectModel: ObservableObject {
 
     /// Picks up snapshots written outside the app (a re-record from Xcode or the CLI) while the
     /// window is open. Runs of our own refresh when they finish instead.
-    private var watcher: SnapshotWatcher?
+    @ObservationIgnored private var watcher: SnapshotWatcher?
     private func watchSnapshots() {
         watcher = SnapshotWatcher(repository: project.url) { [weak self] in
             Task { @MainActor in
@@ -266,7 +267,7 @@ final class ProjectModel: ObservableObject {
 
     // MARK: Loading
 
-    private var reloadGeneration = 0
+    @ObservationIgnored private var reloadGeneration = 0
 
     /// Re-reads configuration, branches and history off the main thread (git and file I/O
     /// can take a while in large repositories), then refreshes everything that depends on them.
@@ -492,7 +493,7 @@ final class ProjectModel: ObservableObject {
         }
         return multiSnapshotTests?.tests.contains(file.module + "/" + file.suite + "/" + file.testName) ?? true
     }
-    private var multiSnapshotTests: (revision: Int, tests: Set<String>)?
+    @ObservationIgnored private var multiSnapshotTests: (revision: Int, tests: Set<String>)?
 
     /// The other snapshots of the same test (light/dark, devices, named states), in variant order.
     func variants(of file: SnapshotFile) -> [SnapshotFile] {

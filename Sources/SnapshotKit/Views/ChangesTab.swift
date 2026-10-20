@@ -4,7 +4,7 @@ import SnapshotKitCore
 import SwiftUI
 
 struct ChangesTab: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     @State private var pendingDiscard: SnapshotChange?
     /// Changes waiting for the Revert confirmation: one from its menu, or everything shown.
     @State private var pendingRevert: [SnapshotChange] = []
@@ -357,7 +357,7 @@ struct ChangesTab: View {
 /// when, why), or that it isn't committed yet. Until the history is read, and when there is none,
 /// it says what is compared instead.
 struct ChangeOrigin: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     var change: SnapshotChange
     @State private var last: SnapshotVersion?
     @Environment(\.locale) private var locale

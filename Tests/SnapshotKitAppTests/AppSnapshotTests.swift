@@ -114,7 +114,7 @@ extension AppUITests {
             for file in project.displayedSnapshots {
                 project.selectedSnapshotID = file.id
                 let view = SnapshotDetail(project: project, file: file)
-                    .environmentObject(app)
+                    .environment(app)
                     .onPreferenceChange(SnapshotCanvasTopKey.self) { tops.values[file.testName + "." + file.variant] = $0 }
                 // Narrow, as the detail pane often is: crowded headers must not grow either.
                 _ = host(view, size: CGSize(width: 560, height: 600), appearance: .aqua)
@@ -168,7 +168,7 @@ extension AppUITests {
             UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.failedRun)
             project.tab = .changes
-            let view = ProjectView(project: project).environmentObject(app)
+            let view = ProjectView(project: project).environment(app)
             assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy)
         }
 
@@ -179,7 +179,7 @@ extension AppUITests {
             UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(tab == .run ? .failedRun : .changes)
             project.tab = tab
-            let view = ProjectView(project: project).environmentObject(app)
+            let view = ProjectView(project: project).environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 740, height: 520), appearance: .aqua), as: Self.strategy,
                            named: tab.rawValue.lowercased())
         }
@@ -188,7 +188,7 @@ extension AppUITests {
         @Test func changesTabWithIncreasedContrast() {
             UserDefaults.standard.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.changes)
-            let view = ProjectView(project: project).environmentObject(app)
+            let view = ProjectView(project: project).environment(app)
             assertSnapshot(of: host(view, size: Self.paneSize, appearance: .accessibilityHighContrastAqua), as: Self.strategy)
         }
 
@@ -208,7 +208,7 @@ extension AppUITests {
             default: .neverRun
             }
             let (app, project) = makeApp(scenario)
-            let view = ProjectView(project: project).environmentObject(app)
+            let view = ProjectView(project: project).environment(app)
             assertSnapshot(of: host(view, size: Self.paneSize, appearance: .aqua), as: Self.strategy, named: name)
         }
 
@@ -232,7 +232,7 @@ extension AppUITests {
             // No selection: the sidebar's selection material can't be rendered off-screen.
             let app = AppModel(store: AppFixtures.store())
             app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
-            let view = SidebarView().environmentObject(app)
+            let view = SidebarView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 260, height: 420), appearance: appearance), as: Self.strategy,
                            named: appearance == .darkAqua ? "dark" : "light")
         }
@@ -241,7 +241,7 @@ extension AppUITests {
             let (app, _) = makeApp(.changes)
             QuickSwitcherQuery.preset = "pay"
             defer { QuickSwitcherQuery.preset = nil }
-            let view = QuickSwitcherView().environmentObject(app)
+            let view = QuickSwitcherView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
         }
 
@@ -249,7 +249,7 @@ extension AppUITests {
             let (app, _) = makeApp(.failedRun)
             QuickSwitcherQuery.preset = "rec"
             defer { QuickSwitcherQuery.preset = nil }
-            let view = QuickSwitcherView().environmentObject(app)
+            let view = QuickSwitcherView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua, keepFocus: true), as: Self.strategy)
         }
 
@@ -257,7 +257,7 @@ extension AppUITests {
             let (app, _) = makeApp(.failedRun)
             QuickSwitcherQuery.preset = ""
             defer { QuickSwitcherQuery.preset = nil }
-            let view = QuickSwitcherView().environmentObject(app)
+            let view = QuickSwitcherView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 520), appearance: .darkAqua, keepFocus: true), as: Self.strategy)
         }
 
@@ -267,14 +267,14 @@ extension AppUITests {
             store.addScanRoot("/work")
             store.addScanRoot("/Volumes/Projects/ios")
             let app = AppModel(store: store)
-            let view = SettingsView().environmentObject(app)
+            let view = SettingsView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 520, height: 500), appearance: appearance), as: Self.strategy,
                            named: appearance == .darkAqua ? "dark" : "light")
         }
 
         @Test func welcome() {
             let app = AppModel(store: AppFixtures.store())
-            let view = WelcomeView().environmentObject(app)
+            let view = WelcomeView().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 700, height: 460), appearance: .aqua), as: Self.strategy)
         }
 
@@ -288,7 +288,7 @@ extension AppUITests {
             app.updateRunningPaths()
             #expect(app.runningPaths == [project.project.path])
             #expect(project.progressFraction.map { abs($0 - 13.0 / 30) < 0.001 } == true, "\(String(describing: project.progressFraction)) \(project.passed) \(project.failed) \(project.skipped)")
-            let view = MenuBarPanel().environmentObject(app)
+            let view = MenuBarPanel().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: appearance), as: Self.strategy,
                            named: appearance == .darkAqua ? "dark" : "light")
         }
@@ -298,7 +298,7 @@ extension AppUITests {
             let (app, _) = makeApp(.failedRun)
             app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
             app.updateRunningPaths()
-            let view = MenuBarPanel().environmentObject(app)
+            let view = MenuBarPanel().environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: MenuBarPanel.width, height: 380), appearance: .aqua), as: Self.strategy)
         }
 
@@ -321,7 +321,7 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-test")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-test")
-                .environmentObject(app)
+                .environment(app)
             let name = switch mode { case .sideBySide: "side-by-side"; case .slider: "slider"; case .difference: "difference"; case .toggle: "toggle" }
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy, named: name)
         }
@@ -333,7 +333,7 @@ extension AppUITests {
             let taller = AppFixtures.screen(accent: .systemBlue, height: 280)
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: taller), for: "compare-size")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-size")
-                .environmentObject(app)
+                .environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
         }
 
@@ -362,7 +362,7 @@ extension AppUITests {
                                      location: (URL(fileURLWithPath: "/work/payments-ui"),
                                                 "Tests/AppSnapshotTests/__Snapshots__/CheckoutViewTests/payButton.dark.png"),
                                      leadingInset: 72)
-                .environmentObject(app)
+                .environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 900, height: 560), appearance: appearance), as: Self.strategy,
                            named: appearance == .darkAqua ? "dark" : "light")
         }
@@ -373,7 +373,7 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-narrow")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-narrow")
-                .environmentObject(app)
+                .environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 440, height: 360), appearance: .aqua), as: Self.strategy, named: "440pt")
         }
 
@@ -383,7 +383,7 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.renderingNoise), for: "compare-noise")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-noise")
-                .environmentObject(app)
+                .environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .aqua), as: Self.strategy)
         }
 
@@ -393,7 +393,7 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.badged), for: "compare-zoom-change")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom-change")
-                .environmentObject(app)
+                .environment(app)
             let hosted = host(view, size: CGSize(width: 820, height: 480), appearance: .aqua)
             app.zoomToChangeRequest += 1
             settle(hosted)
@@ -428,7 +428,7 @@ extension AppUITests {
             app.viewport = Viewport(scale: 4, offset: CGSize(width: 120, height: -60))
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-zoom")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom")
-                .environmentObject(app)
+                .environment(app)
             assertSnapshot(of: host(view, size: CGSize(width: 820, height: 480), appearance: .darkAqua), as: Self.strategy, named: "dark-4x")
         }
 
@@ -445,7 +445,7 @@ extension AppUITests {
         private func assertPane(_ project: ProjectModel, app: AppModel, appearance: NSAppearance.Name,
                                 fileID: StaticString = #fileID, file: StaticString = #filePath,
                                 testName: String = #function, line: UInt = #line, column: UInt = #column) {
-            let view = ProjectView(project: project).environmentObject(app)
+            let view = ProjectView(project: project).environment(app)
             assertSnapshot(of: host(view, size: Self.paneSize, appearance: appearance), as: Self.strategy,
                            named: appearance == .darkAqua ? "dark" : "light",
                            fileID: fileID, file: file, testName: testName, line: line, column: column)

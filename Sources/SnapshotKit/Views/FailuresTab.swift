@@ -3,8 +3,8 @@ import SnapshotKitCore
 import SwiftUI
 
 struct FailuresTab: View {
-    @EnvironmentObject private var app: AppModel
-    @ObservedObject var project: ProjectModel
+    @Environment(AppModel.self) private var app
+    @Bindable var project: ProjectModel
     @State private var repetition = 1
 
     var body: some View {
@@ -466,7 +466,7 @@ struct VerdictTag: View {
 
 /// Several failures selected: what they are, and the two things to do with all of them at once.
 struct BatchFailureDetail: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
 
     var body: some View {
         let items = project.selectedFailures

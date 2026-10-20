@@ -95,10 +95,10 @@ can be followed between these views, and re-recording is available wherever a sn
 - `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
 - `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
   selection and the section headers carry the structure.
-- `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%); a selected list row is
-  `DS.Surface.selection` (the text colour at 8%), not the
-  system's grey or accent block; the list keeps its selection, keyboard navigation and accessibility. The
-  sidebar keeps the system selection, which on its material is already as quiet.
+- `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%). Selection is the list's own
+  system highlight, as in every Mac app: SwiftUI has no way to restyle it, and reaching into the AppKit
+  table underneath cost clicks. Grid tiles and palette rows, which have no system highlight, use
+  `selectableTile(_:)` and `DS.Surface.selection` (the text colour at 8%).
 - `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
 - `glassChrome(_:)`, `GlassIconButton`, `GlassIconMenu`, `GlassSplitButton`, `quietControl()`: the header
   controls, 28 points tall (`DS.Control`). Interactive Liquid Glass on macOS 26 and later; a faint fill with a
@@ -149,7 +149,12 @@ can be followed between these views, and re-recording is available wherever a sn
 - **An accessibility audit test** walks each tab's live accessibility tree and fails on unlabeled controls.
 - **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every tab, compare mode,
   the palette and the welcome screen in the real window and fails on any SwiftUI or AppKit runtime issue,
-  such as *Publishing changes from within view updates*. Tests can't see those; they only reach the log.
+  such as *Publishing changes from within view updates*. `ListSelectionTests` select rows in every list the
+  way a click does and read the same log in-process.
+- **Models are `@Observable`.** On macOS 27, lists and segmented pickers write their bindings from inside a
+  view update; written into an `ObservableObject`'s `@Published` property, that logged a runtime issue on
+  every click. Observation doesn't. Stored properties that aren't state (tasks, caches, observers) are
+  `@ObservationIgnored`, so filling a cache while a view reads it doesn't redraw that view.
 - **Swift 6 language mode.** Data races and actor isolation are checked at compile time; shared state that
   is safe for another reason is marked `nonisolated(unsafe)` with that reason next to it.
 - **Re-record only what you changed.** In a record-mode run of the whole suite, layout can depend on which

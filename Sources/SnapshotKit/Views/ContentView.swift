@@ -2,7 +2,7 @@ import SnapshotKitCore
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -48,7 +48,7 @@ struct ContentView: View {
 }
 
 struct WelcomeView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(spacing: DS.Space.xl) {

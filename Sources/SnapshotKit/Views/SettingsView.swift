@@ -3,7 +3,7 @@ import SnapshotKitCore
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     @State private var roots: [String] = []
     @State private var iterations = 5
     @State private var verify = true

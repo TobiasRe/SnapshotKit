@@ -9,7 +9,7 @@ enum LibraryLayout: String {
 }
 
 struct SnapshotsTab: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     @AppStorage("libraryLayout") private var layoutRaw = LibraryLayout.list.rawValue
     @State private var confirmRecordShown = false
     @State private var confirmTrashOrphans = false
@@ -205,7 +205,9 @@ struct SnapshotsTab: View {
                                         showVariant: project.showsVariant(file))
                                 .tag(file.id)
                                 .selectableRow(project.selectedSnapshotID == file.id)
-                                .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
+                                // The list's own drag (itemProvider), not .onDrag: a drag source on the row
+                                // takes the mouse-down, and clicking the row no longer selected it.
+                                .itemProvider { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) }
                                 .contextMenu { SnapshotActions(project: project, file: file) }
                         }
                     } header: {
@@ -222,8 +224,10 @@ struct SnapshotsTab: View {
                                                 showVariant: project.showsVariant(file))
                                         .tag(file.id)
                                         .selectableRow(project.selectedSnapshotID == file.id)
-                                        // Drag a snapshot out, e.g. into a pull request comment.
-                                        .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
+                                        // Drag a snapshot out, e.g. into a pull request comment. The list's own
+                                        // drag (itemProvider), not .onDrag: a drag source on the row takes the
+                                        // mouse-down, and clicking the row no longer selected it.
+                                        .itemProvider { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) }
                                         .contextMenu { SnapshotActions(project: project, file: file) }
                                 }
                             }
@@ -360,7 +364,7 @@ struct SnapshotStateChip: View {
 
 /// Actions on one snapshot, for the context menu and the detail header.
 struct SnapshotActions: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     var file: SnapshotFile
 
     var body: some View {
@@ -394,7 +398,7 @@ struct SnapshotCanvasTopKey: PreferenceKey {
 
 /// One snapshot, large: zoom, pan and read pixels, with what it is and where it lives.
 struct SnapshotDetail: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     var file: SnapshotFile
     @State private var versions: [SnapshotVersion]?
     private var comparing: SnapshotVersion? {
@@ -572,7 +576,7 @@ struct SnapshotDetail: View {
 
 /// A single image with the compare view's zoom, pan and pixel readout.
 struct SnapshotViewer: View {
-    @EnvironmentObject private var app: AppModel
+    @Environment(AppModel.self) private var app
     var load: @Sendable () -> Data?
     var identity: String
     var fileSize: Int
@@ -596,7 +600,7 @@ struct SnapshotViewer: View {
             Group {
                 if nsImage != nil {
                     ZoomableImage(image: nsImage, pixelSize: size, viewport: app.viewport)
-                        .overlay(ZoomPanSurface(viewport: $app.viewport, onHover: { hover($0, size: size) }))
+                        .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, size: size) }))
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -698,7 +702,7 @@ enum SnapshotImageCache {
 
 /// A contact sheet of the library: every snapshot as a tile, grouped by test file.
 struct SnapshotGrid: View {
-    @ObservedObject var project: ProjectModel
+    @Bindable var project: ProjectModel
     var open: (SnapshotFile) -> Void
 
     static let tile = CGSize(width: 180, height: 124)

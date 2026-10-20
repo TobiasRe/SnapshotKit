@@ -1,31 +1,27 @@
 import AppKit
-import Combine
 import Foundation
+import Observation
 import SnapshotKitCore
 
-@MainActor
-final class AppModel: ObservableObject {
+@MainActor @Observable
+final class AppModel {
     let store: ProjectStore
-    @Published private(set) var projects: [Project] = []
-    @Published var selectedPath: String? {
+    private(set) var projects: [Project] = []
+    var selectedPath: String? {
         didSet { if oldValue != selectedPath { openSelected() } }
     }
-    @Published private(set) var current: ProjectModel? {
-        didSet { menuState.follow(current) }
-    }
-    /// What the menu bar observes: the current project's changes, throttled.
-    let menuState = MenuState()
-    @Published var showQuickSwitcher = false
-    @Published private(set) var isScanning = false
-    @Published private(set) var startupNotice: String?
+    private(set) var current: ProjectModel?
+    var showQuickSwitcher = false
+    private(set) var isScanning = false
+    private(set) var startupNotice: String?
     /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
-    @Published var viewport = Viewport()
+    var viewport = Viewport()
     /// Bumped by View ▸ Zoom to Change; the visible compare view frames the changed pixels.
-    @Published var zoomToChangeRequest = 0
+    var zoomToChangeRequest = 0
     /// Failing test count per project path, from each repository's last run.
-    @Published var failingCounts: [String: Int] = [:]
+    var failingCounts: [String: Int] = [:]
 
-    private var models: [String: ProjectModel] = [:]
+    @ObservationIgnored private var models: [String: ProjectModel] = [:]
 
     /// Whether the menu bar item is shown (its own object; see `MenuBarSetting`).
     let menuBar: MenuBarSetting
@@ -34,9 +30,9 @@ final class AppModel: ObservableObject {
         set { menuBar.isShown = newValue }
     }
     /// Projects with a run, record or flakiness check going on, for the menu bar.
-    @Published private(set) var runningPaths: [String] = []
+    private(set) var runningPaths: [String] = []
     static let runStarted = Notification.Name("SnapshotKitRunStarted")
-    private var runObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var runObservers: [NSObjectProtocol] = []
 
     init(store: ProjectStore = ProjectStore()) {
         self.store = store
@@ -69,8 +65,8 @@ final class AppModel: ObservableObject {
     }
 
     static let runFinished = Notification.Name("SnapshotKitRunFinished")
-    private var isRefreshingCounts = false
-    private var runObserver: NSObjectProtocol?
+    @ObservationIgnored private var isRefreshingCounts = false
+    @ObservationIgnored private var runObserver: NSObjectProtocol?
 
     /// Reads every project's last-run summary in the background (cheap: one small JSON per repo).
     func refreshFailingCounts() {
@@ -260,26 +256,11 @@ final class AppModel: ObservableObject {
     }
 }
 
-/// Relays the current project's changes to the menu bar, at most five times a second, so menu
-/// items (Cancel while running, Re-record Selected Test) are enabled when they should be
-/// without redrawing the menus on every line of test output.
-@MainActor
-final class MenuState: ObservableObject {
-    private var subscription: AnyCancellable?
-
-    func follow(_ project: ProjectModel?) {
-        subscription = project?.objectWillChange
-            .throttle(for: .milliseconds(200), scheduler: RunLoop.main, latest: true)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-        objectWillChange.send()
-    }
-}
-
 /// The menu bar item setting, which the menu bar scene binds to.
-@MainActor
-final class MenuBarSetting: ObservableObject {
+@MainActor @Observable
+final class MenuBarSetting {
     private let store: ProjectStore
-    @Published var isShown: Bool {
+    var isShown: Bool {
         didSet { if isShown != store.settings.showMenuBarItem { store.update { $0.showMenuBarItem = isShown } } }
     }
 

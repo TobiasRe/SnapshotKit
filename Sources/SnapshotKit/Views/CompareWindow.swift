@@ -6,7 +6,7 @@ import SwiftUI
 /// the diff tool swift-snapshot-testing names in a failure message, opens a `snapshotkit://compare`
 /// URL, and this window shows the pair with the same compare view as the Failures tab.
 struct CompareWindow: View {
-    @EnvironmentObject private var app: AppModel
+    @Environment(AppModel.self) private var app
     @Environment(\.openWindow) private var openWindow
     var request: CompareRequest
     /// Where the reference lives, when it's in a git repository: what "Show in Project" opens.
@@ -106,7 +106,7 @@ enum CompareWindows {
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 420)
-        window.contentView = NSHostingView(rootView: view.environmentObject(model ?? .shared))
+        window.contentView = NSHostingView(rootView: view.environment(model ?? .shared))
         window.center()
         window.setFrameAutosaveName("CompareWindow")
         windows[request] = window

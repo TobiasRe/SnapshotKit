@@ -72,7 +72,7 @@ final class ComparePairCache {
 }
 
 struct CompareView: View {
-    @EnvironmentObject private var app: AppModel
+    @Environment(AppModel.self) private var app
     /// Produces the (before, after) image bytes; called off the main thread.
     var load: @Sendable () -> (Data?, Data?)
     var beforeLabel: String
@@ -261,7 +261,7 @@ struct CompareView: View {
                     ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: app.viewport)
                     ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: app.viewport)
                         .mask(alignment: .leading) { Rectangle().frame(width: x) }
-                    ZoomPanSurface(viewport: $app.viewport, onHover: { hover($0, pixelSize: pair.pixelSize) })
+                    ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: pair.pixelSize) })
                     Rectangle()
                         .fill(Color.white.opacity(0.9))
                         .frame(width: 1)
@@ -327,7 +327,7 @@ struct CompareView: View {
                     ContentUnavailableView("No Image", systemImage: "photo", description: Text("This side doesn't exist."))
                 }
             }
-            .overlay(ZoomPanSurface(viewport: $app.viewport, onHover: { hover($0, pixelSize: size) }))
+            .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }))
             .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m) }
     }
 
@@ -396,7 +396,7 @@ struct PixelReadout: View {
 /// − level +, plain on a glass bar (compare and single snapshot alike): no bordered boxes inside
 /// a pill. The level is a menu of fixed steps.
 struct ZoomControls: View {
-    @EnvironmentObject private var app: AppModel
+    @Environment(AppModel.self) private var app
 
     private var label: String {
         let s = app.viewport.scale

@@ -270,8 +270,8 @@ extension DS {
     enum Surface {
         /// The one surface of a column: its bars and its list share it, so only hairlines divide them.
         static let content = Color(nsColor: .controlBackgroundColor)
-        /// A selected row: a whisper of the text colour, the same in every list and both appearances,
-        /// instead of the system's solid grey or accent block.
+        /// A selected grid tile and palette row: a whisper of the text colour, the same in both
+        /// appearances. Lists use the system highlight instead.
         /// Stronger with Increase Contrast, where a whisper would not be seen.
         static let selection = Color(nsColor: NSColor(name: nil) { appearance in
             let highContrast = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
@@ -293,13 +293,14 @@ extension DS {
 }
 
 extension View {
-    /// Marks a list row as selected with `DS.Surface.selection`, and turns off the list's own
-    /// highlight (the list keeps its selection, keyboard navigation and accessibility).
+    /// Marks a list row under the pointer. Selection is the list's own system highlight, like
+    /// every Mac app's: no custom fill, nothing reaching into the AppKit table underneath.
     func selectableRow(_ selected: Bool) -> some View {
         modifier(SelectableRow(selected: selected))
     }
 
-    /// The same selection and hover fills for something that isn't a list row (a grid tile).
+    /// Selection and hover fills for something that isn't a list row (a grid tile), which has no
+    /// system highlight of its own.
     func selectableTile(_ selected: Bool) -> some View {
         modifier(SelectableTile(selected: selected))
     }
@@ -369,8 +370,7 @@ struct QuietControlText: ViewModifier {
     }
 }
 
-/// The row background: the selection fill, or a fainter one under the pointer, so you see what a
-/// click will select.
+/// The row background under the pointer, so you see what a click will select.
 private struct SelectableRow: ViewModifier {
     var selected: Bool
     @State private var hovering = false
@@ -378,12 +378,13 @@ private struct SelectableRow: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onHover { hovering = $0 }
+            // The list draws the selection itself (the system highlight); this only marks the row
+            // under the pointer, and never a selected one.
             .listRowBackground(
                 RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
-                    .fill(selected ? DS.Surface.selection : hovering ? DS.Surface.hover : .clear)
+                    .fill(hovering && !selected ? DS.Surface.hover : .clear)
                     .padding(.horizontal, DS.Space.s + 2)
             )
-            .background(NativeHighlightOff())
     }
 }
 
@@ -396,47 +397,6 @@ private struct SelectableTile: ViewModifier {
             .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
                 .fill(selected ? DS.Surface.selection : hovering ? DS.Surface.hover : .clear))
             .onHover { hovering = $0 }
-    }
-}
-
-/// Turns off the system selection highlight of the list row it sits in, so the row can draw
-/// `DS.Surface.selection` instead. Per row, not on the table: setting the table's
-/// `selectionHighlightStyle` makes SwiftUI's List update and publish changes mid-update ("Publishing
-/// changes from within view updates"), however late it's done. Every row carries a probe, so rows
-/// the table creates or reuses later are covered as they appear.
-private struct NativeHighlightOff: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { Probe() }
-    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.scheduleApply() }
-
-    final class Probe: NSView {
-        /// Never a click target: it fills the row's background, so it would take every click on the
-        /// row, and the list would never select it.
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            scheduleApply()
-        }
-
-        /// After the current view update: a probe joins its row view only once the row is laid out.
-        /// The run loop rather than the main queue, so it also happens while something on the main
-        /// queue spins the run loop (the snapshot tests).
-        func scheduleApply() {
-            RunLoop.main.perform(inModes: [.common]) { [weak self] in
-                MainActor.assumeIsolated { self?.apply() }
-            }
-        }
-
-        private func apply() {
-            var view = superview
-            while let current = view {
-                if let row = current as? NSTableRowView {
-                    if row.selectionHighlightStyle != .none { row.selectionHighlightStyle = .none }
-                    return
-                }
-                view = current.superview
-            }
-        }
     }
 }
 

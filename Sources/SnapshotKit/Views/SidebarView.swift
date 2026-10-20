@@ -2,7 +2,7 @@ import SnapshotKitCore
 import SwiftUI
 
 struct SidebarView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
     private var pinned: [Project] { model.projects.filter { model.isPinned($0) } }
     private var recents: [Project] {
@@ -182,7 +182,7 @@ struct QuickSwitcherRow: View {
 }
 
 struct QuickSwitcherView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     // Starts with a preset query (captures, tests), so the first layout is already the final one.
     @State private var query = QuickSwitcherQuery.preset ?? ""
     @State private var highlighted = 0

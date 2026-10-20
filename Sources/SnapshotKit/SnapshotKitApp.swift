@@ -5,22 +5,22 @@ import SwiftUI
 @main
 struct SnapshotKitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var model = AppModel.shared
+    private let model = AppModel.shared
     /// Bound by the menu bar scene; a small object of its own rather than a property of `model`.
-    @ObservedObject private var menuBar = AppModel.shared.menuBar
+    private let menuBar = AppModel.shared.menuBar
 
     var body: some Scene {
         WindowGroup("SnapshotKit", id: "main") {
             ContentView()
-                .environmentObject(model)
+                .environment(model)
                 .frame(minWidth: 980, minHeight: 620)
         }
         .defaultSize(width: 1400, height: 880)
-        .commands { SnapshotKitCommands(model: model, menuState: model.menuState) }
+        .commands { SnapshotKitCommands(model: model) }
 
         Settings {
             SettingsView()
-                .environmentObject(model)
+                .environment(model)
         }
 
         // Optional (Settings > General): run progress and quick access from the menu bar.
@@ -29,7 +29,7 @@ struct SnapshotKitApp: App {
                                          // that would rebuild the app's scenes again, endlessly.
                                          set: { if $0 != menuBar.isShown { menuBar.isShown = $0 } })) {
             MenuBarPanel()
-                .environmentObject(model)
+                .environment(model)
         } label: {
             MenuBarLabel(model: model)
         }
@@ -79,8 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 struct SnapshotKitCommands: Commands {
-    @ObservedObject var model: AppModel
-    @ObservedObject var menuState: MenuState
+    var model: AppModel
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
 
     var body: some Commands {
