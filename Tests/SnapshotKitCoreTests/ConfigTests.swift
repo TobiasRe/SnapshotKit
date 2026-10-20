@@ -217,6 +217,33 @@ import Testing
         #expect(x.config.scheme == "Snapshots")
     }
 
+    /// GitHub replaces `${{ … }}` before the shell splits the line, so its spaces don't split words.
+    @Test func unquotedGitHubExpressionsAreOneWord() {
+        let text = """
+        env:
+          APP_NAME: Shop
+        jobs:
+          snapshots:
+            steps:
+              - run: xcodebuild test -scheme ${{ env.APP_NAME }} -testPlan ${{ matrix.plan }} -destination 'platform=iOS Simulator,name=Example Phone'
+        """
+        let x = CIConfigParser.extract(from: [.init(name: ".github/workflows/snapshots.yml", text: text)])
+        #expect(x.config.scheme == "Shop")
+        #expect(x.config.testPlan == nil) // `matrix.plan` isn't defined: unknown, not "${{"
+        #expect(x.config.deviceName == "Example Phone")
+    }
+
+    @Test func everyXcodebuildOnALineCountsAndAFullPathToo() {
+        let text = """
+        snapshots:
+          script:
+            - xcodebuild -version && xcodebuild test -scheme Snapshots -destination 'platform=iOS Simulator,name=Example Phone'
+        """
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.scheme == "Snapshots")
+        let script = "set -e\n/usr/bin/xcodebuild test -scheme Snapshots -destination 'platform=iOS Simulator,name=Example Phone'\n"
+        #expect(CIConfigParser.extract(from: [.init(name: "scripts/snapshots.sh", text: script)]).config.scheme == "Snapshots")
+    }
+
     @Test func commentedOutCommandsAreIgnored() {
         let text = """
         snapshots:

@@ -188,28 +188,51 @@ public struct CIConfigParser {
         var found: [Invocation] = []
         for (fullLine, index) in lines {
             let line = MiniYAML.stripComment(fullLine) // also a commented-out command
-            guard let range = line.range(of: #"(^|[\s;&|(`"'])xcodebuild(\s|$)"#, options: .regularExpression) else { continue }
-            let prefix = String(line[..<range.lowerBound])
-            var command = String(line[range.lowerBound...]).trimmingCharacters(in: CharacterSet(charactersIn: " ;&|(`\"'"))
-            command = ShellWords.firstCommand(command)
-            var words = ShellWords.split(command)
-            guard words.first == "xcodebuild" else { continue }
-            words.removeFirst()
-            var invocation = parseArguments(words.map(expand))
+            // Every call on the line (`xcodebuild -version && xcodebuild test …`), also by its full path.
+            let calls = Self.xcodebuildCall.matches(in: line, range: NSRange(location: 0, length: (line as NSString).length))
+            for call in calls {
+                let start = Range(call.range, in: line)!.lowerBound
+                // GitHub replaces `${{ … }}` before the shell splits the line.
+                var words = ShellWords.split(ShellWords.firstCommand(expandingExpressions(String(line[start...]))))
+                guard words.first == "xcodebuild" else { continue }
+                words.removeFirst()
+                var invocation = parseArguments(words.map(expand))
 
-            if let cd = prefix.range(of: #"cd\s+([^\s;&]+)\s*&&\s*$"#, options: .regularExpression) {
-                let dir = String(prefix[cd]).replacingOccurrences(of: #"^cd\s+|\s*&&\s*$"#, with: "", options: .regularExpression)
-                invocation.workingDirectory = expand(MiniYAML.unquote(dir))
+                // What runs before it, less the folder it is called from (`/usr/bin/`).
+                let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
+                if let cd = prefix.range(of: #"cd\s+([^\s;&]+)\s*&&\s*$"#, options: .regularExpression) {
+                    let dir = String(prefix[cd]).replacingOccurrences(of: #"^cd\s+|\s*&&\s*$"#, with: "", options: .regularExpression)
+                    invocation.workingDirectory = expand(MiniYAML.unquote(dir))
+                }
+
+                // Score: prefer `test`, and anything that mentions snapshots nearby.
+                if invocation.actions.contains("test") || invocation.actions.contains("test-without-building") { invocation.score += 4 }
+                if invocation.actions.contains("build-for-testing") { invocation.score += 1 }
+                let context = rawLines[max(0, index - 25)...min(rawLines.count - 1, index)].joined(separator: "\n").lowercased()
+                if line.lowercased().contains("snapshot") { invocation.score += 3 } else if context.contains("snapshot") { invocation.score += 2 }
+                found.append(invocation)
             }
-
-            // Score: prefer `test`, and anything that mentions snapshots nearby.
-            if invocation.actions.contains("test") || invocation.actions.contains("test-without-building") { invocation.score += 4 }
-            if invocation.actions.contains("build-for-testing") { invocation.score += 1 }
-            let context = rawLines[max(0, index - 25)...min(rawLines.count - 1, index)].joined(separator: "\n").lowercased()
-            if line.lowercased().contains("snapshot") { invocation.score += 3 } else if context.contains("snapshot") { invocation.score += 2 }
-            found.append(invocation)
         }
         return found
+    }
+
+    /// `xcodebuild` as a command: at the start, after a separator or quote, or at the end of a path.
+    private static let xcodebuildCall = try! NSRegularExpression(pattern: #"(?<=^|[\s;&|(`"'/])xcodebuild(?=\s|$)"#)
+    /// A GitHub Actions expression, `${{ env.NAME }}`.
+    private static let expression = try! NSRegularExpression(pattern: #"\$\{\{[^}]*\}\}"#)
+
+    /// `command` with its GitHub expressions replaced by their values, and the spaces taken out of
+    /// those it can't resolve (`${{ secrets.X }}`), so each stays one unresolved word.
+    func expandingExpressions(_ command: String) -> String {
+        let ns = command as NSString
+        var result = command
+        for match in Self.expression.matches(in: command, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let expression = ns.substring(with: match.range)
+            let value = expand(expression)
+            let replacement = value == expression ? expression.filter { !$0.isWhitespace } : value
+            result = (result as NSString).replacingCharacters(in: match.range, with: replacement)
+        }
+        return result
     }
 
     func parseArguments(_ words: [String]) -> Invocation {
