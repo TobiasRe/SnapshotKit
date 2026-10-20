@@ -130,12 +130,16 @@ public enum FailureAttachments {
         return references.compactMap { raw in
             let path = URL.canonicalPath(raw)
             if path.hasPrefix(root + "/") { return String(path.dropFirst(root.count + 1)) }
-            // Paths from another machine (CI): keep the part from the first __Snapshots__ ancestor's parent.
-            if let range = raw.range(of: "/__Snapshots__/") {
-                let before = raw[..<range.lowerBound]
-                return before.split(separator: "/").last.map { "…/\($0)/__Snapshots__/" + raw[range.upperBound...] }
+            // Recorded somewhere else (on CI, or before the repository moved): the longest tail of the
+            // path, from above `__Snapshots__`, that names a file here. Else, for showing, the part
+            // from the folder holding `__Snapshots__`.
+            let components = raw.split(separator: "/")
+            guard let snapshots = components.firstIndex(of: "__Snapshots__"), snapshots > 0 else { return nil }
+            for start in 0..<snapshots {
+                let tail = components[start...].joined(separator: "/")
+                if FileManager.default.fileExists(atPath: repository.appendingPathComponent(tail).path) { return tail }
             }
-            return nil
+            return "…/" + components[(snapshots - 1)...].joined(separator: "/")
         }
     }
 

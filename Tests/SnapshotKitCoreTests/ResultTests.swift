@@ -113,6 +113,24 @@ import Testing
         #expect(FailureAttachments.referencePaths(in: message, repository: URL(fileURLWithPath: "/elsewhere")) == ["…/AppTests/__Snapshots__/CardTests/dark.1.png"])
     }
 
+    /// The last run's messages name the folder the repository was in when it ran.
+    @Test func referencesMatchAfterTheRepositoryMoved() throws {
+        let original = try TempRepo()
+        let reference = "Tests/AppTests/__Snapshots__/CardTests/dark.1.png"
+        try original.write(reference, png(width: 1, height: 1, rgba: (0, 0, 0, 255)))
+        try original.commitAll("init")
+        let message = "Snapshot does not match reference.\n\n@\u{2212}\n\"file://\(original.url.path)/\(reference)\"\n@+\n\"file:///sim/tmp/CardTests/dark.1.png\""
+        let test = TestCaseResult(name: "dark()", identifier: "CardTests/dark()", outcome: .failed, failureMessages: [message], repetitions: [.failed])
+        let summary = TestRunSummary(suites: [SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [test], failureFiles: [])])
+        LastRun(result: TestRunResult(commandLine: "", exitStatus: 1, cancelled: false, resultBundle: URL(fileURLWithPath: "/r.xcresult"),
+                                      summary: summary, passed: 0, failed: 1, skipped: 0, buildErrors: [])).save(repository: original.url)
+
+        let moved = testTemp("moved")
+        try FileManager.default.copyItem(at: original.url, to: moved)
+        let messages = try #require(LastRun.load(repository: moved)?.failingSuites.first?.tests.first?.failureMessages)
+        #expect(messages.flatMap { FailureAttachments.referencePaths(in: $0, repository: moved) } == [reference])
+    }
+
     @Test func referencePathFromADiffToolCommand() {
         let repo = URL(fileURLWithPath: "/my repo")
         // `.snapshots(diffTool: .snapkit)` with `Self { "snapkit open \"\($0)\" \"\($1)\"" }`
@@ -192,6 +210,23 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: older.path))
         let kept = try FileManager.default.contentsOfDirectory(atPath: last.deletingLastPathComponent().path)
         #expect(kept.filter { $0.hasSuffix(".xcresult") }.count == TestRunner.keptResults + 1)
+    }
+
+    @Test func theLastRunFindsItsResultsInACopyOfTheRepository() throws {
+        let original = try TempRepo()
+        let bundle = try newBundle(in: original)
+        let attachments = bundle.deletingPathExtension().appendingPathExtension("attachments")
+        try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
+        LastRun(result: TestRunResult(commandLine: "", exitStatus: 1, cancelled: false, resultBundle: bundle, summary: nil,
+                                      passed: 0, failed: 1, skipped: 0, buildErrors: []),
+                attachmentsDirectory: attachments).save(repository: original.url)
+
+        let copy = testTemp("copy")
+        try FileManager.default.copyItem(at: original.url, to: copy)
+        let last = try #require(LastRun.load(repository: copy))
+        let results = try Git(root: copy).gitDirectory().appendingPathComponent("snapshotkit/results").path
+        #expect(last.resultBundle == results + "/" + bundle.lastPathComponent)
+        #expect(last.attachmentsDirectory == results + "/" + attachments.lastPathComponent)
     }
 }
 

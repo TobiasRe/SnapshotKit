@@ -77,7 +77,18 @@ public struct LastRun: Codable, Sendable {
         guard let url = try? url(for: repository), let data = FileManager.default.contents(atPath: url.path) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(LastRun.self, from: data)
+        guard var last = try? decoder.decode(LastRun.self, from: data) else { return nil }
+        // The paths name the folder the repository was in, which it may since have moved or been
+        // copied from: what is in its own results folder wins.
+        let results = TestRunner.resultsDirectory(for: repository)
+        func here(_ path: String?) -> String? {
+            guard let path else { return nil }
+            let local = results.appendingPathComponent((path as NSString).lastPathComponent).path
+            return FileManager.default.fileExists(atPath: local) ? local : path
+        }
+        last.resultBundle = here(last.resultBundle)
+        last.attachmentsDirectory = here(last.attachmentsDirectory)
+        return last
     }
 
     public func save(repository: URL) {
