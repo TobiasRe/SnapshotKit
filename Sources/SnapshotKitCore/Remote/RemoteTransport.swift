@@ -28,10 +28,21 @@ extension RemoteTransport {
 
     /// Copies the listed files (relative to `localRoot`) into `remoteDirectory`.
     public func upload(files: [String], from localRoot: URL, to remoteDirectory: String) throws {
+        try rsync(files: files, from: localRoot.path + "/", to: try rsyncLocation(remoteDirectory) + "/")
+    }
+
+    /// Copies the listed files (relative to `remoteDirectory`) into `localRoot`. Unlike
+    /// `download(_:to:)`, their names may contain anything: rsync sends the list itself, not the
+    /// remote shell.
+    public func download(files: [String], from remoteDirectory: String, to localRoot: URL) throws {
+        try rsync(files: files, from: try rsyncLocation(remoteDirectory) + "/", to: localRoot.path + "/")
+    }
+
+    private func rsync(files: [String], from source: String, to destination: String) throws {
         let list = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-files-\(UUID().uuidString).txt")
         try files.joined(separator: "\n").appending("\n").write(to: list, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: list) }
-        try rsync(["-a", "--files-from=\(list.path)", localRoot.path + "/", try rsyncLocation(remoteDirectory) + "/"])
+        try rsync(["-a", "--files-from=\(list.path)", source, destination])
     }
 
     /// Copies a remote file or directory to a local path.

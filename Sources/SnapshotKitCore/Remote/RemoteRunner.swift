@@ -343,11 +343,11 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
     }
 
     func downloadRecordedSnapshots(dir: String, stateDir: String) throws -> [String] {
-        let out = try transport.run("cd \(Shell.quote(dir)) && find . -path '*/__Snapshots__/*' -type f -newer \(Shell.quote(stateDir + "/record-marker")) -not -path './.snapshotkit/*' | sed 's|^\\./||'")
+        // Not in the folders the sync leaves alone: package checkouts there have __Snapshots__ too.
+        let out = try transport.run("cd \(Shell.quote(dir)) && find . -path '*/__Snapshots__/*' -type f -newer \(Shell.quote(stateDir + "/record-marker")) "
+            + "-not -path './.snapshotkit/*' -not -path './.build/*' -not -path './.swiftpm/*' -not -path '*/DerivedData/*' | sed 's|^\\./||'")
         let paths = out.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
-        for path in paths {
-            try transport.download(dir + "/" + path, to: repository.appendingPathComponent(path))
-        }
+        if !paths.isEmpty { try transport.download(files: paths, from: dir, to: repository) }
         return paths
     }
 

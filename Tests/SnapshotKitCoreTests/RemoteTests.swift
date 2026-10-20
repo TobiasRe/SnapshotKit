@@ -63,6 +63,25 @@ import Testing
         #expect(try repo.read(paths[0]) == RecordSessionTests.suiteSource)
     }
 
+    @Test func downloadsWhatTheRecordRunWroteWhateverItIsCalled() throws {
+        let repo = try TempRepo()
+        try repo.write("README", "x")
+        try repo.commitAll("init")
+        let remote = testTemp("remote").path, state = remote + "/.snapshotkit"
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: state, withIntermediateDirectories: true)
+        fm.createFile(atPath: state + "/record-marker", contents: nil, attributes: [.modificationDate: Date(timeIntervalSinceNow: -60)])
+        let recorded = "Tests/AppTests/__Snapshots__/ÜbersichtTests/größe 2.1.png"
+        for path in [recorded, "DerivedData/SourcePackages/checkouts/Lib/__Snapshots__/LibTests/a.1.png"] {
+            try fm.createDirectory(atPath: ((remote + "/" + path) as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+            fm.createFile(atPath: remote + "/" + path, contents: Data("png".utf8))
+        }
+
+        let runner = RemoteRunner(repository: repo.url, config: SnapshotConfig(), transport: ShellSafePathsTransport())
+        #expect(try runner.downloadRecordedSnapshots(dir: remote, stateDir: state) == [recorded])
+        #expect(fm.contents(atPath: repo.url.appendingPathComponent(recorded).path) == Data("png".utf8))
+    }
+
     @Test func mapsRemotePathsToLocalCheckout() {
         let message = "@\u{2212}\n\"file:///private/var/x/remote/Tests/A/__Snapshots__/S/t.1.png\""
         #expect(RemoteRunner.mapPath(message, from: "/var/x/remote", to: "/repo") == "@\u{2212}\n\"file:///repo/Tests/A/__Snapshots__/S/t.1.png\"")
@@ -116,6 +135,19 @@ import Testing
         let runner = RemoteRunner(repository: repo.url, config: SnapshotConfig(), transport: LocalDirectoryTransport())
         #expect(try runner.filesToSync().sorted() == ["Sources/Café.swift", "Tests/__Snapshots__/ÜbersichtTests/größe.1.png"])
     }
+}
+
+/// A local "remote" that, like ssh, refuses rsync paths the remote shell would split.
+private struct ShellSafePathsTransport: RemoteTransport {
+    var label: String { "strict" }
+    func command(for script: String, interactive: Bool) -> (executable: String, arguments: [String]) {
+        ("/bin/bash", ["-c", script])
+    }
+    func rsyncLocation(_ remotePath: String) throws -> String {
+        guard Shell.quote(remotePath) == remotePath else { throw RemoteError.unsafeRemotePath(host: label, path: remotePath) }
+        return remotePath
+    }
+    var rsyncArguments: [String] { [] }
 }
 
 /// A remote whose every command fails with `status`.
