@@ -514,8 +514,10 @@ struct GlassIconMenu<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
+        // A titled label, shown as its icon: the title is the menu's own name for VoiceOver, which
+        // otherwise reads the symbol ("More") whatever label is set on the glass around it.
         Menu { content } label: {
-            Image(systemName: symbol)
+            Label(title, systemImage: symbol).labelStyle(.iconOnly)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)

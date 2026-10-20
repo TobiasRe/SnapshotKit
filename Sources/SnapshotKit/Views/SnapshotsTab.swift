@@ -530,11 +530,29 @@ struct SnapshotDetail: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: DS.Space.s)
+            // Light and dark, or a couple of devices, read best side by side; more would crowd out
+            // the history, so they go in a menu that names the one shown.
             if variants.count > 1 {
-                GlassSegmented(title: "Variant",
-                               segments: variants.map { Segment($0.variant.isEmpty ? "default" : $0.variant, value: $0.id) },
-                               selection: Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 }))
+                let selection = Binding(get: { file.id }, set: { project.selectedSnapshotID = $0 })
+                let name = { (variant: SnapshotFile) in variant.variant.isEmpty ? "default" : variant.variant }
+                if variants.count <= 3 {
+                    GlassSegmented(title: "Variant", segments: variants.map { Segment(name($0), value: $0.id) }, selection: selection)
+                        .fixedSize()
+                } else {
+                    Menu {
+                        Picker("Variant", selection: selection) {
+                            ForEach(variants) { Text(name($0)).tag($0.id) }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    } label: {
+                        Text(name(file)).font(DS.Font.code)
+                    }
                     .fixedSize()
+                    .quietControl()
+                    .accessibilityLabel("Variant")
+                    .help("\(variants.count) variants of this test")
+                }
             }
             compareMenu(variants: variants)
         }

@@ -107,7 +107,10 @@ struct ProjectView: View {
     }
 
     private var subtitle: String {
-        let branch = project.currentBranch ?? "detached HEAD"
+        guard let branch = project.currentBranch else {
+            // Unknown until the project has loaded; after that, no branch means a detached HEAD.
+            return project.context == nil && project.configError == nil ? "" : "detached HEAD"
+        }
         // "feature → develop" says what Changes compares; on the base branch itself just its name.
         guard let base = project.baseBranch, base != branch else { return branch }
         return "\(branch) → \(base)"
