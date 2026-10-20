@@ -61,8 +61,6 @@ enum DS {
     enum Status {
         /// The dot beside a status label.
         static let dot: CGFloat = 6
-        /// A status dot standing on its own (a change's kind in a row), a little larger to be seen.
-        static let mark: CGFloat = 7
         static let passed = Color.green
         static let failed = Color.red
         static let flaky = Color.orange
@@ -567,6 +565,60 @@ struct GlassSplitButton<Content: View>: View {
             .help("More ways to \(title.lowercased())")
         }
         .glassChrome(Capsule(style: .circular))
+    }
+}
+
+/// A project's failing tests, wherever projects are listed (sidebar, menu bar): the failed dot
+/// and the number, read as "3 failing".
+struct FailingCount: View {
+    var count: Int
+
+    var body: some View {
+        HStack(spacing: DS.Space.xs) {
+            Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
+            Text("\(count)").monospacedDigit()
+        }
+        .font(DS.Font.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) failing")
+    }
+}
+
+/// A sentence with a status icon: the icon carries the color, the text stays readable in either
+/// appearance (whole red or orange sentences glare in dark mode). Icons share one width, so the
+/// text of stacked notes starts at the same edge.
+struct StatusNote: View {
+    var text: String
+    var symbol: String
+    var color: Color
+
+    init(_ text: String, symbol: String, color: Color) {
+        self.text = text
+        self.symbol = symbol
+        self.color = color
+    }
+
+    var body: some View {
+        Label {
+            Text(Self.code(text))
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(color).frame(width: DS.Space.l)
+        }
+    }
+
+    /// Messages name commands in backticks ("Run `xcodes install 16.2`"); those parts are set in
+    /// code type. Only backticks: full Markdown would turn `__Snapshots__` in a path bold.
+    static func code(_ text: String) -> AttributedString {
+        let parts = text.split(separator: "`", omittingEmptySubsequences: false)
+        guard parts.count >= 3, parts.count % 2 == 1 else { return AttributedString(text) }
+        var result = AttributedString()
+        for (index, part) in parts.enumerated() {
+            var piece = AttributedString(String(part))
+            if index % 2 == 1 { piece.font = DS.Font.code }
+            result += piece
+        }
+        return result
     }
 }
 

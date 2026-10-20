@@ -35,7 +35,7 @@ struct ChangesTab: View {
                                      position: shown.firstIndex(of: change.id).map { ($0 + 1, shown.count) },
                                      step: { project.selectAdjacent($0) }) {
                             HStack(spacing: DS.Space.s) {
-                                KindBadge(kind: change.kind, style: .label)
+                                Chip(text: change.kind.label, color: DS.Status.color(for: change.kind))
                                 let viewed = project.viewedChanges.contains(change.id)
                                 Button { project.setViewed(!viewed, for: change) } label: {
                                     Label("Viewed", systemImage: viewed ? "checkmark.circle.fill" : "circle")
@@ -269,7 +269,7 @@ struct ChangesTab: View {
         let count = project.invisibleUncommitted.count
         return VStack(spacing: 0) {
             HStack(spacing: DS.Space.s) {
-                Image(systemName: "eye.slash").foregroundStyle(DS.Status.flaky).accessibilityHidden(true)
+                Image(systemName: "eye.slash").foregroundStyle(DS.Status.changed).accessibilityHidden(true)
                 Text("\(count) uncommitted snapshot\(count == 1 ? " has" : "s have") no visible change.")
                     .font(DS.Font.caption)
                     .fixedSize(horizontal: false, vertical: true)
@@ -421,7 +421,7 @@ struct ChangeRow: View {
                 Text(change.file.testName).fontWeight(.medium).lineLimit(1)
                     .foregroundStyle(viewed ? .secondary : .primary)
                 HStack(spacing: DS.Space.xs) {
-                    KindBadge(kind: change.kind, style: .dot)
+                    Circle().fill(DS.Status.color(for: change.kind)).frame(width: DS.Status.dot, height: DS.Status.dot)
                     // Named like the library: the variant in code type, not the file name.
                     (Text(change.kind.label) + Text(variant == nil ? "" : " · ")
                         + Text(variant ?? "").font(DS.Font.code))
@@ -529,20 +529,3 @@ struct SearchField: View {
     }
 }
 
-struct KindBadge: View {
-    enum Style { case dot, label }
-    var kind: SnapshotChangeKind
-    var style: Style = .dot
-
-    var body: some View {
-        switch style {
-        case .dot:
-            Circle().fill(color).frame(width: DS.Status.mark, height: DS.Status.mark)
-                .help(kind.label)
-        case .label:
-            Chip(text: kind.label, color: color)
-        }
-    }
-
-    private var color: Color { DS.Status.color(for: kind) }
-}

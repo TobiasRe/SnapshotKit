@@ -193,8 +193,7 @@ struct FailuresTab: View {
             Divider()
             if let message = item.test.failureMessages.first {
                 VStack(alignment: .leading, spacing: DS.Space.xs) {
-                    Label(firstLine(message), systemImage: "xmark.circle.fill")
-                        .foregroundStyle(DS.Status.text(DS.Status.failed))
+                    StatusNote(firstLine(message), symbol: "xmark.circle.fill", color: DS.Status.failed)
                         .lineLimit(2)
                         .textSelection(.enabled)
                     hint(item)
@@ -272,21 +271,24 @@ struct FailuresTab: View {
     private func verdictHint(_ item: FailureItem) -> some View {
         switch item.verdict {
         case .flaky:
-            Label("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.", systemImage: "lightbulb")
-                .foregroundStyle(DS.Status.text(DS.Status.flaky))
+            StatusNote("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.",
+                       symbol: "lightbulb", color: DS.Status.flaky)
+                .foregroundStyle(.secondary)
         case .alwaysFails where project.diagnoses[item.id]?.kind == .imperceptible:
-            Label("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.", systemImage: "lightbulb")
-                .foregroundStyle(DS.Status.text(DS.Status.flaky))
+            StatusNote("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.",
+                       symbol: "lightbulb", color: DS.Status.changed)
+                .foregroundStyle(.secondary)
         case .alwaysFails:
-            Label("Fails every time: re-record if the change is intended, otherwise it is a regression.", systemImage: "lightbulb")
+            StatusNote("Fails every time: re-record if the change is intended, otherwise it is a regression.",
+                       symbol: "lightbulb", color: .secondary)
                 .foregroundStyle(.secondary)
         case .passes:
-            Label("Did not reproduce in the flakiness check.", systemImage: "lightbulb")
+            StatusNote("Did not reproduce in the flakiness check.", symbol: "lightbulb", color: .secondary)
                 .foregroundStyle(.secondary)
         case nil:
             if item.historyFlaky != nil {
-                Label("Both passed and failed on the same commit in earlier runs.", systemImage: "lightbulb")
-                    .foregroundStyle(DS.Status.text(DS.Status.flaky))
+                StatusNote("Both passed and failed on the same commit in earlier runs.", symbol: "lightbulb", color: DS.Status.flaky)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -331,13 +333,13 @@ struct FailureRow: View {
             Thumbnail(id: "failure:\(item.id)#\(failure?.path ?? reference?.path ?? "")") {
                 (failure ?? reference).flatMap { try? Data(contentsOf: $0) }
             }
-            VStack(alignment: .leading, spacing: DS.Space.xs) {
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(item.test.name).fontWeight(.medium).lineLimit(1)
                 HStack(spacing: DS.Space.xs) {
                     // One label for what's known about its flakiness: the verdict with the runs
                     // behind it, else the runs, else what earlier runs showed.
                     let runs = item.test.repetitions.count > 1
-                        ? "\(item.test.failedRepetitions)/\(item.test.repetitions.count) runs failed" : nil
+                        ? "\(item.test.passedRepetitions) of \(item.test.repetitions.count) runs passed" : nil
                     if let verdict = item.verdict {
                         VerdictTag(verdict: verdict, detail: runs)
                     } else if let runs {
@@ -351,7 +353,8 @@ struct FailureRow: View {
                     } else if let kind = diagnosis.flatMap(DiagnosisChip.init) {
                         kind
                     } else if item.verdict == nil && item.test.repetitions.count <= 1 && item.historyFlaky == nil {
-                        Text(item.images.isEmpty ? "No images" : "Snapshot mismatch")
+                        // The reference still shows in the thumbnail; what's missing is the run's image.
+                        Text(item.images.isEmpty ? "No image from the run" : "Snapshot mismatch")
                             .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -440,7 +443,7 @@ struct HistoryStrip: View {
     static func summary(_ points: [HistoryPoint]) -> String {
         let passed = points.filter { $0.result == .passed }.count
         let mixed = points.filter { $0.result == .mixed }.count
-        var text = "\(passed) of \(points.count) passed"
+        var text = "\(passed) of \(points.count) recent runs passed"
         if mixed > 0 { text += ", \(mixed) mixed" }
         return text
     }
@@ -464,7 +467,7 @@ struct HistoryStrip: View {
 
 struct VerdictTag: View {
     var verdict: FlakeVerdict
-    /// What the verdict rests on, e.g. "3/5 runs failed".
+    /// What the verdict rests on, e.g. "2 of 5 runs passed".
     var detail: String?
 
     var body: some View {

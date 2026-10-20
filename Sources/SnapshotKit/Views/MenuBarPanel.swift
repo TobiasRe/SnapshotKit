@@ -126,8 +126,9 @@ struct MenuBarPanel: View {
             }
             Divider().padding(.top, DS.Space.xs)
             HStack {
+                // The panel's main action: primary text, not a tinted link, beside quieter Settings and Quit.
                 Button("Open SnapshotKit") { show(nil) }
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(.primary)
                 Spacer()
                 Button("Settings…") {
                     NSApp.activate(ignoringOtherApps: true)
@@ -180,8 +181,13 @@ struct RunProgressRow: View {
                 ProgressView().progressViewStyle(.linear)
             }
             HStack(spacing: DS.Space.m) {
-                Label("\(project.passed)", systemImage: "checkmark.circle.fill").foregroundStyle(DS.Status.passed)
-                Label("\(project.failed)", systemImage: "xmark.circle.fill").foregroundStyle(project.failed > 0 ? DS.Status.failed : .secondary)
+                // The icons carry the status colors; the numbers stay readable, as on the Run tab.
+                Label { Text("\(project.passed)") } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.Status.passed)
+                }
+                Label { Text("\(project.failed)") } icon: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(project.failed > 0 ? DS.Status.failed : .secondary)
+                }
                 Spacer()
                 if let started = project.startedAt {
                     Text(started, style: .timer).foregroundStyle(.secondary)
@@ -212,9 +218,7 @@ struct QuickProjectRow: View {
                     ProjectMonogram(name: project.name)
                     Text(project.name).fontWeight(.medium).lineLimit(1)
                     Spacer()
-                    if failing > 0 {
-                        Chip(text: "\(failing) failing", color: DS.Status.failed)
-                    }
+                    if failing > 0 { FailingCount(count: failing) }
                 }
                 .contentShape(Rectangle())
             }

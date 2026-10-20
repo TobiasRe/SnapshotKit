@@ -94,14 +94,7 @@ struct SidebarView: View {
                     // A failing count is status, so it carries the failed colour (the system
                     // badge would be a plain grey number).
                     if let failing = model.failingCounts[project.path], failing > 0 {
-                        HStack(spacing: DS.Space.xs) {
-                            Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
-                            Text("\(failing)").monospacedDigit()
-                        }
-                        .font(DS.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(failing) failing")
+                        FailingCount(count: failing)
                     }
                 }
             } icon: {
@@ -170,7 +163,7 @@ struct QuickSwitcherRow: View {
             Spacer(minLength: DS.Space.m)
             Text(current ? "Current" : Self.location(project.path))
                 .font(DS.Font.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
         }

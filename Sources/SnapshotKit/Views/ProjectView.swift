@@ -219,8 +219,7 @@ struct RunInspector: View {
                     }
                 } else if let error = project.configError {
                     PropertySection("Configuration") {
-                        Label(error, systemImage: "xmark.octagon.fill")
-                            .foregroundStyle(DS.Status.text(DS.Status.failed))
+                        StatusNote(error, symbol: "xmark.circle.fill", color: DS.Status.failed)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -246,11 +245,9 @@ struct RunInspector: View {
                         source: env.simulator.state)
         } else if let error = project.environmentError {
             VStack(alignment: .leading, spacing: DS.Space.s) {
-                Label {
-                    Text(error).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
-                }
+                StatusNote(error, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
                 // Reload, not just re-check: the fix is often an edit to .snapshotkit.yml.
                 Button("Check Again") { project.reload() }
                     .quietControl()
@@ -289,7 +286,12 @@ struct PropertySection<Content: View>: View {
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: DS.Space.xs) { content }
             if let footer { FormFooter(footer).padding(.top, DS.Space.xxs) }
-            ForEach(notes, id: \.self) { FormFooter($0).foregroundStyle(DS.Status.text(DS.Status.flaky)) }
+            ForEach(notes, id: \.self) { note in
+                StatusNote(note, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, DS.Space.xxs)
+            }
         }
         .font(DS.Font.secondary)
     }
@@ -322,7 +324,7 @@ struct PropertyRow<Value: View>: View {
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 value
                 if let source {
-                    Text(source).font(DS.Font.caption).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                    Text(source).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -405,7 +407,7 @@ struct RunStatusHeader: View {
                     }
                 } else {
                     // Three zeros say nothing; say that instead, in the same place.
-                    Text("No results yet").foregroundStyle(.tertiary)
+                    Text("No results yet").foregroundStyle(.secondary)
                 }
                 Spacer(minLength: DS.Space.s)
                 if let test = project.currentTest, project.isRunning {
@@ -437,9 +439,10 @@ struct RunStatusHeader: View {
         } else if project.environmentError != nil {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
         } else if project.lastMessageIsError || (project.lastMessage == nil && project.failed > 0) {
-            Image(systemName: "xmark.octagon.fill").foregroundStyle(DS.Status.failed)
+            // The same marks as a test's row: failed and passed are circles everywhere.
+            Image(systemName: "xmark.circle.fill").foregroundStyle(DS.Status.failed)
         } else if project.lastResult != nil || project.lastMessage != nil || project.passed > 0 {
-            Image(systemName: "checkmark.seal.fill").foregroundStyle(DS.Status.passed)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.Status.passed)
         } else {
             Image(systemName: "play.circle").foregroundStyle(.secondary)
         }
@@ -574,8 +577,12 @@ struct LogView: View {
                         .fixedSize()
                 }
                 let testCount = suites.reduce(0) { $0 + $1.tests.count }
-                Text(showResults ? "\(testCount) test\(testCount == 1 ? "" : "s")" : "\(lines.count) line\(lines.count == 1 ? "" : "s")")
-                    .font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                let count = showResults ? testCount : lines.count
+                // "0 lines" says nothing the empty pane doesn't.
+                if count > 0 {
+                    Text(showResults ? "\(count) test\(count == 1 ? "" : "s")" : "\(count) line\(count == 1 ? "" : "s")")
+                        .font(DS.Font.caption).foregroundStyle(.secondary).monospacedDigit()
+                }
                 Spacer()
                 SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter,
                             focusRequest: project.focusFilterRequest)
@@ -635,7 +642,7 @@ struct LogView: View {
             .overlay {
                 if lines.isEmpty {
                     ContentUnavailableView(
-                        project.isRunning ? "Waiting for output" : "No output yet",
+                        project.isRunning ? "Waiting for Output" : "No Output Yet",
                         systemImage: "text.alignleft",
                         description: Text(project.isRunning ? "xcodebuild is starting…" : "Output from the next run appears here.")
                     )
@@ -706,7 +713,7 @@ struct RunResultsList: View {
                             Text("\(suite.failedCount) failed").foregroundStyle(DS.Status.text(DS.Status.failed))
                         }
                         if suite.passedCount > 0 {
-                            Text("\(suite.passedCount) passed").foregroundStyle(.tertiary)
+                            Text("\(suite.passedCount) passed").foregroundStyle(.secondary)
                         }
                     }
                     .monospacedDigit()
@@ -726,7 +733,7 @@ struct RunResultsList: View {
             .flatMap { suite in
                 suite.tests.map { test in
                     let mark = switch test.outcome { case .passed: "✔"; case .failed: "✘"; default: "–" }
-                    let reps = test.repetitions.count > 1 ? " (\(test.passedRepetitions)/\(test.repetitions.count) passed)" : ""
+                    let reps = test.repetitions.count > 1 ? " (\(test.passedRepetitions) of \(test.repetitions.count) runs passed)" : ""
                     return "\(mark) \(suite.identifier)/\(test.name)\(reps)"
                 }
             }
@@ -742,7 +749,7 @@ struct RunResultsList: View {
                 .accessibilityLabel(test.outcome.rawValue)
             Text(test.name).lineLimit(1)
             if test.repetitions.count > 1 {
-                Chip(text: "\(test.passedRepetitions)/\(test.repetitions.count) passed",
+                Chip(text: "\(test.passedRepetitions) of \(test.repetitions.count) runs passed",
                      color: test.failedRepetitions > 0 && test.passedRepetitions > 0 ? DS.Status.flaky : DS.Status.neutral)
             }
             Spacer()

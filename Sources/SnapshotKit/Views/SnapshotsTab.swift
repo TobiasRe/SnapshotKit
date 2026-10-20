@@ -293,7 +293,7 @@ struct SnapshotRow: View {
             }
             Spacer(minLength: DS.Space.s)
             // Only failing gets a mark of its own: the line above already says how it changed.
-            StatusMarks(status: SnapshotStatus(failureID: status.failureID, verdict: status.verdict))
+            if status.failureID != nil { FailingMark(verdict: status.verdict) }
             switch detail {
             case .size:
                 Text(SnapshotLibrary.formatSize(file.byteSize))
@@ -348,7 +348,7 @@ struct SnapshotStatusLine: View {
         let variant = showVariant && !file.variant.isEmpty ? file.variant : nil
         HStack(spacing: DS.Space.xs) {
             if let state {
-                Circle().fill(state.color).frame(width: DS.Status.mark, height: DS.Status.mark)
+                Circle().fill(state.color).frame(width: DS.Status.dot, height: DS.Status.dot)
             }
             (Text(state?.label ?? "") + Text(state != nil && variant != nil ? " · " : "")
                 + Text(variant ?? "").font(DS.Font.code))
@@ -360,23 +360,16 @@ struct SnapshotStatusLine: View {
     }
 }
 
-/// Small marks at the end of a row: failing in the last run, changed against the base branch.
-struct StatusMarks: View {
-    var status: SnapshotStatus
+/// The mark at the end of a row (or on a tile) whose test failed in the last run: a triangle when
+/// it is flaky. How the snapshot changed is its status line's to say.
+struct FailingMark: View {
+    var verdict: FlakeVerdict?
 
     var body: some View {
-        HStack(spacing: DS.Space.xs) {
-            if status.failureID != nil {
-                Image(systemName: status.verdict == .flaky ? "exclamationmark.triangle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(status.verdict == .flaky ? DS.Status.flaky : DS.Status.failed)
-                    .help(status.verdict == .flaky ? "Flaky: failed in some runs" : "Its test failed in the last run")
-            }
-            if let change = status.change {
-                KindBadge(kind: change, style: .dot)
-                    .help("\(change.label) change against the base branch")
-            }
-        }
-        .accessibilityHidden(true)
+        Image(systemName: verdict == .flaky ? "exclamationmark.triangle.fill" : "xmark.circle.fill")
+            .foregroundStyle(verdict == .flaky ? DS.Status.flaky : DS.Status.failed)
+            .help(verdict == .flaky ? "Flaky: failed in some runs" : "Its test failed in the last run")
+            .accessibilityHidden(true)
     }
 }
 
@@ -544,7 +537,8 @@ struct SnapshotDetail: View {
                         .pickerStyle(.inline)
                         .labelsHidden()
                     } label: {
-                        Text(name(file)).font(DS.Font.code)
+                        // In the segments' type: a control's label, not a file name.
+                        Text(name(file))
                     }
                     .fixedSize()
                     .quietControl()
@@ -576,7 +570,7 @@ struct SnapshotDetail: View {
     private func compareMenu(variants: [SnapshotFile]) -> some View {
         let others = variants.filter { $0.id != file.id }
         return Menu {
-            Button("Nothing (Show Current Only)") { project.comparison = nil }
+            Button("Show Only This Snapshot") { project.comparison = nil }
             if !others.isEmpty {
                 Section("Variants") {
                     ForEach(others) { other in
@@ -682,7 +676,7 @@ struct SnapshotViewer: View {
                 }
                 Text(SnapshotLibrary.formatSize(fileSize))
                     .font(DS.Font.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 ZoomControls()
             }
             .controlSize(.small)
@@ -785,7 +779,7 @@ struct SnapshotGrid: View {
                 .overlay(alignment: .topTrailing) {
                     // Like a row: only failing gets a mark; the line below says how it changed.
                     if status.failureID != nil {
-                        StatusMarks(status: SnapshotStatus(failureID: status.failureID, verdict: status.verdict))
+                        FailingMark(verdict: status.verdict)
                             .padding(.horizontal, DS.Space.xs)
                             .padding(.vertical, DS.Space.xxs)
                             .background(Capsule(style: .circular).fill(Color(nsColor: .windowBackgroundColor).opacity(0.9)))

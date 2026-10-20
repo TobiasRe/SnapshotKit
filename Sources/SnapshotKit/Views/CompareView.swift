@@ -177,9 +177,11 @@ struct CompareView: View {
             .fixedSize()
 
             if showStats, let stats = pair?.stats {
-                HStack(spacing: DS.Space.xs + 1) {
+                HStack(spacing: DS.Space.xs) {
+                    // Neutral when nobody could see the difference, as the diagnosis beside it says.
                     Circle()
-                        .fill(stats.isIdentical ? DS.Status.passed : DS.Status.changed)
+                        .fill(stats.isIdentical ? DS.Status.passed
+                              : pair?.diagnosis?.kind == .imperceptible ? DS.Status.neutral : DS.Status.changed)
                         .frame(width: DS.Status.dot, height: DS.Status.dot)
                     Text(stats.isIdentical
                          ? "Identical"
@@ -204,7 +206,7 @@ struct CompareView: View {
                 } else {
                     Text(verbatim: "\(Int(size.width))×\(Int(size.height))")
                         .font(DS.Font.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .fixedSize()
                 }
             }
@@ -377,7 +379,8 @@ struct PixelReadout: View {
             if let a, let b {
                 let delta = a.perceptualDistance(to: b)
                 Text(a == b ? "same" : String(format: "ΔE %.1f", delta))
-                    .foregroundStyle(a == b ? Color.secondary : DS.Status.text(delta < 2.3 ? DS.Status.flaky : DS.Status.changed))
+                    // Invisible differences stay quiet; orange would read as flaky.
+                    .foregroundStyle(a == b || delta < 2.3 ? Color.secondary : DS.Status.text(DS.Status.changed))
                     .help("CIE94 color difference. Below 2.3 is invisible to the eye.")
             }
         }
@@ -466,8 +469,9 @@ struct DiagnosisNote: View {
     var body: some View {
         if let icon {
             HStack(spacing: DS.Space.s) {
+                // Diagnosis is about changed pixels, like its chips: the changed color, not flaky's.
                 Image(systemName: icon)
-                    .foregroundStyle(DS.Status.flaky)
+                    .foregroundStyle(DS.Status.changed)
                     .accessibilityHidden(true)
                 Text(diagnosis.summary)
                     .lineLimit(2)

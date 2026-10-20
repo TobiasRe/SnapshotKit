@@ -86,10 +86,11 @@ struct WelcomeView: View {
             }
             Text("Or drop a repository onto this window. ⌘K finds projects and commands.")
                 .font(DS.Font.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .padding(DS.Space.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DS.Surface.content)
     }
 
     private func feature(_ icon: String, _ title: String, _ detail: String) -> some View {
@@ -116,7 +117,8 @@ struct NoticeBanner: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Space.s) {
-            Image(systemName: isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
+            // Failed is a red circle everywhere; the triangle means a warning.
+            Image(systemName: isError ? "xmark.circle.fill" : "info.circle.fill")
                 .foregroundStyle(isError ? DS.Status.failed : Color.secondary)
             Text(text)
                 .font(DS.Font.secondary)

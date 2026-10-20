@@ -79,7 +79,7 @@ extension PaletteCommand {
         commands += [
             .init(title: "Show Snapshots", symbol: "photo.stack", shortcut: "⌥⌘1") { project.tab = .snapshots },
             .init(title: "Show Changes", symbol: "arrow.triangle.branch", shortcut: "⌥⌘2") { project.tab = .changes },
-            .init(title: "Show Failures", symbol: "xmark.octagon", shortcut: "⌥⌘3") { project.tab = .failures },
+            .init(title: "Show Failures", symbol: "xmark.circle", shortcut: "⌥⌘3") { project.tab = .failures },
             .init(title: "Show Run", symbol: "terminal", shortcut: "⌥⌘4") { project.tab = .run },
             .init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() },
             .init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() },
@@ -108,7 +108,7 @@ struct PaletteCommandRow: View {
             if let shortcut = command.shortcut {
                 Text(shortcut)
                     .font(DS.Font.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, DS.Space.s)

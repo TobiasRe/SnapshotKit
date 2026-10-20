@@ -74,7 +74,7 @@ can be followed between these views, and re-recording is available wherever a sn
 | Surfaces (`DS.Surface`) | content · selection (grid tiles, primary 8%) · thumb (chosen segment, 10%) · hover (4%) · match (log filter hits) · hairline (separator) |
 | Panes (`DS.Pane`) | a detail is at least 440 wide; the list beside it gives way first |
 | Type (`DS.Font`) | heading (headline) · secondary (callout) · caption · code (mono caption) · log (mono 11) |
-| Status (`DS.Status`) | passed · failed · flaky · neutral · changed; dot 6 beside a label, mark 7 on its own |
+| Status (`DS.Status`) | passed · failed · flaky · neutral · changed; a dot of 6 beside its label |
 
 ## Components
 
