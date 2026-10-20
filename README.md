@@ -115,25 +115,29 @@ snapkit run --remote      # on the machine in remoteHost
 ### Use SnapshotKit as your diff tool
 
 swift-snapshot-testing ends a failure message with a command for your diff tool, given the reference and
-the image the test produced. Name `snapkit open` and that command opens the pair in a SnapshotKit compare
+the image the test produced. Make that command `snapkit open` and it opens the pair in a SnapshotKit compare
 window (side by side, slider, difference, toggle and the diagnosis), with **Show in Project** to jump to
 the snapshot in its library:
 
 ```swift
+extension SnapshotTestingConfiguration.DiffTool {
+    // Quotes the paths; a plain "snapkit open" string would get them unquoted.
+    static let snapkit = Self { "snapkit open \"\($0)\" \"\($1)\"" }
+}
+
 // Swift Testing: on a suite, or a base suite the others nest in
-@Suite(.snapshots(diffTool: "snapkit open"))
+@Suite(.snapshots(diffTool: .snapkit))
 struct CheckoutViewTests { … }
 
 // XCTest: in a shared base class
 override func invokeTest() {
-    withSnapshotTesting(diffTool: "snapkit open") { super.invokeTest() }
+    withSnapshotTesting(diffTool: .snapkit) { super.invokeTest() }
 }
 ```
 
-The message then ends in `snapkit open "<reference>" "<actual>"`: run it from Terminal (or Xcode's
-report navigator, copied). It prints the same summary as `snapkit diff` and opens SnapshotKit.app, or the
-app given with `--app PATH` or `SNAPSHOTKIT_APP`. For a terminal-only answer, use `"snapkit diff"` instead.
-Other tools can open the same window with a `snapshotkit://compare?reference=<path>&actual=<path>` link.
+The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from Xcode's Report navigator and
+run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. See
+[Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
 
 ## Configuration
 

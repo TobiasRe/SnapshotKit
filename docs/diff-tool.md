@@ -9,8 +9,24 @@ command opens the pair in a SnapshotKit compare window.
 
 ## Set it up
 
-Install SnapshotKit.app and put `snapkit` on your `PATH` ([Getting started](getting-started.md)). Then name the
-tool in your tests.
+Install SnapshotKit.app and put `snapkit` on your `PATH` ([Getting started](getting-started.md)). Then define
+the tool once, in a file of your test target:
+
+```swift
+import SnapshotTesting
+
+extension SnapshotTestingConfiguration.DiffTool {
+    /// Opens a failing snapshot's reference and actual image in SnapshotKit.
+    static let snapkit = Self { "snapkit open \"\($0)\" \"\($1)\"" }
+}
+```
+
+The closure gets the path of the reference and the path of the image the test produced, and quotes them, so
+paths with spaces work. A plain string such as `"snapkit open"` is a `DiffTool` too, but swift-snapshot-testing
+appends the two paths to it unquoted, and the command breaks at the first space. If your snapshot tests share a
+support module, declare the tool there as `public static let`.
+
+Then name it in your tests.
 
 **Swift Testing** — on a suite, or on a base suite that your snapshot suites nest in:
 
@@ -18,7 +34,7 @@ tool in your tests.
 import SnapshotTesting
 import Testing
 
-@Suite(.snapshots(diffTool: "snapkit open"))
+@Suite(.snapshots(diffTool: .snapkit))
 struct CheckoutViewTests {
     @Test func payButton() {
         assertSnapshot(of: PayButton(), as: .image)
@@ -34,14 +50,12 @@ import XCTest
 
 class SnapshotTestCase: XCTestCase {
     override func invokeTest() {
-        withSnapshotTesting(diffTool: "snapkit open") {
+        withSnapshotTesting(diffTool: .snapkit) {
             super.invokeTest()
         }
     }
 }
 ```
-
-A string literal works as a `DiffTool`: swift-snapshot-testing appends the two paths, quoted.
 
 ## What you get
 
@@ -74,10 +88,14 @@ Opening the same pair again brings its window forward; each new pair gets its ow
 
 ## Terminal only: `snapkit diff`
 
-If you'd rather not leave the terminal, name `snapkit diff` instead:
+If you'd rather not leave the terminal, define a tool that runs `snapkit diff` instead:
 
 ```swift
-@Suite(.snapshots(diffTool: "snapkit diff"))
+extension SnapshotTestingConfiguration.DiffTool {
+    static let snapkitDiff = Self { "snapkit diff \"\($0)\" \"\($1)\"" }
+}
+
+@Suite(.snapshots(diffTool: .snapkitDiff))
 ```
 
 The command then prints the summary and, for invisible or tiny differences, the precision that would pass.
@@ -92,7 +110,7 @@ Append `-o diff.png` to write the difference image.
 3. the installed SnapshotKit.app (by its bundle id `org.snapshotkit.SnapshotKit`).
 
 Use `--app` or `SNAPSHOTKIT_APP` for a development build, e.g.
-`.snapshots(diffTool: "snapkit open --app ~/Developer/SnapshotKit/dist/SnapshotKit.app")`.
+`Self { "snapkit open --app ~/Developer/SnapshotKit/dist/SnapshotKit.app \"\($0)\" \"\($1)\"" }`.
 
 ## From other tools: `snapshotkit://`
 

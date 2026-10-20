@@ -459,11 +459,17 @@ ShopTests/ShopScreenTests
           <h3>Your diff tool, too.</h3>
           <p>Name <code>snapkit open</code> as swift-snapshot-testing's diff tool, and every failing test's message ends in a command that opens the reference and the actual image side by side in SnapshotKit, one click from the snapshot in its project.</p>
         </div>
-<pre><span class="p">// Swift Testing</span>
-@Suite(.snapshots(diffTool: "snapkit open"))
+<pre>extension SnapshotTestingConfiguration.DiffTool {
+  static let snapkit = Self {
+    "snapkit open \"\($0)\" \"\($1)\""
+  }
+}
+
+<span class="p">// Swift Testing</span>
+@Suite(.snapshots(diffTool: .snapkit))
 
 <span class="p">// XCTest</span>
-withSnapshotTesting(diffTool: "snapkit open") { … }</pre>
+withSnapshotTesting(diffTool: .snapkit) { … }</pre>
       </div>
       <p class="note">Output from the sample projects that <code>scripts/make-samples.sh</code> generates, with paths shortened.</p>
     </div>

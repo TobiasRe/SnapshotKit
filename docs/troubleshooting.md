@@ -109,6 +109,11 @@ apply there.
 **`snapkit open` says "Couldn't open SnapshotKit".**
 Install SnapshotKit.app in `/Applications`, or tell it where the app is with `--app PATH` or `SNAPSHOTKIT_APP`.
 
+**The command from the failure message prints "usage: snapkit open …" or "no such file".**
+A path contains a space and isn't quoted. That happens when the diff tool is the plain string `"snapkit open"`:
+swift-snapshot-testing appends the paths to a string unquoted. Define the tool with a closure that quotes them,
+as in [Set it up](diff-tool.md#set-it-up).
+
 ## Where to report a problem
 
 Open an issue at [github.com/TobiasRe/SnapshotKit/issues](https://github.com/TobiasRe/SnapshotKit/issues) with
