@@ -1171,12 +1171,15 @@ final class ProjectModel {
                 }
                 if let verifyRun = outcome.verifyRun {
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: "local", repository: project.url, result: verifyRun))
+                }
+                // A cancelled verification has no results; the last run's failures stay.
+                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
                     LastRun(result: verifyRun).save(repository: project.url)
                     lastFailingSuites = verifyRun.failingSuites
                     setFailures(suites: verifyRun.failingSuites, images: [], source: FailureSource(label: "Verification run", date: Date(), host: "local"))
                     if verifyRun.succeeded {
                         message += " Verified: \(verifyRun.passed) passed."
-                    } else if !verifyRun.cancelled {
+                    } else {
                         message += " Verification still fails (\(verifyRun.failed)) — the test may be flaky; try Check flakiness."
                         isError = true
                     }

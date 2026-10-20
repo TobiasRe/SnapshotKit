@@ -649,5 +649,21 @@ extension AppUITests {
             #expect(model.lastMessage == "Cancelled.")
             #expect(try Shell.output(["git", "status", "--porcelain", "--", "Tests/AppTests/CardTests.swift"], in: repo).isEmpty)
         }
+
+        /// Cancelling the verification after a re-record leaves the failures as they were.
+        @Test func cancellingTheVerificationKeepsTheFailures() async throws {
+            let repo = try makeRecordableRepo()
+            // Records at once; the second run, the verification, waits.
+            let model = try runnableModel(repo, xcodebuild: "[ -e \"$0.ran\" ] || { touch \"$0.ran\"; exit 0; }\n" + Self.longRun,
+                                          failures: true)
+            let failures = model.failures.map(\.id)
+            model.reRecordFailed(suites: [Self.cardSuite])
+            try await waitUntilStarted(model)
+            model.cancel()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded CardTests.")
+            #expect(model.failures.map(\.id) == failures)
+            #expect(LastRun.load(repository: repo) == nil)
+        }
     }
 }
