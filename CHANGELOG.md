@@ -6,6 +6,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
 ### Added
 - Hosted documentation at [tobiasre.github.io/SnapshotKit/docs](https://tobiasre.github.io/SnapshotKit/docs/),
   linked from the website and the README.
@@ -99,6 +101,7 @@ snapshot tests built with swift-snapshot-testing.
 - `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
   changes and failures, to try SnapshotKit on.
 
-[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TobiasRe/SnapshotKit/releases/tag/v0.1.0
