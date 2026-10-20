@@ -1383,8 +1383,10 @@ final class ProjectModel {
         }
         let flaky = flakeResults.filter { $0.verdict == .flaky }.count
         let always = flakeResults.filter { $0.verdict == .alwaysFails }.count
+        let passing = flakeResults.count - always - flaky
         let start = operationTab
-        finish(message: "\(iterations)× on \(result.host): \(always) fail every time, \(flaky) flaky, \(flakeResults.count - always - flaky) pass.",
+        finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, \(flaky) flaky, "
+                + "\(passing) pass\(passing == 1 ? "es" : "").",
                action: .showFailures)
         moveOn(to: .failures, from: start)
     }

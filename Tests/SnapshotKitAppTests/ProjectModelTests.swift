@@ -954,6 +954,15 @@ extension AppUITests {
             #expect(none.lastMessageIsError)
         }
 
+        /// A flakiness check's summary reads right for one test.
+        @Test func aFlakinessCheckOfOneTestReadsRight() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed, failures: true)
+            model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
