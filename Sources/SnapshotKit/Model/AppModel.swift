@@ -138,8 +138,7 @@ final class AppModel {
 
     /// Runs a project's snapshot tests from outside its window (the menu bar), opening it first.
     func runTests(path: String) {
-        open(path: path)
-        guard let model = models[Project(path: path).path] else { return }
+        guard let model = open(path: path) else { return }
         // A project opened just now is still checking Xcode and the simulator.
         Task {
             for _ in 0..<300 where model.environment == nil && model.environmentError == nil && model.configError == nil {
@@ -149,18 +148,28 @@ final class AppModel {
         }
     }
 
-    func open(path: String) {
+    /// Opens (and adds) the project at `path`. A folder that is gone or outside any git repository
+    /// is no project: the window says so, and nil comes back.
+    @discardableResult
+    func open(path: String) -> ProjectModel? {
+        guard Git.repository(containing: URL(fileURLWithPath: path)) != nil else {
+            let name = path.abbreviatingWithTildeInPath
+            startupNotice = FileManager.default.fileExists(atPath: path)
+                ? "Can't open \(name): it isn't in a git repository."
+                : "Can't open \(name): there is no such folder."
+            return nil
+        }
         let project = Project(path: path)
         store.markOpened(project)
         refreshProjects()
         selectedPath = project.path
+        return current
     }
 
     /// Opens the repository (adding it if it's new) and selects the snapshot at `path` in its library
     /// once the library has loaded.
     func reveal(snapshot path: String, in repository: URL) {
-        open(path: repository.path)
-        guard let model = models[Project(path: repository.path).path] else { return }
+        guard let model = open(path: repository.path) else { return }
         Task {
             for _ in 0..<100 where !model.isInLibrary(path) {
                 try? await Task.sleep(for: .milliseconds(100))

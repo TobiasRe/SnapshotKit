@@ -353,6 +353,21 @@ extension AppUITests {
             #expect(!app.addDroppedFolders([file]))
         }
 
+        /// A folder that is gone (or never was a repository) is not added as a project, and the window says why.
+        @Test func openingAFolderOutsideAnyRepositoryIsRefused() throws {
+            let app = AppModel(store: AppFixtures.store())
+            let projects = app.projects.map(\.path)
+            let missing = AppFixtures.temporaryDirectory("gone").appendingPathComponent("Shop")
+            #expect(app.open(path: missing.path) == nil)
+            #expect(app.startupNotice?.contains("Shop") == true)
+            let plain = AppFixtures.temporaryDirectory("plain")
+            try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+            #expect(app.open(path: plain.path) == nil)
+            #expect(app.projects.map(\.path) == projects)
+            #expect(app.current == nil)
+            #expect(app.store.settings.recents.allSatisfy { $0 != missing.path && $0 != plain.path })
+        }
+
         @Test func exportsBaseImageForOpeningElsewhere() async throws {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
