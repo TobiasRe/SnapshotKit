@@ -366,8 +366,10 @@ final class ProjectModel {
         }
     }
 
+    /// Shows the last run on disk, unless what is shown is newer: a run of this session, or an
+    /// imported bundle, which a reload (another base branch) must not replace.
     private func loadLastRun() {
-        guard let last = LastRun.load(repository: project.url) else { return }
+        guard let last = LastRun.load(repository: project.url), failureSource.map({ last.date > $0.date }) ?? true else { return }
         lastFailingSuites = last.failingSuites
         restoredSuites = last.suites ?? []
         passed = last.passed

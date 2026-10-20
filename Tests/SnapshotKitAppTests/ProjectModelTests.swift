@@ -650,6 +650,31 @@ extension AppUITests {
             #expect(model.configError?.contains("no folder") == true)
         }
 
+        /// Failures newer than the last run on disk (from an imported bundle) stay through a reload,
+        /// such as choosing another base branch.
+        @Test func aReloadKeepsNewerFailures() async throws {
+            let (repo, _) = try makeRepo()
+            var last = LastRun(result: TestRunResult(commandLine: "xcodebuild test", exitStatus: 65, cancelled: false,
+                                                     resultBundle: repo.appendingPathComponent("run.xcresult"),
+                                                     summary: TestRunSummary(suites: [AppFixtures.profileSuite]),
+                                                     passed: 0, failed: 1, skipped: 0, buildErrors: []))
+            last.date = Date().addingTimeInterval(-3600)
+            last.save(repository: repo)
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
+            var f = ProjectFixture()
+            f.context = AppFixtures.context(at: repo)
+            f.failingSuites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
+            f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures"))
+            f.failureSource = FailureSource(label: "ci.xcresult", date: Date(), host: "imported")
+            model.apply(f)
+            let failures = model.failures.map(\.id)
+
+            model.setBaseBranch("develop")
+            await waitForChanges(model)
+            #expect(model.failures.map(\.id) == failures)
+            #expect(model.failureSource?.host == "imported")
+        }
+
         /// A project added while the counts are being read gets its count too.
         @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
             let solid = DS.solidSurfaces
