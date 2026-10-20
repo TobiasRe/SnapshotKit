@@ -30,7 +30,7 @@ Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it wi
 | [`projects`](#projects) | scan folders for projects, or list them |
 | `help`, `version` | usage, and `snapkit <version>` |
 
-## Common behaviour
+## Common behavior
 
 **Which repository.** `--repo PATH`, or the current directory. Any folder inside a repository works: `snapkit`
 uses the repository's root (`git rev-parse --show-toplevel`). Outside a repository: *error: … is not inside a
@@ -43,7 +43,7 @@ and `projects` don't need it.
 **Options** come after the command, in any order. Repeating an option keeps the last value, except `--only`
 and `--suite`, which collect every value. Unknown options are ignored.
 
-**Output.** Colour only when writing to a terminal. Errors go to standard error as `error: …`. Progress lines
+**Output.** Color only when writing to a terminal. Errors go to standard error as `error: …`. Progress lines
 start with `▸`, SnapshotKit's own notes with `snapkit:`. Test output is shortened to what matters (suites,
 failures, errors, the summary); `--verbose` prints everything `xcodebuild` prints.
 
@@ -166,7 +166,7 @@ Failure images: 2 (see `snapkit failures`)
 plus up to ten build errors when the build failed. The run is added to the history, and (without
 `--iterations`) remembered as the last run, which the app's Failures tab and `rerecord` / `failures` use.
 
-Exits 0 when the tests passed, 1 when they failed, the build failed or the run was cancelled.
+Exits 0 when the tests passed, 1 when they failed, the build failed or the run was canceled.
 
 ## record
 
@@ -199,7 +199,7 @@ Other endings: *Recorded, but verification failed: 1 still failing (flaky?).* an
 *Recorded.* If the test source couldn't be restored automatically you get a `WARNING:` naming the backup.
 
 No match: *No snapshot path contains 'x' and 'y'.* Exits 0 when verified, 1 when verification fails or the
-run is cancelled. See [Re-recording](re-recording.md).
+run is canceled. See [Re-recording](re-recording.md).
 
 ## rerecord
 

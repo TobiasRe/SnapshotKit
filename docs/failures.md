@@ -72,7 +72,7 @@ also differ in shape.
 **Message** — the first line of the failure message, and for a flaky test the advice: *Passes sometimes, so
 re-recording will not fix it. Look for animations, async loading, dates or random data.*
 
-**Compare** — reference and actual in the [compare view](comparing.md), labelled *Reference* and *Actual* with the device (*Actual · iPhone 16 Pro*). When the run repeated the test
+**Compare** — reference and actual in the [compare view](comparing.md), labeled *Reference* and *Actual* with the device (*Actual · iPhone 16 Pro*). When the run repeated the test
 (a flakiness check), a **Repetition** picker (*Run 1 of 5*…) shows each attempt.
 
 ## What to do with a failure

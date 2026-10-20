@@ -72,7 +72,7 @@ palette.
 ⌘K (File › Go to Project or Command…) opens a palette over the window. Type to filter; ↑/↓ to move; Return
 to choose; Escape to close.
 
-- **Projects** match by name first, then by path. The current project is labelled *Current*, others show
+- **Projects** match by name first, then by path. The current project is labeled *Current*, others show
   their folder.
 - **Commands** are whatever can be done right now in the open project, each with its keyboard shortcut:
   Run Snapshot Tests, Re-record Selected Test, Open Test in Xcode, Re-record Failing Tests, Check

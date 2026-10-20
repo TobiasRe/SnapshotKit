@@ -40,7 +40,7 @@ The value is anything `ssh` accepts: `user@ci-mac.local`, or an alias from `~/.s
 2. **Syncing working tree** — your tracked files plus untracked files that aren't ignored (`git ls-files -co
    --exclude-standard`) are copied with `rsync`, including uncommitted changes. Files you deleted are deleted
    there too, except build products (`.build`, `.swiftpm`, `DerivedData`, `.snapshotkit`).
-3. **Running tests remotely** — `xcodebuild test` with the CI configuration, over `ssh -tt`, so cancelling here
+3. **Running tests remotely** — `xcodebuild test` with the CI configuration, over `ssh -tt`, so canceling here
    stops it there. The output streams into the Run tab.
 4. **Collecting results** — the result summary and failure images are fetched, and remote paths are mapped back
    to your repository, so the Failures tab works as for a local run.
@@ -61,7 +61,7 @@ remote runs.
 ## Checking flakiness remotely
 
 **Run tab › ··· › On *host* › Check Flakiness** (or `snapkit flaky --remote`) repeats the failing tests on the
-remote Mac. A test that fails on CI but passes on your Mac often shows its true colours there.
+remote Mac. A test that fails on CI but passes on your Mac often shows its true colors there.
 
 ## A local "remote"
 

@@ -59,7 +59,7 @@ snapshot tests built with swift-snapshot-testing.
 
 ### Failing and flaky tests
 - Reference vs. actual vs. difference for the last run or an `.xcresult` from CI.
-- Each difference is diagnosed (invisible, a few pixels, size changed, visible) using the CIE94 colour
+- Each difference is diagnosed (invisible, a few pixels, size changed, visible) using the CIE94 color
   difference behind `perceptualPrecision`, with the precision that would pass.
 - Flakiness checks, a strip of each test's recent runs, and run history that flags tests which both passed
   and failed on the same commit.

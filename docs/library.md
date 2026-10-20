@@ -56,7 +56,7 @@ Each row has a thumbnail, the test name, the variant and, when it matters, a sta
 - **Orphaned** — its test no longer exists.
 
 Marks at the trailing edge tell you where else the snapshot appears: a red ✕ when its test failed in the last
-run, an orange ⚠ when the test is flaky, a coloured dot when it is in the Changes list. Click a mark to jump
+run, an orange ⚠ when the test is flaky, a colored dot when it is in the Changes list. Click a mark to jump
 to that failure or change.
 
 A test's variants are listed under one title; the variant is left out when a test has only one.

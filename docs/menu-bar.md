@@ -16,7 +16,7 @@ runs continue, and the menu bar item reopens the window. With it off, closing th
 | Nothing running, tests failing | the symbol and the number of failing tests across your projects |
 | A run in progress | a pie that fills as tests complete, and `done/total` (e.g. `13/30`); a quarter arc while the total isn't known yet |
 
-The icon is a template image, so it follows the menu bar's colour in light and dark mode and with a coloured
+The icon is a template image, so it follows the menu bar's color in light and dark mode and with a colored
 wallpaper.
 
 ## The panel

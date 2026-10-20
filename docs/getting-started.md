@@ -97,7 +97,7 @@ the folder as a scan folder.
 4. **Failures** — after a run (or after importing a CI `.xcresult`), every failing snapshot with reference,
    actual image and difference, diagnosed. See [Failures and flaky tests](failures.md).
 5. **Re-record** — the camera button in a detail header (⇧⌘R) records the selected test again and verifies
-   it; the arrow next to the toolbar's Run button re-records all failing or all snapshot tests. See
+   it; the arrow next to the toolbar's Run button re-records the failing tests or every snapshot test. See
    [Re-recording](re-recording.md).
 
 Press ⌘K at any time to jump to a project or run a command by name.

@@ -18,7 +18,7 @@ they're ignored) with the base branch:
 | **New** | added on this branch, or a new file not committed yet |
 | **Deleted** | removed on this branch |
 
-Each change carries its kind as a coloured dot and label, and the row shows the variant like the library does.
+Each change carries its kind as a colored dot and label, and the row shows the variant like the library does.
 
 ## The base branch
 
@@ -95,7 +95,7 @@ Viewed marks work like a code review's:
 ## Re-records with no visible change
 
 Re-recording on your machine often rewrites PNGs that look exactly the same — a different GPU or OS version
-renders a few colours a tiny bit differently. Those uncommitted changes are noise in a pull request.
+renders a few colors a tiny bit differently. Those uncommitted changes are noise in a pull request.
 
 When there are any, a row at the top of the list says so (*1 uncommitted snapshot has no visible change*) and
 offers **Discard…**. Discarding restores those files from `HEAD` (`git restore --staged --worktree`), after

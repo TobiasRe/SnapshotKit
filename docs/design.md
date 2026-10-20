@@ -20,12 +20,12 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
   and Reduce Motion. That is one more reason to keep custom glass to a minimum.
 - **Linear's 2024 redesign:** reduce visual noise and keep things aligned. The chrome around the content (the
   "inverted L") is quiet and consistent; labels, icons and buttons line up across panes, which you feel more
-  than see. Colour is mostly neutral and comes from a few inputs, not dozens of hand-picked values; status
-  is a small coloured dot on a neutral label. A detail view says where you are in the list ("12 / 40") and
+  than see. Color is mostly neutral and comes from a few inputs, not dozens of hand-picked values; status
+  is a small colored dot on a neutral label. A detail view says where you are in the list ("12 / 40") and
   steps through it in place.
 - **Practitioner guidance:**
   - Start from standard structure (`NavigationSplitView`, toolbars, inspectors).
-  - Add custom glass only where a surface floats over content, and group neighbouring glass in one container.
+  - Add custom glass only where a surface floats over content, and group neighboring glass in one container.
   - Don't tint every surface or stack glass on glass.
 
 ## What the app is for
@@ -43,13 +43,13 @@ can be followed between these views, and re-recording is available wherever a sn
    the slider knob) and the controls in pane headers are Liquid Glass:
    icon actions are glass circles (`GlassIconButton`, `GlassIconMenu`), an action with variations is a
    glass pill with a chevron (`GlassSplitButton`), and text controls are glass capsules (`quietControl()`).
-   Lists, forms, logs and images stay solid. Neighbouring floating glass is grouped with `GlassGroup`.
-3. **One tint.** The accent colour marks the single primary action in a region (`primaryActionStyle()`,
-   which is `.glassProminent` on macOS 26). Neighbouring actions use `secondaryActionStyle()` (`.glass`).
-4. **Colour means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
+   Lists, forms, logs and images stay solid. Neighboring floating glass is grouped with `GlassGroup`.
+3. **One tint.** The accent color marks the single primary action in a region (`primaryActionStyle()`,
+   which is `.glassProminent` on macOS 26). Neighboring actions use `secondaryActionStyle()` (`.glass`).
+4. **Color means status, nothing else.** Green passed, red failed, orange flaky, magenta changed pixels.
    Change kinds use blue (committed), orange (uncommitted), green (new) and red (deleted).
-   Status colour as *text* goes through `DS.Status.text(_:)`: system colours are tuned for fills and icons, and
-   orange or green text on its own tint drops to about 2:1 in light mode. Never rely on colour alone: the
+   Status color as *text* goes through `DS.Status.text(_:)`: system colors are tuned for fills and icons, and
+   orange or green text on its own tint drops to about 2:1 in light mode. Never rely on color alone: the
    history strip uses shape too when Differentiate Without Color is on.
 5. **Titles carry the row.** Row and sidebar titles are medium weight; everything else in a row is
    secondary.
@@ -90,7 +90,7 @@ can be followed between these views, and re-recording is available wherever a sn
   for every tab, kept across launches; dragging it on one tab sets it everywhere, and switching tabs never moves it. Content too wide
   for the column gives way (a long branch name truncates) instead of spilling over.
 - `PropertySection` / `PropertyRow`: an inspector's properties (the Run tab's configuration): small section
-  headers, grey labels in a 104-point column, values beside them, and where a value came from in quieter
+  headers, gray labels in a 104-point column, values beside them, and where a value came from in quieter
   type under it.
 - `PositionStepper`: "12 / 40" with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
 - `ListSectionHeader`: a group's name with its count in tertiary type. Lists have no row separators; the
@@ -98,7 +98,7 @@ can be followed between these views, and re-recording is available wherever a sn
 - `selectableRow(_:)`: a row under the pointer gets `DS.Surface.hover` (4%). Selection is the list's own
   system highlight, as in every Mac app: SwiftUI has no way to restyle it, and reaching into the AppKit
   table underneath cost clicks. Grid tiles and palette rows, which have no system highlight, use
-  `selectableTile(_:)` and `DS.Surface.selection` (the text colour at 8%).
+  `selectableTile(_:)` and `DS.Surface.selection` (the text color at 8%).
 - `DS.Surface.content`: each column is one surface. Its bars, list and footer share it; only hairlines divide.
 - `glassChrome(_:)`, `GlassIconButton`, `GlassIconMenu`, `GlassSplitButton`, `quietControl()`: the header
   controls, 28 points tall (`DS.Control`). Interactive Liquid Glass on macOS 26 and later; a faint fill with a
@@ -113,29 +113,29 @@ can be followed between these views, and re-recording is available wherever a sn
   the curve, which showed as a tick at both ends of every pill.
 - `ZoomControls`: − level + on the compare and snapshot bars, plain on the glass.
 - `GlassSegmented`: every segmented control (layout, scope, variant, Results/Output, compare mode) is a glass
-  pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system's grey
+  pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system's gray
   track. On a bar that is glass already (compare), the segments sit on it without a second pill. Labels use
-  fixed label colours: glass would otherwise pick its own, which came out dark in dark mode.
+  fixed label colors: glass would otherwise pick its own, which came out dark in dark mode.
 - The sidebar lists every project under Projects, alphabetically, so a project stays where it is when
   opened. Pinned and Recent above are shortcuts to the same projects; a click highlights only the row clicked.
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
   ranked list, one line each, a command's shortcut where a project shows its folder, so the palette also
   teaches the keyboard.
-- `ProjectMonogram`: a project's initials in a small neutral tile, telling projects apart without colour.
-- `Chip`: a small status label: a coloured dot and neutral text in a hairline capsule, so several labels in a
+- `ProjectMonogram`: a project's initials in a small neutral tile, telling projects apart without color.
+- `Chip`: a small status label: a colored dot and neutral text in a hairline capsule, so several labels in a
   row stay calm and the text is readable in either appearance.
 - `HistoryStrip`: the signature element. One mark per recent run of a test, green, red or orange. A flaky test
   reads as a broken pattern, a regression as a clean switch to red. It appears in failure rows (compact) and
   the failure detail (regular).
 - `DiagnosisNote` / `DiagnosisChip`: say what kind of difference it is when it isn't plainly visible
   (Invisible, Few pixels, Size changed), and offer the precision that would pass.
-- `PixelReadout`: the hover loupe, showing coordinates, both colours and their ΔE.
+- `PixelReadout`: the hover loupe, showing coordinates, both colors and their ΔE.
 - `SnapshotRow` / grid tile: thumbnail, test name, variant in code type, state chip (New, Modified, Orphaned)
   and `StatusMarks` at the trailing edge (failing ✕, flaky ⚠, change dot). One row design for every list.
 - `SnapshotViewer`: a single image with the compare view's zoom, pan and readout; the compare view itself
   is reused for versions and variants, so every comparison looks and behaves the same.
 - `MenuBarLabel` / `ProgressPie` / `MenuBarPanel`: the optional menu bar item. The icon is a 16 pt template
-  image (a ring with a pie), so it follows the menu bar's colour; the panel reuses the row and chip styles.
+  image (a ring with a pie), so it follows the menu bar's color; the panel reuses the row and chip styles.
 - Scope controls degrade instead of clipping: segments with counts, then without, then a menu
   (`ViewThatFits`).
 
@@ -163,8 +163,8 @@ can be followed between these views, and re-recording is available wherever a sn
 ## Don'ts
 
 - Don't paint behind the sidebar or toolbar, and don't put glass inside lists or forms.
-- Don't use more than one prominent button per region, and don't use decorative colour or gradients.
-- Don't let a bar's height depend on its content: use `DS.Bar`, so neighbouring panes stay aligned.
+- Don't use more than one prominent button per region, and don't use decorative color or gradients.
+- Don't let a bar's height depend on its content: use `DS.Bar`, so neighboring panes stay aligned.
 - Don't let a control give way to a title: buttons keep their size (`fixedSize`) and titles truncate.
 - Don't show the same empty state twice, or a count of zero.
 - Don't add new spacing or radius values. If one seems necessary, add it here first.

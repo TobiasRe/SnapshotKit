@@ -13,10 +13,10 @@ is remembered.
 |---|---|---|---|
 | **Side by Side** | ⌘1 | before and after next to each other, zoomed and panned together | layout changes, copy changes |
 | **Slider** | ⌘2 | one image over the other, split where you drag the knob (← / → move it) | the exact place a change starts |
-| **Difference** | ⌘3 | only the changed pixels, in magenta, over a faded grey copy | small changes you can't spot |
+| **Difference** | ⌘3 | only the changed pixels, in magenta, over a faded gray copy | small changes you can't spot |
 | **Toggle** | ⌘4 | one image at a time; Space flips | movement and shifts, which are easier to see than to compare |
 
-Each side is labelled: *Reference* and *Actual* for failures, the base branch and *This branch* / *Working
+Each side is labeled: *Reference* and *Actual* for failures, the base branch and *This branch* / *Working
 tree* for changes, the variant or commit for library comparisons.
 
 In a narrow window the bar drops the size and statistics first, then shows icons instead of mode names,
@@ -40,15 +40,15 @@ the bounding box of every changed pixel.
 
 ## Pixel readout
 
-Hover the image to read the pixel under the pointer. The readout shows its coordinates, the colour on each
-side and their **ΔE** — the CIE94 colour difference that swift-snapshot-testing's `perceptualPrecision`
+Hover the image to read the pixel under the pointer. The readout shows its coordinates, the color on each
+side and their **ΔE** — the CIE94 color difference that swift-snapshot-testing's `perceptualPrecision`
 is based on. Below about 2.3, nobody can see the difference.
 
 ## Statistics
 
 The bar shows, for the pair:
 
-- a coloured dot and **N% changed** — the share of pixels that differ at all,
+- a colored dot and **N% changed** — the share of pixels that differ at all,
 - the pixel size (`1,020×330`), or both sizes when they differ (`360×240 → 360×280`).
 
 ## The diagnosis
