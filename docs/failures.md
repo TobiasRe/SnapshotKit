@@ -128,6 +128,7 @@ Each test gets a verdict:
 |---|---|
 | **Fails every time** | it never passed: a real failure |
 | **Flaky** | it passed and failed |
+| **Fails on** *device* | on several simulators: it failed every time on some and passed every time on the rest (one reference that fits only some devices, not flakiness) |
 | **Passes** | it never failed this time: it may have been flaky before, or fixed |
 
 The notice sums it up: *5× on local: 1 fails every time, 1 flaky, 0 pass.*

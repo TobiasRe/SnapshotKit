@@ -175,7 +175,7 @@ struct FailuresTab: View {
             }
             // Verdict, recent runs and repetition: one row, level with the list's buttons.
             DetailInfoRow {
-                if let verdict = item.verdict { VerdictTag(verdict: verdict) }
+                if let verdict = item.verdict { VerdictTag(verdict: verdict, failingDevices: item.failingDevices) }
                 if item.timeline.count > 1 {
                     HistoryStrip(points: item.timeline, size: .regular)
                     Text(HistoryStrip.summary(item.timeline))
@@ -295,6 +295,11 @@ struct FailuresTab: View {
             StatusNote("Passes sometimes, so re-recording will not fix it. Look for animations, async loading, dates or random data.",
                        symbol: "lightbulb", color: DS.Status.flaky)
                 .foregroundStyle(.secondary)
+        case .alwaysFails where item.failingDevices != nil:
+            // Fails every time there, passes every time elsewhere: one reference for devices that draw differently.
+            StatusNote("\(item.verdictLabel ?? "Fails on some devices") and passes on the others: the reference fits only some of them. Give each device its own reference (for example a `named:` per device), or record where CI runs.",
+                       symbol: "lightbulb", color: DS.Status.failed)
+                .foregroundStyle(.secondary)
         case .alwaysFails where project.diagnoses[item.id]?.kind == .imperceptible:
             StatusNote("Fails every time, but nobody can see the difference: the reference was likely recorded on another machine or OS version. Re-record where CI runs, or relax perceptualPrecision.",
                        symbol: "lightbulb", color: DS.Status.changed)
@@ -362,7 +367,7 @@ struct FailureRow: View {
                     let runs = item.test.repetitions.count > 1
                         ? "\(item.test.passedRepetitions) of \(item.test.repetitions.count) runs passed" : nil
                     if let verdict = item.verdict {
-                        VerdictTag(verdict: verdict, detail: runs)
+                        VerdictTag(verdict: verdict, failingDevices: item.failingDevices, detail: runs)
                     } else if let runs {
                         Chip(text: runs, color: DS.Status.neutral)
                     }
@@ -488,11 +493,14 @@ struct HistoryStrip: View {
 
 struct VerdictTag: View {
     var verdict: FlakeVerdict
+    /// The devices it fails on when it passes on the others ("Fails on iPhone SE").
+    var failingDevices: [String]? = nil
     /// What the verdict rests on, e.g. "2 of 5 runs passed".
     var detail: String?
 
     var body: some View {
-        let text = detail.map { "\(verdict.label) · \($0)" } ?? verdict.label
+        let label = verdict.label(failingDevices: failingDevices)
+        let text = detail.map { "\(label) · \($0)" } ?? label
         switch verdict {
         case .alwaysFails: Chip(text: text, color: DS.Status.failed)
         case .flaky: Chip(text: text, color: DS.Status.flaky)

@@ -514,9 +514,11 @@ func main() async {
         guard let summary = result.summary else { printSummary(result); exit(1) }
         say("")
         let verdicts = Flakiness.classify(summary)
+        // As wide as the longest label: padding(toLength:) would cut "Fails on iPhone SE and iPad".
+        let width = max(18, verdicts.map(\.label.count).max() ?? 0)
         for r in verdicts {
             let code = r.verdict == .flaky ? "33" : r.verdict == .alwaysFails ? "31" : "32"
-            say("\(color(code, r.verdict.label.padding(toLength: 18, withPad: " ", startingAt: 0))) \(r.passed)✔ \(r.failed)✘  \(r.suite)/\(r.test)")
+            say("\(color(code, r.label.padding(toLength: width, withPad: " ", startingAt: 0))) \(r.passed)✔ \(r.failed)✘  \(r.suite)/\(r.test)")
         }
         exit(verdicts.allSatisfy { $0.verdict == .passes } ? 0 : 1)
 
