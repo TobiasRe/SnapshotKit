@@ -24,6 +24,8 @@ public enum SnapshotChangeKind: String, Codable, CaseIterable, Sendable {
 public struct SnapshotChange: Identifiable, Hashable, Sendable {
     public var path: String
     public var kind: SnapshotChangeKind
+    /// A file git doesn't track yet: discarding the change deletes it.
+    public var isUntracked: Bool
 
     public var id: String { path }
     public var fileName: String { (path as NSString).lastPathComponent }
@@ -44,9 +46,10 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
         return name
     }
 
-    public init(path: String, kind: SnapshotChangeKind) {
+    public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false) {
         self.path = path
         self.kind = kind
+        self.isUntracked = isUntracked
     }
 }
 
@@ -151,7 +154,7 @@ extension Git {
         let current = baseBlobs.isEmpty ? [] : try run(["hash-object", "--"] + Array(baseBlobs.keys)).split(separator: "\n").map(String.init)
         let unchanged = Set(zip(Array(baseBlobs.keys), current).filter { baseBlobs[$0.0] == $0.1 }.map(\.0))
         for path in untracked where !unchanged.contains(path) {
-            changes[path] = SnapshotChange(path: path, kind: baseBlobs[path] == nil ? .new : .uncommitted)
+            changes[path] = SnapshotChange(path: path, kind: baseBlobs[path] == nil ? .new : .uncommitted, isUntracked: true)
         }
 
         return SnapshotChangeSet(

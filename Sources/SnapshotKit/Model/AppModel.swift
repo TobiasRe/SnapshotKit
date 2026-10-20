@@ -58,9 +58,15 @@ final class AppModel {
 
     /// A record patch can survive a crash or force quit; undo it before anything else.
     private func restoreLeftoverPatches() {
-        let reports = RecordSession.restoreAllLeftovers().reports.filter { !$0.files.isEmpty }
-        guard !reports.isEmpty else { return }
-        startupNotice = "Restored a record patch left by an interrupted run:\n" + reports.map(\.summary).joined(separator: "\n")
+        let leftovers = RecordSession.restoreAllLeftovers()
+        let reports = leftovers.reports.filter { !$0.files.isEmpty }
+        var notes = reports.isEmpty ? [] : ["Restored a record patch left by an interrupted run:"] + reports.map(\.summary)
+        // A patch that couldn't be undone leaves test files recording: say where, so it can be fixed.
+        notes += leftovers.failures.map { failure in
+            "Could not restore the record patch in \(failure.repository.path.abbreviatingWithTildeInPath): "
+                + failure.error.localizedDescription + " Its test files may still record: look for lines ending in // snapshotkit:record."
+        }
+        startupNotice = notes.isEmpty ? nil : notes.joined(separator: "\n")
     }
 
     func dismissStartupNotice() { startupNotice = nil }
@@ -191,7 +197,7 @@ final class AppModel {
         isScanning = true
         let store = store
         Task {
-            let reports = await Task.detached { store.rescanReports() }.value
+            let reports = await offCooperativePool { store.rescanReports() }
             isScanning = false
             refreshProjects()
             startupNotice = Self.scanSummary(reports)

@@ -38,6 +38,8 @@ import Testing
             "untracked.1.png": .new,
             "deleted.1.png": .deleted,
         ])
+        // Only the file git doesn't track yet can be discarded by deleting it.
+        #expect(set.changes.filter(\.isUntracked).map(\.fileName) == ["untracked.1.png"])
         #expect(set.groups.map(\.suite) == ["CardTests", "ListTests"])
         #expect(repo.git.baseImage(for: try #require(set.changes.first { $0.fileName == "committed.1.png" }), in: set) == red)
         #expect(repo.git.currentImage(for: try #require(set.changes.first { $0.fileName == "deleted.1.png" })) == nil)

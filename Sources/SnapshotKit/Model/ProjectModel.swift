@@ -276,7 +276,7 @@ final class ProjectModel {
         let generation = reloadGeneration
         let url = project.url, settings = settings
         Task {
-            let loaded = await Task.detached {
+            let loaded = await offCooperativePool {
                 let git = Git(root: url)
                 let context = Result { try ProjectContext.load(repository: url, settings: settings) }
                 return (
@@ -286,7 +286,7 @@ final class ProjectModel {
                     modules: (try? context.get())?.modules() ?? [],
                     history: RunHistory(repository: url).load()
                 )
-            }.value
+            }
             // A newer reload (e.g. a quick second settings change) wins.
             guard generation == reloadGeneration else { return }
             currentBranch = loaded.branch
@@ -311,7 +311,7 @@ final class ProjectModel {
     func validateEnvironment() {
         guard let config else { return }
         Task {
-            let result = await Task.detached { Result { try EnvironmentValidator.validate(config) } }.value
+            let result = await offCooperativePool { Result { try EnvironmentValidator.validate(config) } }
             switch result {
             case .success(let env):
                 environment = env
@@ -370,10 +370,10 @@ final class ProjectModel {
         isLoadingLibrary = true
         let repo = project.url
         Task {
-            let (loaded, orphans) = await Task.detached { () -> (SnapshotLibrary?, Set<String>) in
+            let (loaded, orphans) = await offCooperativePool { () -> (SnapshotLibrary?, Set<String>) in
                 let library = try? SnapshotLibrary.load(repository: repo)
                 return (library, library.map { SnapshotLibrary.orphans($0.files, repository: repo) } ?? [])
-            }.value
+            }
             isLoadingLibrary = false
             library = loaded
             orphanIDs = orphans
@@ -505,7 +505,7 @@ final class ProjectModel {
     func history(of file: SnapshotFile) async -> [SnapshotVersion] {
         if fixtureSnapshotImages != nil { return fixtureHistory?[file.path] ?? [] }
         let repo = project.url, path = file.path
-        return await Task.detached { Git(root: repo).history(of: path) }.value
+        return await offCooperativePool { Git(root: repo).history(of: path) }
     }
 
     /// Loader for a snapshot as it was in `commit`; call off the main thread.
@@ -532,12 +532,12 @@ final class ProjectModel {
         isLoadingChanges = true
         let repo = project.url, against = diffBase
         Task {
-            let result = await Task.detached {
+            let result = await offCooperativePool {
                 Result {
                     let set = try Git(root: repo).snapshotChanges(baseBranch: base, against: against)
                     return (set, ReviewMarks(repository: repo).viewed(in: set.changes))
                 }
-            }.value
+            }
             isLoadingChanges = false
             switch result {
             case .success(let (set, viewed)):
@@ -616,14 +616,14 @@ final class ProjectModel {
                 return
             }
             let url = repo.appendingPathComponent(location.path)
-            let opened = await Task.detached { () -> Bool in
+            let opened = await offCooperativePool { () -> Bool in
                 let xed = Process()
                 xed.executableURL = URL(fileURLWithPath: "/usr/bin/xed")
                 xed.arguments = (location.line.map { ["--line", String($0)] } ?? []) + [url.path]
                 guard (try? xed.run()) != nil else { return false }
                 xed.waitUntilExit()
                 return xed.terminationStatus == 0
-            }.value
+            }
             if !opened { NSWorkspace.shared.open(url) }
         }
     }
@@ -691,7 +691,7 @@ final class ProjectModel {
         guard let set = changeSet, !changes.isEmpty, !isRunning else { return }
         let repo = project.url
         Task {
-            let result = await Task.detached { Result { try Git(root: repo).revertToBase(changes, in: set) } }.value
+            let result = await offCooperativePool { Result { try Git(root: repo).revertToBase(changes, in: set) } }
             ThumbnailCache.shared.removeAllObjects()
             ComparePairCache.shared.removeAllObjects()
             switch result {
@@ -714,7 +714,7 @@ final class ProjectModel {
     func discardInvisibleChanges() {
         let repo = project.url, changes = changeSet?.changes ?? []
         Task {
-            let result = await Task.detached { () -> Result<Int, Error> in
+            let result = await offCooperativePool { () -> Result<Int, Error> in
                 let git = Git(root: repo)
                 let invisible = git.invisibleUncommittedChanges(changes)
                 guard !invisible.isEmpty else { return .success(0) }
@@ -722,7 +722,7 @@ final class ProjectModel {
                     try git.run(["restore", "--source=HEAD", "--staged", "--worktree", "--"] + invisible.map(\.path))
                     return invisible.count
                 }
-            }.value
+            }
             ThumbnailCache.shared.removeAllObjects()
             ComparePairCache.shared.removeAllObjects()
             switch result {
@@ -740,7 +740,7 @@ final class ProjectModel {
         changeDiagnoseTask?.cancel()
         let loaders = set.changes.prefix(300).filter { $0.kind != .new && $0.kind != .deleted }.map { ($0.id, imageLoader(for: $0)) }
         changeDiagnoseTask = Task {
-            let result = await Task.detached {
+            let result = await offCooperativePool {
                 var out: [String: DiffDiagnosis] = [:]
                 for (id, load) in loaders {
                     let (base, current) = load()
@@ -748,7 +748,7 @@ final class ProjectModel {
                     out[id] = DiffDiagnosis(ImageDiff.compare(a, b))
                 }
                 return out
-            }.value
+            }
             guard !Task.isCancelled else { return }
             changeDiagnoses = result
         }
@@ -758,7 +758,7 @@ final class ProjectModel {
     func canDiscard(_ change: SnapshotChange) -> Bool {
         switch change.kind {
         case .uncommitted: true
-        case .new: fixtureImages == nil && Git(root: project.url).tryRun(["ls-files", "--error-unmatch", "--", change.path]) == nil
+        case .new: change.isUntracked
         default: false
         }
     }
@@ -859,13 +859,13 @@ final class ProjectModel {
         let repo = project.url
         Task {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/imported/\(UUID().uuidString)")
-            let result = await Task.detached {
+            let result = await offCooperativePool {
                 Result { () -> (TestRunSummary, [SnapshotFailureImages]) in
                     let summary = try XCResultParser.load(resultBundle: url, developerDir: nil)
                     let images = (try? FailureAttachments.export(resultBundle: url, to: dir, developerDir: nil)) ?? []
                     return (summary, images)
                 }
-            }.value
+            }
             switch result {
             case .success(let (summary, images)):
                 let runs = RunHistory(repository: repo)
@@ -986,9 +986,9 @@ final class ProjectModel {
             do {
                 let result = try await runner.run(onLine: onLine, onEvent: onEvent)
                 let dir = result.resultBundle.deletingPathExtension().appendingPathExtension("attachments")
-                let images = await Task.detached {
+                let images = await offCooperativePool {
                     (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir, developerDir: env.xcode.developerDir)) ?? []
-                }.value
+                }
                 completeRun(result, images: images, kind: .run, attachmentsDirectory: images.isEmpty ? nil : dir)
             } catch {
                 finish(message: error.localizedDescription, isError: true)
