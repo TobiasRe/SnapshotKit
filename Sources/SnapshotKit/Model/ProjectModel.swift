@@ -450,10 +450,12 @@ final class ProjectModel {
         library?.files.contains { $0.path == path } ?? false
     }
 
-    /// Opens a snapshot's change on the Changes tab.
+    /// Opens a snapshot's change on the Changes tab, clearing filters that would hide it.
     func showChange(path: String) {
-        guard changeSet?.changes.contains(where: { $0.path == path }) == true else { return }
+        guard let change = changeSet?.changes.first(where: { $0.path == path }) else { return }
         changeFilter = ""
+        changeKinds.insert(change.kind)
+        if viewedChanges.contains(change.id) { hideViewed = false }
         selectedChangeID = path
         tab = .changes
     }

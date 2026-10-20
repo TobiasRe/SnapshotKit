@@ -452,5 +452,18 @@ extension AppUITests {
             model.showFailure(ids[0])
             #expect(model.selectedFailures.map(\.id) == [ids[0]])
         }
+
+        /// Clicking a snapshot's change mark opens that change, even when the list's filters hid it.
+        @Test func showChangeClearsFiltersThatHideTheChange() throws {
+            let model = AppFixtures.project(.changes, store: AppFixtures.store())
+            let viewed = try #require(model.changeSet?.changes.first { model.viewedChanges.contains($0.id) })
+            model.hideViewed = true
+            model.changeKinds = [.committed]
+            model.tab = .snapshots
+            model.showChange(path: viewed.path)
+            #expect(model.tab == .changes)
+            #expect(model.selectedChangeID == viewed.id)
+            #expect(model.displayedChanges.contains(viewed))
+        }
     }
 }
