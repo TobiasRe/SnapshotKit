@@ -123,9 +123,7 @@ struct ChangesTab: View {
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.fileURL(for: change)]) }
         }
         if change.kind != .new {
-            Button("Open \(project.changeSet?.baseBranch ?? "Base") Version") {
-                if let url = project.exportBaseImage(for: change) { NSWorkspace.shared.open(url) }
-            }
+            Button("Open \(project.changeSet?.baseBranch ?? "Base") Version") { project.openBaseImage(for: change) }
         }
         Divider()
         Button("Copy Side-by-Side Image") { Clipboard.copyComparison(project.imageLoader(for: change)) }

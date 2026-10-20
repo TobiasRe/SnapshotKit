@@ -655,6 +655,15 @@ final class ProjectModel {
         return (try? data.write(to: url)) != nil ? url : nil
     }
 
+    /// Opens the base-side image in the default app, or says why it can't.
+    func openBaseImage(for change: SnapshotChange) {
+        guard let url = exportBaseImage(for: change) else {
+            notify("Could not open the \(changeSet?.baseBranch ?? "base") version of \(change.fileName).", isError: true)
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
     /// Throws away a working-tree change to a snapshot (e.g. an unwanted re-record).
     func discard(_ change: SnapshotChange) {
         let git = Git(root: project.url)
