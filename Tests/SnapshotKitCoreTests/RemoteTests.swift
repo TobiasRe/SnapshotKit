@@ -153,6 +153,149 @@ import Testing
     }
 }
 
+/// The record path end to end, without ssh or Xcode: a `FakeMac` stands in for both.
+@Suite struct RemoteRecordTests {
+    let suite = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [], failureFiles: [])
+    let source = "Tests/AppTests/CardTests.swift"
+    let snapshot = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
+
+    func makeRepo() throws -> TempRepo {
+        let repo = try TempRepo()
+        try repo.write(source, RecordSessionTests.suiteSource)
+        // Not the size of the new one: rsync skips a file with the same size and modification second,
+        // which a test (unlike a real recording) produces.
+        try repo.write(snapshot, "the old reference")
+        try repo.commitAll("init")
+        return repo
+    }
+
+    func runner(_ repo: TempRepo, _ mac: FakeMac, scheme: String? = "App") -> RemoteRunner {
+        var config = SnapshotConfig()
+        config.scheme = scheme
+        config.deviceName = "Example Phone"
+        config.remoteDirectory = mac.checkout.path
+        return RemoteRunner(repository: repo.url, config: config, transport: mac)
+    }
+
+    @Test func recordsRemotelyAndDownloadsTheNewReferences() async throws {
+        let repo = try makeRepo()
+        let mac = try FakeMac(xcodebuild: """
+            grep -q 'record: .all' \(source) || { echo 'error: record mode is not on' >&2; exit 70; }
+            printf new > \(snapshot)
+            mkdir -p "$bundle" && cat > "$bundle/tests.json" <<'JSON'
+            \(FakeMac.oneFailingTest)
+            JSON
+            echo '✘ Test card() failed after 0.1 seconds with 1 issue.'
+            exit 65
+            """)
+
+        let result = try await runner(repo, mac).run(mode: .record(suites: [suite]))
+        #expect(result.run.failed == 1)
+        #expect(result.run.nothingTested == nil)
+        #expect(result.downloadedSnapshots == [snapshot])
+        #expect(try repo.read(snapshot) == "new")
+        // Patched only on the remote copy, and put back there afterwards.
+        #expect(try repo.read(source) == RecordSessionTests.suiteSource)
+        #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
+    }
+
+    @Test func aBuildThatFailsRemotelyRecordsNothing() async throws {
+        let repo = try makeRepo()
+        let mac = try FakeMac(xcodebuild: """
+            echo "$PWD/\(source):6:9: error: cannot find 'draw' in scope"
+            exit 65
+            """)
+
+        let result = try await runner(repo, mac).run(mode: .record(suites: [suite]))
+        #expect(result.run.nothingTested == "the build failed (CardTests.swift:6:9: cannot find 'draw' in scope)")
+        #expect(result.downloadedSnapshots.isEmpty)
+        #expect(try repo.read(snapshot) == "the old reference")
+        #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
+    }
+
+    /// A cancelled record keeps what it wrote on the remote Mac: half a run's references aren't wanted.
+    @Test func aCancelledRecordDownloadsNothing() async throws {
+        let repo = try makeRepo()
+        let mac = try FakeMac(xcodebuild: "printf new > \(snapshot)\nexec sleep 30")
+        let runner = runner(repo, mac)
+        let run = Task { try await runner.run(mode: .record(suites: [suite])) }
+        let written = mac.checkout.appendingPathComponent(snapshot)
+        for _ in 0..<200 where (try? String(contentsOf: written, encoding: .utf8)) != "new" {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        runner.cancel()
+
+        let result = try await run.value
+        #expect(result.run.cancelled)
+        #expect(result.downloadedSnapshots.isEmpty)
+        #expect(try repo.read(snapshot) == "the old reference")
+        #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
+    }
+
+    /// Every way out after patching puts the remote sources back, also when the run never starts.
+    @Test func restoresTheRemoteSourcesWhenTheRunFails() async throws {
+        let repo = try makeRepo()
+        let mac = try FakeMac(xcodebuild: "exit 0") // `-list` lists no scheme
+
+        await #expect(throws: ConfigError.missingScheme) { try await runner(repo, mac, scheme: nil).run(mode: .record(suites: [suite])) }
+        #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
+    }
+}
+
+/// A remote Mac in a local folder: scripts run with bash, with stand-ins for `xcodebuild` and
+/// `xcrun` (simctl and xcresulttool) first on the PATH; the preflight reports one Xcode.
+struct FakeMac: RemoteTransport {
+    let checkout: URL
+    let bin: URL
+
+    /// `xcodebuild` runs `script` in the remote checkout, with `$bundle` set to the result bundle path.
+    init(xcodebuild script: String) throws {
+        checkout = testTemp("remote-checkout")
+        bin = testTemp("fake-bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try Self.install("xcodebuild", """
+            bundle=
+            while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
+            \(script)
+            """, in: bin)
+        try Self.install("xcrun", """
+            case "$1 $2" in
+              "simctl list") echo '{"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "Example Phone", "udid": "SIM-1", "state": "Shutdown"}]}}' ;;
+              "xcresulttool get") while [ "$1" != --path ]; do shift; done; cat "$2/tests.json" ;;
+              "xcresulttool export") while [ "$1" != --output-path ]; do shift; done; mkdir -p "$2" && echo '[]' > "$2/manifest.json" ;;
+              *) echo "unexpected: xcrun $*" >&2; exit 64 ;;
+            esac
+            """, in: bin)
+    }
+
+    private static func install(_ name: String, _ body: String, in bin: URL) throws {
+        let url = bin.appendingPathComponent(name)
+        try ("#!/bin/bash\n" + body + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    }
+
+    var label: String { "fake-mac" }
+
+    func command(for script: String, interactive: Bool) -> (executable: String, arguments: [String]) {
+        if script == RemoteRunner.preflightScript {
+            return ("/bin/echo", ["HOME=/Users/ci\nSELECTED=/Applications/Xcode.app/Contents/Developer\nXCODE=/Applications/Xcode.app|99.0|99A1"])
+        }
+        return ("/usr/bin/env", ["PATH=\(bin.path):/usr/bin:/bin", "/bin/bash", "-c", script])
+    }
+
+    func rsyncLocation(_ remotePath: String) -> String { remotePath }
+    var rsyncArguments: [String] { [] }
+
+    /// `xcresulttool get test-results tests` for a run whose one test failed (as recording does).
+    static let oneFailingTest = #"""
+        {"testNodes": [{"name": "App", "nodeType": "Test Plan", "result": "Failed", "children": [
+          {"name": "AppTests", "nodeType": "Unit test bundle", "result": "Failed", "children": [
+            {"name": "CardTests", "nodeType": "Test Suite", "result": "Failed", "children": [
+              {"name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Failed", "children": [
+                {"name": "Record mode is on. Automatically recorded snapshot.", "nodeType": "Failure Message"}]}]}]}]}]}
+        """#
+}
+
 /// A local "remote" that, like ssh, refuses rsync paths the remote shell would split.
 private struct ShellSafePathsTransport: RemoteTransport {
     var label: String { "strict" }
