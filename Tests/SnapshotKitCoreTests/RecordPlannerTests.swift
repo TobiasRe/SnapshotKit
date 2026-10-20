@@ -59,6 +59,21 @@ import Testing
         #expect(suites.onlyTesting == ["AppTests/CardTests"])
     }
 
+    /// Thousands of snapshots live in a few test files: each is read once, not once per snapshot
+    /// (re-recording 3,000 snapshots took 3 seconds before anything ran).
+    @Test func readsEachTestFileOnce() throws {
+        let repo = try repo()
+        let files = (1...200).flatMap { n in [file("CardTests", "compact.\(n)"), file("CardTests", "expanded.\(n)"), file("LegacyTests", "testHeader.\(n)")] }
+        let sources = TestSources(repository: repo.url)
+        let selection = try RecordPlanner.plan(files, granularity: .tests, sources: sources)
+        #expect(selection.onlyTesting == ["AppTests/CardTests/compact()", "AppTests/CardTests/expanded()", "AppTests/LegacyTests/testHeader"])
+        #expect(sources.reads == 2)
+
+        let orphanSources = TestSources(repository: repo.url)
+        #expect(SnapshotLibrary.orphans(files + [file("CardTests", "gone.1")], sources: orphanSources) == ["Tests/AppTests/__Snapshots__/CardTests/gone.1.png"])
+        #expect(orphanSources.reads == 2)
+    }
+
     @Test func missingTestFileIsAnError() throws {
         let repo = try repo()
         #expect(throws: RecordPatchError.self) {

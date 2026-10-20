@@ -12,10 +12,9 @@ public enum TestSourceLocator {
     /// Finds the test behind a snapshot: `<suite>.swift` (preferably next to its `__Snapshots__`
     /// folder), and in it the function named like the snapshot's test. Nil when there is no such file.
     public static func locate(_ file: SnapshotFile, in repository: URL) -> TestSourceLocation? {
-        let swiftFiles = Git(root: repository).lsFiles(["*.swift"])
-        guard let path = try? RecordPlanner.testFile(for: file, among: swiftFiles, repository: repository) else { return nil }
-        let source = (try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8)) ?? ""
-        return TestSourceLocation(path: path, line: line(ofTest: file.testName, in: source))
+        let sources = TestSources(repository: repository)
+        guard let path = try? sources.testFile(for: file) else { return nil }
+        return TestSourceLocation(path: path, line: line(ofTest: file.testName, in: sources.text(of: path) ?? ""))
     }
 
     /// The line of the function a snapshot's test name comes from. swift-snapshot-testing names

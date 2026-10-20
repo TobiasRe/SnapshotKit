@@ -169,17 +169,19 @@ public struct SnapshotLibrary: Sendable {
     /// Snapshots whose test is gone: no `<suite>.swift` test file, or no function with the test's
     /// name in it. Leftovers of renamed or deleted tests that nothing records or checks any more.
     public static func orphans(_ files: [SnapshotFile], repository: URL) -> Set<String> {
-        let swiftFiles = Git(root: repository).lsFiles(["*.swift"])
+        orphans(files, sources: TestSources(repository: repository))
+    }
+
+    static func orphans(_ files: [SnapshotFile], sources: TestSources) -> Set<String> {
         var functions: [String: [String]?] = [:]   // test file path → its functions (nil if unreadable)
         var orphans = Set<String>()
         for file in files {
-            guard let path = try? RecordPlanner.testFile(for: file, among: swiftFiles, repository: repository) else {
+            guard let path = try? sources.testFile(for: file) else {
                 orphans.insert(file.id)
                 continue
             }
             if functions[path] == nil {
-                functions[path] = .some((try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8))
-                    .map { TestSourceLocator.functions(in: $0).map(\.name) })
+                functions[path] = .some(sources.text(of: path).map { TestSourceLocator.functions(in: $0).map(\.name) })
             }
             guard let declared = functions[path] ?? nil else { continue }
             if !declared.contains(where: { TestSourceLocator.isFunction($0, ofTest: file.testName) }) { orphans.insert(file.id) }

@@ -25,23 +25,30 @@ public enum RecordPlanner {
     }
 
     public static func plan(_ files: [SnapshotFile], granularity: Granularity, repository: URL) throws -> RecordSelection {
+        try plan(files, granularity: granularity, sources: TestSources(repository: repository))
+    }
+
+    static func plan(_ files: [SnapshotFile], granularity: Granularity, sources: TestSources) throws -> RecordSelection {
         var suites: [String: SuiteResult] = [:]
         var order: [String] = []
-        var only: [String] = []
-        let git = Git(root: repository)
-        let swiftFiles = git.lsFiles(["*.swift"])
+        var only: [String] = [], listed = Set<String>()
+        // A suite's snapshots share its test file, which is parsed once for all of them.
+        var parsed: [String: (text: String, suite: SuiteResult, isXCTest: Bool)] = [:]
         for file in files {
-            let source = try testFile(for: file, among: swiftFiles, repository: repository)
-            guard let text = try? String(contentsOf: repository.appendingPathComponent(source), encoding: .utf8),
-                  let suitePath = suitePath(in: text, preferring: file.suite) else {
-                throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)")
+            let source = try sources.testFile(for: file)
+            let key = file.module + "/" + source
+            if parsed[key] == nil {
+                guard let text = sources.text(of: source), let suitePath = suitePath(in: text, preferring: file.suite) else {
+                    throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)")
+                }
+                let suite = SuiteResult(bundle: file.module, path: suitePath, tests: [],
+                                        failureFiles: [sources.repository.appendingPathComponent(source).path])
+                parsed[key] = (text, suite, RecordPatcher.findDeclaration(of: suite.name, in: text)?.isXCTest ?? false)
             }
-            let suite = SuiteResult(bundle: file.module, path: suitePath, tests: [],
-                                    failureFiles: [repository.appendingPathComponent(source).path])
+            let (text, suite, isXCTest) = parsed[key]!
             if suites[suite.identifier] == nil { order.append(suite.identifier) }
             suites[suite.identifier] = suite
 
-            let isXCTest = RecordPatcher.findDeclaration(of: suite.name, in: text)?.isXCTest ?? false
             let id: String
             switch granularity {
             case .suites:
@@ -55,22 +62,12 @@ public enum RecordPlanner {
                     id = suite.identifier + "/" + file.testName + (isXCTest ? "" : "()")
                 }
             }
-            if !only.contains(id) { only.append(id) }
+            if listed.insert(id).inserted { only.append(id) }
         }
         // A suite-level identifier already covers that suite's single tests.
         let suiteIDs = Set(only.filter { suites[$0] != nil })
         only = only.filter { id in suiteIDs.contains(id) || !suiteIDs.contains(where: { id.hasPrefix($0 + "/") }) }
         return RecordSelection(suites: order.compactMap { suites[$0] }, onlyTesting: only)
-    }
-
-    /// The test file: `<suite folder>.swift`, preferably next to the `__Snapshots__` folder.
-    static func testFile(for file: SnapshotFile, among swiftFiles: [String], repository: URL) throws -> String {
-        let snapshotsDir = file.path.components(separatedBy: "/__Snapshots__/").first ?? ""
-        let name = file.suite + ".swift"
-        let matches = swiftFiles.filter { ($0 as NSString).lastPathComponent == name }
-        if let next = matches.first(where: { $0.hasPrefix(snapshotsDir + "/") }) { return next }
-        if let any = matches.first { return any }
-        throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)")
     }
 
     /// The suite's path for `-only-testing`: the type named like the file if there is one, else the
