@@ -552,7 +552,7 @@ func main() async {
                         references.append(path)
                         say("    reference: \(path)")
                     }
-                    let shown = images.filter { $0.testIdentifier == test.identifier && $0.repetition == 1 }
+                    let shown = images.filter { $0.belong(to: test, in: suite) && $0.repetition == 1 }
                     let severalDevices = Set(shown.map(\.deviceID)).count > 1, severalCases = Set(shown.map(\.arguments)).count > 1
                     for img in shown {
                         // Say whose images these are: which device, which case of a parameterized test.

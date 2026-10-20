@@ -294,6 +294,49 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
         #expect(imported.first?.failed == 1 && imported.first?.passed == 1)
     }
 
+    /// `AppTests/CardTests/card()` and `FeatureTests/CardTests/card()` both fail: each shows its own images.
+    @Test func sameNamedTestsInTwoTargetsShowTheirOwnImages() throws {
+        let repo = try TempRepo()
+        let bundle = testTemp("artifacts").appendingPathComponent("CI.xcresult")
+        let attachments = bundle.appendingPathComponent("attachments")
+        try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
+        let white = PixelImage(width: 10, height: 10, pixels: Array(repeating: 255, count: 400))
+        var targets: [[String: Any]] = [], manifest: [[String: Any]] = []
+        for (target, changed) in [("AppTests", 3), ("FeatureTests", 5)] {
+            var red = white
+            for i in 0..<changed { red.pixels[i * 4 + 1] = 0; red.pixels[i * 4 + 2] = 0 }
+            try white.pngData()!.write(to: attachments.appendingPathComponent("\(target)-R.png"))
+            try red.pngData()!.write(to: attachments.appendingPathComponent("\(target)-F.png"))
+            targets.append(["name": target, "nodeType": "Unit test bundle", "children": [
+                ["name": "CardTests", "nodeType": "Test Suite", "children": [
+                    ["name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Failed",
+                     "children": [["name": "Snapshot does not match reference.", "nodeType": "Failure Message"]]]]]]])
+            manifest.append(["testIdentifier": "CardTests/card()", "testIdentifierURL": "test://com.apple.xcode/App/\(target)/CardTests/card()",
+                             "attachments": [
+                                ["exportedFileName": "\(target)-R.png", "suggestedHumanReadableName": "reference_0_A.png", "repetitionNumber": 1],
+                                ["exportedFileName": "\(target)-F.png", "suggestedHumanReadableName": "failure_0_B.png", "repetitionNumber": 1]]])
+        }
+        try JSONSerialization.data(withJSONObject: ["testNodes": [["name": "App", "nodeType": "Test Plan", "children": targets]]])
+            .write(to: bundle.appendingPathComponent("tests.json"))
+        try JSONSerialization.data(withJSONObject: manifest).write(to: attachments.appendingPathComponent("manifest.json"))
+
+        let exported = bundle.deletingPathExtension().path + ".attachments"
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--xcresult", bundle.path, environment: try fakeXcrun()))
+                == Outcome(status: 0, stdout: """
+                    AppTests/CardTests
+                      ✘ card()  (1/1 repetitions failed)
+                        failure:    \(exported)/AppTests-F.png
+                        difference: —
+                        Visible change in a 3×1 area at 0, 0.
+                    FeatureTests/CardTests
+                      ✘ card()  (1/1 repetitions failed)
+                        failure:    \(exported)/FeatureTests-F.png
+                        difference: —
+                        Visible change in a 5×1 area at 0, 0.
+
+                    """))
+    }
+
     @Test func exportsWhereItIsTold() throws {
         let repo = try TempRepo()
         let out = testTemp("snapshot-failures")

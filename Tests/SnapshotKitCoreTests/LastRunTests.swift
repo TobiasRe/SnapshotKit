@@ -110,6 +110,25 @@ import Testing
         #expect(last.failureImages().map(\.testIdentifier) == ["CardTests/a()"])
     }
 
+    /// `FeatureTests/CardTests/a()` passed now, `AppTests/CardTests/a()` failed: only the latter's
+    /// images are a failure's, though the run's folder has both.
+    @Test func imagesGoWithTheTestOfTheirOwnTarget() throws {
+        let repo = try TempRepo()
+        let dir = testTemp("run").appendingPathExtension("attachments")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("""
+            [{"testIdentifier": "CardTests/a()", "testIdentifierURL": "test://com.apple.xcode/App/FeatureTests/CardTests/a()",
+              "attachments": [{"exportedFileName": "feature.png", "suggestedHumanReadableName": "failure_0_F.png"}]},
+             {"testIdentifier": "CardTests/a()", "testIdentifierURL": "test://com.apple.xcode/App/AppTests/CardTests/a()",
+              "attachments": [{"exportedFileName": "app.png", "suggestedHumanReadableName": "failure_0_A.png"}]}]
+            """.utf8).write(to: dir.appendingPathComponent("manifest.json"))
+        var feature = Self.suite("CardTests", .passed)
+        feature.bundle = "FeatureTests"
+        LastRun.update(with: Self.run([Self.suite("CardTests", .failed), feature], bundle: "full"), attachmentsDirectory: dir, repository: repo.url)
+        let last = try #require(LastRun.load(repository: repo.url))
+        #expect(last.failureImages().map { $0.failure?.lastPathComponent } == ["app.png"])
+    }
+
     /// A partial run that ran every failing test leaves no images of the earlier run behind.
     @Test func aPartialRunOfEveryFailureTakesOverTheImages() throws {
         let repo = try TempRepo()

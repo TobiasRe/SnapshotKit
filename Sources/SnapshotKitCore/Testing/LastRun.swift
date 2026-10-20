@@ -113,16 +113,16 @@ public struct LastRun: Codable, Sendable {
 
     /// The failing tests' images, each test's from the run that last ran it.
     public func failureImages() -> [SnapshotFailureImages] {
-        var tests: [URL: Set<String>] = [:]
+        var tests: [URL: [(test: TestCaseResult, suite: SuiteResult)]] = [:]
         for suite in failingSuites {
             for test in suite.tests where test.outcome == .failed {
-                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name) { tests[folder, default: []].insert(test.identifier) }
+                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name) { tests[folder, default: []].append((test, suite)) }
             }
         }
-        return tests.sorted { $0.key.path < $1.key.path }.flatMap { folder, identifiers -> [SnapshotFailureImages] in
+        return tests.sorted { $0.key.path < $1.key.path }.flatMap { folder, tests -> [SnapshotFailureImages] in
             guard let manifest = FileManager.default.contents(atPath: folder.appendingPathComponent("manifest.json").path),
                   let images = try? FailureAttachments.parse(manifest: manifest, directory: folder) else { return [] }
-            return images.filter { identifiers.contains($0.testIdentifier) }
+            return images.filter { image in tests.contains { image.belong(to: $0.test, in: $0.suite) } }
         }
     }
 

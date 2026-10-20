@@ -982,7 +982,7 @@ final class ProjectModel {
                 FailureItem(
                     suite: suite,
                     test: test,
-                    images: images.filter { $0.testIdentifier == test.identifier },
+                    images: images.filter { $0.belong(to: test, in: suite) },
                     referencePaths: test.failureMessages.flatMap { FailureAttachments.referencePaths(in: $0, repository: project.url) },
                     verdict: verdicts[suite.identifier + "/" + test.name]?.verdict,
                     historyFlaky: flaky[suite.identifier + "/" + test.name],

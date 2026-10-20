@@ -175,6 +175,32 @@ import Testing
         #expect(Set(images.map(\.id)).count == 3)
     }
 
+    /// Two test targets each have a `CardTests/card()`; only the identifier's URL names the target.
+    @Test func keepsTheImagesOfSameNamedTestsInTwoTargetsApart() throws {
+        let manifest = """
+            [{"testIdentifier": "CardTests/card()", "testIdentifierURL": "test://com.apple.xcode/App/AppTests/CardTests/card()",
+              "attachments": [{"exportedFileName": "A.png", "suggestedHumanReadableName": "failure_0_A.png"}]},
+             {"testIdentifier": "CardTests/card()", "testIdentifierURL": "test://com.apple.xcode/App/FeatureTests/CardTests/card()",
+              "attachments": [{"exportedFileName": "F.png", "suggestedHumanReadableName": "failure_0_F.png"}]},
+             {"testIdentifier": "CardTests/row()", "attachments": [{"exportedFileName": "R.png", "suggestedHumanReadableName": "failure_0_R.png"}]}]
+            """
+        let images = try FailureAttachments.parse(manifest: Data(manifest.utf8), directory: URL(fileURLWithPath: "/att"))
+        #expect(images.map(\.bundle) == [nil, "AppTests", "FeatureTests"])
+        #expect(Set(images.map(\.id)).count == 3)
+
+        func suite(_ bundle: String, _ test: String) -> (TestCaseResult, SuiteResult) {
+            let test = TestCaseResult(name: test, identifier: "CardTests/\(test)", outcome: .failed, failureMessages: [], repetitions: [.failed])
+            return (test, SuiteResult(bundle: bundle, path: ["CardTests"], tests: [test], failureFiles: []))
+        }
+        func failures(of test: (TestCaseResult, SuiteResult)) -> [String?] {
+            images.filter { $0.belong(to: test.0, in: test.1) }.map { $0.failure?.lastPathComponent }
+        }
+        #expect(failures(of: suite("AppTests", "card()")) == ["A.png"])
+        #expect(failures(of: suite("FeatureTests", "card()")) == ["F.png"])
+        // A manifest that doesn't name the target (older Xcode) still finds its test's images.
+        #expect(failures(of: suite("AppTests", "row()")) == ["R.png"])
+    }
+
     @Test func reExportReplacesOnlyTheFilesOfTheLastExport() throws {
         let dir = testTemp("out")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

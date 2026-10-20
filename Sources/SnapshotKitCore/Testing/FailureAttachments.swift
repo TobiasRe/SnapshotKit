@@ -3,7 +3,11 @@ import Foundation
 /// The images swift-snapshot-testing attaches when a snapshot does not match:
 /// the stored reference, the newly taken image, and a difference image.
 public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
+    /// The test within its target, e.g. `CardTests/card()`.
     public var testIdentifier: String
+    /// The test target, e.g. `AppTests`: two targets can each have a `CardTests/card()`. Nil when the
+    /// manifest doesn't name it (and in files written by older versions).
+    public var bundle: String?
     public var repetition: Int
     /// Index of the assertion within the test (the `_0_` in `failure_0_<uuid>.png`).
     public var index: Int
@@ -19,10 +23,11 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
     /// Repository-relative path of the reference PNG, when it could be read from the failure message.
     public var referencePath: String?
 
-    public init(testIdentifier: String, repetition: Int, index: Int, reference: URL? = nil, failure: URL? = nil,
+    public init(testIdentifier: String, bundle: String? = nil, repetition: Int, index: Int, reference: URL? = nil, failure: URL? = nil,
                 difference: URL? = nil, device: String? = nil, deviceID: String? = nil, arguments: [String]? = nil,
                 referencePath: String? = nil) {
         self.testIdentifier = testIdentifier
+        self.bundle = bundle
         self.repetition = repetition
         self.index = index
         self.reference = reference
@@ -36,7 +41,13 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
 
     /// One assertion's images: per test, device, test case, repetition and assertion.
     public var id: String {
-        [testIdentifier, deviceID ?? "", arguments?.joined(separator: ", ") ?? "", "\(repetition)", "\(index)"].joined(separator: "#")
+        [bundle ?? "", testIdentifier, deviceID ?? "", arguments?.joined(separator: ", ") ?? "", "\(repetition)", "\(index)"].joined(separator: "#")
+    }
+
+    /// Whether these are images of `test` in `suite`. Images that don't name their target go with a
+    /// test of that name in any target.
+    public func belong(to test: TestCaseResult, in suite: SuiteResult) -> Bool {
+        testIdentifier == test.identifier && (bundle ?? suite.bundle) == suite.bundle
     }
 }
 
@@ -51,7 +62,17 @@ public enum FailureAttachments {
             var arguments: [String]?
         }
         var testIdentifier: String
+        /// `test://com.apple.xcode/<test plan>/<target>/<testIdentifier>`, the only name of the target.
+        var testIdentifierURL: String?
         var attachments: [Attachment]
+
+        var bundle: String? {
+            guard let url = testIdentifierURL?.split(separator: "?", maxSplits: 1).first,
+                  url.hasSuffix("/" + testIdentifier) else { return nil }
+            let container = url.dropLast(testIdentifier.count + 1).split(separator: "/")
+            // After "test:" and the host, the last component is the target.
+            return container.count > 2 ? container.last.map(String.init) : nil
+        }
     }
 
     /// Exports attachments from a result bundle into `directory` and groups snapshot images.
@@ -94,7 +115,7 @@ public enum FailureAttachments {
                 guard let name = attachment.suggestedHumanReadableName,
                       let (role, index) = role(of: name) else { continue }
                 let new = SnapshotFailureImages(
-                    testIdentifier: entry.testIdentifier, repetition: attachment.repetitionNumber ?? 1, index: index,
+                    testIdentifier: entry.testIdentifier, bundle: entry.bundle, repetition: attachment.repetitionNumber ?? 1, index: index,
                     device: attachment.deviceName, deviceID: attachment.deviceId, arguments: attachment.arguments
                 )
                 if grouped[new.id] == nil { order.append(new.id) }
@@ -111,7 +132,8 @@ public enum FailureAttachments {
         }
         let position = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
         return order.compactMap { grouped[$0] }.sorted {
-            ($0.testIdentifier, $0.repetition, $0.index, position[$0.id]!) < ($1.testIdentifier, $1.repetition, $1.index, position[$1.id]!)
+            ($0.bundle ?? "", $0.testIdentifier, $0.repetition, $0.index, position[$0.id]!)
+                < ($1.bundle ?? "", $1.testIdentifier, $1.repetition, $1.index, position[$1.id]!)
         }
     }
 
