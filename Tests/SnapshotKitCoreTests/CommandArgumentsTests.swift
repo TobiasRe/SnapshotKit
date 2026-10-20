@@ -25,6 +25,15 @@ import Testing
         #expect(throws: UsageError("missing arguments")) { try CommandArguments([], options: options, positional: 2...2) }
     }
 
+    /// `--iterations 1` ran two iterations without a word; a flakiness check needs at least two.
+    @Test func iterationsBelowAFlakinessCheckAreAnError() throws {
+        let o = try CommandArguments(["--iterations", "1"], options: ["--iterations": .value])
+        #expect(throws: UsageError("--iterations needs a whole number of at least 2, not '1'")) {
+            try o.integer("--iterations", atLeast: Flakiness.minimumIterations)
+        }
+        #expect(Flakiness.arguments(iterations: 3).prefix(2) == ["-test-iterations", "3"])
+    }
+
     @Test func rejectsUnknownOptionsAndMissingValues() {
         #expect(throws: UsageError("unknown option --verbse")) { try CommandArguments(["--verbse"], options: options) }
         #expect(throws: UsageError("--repo needs a value")) { try CommandArguments(["--repo"], options: options) }

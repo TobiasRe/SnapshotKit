@@ -181,7 +181,7 @@ func context(_ o: CommandArguments) -> ProjectContext {
 }
 
 func iterations(_ o: CommandArguments) -> Int? {
-    do { return try o.integer("--iterations", atLeast: 1) } catch { usageError(error.description) }
+    do { return try o.integer("--iterations", atLeast: Flakiness.minimumIterations) } catch { usageError(error.description) }
 }
 
 func environment(_ config: SnapshotConfig) -> TestEnvironment {

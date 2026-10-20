@@ -31,8 +31,11 @@ public enum Flakiness {
     /// xcodebuild arguments for a flakiness check: N independent iterations,
     /// each in a fresh process so state does not leak between repetitions.
     public static func arguments(iterations: Int) -> [String] {
-        ["-test-iterations", String(max(2, iterations)), "-test-repetition-relaunch-enabled", "YES"]
+        ["-test-iterations", String(max(minimumIterations, iterations)), "-test-repetition-relaunch-enabled", "YES"]
     }
+
+    /// One run tells nothing about flakiness.
+    public static let minimumIterations = 2
 
     public static func classify(_ summary: TestRunSummary) -> [FlakeResult] {
         summary.suites.flatMap { suite in
