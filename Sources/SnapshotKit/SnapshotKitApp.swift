@@ -41,6 +41,7 @@ extension AppModel {
     static let shared = AppModel()
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Built as a plain executable, so opt into being a regular foreground app.
@@ -49,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if capture == nil { NSApp.activate(ignoringOtherApps: true) }
         InterruptGuard.install()
         if let capture {
-            Task { @MainActor in await WindowCapture.run(capture, model: AppModel.shared) }
+            Task { await WindowCapture.run(capture, model: AppModel.shared) }
         }
     }
 
@@ -65,16 +66,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: text), let request = CompareRequest(url: url) else { return }
-        MainActor.assumeIsolated { CompareWindows.show(request) }
+        CompareWindows.show(request)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        MainActor.assumeIsolated { AppModel.shared.applicationWillTerminate() }
+        AppModel.shared.applicationWillTerminate()
     }
 
     /// With the menu bar item shown, closing the window keeps SnapshotKit (and its runs) going.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        MainActor.assumeIsolated { !AppModel.shared.showMenuBarItem }
+        !AppModel.shared.menuBar.isShown
     }
 }
 

@@ -59,9 +59,7 @@ struct SidebarView: View {
             HStack {
                 Menu {
                     Button("Add Project…") { model.addProjectFromPanel() }
-                    Button("Add Scan Folder…") {
-                        model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") { model.addScanRoot($0) }
-                    }
+                    Button("Add Scan Folder…") { model.addScanRootFromPanel() }
                     Button("Rescan Folders") { model.rescan() }
                         .disabled(model.store.settings.scanRoots.isEmpty)
                 } label: {

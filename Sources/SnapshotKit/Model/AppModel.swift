@@ -25,23 +25,29 @@ final class AppModel {
 
     /// Whether the menu bar item is shown (its own object; see `MenuBarSetting`).
     let menuBar: MenuBarSetting
-    var showMenuBarItem: Bool {
-        get { menuBar.isShown }
-        set { menuBar.isShown = newValue }
-    }
     /// Projects with a run, record or flakiness check going on, for the menu bar.
     private(set) var runningPaths: [String] = []
+    /// Posted by a project model when an operation starts and when it ends.
     static let runStarted = Notification.Name("SnapshotKitRunStarted")
+    static let runFinished = Notification.Name("SnapshotKitRunFinished")
     @ObservationIgnored private var runObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var isRefreshingCounts = false
 
     init(store: ProjectStore = ProjectStore()) {
         self.store = store
         menuBar = MenuBarSetting(store: store)
-        for name in [Self.runStarted, Self.runFinished] {
-            runObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        let center = NotificationCenter.default
+        runObservers = [
+            center.addObserver(forName: Self.runStarted, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.updateRunningPaths() }
-            })
-        }
+            },
+            center.addObserver(forName: Self.runFinished, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.updateRunningPaths()
+                    self?.refreshFailingCounts()
+                }
+            },
+        ]
         restoreLeftoverPatches()
         refreshProjects()
         if let last = store.settings.lastProject, projects.contains(where: { $0.path == last }) {
@@ -64,17 +70,8 @@ final class AppModel {
         refreshFailingCounts()
     }
 
-    static let runFinished = Notification.Name("SnapshotKitRunFinished")
-    @ObservationIgnored private var isRefreshingCounts = false
-    @ObservationIgnored private var runObserver: NSObjectProtocol?
-
     /// Reads every project's last-run summary in the background (cheap: one small JSON per repo).
     func refreshFailingCounts() {
-        if runObserver == nil {
-            runObserver = NotificationCenter.default.addObserver(forName: Self.runFinished, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refreshFailingCounts() }
-            }
-        }
         guard !isRefreshingCounts else { return }
         isRefreshingCounts = true
         let paths = projects.map(\.path)
@@ -218,20 +215,26 @@ final class AppModel {
         return "Found \(count) project\(count == 1 ? "" : "s") with snapshot tests in \(folders)."
     }
 
-    func chooseFolder(message: String, completion: @escaping (URL) -> Void) {
+    /// Asks for a folder in an open panel; nil when cancelled.
+    private func chooseFolder(message: String) -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.message = message
-        if panel.runModal() == .OK, let url = panel.url { completion(url) }
+        return panel.runModal() == .OK ? panel.url : nil
     }
 
     func addProjectFromPanel() {
-        chooseFolder(message: "Choose a git repository with snapshot tests") { [weak self] url in
-            guard let root = Git.repository(containing: url)?.root else { return }
-            self?.open(path: root.path)
-        }
+        guard let url = chooseFolder(message: "Choose a git repository with snapshot tests"),
+              let root = Git.repository(containing: url)?.root else { return }
+        open(path: root.path)
+    }
+
+    /// Asks for a folder to scan, then scans it.
+    func addScanRootFromPanel() {
+        guard let url = chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") else { return }
+        addScanRoot(url)
     }
 
     func importResultBundleFromPanel() {

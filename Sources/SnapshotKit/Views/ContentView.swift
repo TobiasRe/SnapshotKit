@@ -80,9 +80,7 @@ struct WelcomeView: View {
             HStack {
                 Button("Add Project…") { model.addProjectFromPanel() }
                     .primaryActionStyle()
-                Button("Add Scan Folder…") {
-                    model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") { model.addScanRoot($0) }
-                }
+                Button("Add Scan Folder…") { model.addScanRootFromPanel() }
                 .fixedSize()
                 .quietControl()
             }

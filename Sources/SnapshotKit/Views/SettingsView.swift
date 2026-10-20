@@ -7,13 +7,11 @@ struct SettingsView: View {
     @State private var roots: [String] = []
     @State private var iterations = 5
     @State private var verify = true
-    @State private var menuBar = false
 
     var body: some View {
         Form {
             Section {
-                Toggle("Show in menu bar", isOn: $menuBar)
-                    .onChange(of: menuBar) { _, v in model.showMenuBarItem = v }
+                Toggle("Show in menu bar", isOn: Bindable(model.menuBar).isShown)
             } header: {
                 Text("General")
             } footer: {
@@ -47,10 +45,8 @@ struct SettingsView: View {
                     Button("Rescan") { model.rescan() }
                         .disabled(roots.isEmpty)
                     Button("Add Folder…") {
-                        model.chooseFolder(message: "Choose a folder to scan for repositories with snapshot tests") {
-                            model.addScanRoot($0)
-                            reload()
-                        }
+                        model.addScanRootFromPanel()
+                        reload()
                     }
                 }
                 .controlSize(.small)
@@ -92,6 +88,5 @@ struct SettingsView: View {
         roots = model.store.settings.scanRoots
         iterations = model.store.settings.flakeIterations
         verify = model.store.settings.verifyAfterRecord
-        menuBar = model.showMenuBarItem
     }
 }
