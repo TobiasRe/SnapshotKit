@@ -410,7 +410,7 @@ func main() async {
         do { library = try SnapshotLibrary.load(repository: ctx.repository) } catch { fail(error.localizedDescription) }
         let orphans = SnapshotLibrary.orphans(library.files, repository: ctx.repository)
         let files = SnapshotLibrary.filter(library.files, text: o.positional.joined(separator: " ")).filter { !orphans.contains($0.id) }
-        guard !files.isEmpty else { fail("No snapshot path contains \(o.positional.map { "'\($0)'" }.joined(separator: " and ")).") }
+        guard !files.isEmpty else { fail("No snapshot path contains \(o.positional.map { "“\($0)”" }.joined(separator: " and ")).") }
         let selection: RecordSelection
         do {
             selection = try RecordPlanner.plan(files, granularity: o.has("--whole-suite") ? .suites : .tests, repository: ctx.repository)
@@ -501,7 +501,7 @@ func main() async {
         if let path = o.value("--xcresult") { bundle = URL(fileURLWithPath: path) }
         else if let path = last?.resultBundle, path.hasSuffix(".xcresult"), FileManager.default.fileExists(atPath: path) { bundle = URL(fileURLWithPath: path) }
         else if let last, last.host == "local", let path = last.resultBundle {
-            fail("The last run's results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
+            fail("The last run’s results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
         }
         else { fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).") }
         let out = o.value("--out").map { URL(fileURLWithPath: $0) } ?? bundle.deletingPathExtension().appendingPathExtension("attachments")
@@ -605,7 +605,7 @@ func main() async {
         let app = o.value("--app") ?? ProcessInfo.processInfo.environment["SNAPSHOTKIT_APP"]
         let opened = try? Shell.run(["open"] + (app.map { ["-a", $0] } ?? ["-b", "org.snapshotkit.SnapshotKit"]) + [request.url.absoluteString])
         guard opened?.succeeded == true else {
-            fail("Couldn't open SnapshotKit\(app.map { " at \($0)" } ?? ""). Install SnapshotKit.app from "
+            fail("Couldn’t open SnapshotKit\(app.map { " at \($0)" } ?? ""). Install SnapshotKit.app from "
                  + "https://github.com/TobiasRe/SnapshotKit/releases, or pass --app PATH.")
         }
 
@@ -618,7 +618,7 @@ func main() async {
             for root in roots { store.addScanRoot(root) }
             let reports = store.rescanReports()
             for report in reports where !report.readable {
-                say("Can't read \(report.root.path): allow access in System Settings › Privacy & Security › Files and Folders.")
+                say("Can’t read \(report.root.path): allow access in System Settings › Privacy & Security › Files and Folders.")
             }
             let found = reports.flatMap(\.projects)
             for p in found { say(p.path) }

@@ -110,7 +110,7 @@ public enum SnapshotChangeError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .baseBranchNotFound(let branch):
-            "Base branch '\(branch)' was not found locally or on origin. Fetch it or choose a different base branch."
+            "Base branch “\(branch)” was not found locally or on origin. Fetch it or choose a different base branch."
         }
     }
 }

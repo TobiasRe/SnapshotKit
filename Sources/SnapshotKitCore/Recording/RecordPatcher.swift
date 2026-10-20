@@ -10,11 +10,11 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case let .declarationNotFound(suite, file):
-            "Could not find the declaration of suite '\(suite)' in \(file)."
+            "Could not find the declaration of suite “\(suite)” in \(file)."
         case let .xctestAlreadyOverridesInvokeTest(suite, file):
-            "'\(suite)' in \(file) already overrides invokeTest(); re-record it manually."
+            "“\(suite)” in \(file) already overrides invokeTest(); re-record it manually."
         case let .suiteFileNotFound(suite):
-            "Could not find the source file for suite '\(suite)'."
+            "Could not find the source file for suite “\(suite)”."
         case let .uncommittedChanges(files):
             "Refusing to re-record: these files have uncommitted changes. Commit or stash them first:\n" + files.map { "  \($0)" }.joined(separator: "\n")
         case let .patchAlreadyActive(repo):

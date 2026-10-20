@@ -169,6 +169,24 @@ import Testing
         #expect(repo.git.resolveBaseRef("develop") == "origin/develop")
     }
 
+    /// Messages read like the app around them: “names” and apostrophes are typographic, and only
+    /// code to type (in backticks) keeps straight quotes.
+    @Test func messagesUseTypographicQuotes() {
+        let errors: [any LocalizedError] = [
+            SnapshotChangeError.baseBranchNotFound("develop"),
+            RecordPatchError.declarationNotFound(suite: "CardTests", file: "CardTests.swift"),
+            RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "CardTests.swift"),
+            RecordPatchError.suiteFileNotFound("CardTests"),
+            EnvironmentError.simulatorMissing(name: "iPhone 16", platform: "iOS", os: "18.2", available: []),
+            RemoteError.notConfigured, RemoteError.invalidHost("-x"), RemoteError.unsafeRemotePath(host: "ci", path: "/a b"),
+        ]
+        for error in errors {
+            let prose = (error.errorDescription ?? "").replacingOccurrences(of: "`[^`]*`", with: "", options: .regularExpression)
+            #expect(!prose.contains("'") && !prose.contains("\""), "\(prose)")
+        }
+        #expect(SnapshotChangeError.baseBranchNotFound("develop").errorDescription?.hasPrefix("Base branch “develop” was not found") == true)
+    }
+
     @Test func missingBaseBranch() throws {
         let repo = try TempRepo()
         try repo.write("a", "a")

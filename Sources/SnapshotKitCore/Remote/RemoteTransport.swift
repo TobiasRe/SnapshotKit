@@ -118,7 +118,7 @@ public enum RemoteError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .notConfigured:
-            "No remote machine configured. Set `remoteHost:` in .snapshotkit.yml or in the project's settings."
+            "No remote machine configured. Set `remoteHost:` in .snapshotkit.yml or in the project’s settings."
         case let .commandFailed(host, _, _, output):
             "Command on \(host) failed: \(output)"
         case let .syncFailed(host, output):
@@ -126,9 +126,9 @@ public enum RemoteError: Error, LocalizedError, Equatable {
         case let .unreachable(host, output):
             "Cannot reach \(host) over SSH (\(output)). Check that key-based login works: `ssh \(host) true`."
         case let .invalidHost(host):
-            "'\(host)' is not a host name SnapshotKit will pass to ssh. Set `remoteHost:` to a host, user@host or an ~/.ssh/config alias."
+            "“\(host)” is not a host name SnapshotKit will pass to ssh. Set `remoteHost:` to a host, user@host or an ~/.ssh/config alias."
         case let .unsafeRemotePath(host, path):
-            "The folder \(path) on \(host) has spaces or shell characters, which rsync can't pass reliably. Set `remoteDirectory:` to a path without them."
+            "The folder \(path) on \(host) has spaces or shell characters, which rsync can’t pass reliably. Set `remoteDirectory:` to a path without them."
         }
     }
 }

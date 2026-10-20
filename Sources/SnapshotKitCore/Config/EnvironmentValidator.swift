@@ -71,7 +71,7 @@ public enum EnvironmentError: Error, LocalizedError, Equatable {
             return "The \(platform) \(os) simulator runtime is not installed for Xcode \(xcode). Installed runtimes: \(list). Install it with `xcodebuild -downloadPlatform \(platform) -buildVersion \(os)` or in Xcode › Settings › Components."
         case let .simulatorMissing(name, platform, os, available):
             let list = available.isEmpty ? "none" : available.joined(separator: ", ")
-            return "No '\(name)' simulator on \(platform) \(os). Available on that runtime: \(list). Create one with `xcrun simctl create \"\(name)\" \"\(name)\" <runtime-id>`, or set `device:` in .snapshotkit.yml."
+            return "No “\(name)” simulator on \(platform) \(os). Available on that runtime: \(list). Create one with `xcrun simctl create \"\(name)\" \"\(name)\" <runtime-id>`, or set `device:` in .snapshotkit.yml."
         case let .noDestination(available):
             let list = available.prefix(8).joined(separator: ", ")
             return "No simulator is configured: CI has no `-destination` with a device name. Set `device:` (and optionally `os:`) in .snapshotkit.yml. Available: \(list)"
