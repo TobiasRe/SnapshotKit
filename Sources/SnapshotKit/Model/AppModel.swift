@@ -165,11 +165,8 @@ final class AppModel {
     /// is no project: the window says so, and nil comes back.
     @discardableResult
     func open(path: String) -> ProjectModel? {
-        guard Git.repository(containing: URL(fileURLWithPath: path)) != nil else {
-            let name = path.abbreviatingWithTildeInPath
-            startupNotice = FileManager.default.fileExists(atPath: path)
-                ? "Can’t open \(name): it isn’t in a git repository."
-                : "Can’t open \(name): there is no such folder."
+        if let problem = Self.problem(opening: path) {
+            startupNotice = problem
             return nil
         }
         let project = Project(path: path)
@@ -177,6 +174,22 @@ final class AppModel {
         refreshProjects()
         selectedPath = project.path
         return current
+    }
+
+    /// Why the folder at `path` can't be opened as a project, or nil when it can. `environment` is
+    /// for git's process.
+    nonisolated static func problem(opening path: String, environment: [String: String]? = nil) -> String? {
+        let name = path.abbreviatingWithTildeInPath
+        guard FileManager.default.fileExists(atPath: path) else { return "Can’t open \(name): there is no such folder." }
+        do {
+            guard try Git.repository(at: URL(fileURLWithPath: path), environment: environment) != nil else {
+                return "Can’t open \(name): it isn’t in a git repository."
+            }
+            return nil
+        } catch {
+            // git itself can't run: that is what to fix, not the folder.
+            return "Can’t open \(name): \(error.localizedDescription)"
+        }
     }
 
     /// Opens the repository (adding it if it's new) and selects the snapshot at `path` in its library
@@ -255,9 +268,9 @@ final class AppModel {
     }
 
     func addProjectFromPanel() {
-        guard let url = chooseFolder(message: "Choose a git repository with snapshot tests"),
-              let root = Git.repository(containing: url)?.root else { return }
-        open(path: root.path)
+        guard let url = chooseFolder(message: "Choose a git repository with snapshot tests") else { return }
+        // A folder outside any repository goes to `open` too, which says why it can't be a project.
+        open(path: Git.repository(containing: url)?.root.path ?? url.path)
     }
 
     /// Asks for a folder to scan, then scans it.

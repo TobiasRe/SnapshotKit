@@ -306,11 +306,7 @@ final class ProjectModel {
         Task {
             let loaded = await offCooperativePool {
                 let git = Git(root: url)
-                let context = Result { () throws -> ProjectContext in
-                    // A folder deleted or moved while open would read as a project with no configuration.
-                    guard Git.repository(containing: url) != nil else { throw RepositoryGone(url: url) }
-                    return try ProjectContext.load(repository: url, settings: settings)
-                }
+                let context = Result { try ProjectModel.loadContext(url, settings: settings) }
                 return (
                     branch: git.currentBranch(),
                     branches: ProjectModel.branchList(git),
@@ -340,6 +336,15 @@ final class ProjectModel {
             loadLastRun()
             refreshChanges()
         }
+    }
+
+    /// The repository's configuration. A folder deleted or moved while open would read as a project
+    /// with no configuration, so that throws, as does git not running at all. `environment` is for git's process.
+    nonisolated static func loadContext(_ url: URL, settings: ProjectSettings, environment: [String: String]? = nil) throws -> ProjectContext {
+        guard FileManager.default.fileExists(atPath: url.path), try Git.repository(at: url, environment: environment) != nil else {
+            throw RepositoryGone(url: url)
+        }
+        return try ProjectContext.load(repository: url, settings: settings)
     }
 
     /// Checks Xcode and the simulator the configuration asks for; without one, there is nothing to check.

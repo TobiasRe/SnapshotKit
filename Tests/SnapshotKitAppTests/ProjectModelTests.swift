@@ -385,6 +385,20 @@ extension AppUITests {
             #expect(app.store.settings.recents.allSatisfy { $0 != missing.path && $0 != plain.path })
         }
 
+        /// Without git a repository can't be told from a plain folder: say git is missing, not that
+        /// the folder isn't a repository.
+        @Test func openingWithoutGitSaysGitIsMissing() throws {
+            let (repo, _) = try makeRepo()
+            #expect(AppModel.problem(opening: repo.path) == nil)
+            let problem = try #require(AppModel.problem(opening: repo.path, environment: ["PATH": "/no/such/bin"]))
+            #expect(problem.contains("`git` was not found on the PATH"))
+            #expect(!problem.contains("isn’t in a git repository"))
+            // Nor does a project already open say it is no repository any more.
+            #expect(throws: CommandError.self) {
+                try ProjectModel.loadContext(repo, settings: ProjectSettings(), environment: ["PATH": "/no/such/bin"])
+            }
+        }
+
         /// Each snapshot's base image gets a file of its own: two of one test, the same test name in
         /// another suite, and a base branch with a slash in its name.
         @Test func exportsBaseImageForOpeningElsewhere() async throws {

@@ -14,12 +14,8 @@ public struct Git: Sendable {
     }
 
     /// Like `repository(containing:)`, but throws when git itself can't run (it isn't installed,
-    /// say), instead of reporting that as "not a repository".
-    public static func repository(at url: URL) throws -> Git? {
-        try repository(at: url, environment: nil)
-    }
-
-    static func repository(at url: URL, environment: [String: String]?) throws -> Git? {
+    /// say), instead of reporting that as "not a repository". `environment` is for git's process.
+    public static func repository(at url: URL, environment: [String: String]? = nil) throws -> Git? {
         let command = ["git", "rev-parse", "--show-toplevel"]
         let result = try Shell.run(command, in: url, environment: environment)
         guard result.succeeded else {
