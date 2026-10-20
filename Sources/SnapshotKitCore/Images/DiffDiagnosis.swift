@@ -39,9 +39,9 @@ public struct DiffDiagnosis: Equatable, Sendable {
             summary = "The image size changed, so the device, scale or layout differs from the reference."
         } else if result.maxPerceptualDelta < Lab.justNoticeable {
             kind = .imperceptible
-            // Round down so the suggestion really passes.
-            let p = Self.floor(1 - result.maxPerceptualDelta / 100, places: 2)
-            suggestedPerceptualPrecision = p
+            // Round down so the suggestion really passes, and stay below 1, where swift-snapshot-testing
+            // compares exactly (pixels can differ with ΔE 0, in transparency).
+            suggestedPerceptualPrecision = min(Self.floor(1 - result.maxPerceptualDelta / 100, places: 2), 0.99)
             summary = "No visible difference (largest ΔE \(delta)), typical of rendering on another machine or OS version."
         } else if Double(result.perceptiblePixels) / Double(max(result.totalPixels, 1)) < Self.tinyFraction {
             kind = .tiny

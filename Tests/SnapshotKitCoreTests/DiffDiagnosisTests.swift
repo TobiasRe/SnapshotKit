@@ -29,6 +29,15 @@ import Testing
         #expect(d.suggestion == "perceptualPrecision: 0.99")
     }
 
+    /// swift-snapshot-testing only compares perceptually below 1, so 1 would never pass.
+    @Test func aDifferenceOnlyInTransparencySuggestsAPrecisionBelowOne() {
+        let clear = PixelImage(width: 1, height: 1, pixels: [0, 0, 0, 0])
+        let faint = PixelImage(width: 1, height: 1, pixels: [0, 0, 0, 3])
+        let d = DiffDiagnosis(ImageDiff.compare(clear, faint))
+        #expect(d.kind == .imperceptible)
+        #expect(d.suggestion == "perceptualPrecision: 0.99")
+    }
+
     @Test func aFewVisiblePixelsAreTiny() {
         let diff = ImageDiff.compare(image((255, 255, 255)), image((255, 255, 255), painting: 3))
         #expect(diff.perceptiblePixels == 3)
