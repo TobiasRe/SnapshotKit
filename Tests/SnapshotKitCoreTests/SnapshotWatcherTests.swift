@@ -23,6 +23,21 @@ import Testing
         #expect(counter.value >= 1)
     }
 
+    @Test func staysQuietOnceStoppedAndReleased() async throws {
+        let snapshots = testTemp("watch").appendingPathComponent("__Snapshots__")
+        try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true)
+        let counter = Counter()
+        var watcher: SnapshotWatcher? = SnapshotWatcher(repository: snapshots.deletingLastPathComponent(), latency: 0.05) { counter.increment() }
+        try await Task.sleep(for: .milliseconds(300))
+        watcher?.stop()
+        watcher?.stop()
+        watcher = nil
+        counter.reset()
+        try Data([1]).write(to: snapshots.appendingPathComponent("a.png"))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(counter.value == 0)
+    }
+
     @Test func recognisesSnapshotPaths() {
         #expect(SnapshotWatcher.isSnapshotPath("/r/Tests/A/__Snapshots__/S/t.1.png"))
         #expect(SnapshotWatcher.isSnapshotPath("/r/Tests/A/__Snapshots__"))
