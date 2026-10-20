@@ -47,6 +47,16 @@ import Testing
         #expect(d.summary.hasPrefix("3 visible pixels changed in a 3×1 px area"))
     }
 
+    /// Invisible noise on every pixel and three visible pixels: `precision` counts only the pixels
+    /// `perceptualPrecision` doesn't excuse, so both are needed; `precision: 0` alone turns the test off.
+    @Test func aFewVisiblePixelsOverNoiseNeedBothPrecisions() {
+        let diff = ImageDiff.compare(image((200, 200, 200)), image((201, 200, 199), painting: 3))
+        #expect(diff.changedPixels == diff.totalPixels && diff.perceptiblePixels == 3)
+        let d = DiffDiagnosis(diff)
+        #expect(d.kind == .tiny)
+        #expect(d.suggestion == "precision: 0.9997, perceptualPrecision: 0.97")
+    }
+
     @Test func largeChangesAreVisible() {
         let diff = ImageDiff.compare(image((255, 255, 255)), image((255, 255, 255), painting: 2000, with: (255, 0, 0)))
         let d = DiffDiagnosis(diff)

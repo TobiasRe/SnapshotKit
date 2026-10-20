@@ -45,7 +45,15 @@ public struct DiffDiagnosis: Equatable, Sendable {
             summary = "No visible difference (largest ΔE \(delta)), typical of rendering on another machine or OS version."
         } else if Double(result.perceptiblePixels) / Double(max(result.totalPixels, 1)) < Self.tinyFraction {
             kind = .tiny
-            suggestedPrecision = Self.floor(1 - result.changedFraction, places: 4)
+            if result.changedPixels == result.perceptiblePixels {
+                suggestedPrecision = Self.floor(1 - result.changedFraction, places: 4)
+            } else {
+                // Invisible noise besides: `precision` then counts the pixels `perceptualPrecision`
+                // doesn't excuse, the visible ones. On its own it would come out near 0, which
+                // passes anything.
+                suggestedPerceptualPrecision = Self.floor(1 - Lab.justNoticeable / 100, places: 2)
+                suggestedPrecision = Self.floor(1 - Double(result.perceptiblePixels) / Double(result.totalPixels), places: 4)
+            }
             let size = result.changedBounds.map { "\(Int($0.width))×\(Int($0.height)) px area" } ?? "small area"
             summary = "\(result.perceptiblePixels) visible pixel\(result.perceptiblePixels == 1 ? "" : "s") changed in a \(size): often anti-aliasing, a caret or a timestamp."
         } else {
@@ -58,11 +66,11 @@ public struct DiffDiagnosis: Equatable, Sendable {
         }
     }
 
-    /// The trait to paste into the test, e.g. `perceptualPrecision: 0.98`.
+    /// The arguments to paste into `.image(…)`, e.g. `perceptualPrecision: 0.98`.
     public var suggestion: String? {
-        if let p = suggestedPerceptualPrecision { return "perceptualPrecision: \(Self.format(p))" }
-        if let p = suggestedPrecision { return "precision: \(Self.format(p))" }
-        return nil
+        let arguments = [suggestedPrecision.map { "precision: \(Self.format($0))" },
+                         suggestedPerceptualPrecision.map { "perceptualPrecision: \(Self.format($0))" }].compactMap { $0 }
+        return arguments.isEmpty ? nil : arguments.joined(separator: ", ")
     }
 
     static func floor(_ value: Double, places: Int) -> Double {
