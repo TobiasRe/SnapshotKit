@@ -48,6 +48,7 @@ final class AppModel {
             },
             center.addObserver(forName: Self.runFinished, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
+                    self?.releaseRemovedModels()
                     self?.updateRunningPaths()
                     self?.refreshFailingCounts()
                 }
@@ -127,9 +128,17 @@ final class AppModel {
     func remove(_ project: Project) {
         store.remove(project)
         if selectedPath == project.path { selectedPath = nil }
-        // Let its model (and the model's file watcher) go, unless it is still running something.
-        if models[project.path]?.isRunning == false { models[project.path] = nil }
         refreshProjects()
+        releaseRemovedModels()
+    }
+
+    /// Lets the models of removed projects (and their file watchers) go, except while one is still
+    /// running something: that one goes when it ends.
+    private func releaseRemovedModels() {
+        let listed = Set(projects.map(\.path))
+        for (path, model) in models where !listed.contains(path) && path != selectedPath && !model.isRunning {
+            models[path] = nil
+        }
     }
 
     /// The loaded model of a project, if it has been opened this session.

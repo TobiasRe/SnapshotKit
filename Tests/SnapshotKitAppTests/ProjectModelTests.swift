@@ -871,6 +871,23 @@ extension AppUITests {
             #expect(model.tab == .run)
         }
 
+        /// A project removed while it runs keeps running, and its model goes once the run ends.
+        @Test func aProjectRemovedWhileRunningIsLetGoWhenItEnds() async throws {
+            let (repo, _) = try makeRepo()
+            let app = AppModel(store: AppFixtures.store())
+            let model = try runnableModel(repo, xcodebuild: Self.longRun)
+            app.show(model)
+            model.runTests()
+            try await waitUntilStarted(model)
+            app.remove(model.project)
+            #expect(app.projectModel(path: model.project.path) === model)
+            model.cancel()
+            try await waitUntilFinished(model)
+            for _ in 0..<100 where app.projectModel(path: model.project.path) != nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(app.projectModel(path: model.project.path) == nil)
+            #expect(app.runningPaths.isEmpty)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
