@@ -47,7 +47,7 @@ xcodebuild test
   -scheme App
   -testPlan Snapshots                 (if configured)
   -destination 'platform=iOS Simulator,id=<udid>'
-  -resultBundlePath $TMPDIR/SnapshotKit/results/<timestamp>.xcresult
+  -resultBundlePath .git/snapshotkit/results/<timestamp>.xcresult
   -only-testing:AppSnapshotTests      (if configured, or the chosen test target)
   -skip-testing:…                     (if configured)
   <extraArguments from .snapshotkit.yml>
@@ -62,8 +62,9 @@ xcodebuild test
 - With no scheme configured, SnapshotKit asks `xcodebuild -list` and uses the only scheme, or the
   `<Package>-Package` scheme of a Swift package.
 
-The newest 30 result bundles are kept in `$TMPDIR/SnapshotKit/results/`, with their exported attachments
-next to them.
+Each repository keeps its own result bundles in `.git/snapshotkit/results/` (inside its git directory, so
+never committed), with their exported failure images next to them: the newest 10 runs, and always the last
+run's, whatever other projects run.
 
 ## Running part of the tests
 

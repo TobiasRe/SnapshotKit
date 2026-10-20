@@ -162,7 +162,7 @@ At the end:
 Result: 12 passed, 2 failed, 0 skipped  [local]
 FAILING SUITE: AppSnapshotTests/CheckoutViewTests (1/2 tests)
   ✘ payButton()
-Result bundle: /var/folders/…/SnapshotKit/results/2026-10-16T17-47-50Z-8C7AFB53.xcresult
+Result bundle: …/Shop/.git/snapshotkit/results/2026-10-16T17-47-50Z-8C7AFB53.xcresult
 Failure images: 2 (see `snapkit failures`)
 ```
 
@@ -273,8 +273,9 @@ For an invisible or tiny difference the diagnosis ends with *Would pass with pre
 | `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). Only the files of an earlier export there are replaced. |
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
-*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* Exits 0 after listing, failures or not; 1
-when there is no bundle or it can't be read.
+*No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* If the last run's bundle has been removed:
+*The last run's results are gone (…). Run the tests again (`snapkit run`), or pass --xcresult PATH.* Exits 0
+after listing, failures or not; 1 when there is no bundle or it can't be read.
 
 ## history
 
@@ -362,7 +363,6 @@ read are named. `list` prints the app's projects: pinned (📌) first, then rece
 | `SNAPSHOTKIT_HOME` | settings, history and patch registry folder (default `~/Library/Application Support/SnapshotKit`) |
 | `SNAPSHOTKIT_APP` | the app `snapkit open` opens |
 | `SNAPSHOTKIT_XCODE_SEARCH_PATHS` | colon-separated folders searched for `Xcode*.app` (default `/Applications` and `~/Applications`) |
-| `TMPDIR` | where result bundles go (`$TMPDIR/SnapshotKit/results`) |
 
 ## In CI and scripts
 

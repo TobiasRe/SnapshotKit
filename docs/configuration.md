@@ -206,7 +206,7 @@ selection; *What CI runs* goes back. `snapkit run --module <target>` does the sa
 | `~/Library/Application Support/SnapshotKit/settings.json` | scan folders, pins, recents, preferences, per-project settings |
 | `~/Library/Application Support/SnapshotKit/history/` | run history |
 | `.git/snapshotkit/` | last run, Viewed marks, record patch journal and backups (per clone, never committed) |
-| `$TMPDIR/SnapshotKit/results/` | result bundles and failure images (newest 30) |
+| `.git/snapshotkit/results/` | each repository's result bundles and failure images (the newest 10 runs; the last run's are always kept) |
 | `SNAPSHOTKIT_HOME` | use another folder instead of `~/Library/Application Support/SnapshotKit` |
 | `SNAPSHOTKIT_XCODE_SEARCH_PATHS` | folders to search for Xcode, colon-separated |
 | `SNAPSHOTKIT_APP` | the app `snapkit open` opens |
