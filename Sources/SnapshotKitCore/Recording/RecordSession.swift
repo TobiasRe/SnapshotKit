@@ -327,10 +327,14 @@ public enum InterruptGuard {
     /// Installs handlers for SIGINT, SIGTERM, SIGHUP and SIGQUIT that stop child processes
     /// (so nothing keeps recording), restore every active record session, and exit with the
     /// conventional status.
-    public static func install(onRestore: (@Sendable (RestoreReport) -> Void)? = nil) {
+    ///
+    /// Pass `interrupt: false` to handle SIGINT yourself (`snapkit` cancels gracefully on the first
+    /// Ctrl-C and calls `restoreAll()` on the second). Every source for a signal runs, so there must
+    /// be only one.
+    public static func install(interrupt: Bool = true, onRestore: (@Sendable (RestoreReport) -> Void)? = nil) {
         queue.sync {
             guard sources.isEmpty else { return }
-            for sig in [SIGINT, SIGTERM, SIGHUP, SIGQUIT] {
+            for sig in interrupt ? [SIGINT, SIGTERM, SIGHUP, SIGQUIT] : [SIGTERM, SIGHUP, SIGQUIT] {
                 signal(sig, SIG_IGN)
                 let source = DispatchSource.makeSignalSource(signal: sig, queue: queue)
                 source.setEventHandler {

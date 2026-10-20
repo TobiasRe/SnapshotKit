@@ -10,64 +10,65 @@ usage: snapkit <command> [options]
 commands:
   snapshots  [--repo P] [--filter TEXT] [--orphans] [--sort size|recent]
                                                  list every snapshot with its state; totals at the end
-  record     [--repo P] TEXT… [--whole-suite] [--no-verify]
+  record     [--repo P] TEXT… [--whole-suite] [--no-verify] [--verbose]
                                                  re-record the tests of the snapshots whose path contains every TEXT
   config     [--repo P]                          show resolved configuration and check Xcode/simulator
   run        [--repo P] [--only ID]... [--module M] [--iterations N] [--remote [HOST]] [--verbose]
+                                                 run the tests like CI; --module runs one test target only
   rerecord   [--repo P] [--suite ID]... [--no-verify] [--remote [HOST]] [--verbose]
-                                                 re-record the failing suites of the last run
-  flaky      [--repo P] [--iterations N] [--remote [HOST]] [--verbose]
+                                                 re-record the failing suites of the last run, or the given
+                                                 ones (ID = Bundle/Suite), then verify them where they were recorded
+  flaky      [--repo P] [--suite ID]... [--iterations N] [--remote [HOST]] [--verbose]
+                                                 run those suites N times; exits 1 if a test is flaky or always fails
   failures   [--repo P] [--xcresult PATH] [--out DIR]   list failures, diagnose each diff, show recent runs
   changes    [--repo P] [--base BRANCH] [--tip] [--filter TEXT]
   history    [--repo P] [TEST]                   recent runs and flaky tests; TEST = Bundle/Suite/test()
-  restore    [--repo P]                          undo a leftover record patch
-  diff       A.png B.png [-o OUT.png]             pixel and perceptual difference, with a precision that passes
+  restore    [--repo P] [--force]                undo a leftover record patch; --force even when a running
+                                                 SnapshotKit owns it
+  diff       A.png B.png [-o OUT.png]             pixel and perceptual difference, with a precision that passes;
+                                                 exits 0 when identical, 1 when they differ, 2 on trouble
   open       REFERENCE.png ACTUAL.png [--app PATH]
-                                                 the same summary, then compare them in SnapshotKit; as a diff
-                                                 tool: .snapshots(diffTool: "snapkit open")
+                                                 the same summary, then compare them in SnapshotKit (the app at
+                                                 --app or $SNAPSHOTKIT_APP, else the installed one); to use it as
+                                                 the diff tool: https://tobiasre.github.io/SnapshotKit/docs/diff-tool/
   projects   scan ROOT... | list
 
 Every command first restores record patches left behind by an interrupted run.
+Options a command doesn't take, and missing or malformed values, exit with 64.
 `snapkit --version` prints the version.
 """
 
-// MARK: - Argument parsing
-
-struct Options {
-    var command = ""
-    var positional: [String] = []
-    var values: [String: [String]] = [:]
-    var flags: Set<String> = []
-
-    func value(_ name: String) -> String? { values[name]?.last }
-    func all(_ name: String) -> [String] { values[name] ?? [] }
-    func has(_ name: String) -> Bool { flags.contains(name) || values[name] != nil }
-}
-
-func parse(_ args: [String]) -> Options {
-    var o = Options()
-    var rest = args[...]
-    o.command = rest.popFirst() ?? ""
-    let takesValue: Set<String> = ["--repo", "--only", "--module", "--iterations", "--suite", "--xcresult", "--out", "--base", "--filter", "--sort", "--app", "-o"]
-    let optionalValue: Set<String> = ["--remote"]
-    while let arg = rest.popFirst() {
-        if takesValue.contains(arg), let v = rest.popFirst() {
-            o.values[arg, default: []].append(v)
-        } else if optionalValue.contains(arg) {
-            if let next = rest.first, !next.hasPrefix("-") { o.values[arg, default: []].append(rest.removeFirst()) } else { o.flags.insert(arg) }
-        } else if arg.hasPrefix("-") {
-            o.flags.insert(arg)
-        } else {
-            o.positional.append(arg)
-        }
-    }
-    return o
-}
+/// The options each command takes, and how many other arguments (checked by the command itself
+/// where it has its own usage line).
+let commands: [String: (options: [String: CommandArguments.Option], positional: ClosedRange<Int>)] = [
+    "snapshots": (["--repo": .value, "--filter": .value, "--orphans": .flag, "--sort": .value], 0...0),
+    "record": (["--repo": .value, "--whole-suite": .flag, "--no-verify": .flag, "--verbose": .flag], 0...Int.max),
+    "config": (["--repo": .value], 0...0),
+    "run": (["--repo": .value, "--only": .value, "--module": .value, "--iterations": .value, "--remote": .optionalValue, "--verbose": .flag], 0...0),
+    "rerecord": (["--repo": .value, "--suite": .value, "--no-verify": .flag, "--remote": .optionalValue, "--verbose": .flag], 0...0),
+    "flaky": (["--repo": .value, "--suite": .value, "--iterations": .value, "--remote": .optionalValue, "--verbose": .flag], 0...0),
+    "failures": (["--repo": .value, "--xcresult": .value, "--out": .value], 0...0),
+    "changes": (["--repo": .value, "--base": .value, "--tip": .flag, "--filter": .value], 0...0),
+    "history": (["--repo": .value], 0...1),
+    "restore": (["--repo": .value, "--force": .flag], 0...0),
+    "diff": (["-o": .value], 0...Int.max),
+    "open": (["--app": .value], 0...Int.max),
+    "projects": ([:], 0...Int.max),
+]
 
 // MARK: - Output
 
-let isTTY = isatty(STDOUT_FILENO) != 0
-func color(_ code: String, _ text: String) -> String { isTTY ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text }
+/// Colour only on a terminal, and never with NO_COLOR set (https://no-color.org).
+func usesColor(_ descriptor: Int32) -> Bool {
+    isatty(descriptor) != 0 && (ProcessInfo.processInfo.environment["NO_COLOR"] ?? "").isEmpty
+}
+let stdoutHasColor = usesColor(STDOUT_FILENO)
+let stderrHasColor = usesColor(STDERR_FILENO)
+
+func color(_ code: String, _ text: String, onStderr: Bool = false) -> String {
+    (onStderr ? stderrHasColor : stdoutHasColor) ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text
+}
+
 /// ✔ ✘ ◐ per run, oldest first, as on the app's Failures tab.
 func historyStrip(_ points: [HistoryPoint]) -> String {
     points.map { p in
@@ -80,14 +81,25 @@ func historyStrip(_ points: [HistoryPoint]) -> String {
 }
 
 func say(_ text: String) { print(text); fflush(stdout) }
+
+/// Notes and warnings: on standard error, so they don't mix with what a command prints.
+func warn(_ text: String, color code: String = "33") {
+    FileHandle.standardError.write(Data((color(code, text, onStderr: true) + "\n").utf8))
+}
+
 func fail(_ text: String, code: Int32 = 1) -> Never {
-    FileHandle.standardError.write(Data((color("31", "error: ") + text + "\n").utf8))
+    FileHandle.standardError.write(Data((color("31", "error: ", onStderr: true) + text + "\n").utf8))
     exit(code)
 }
 
+func usageError(_ text: String) -> Never {
+    fail(text + "\nRun `snapkit help` for usage.", code: EX_USAGE)
+}
+
 /// Prints test-relevant lines only (or everything with --verbose) plus a live counter on TTYs.
-final class Printer: @unchecked Sendable {
+final class Printer: Sendable {
     let verbose: Bool
+    /// Lines arrive from the runner's threads; one at a time keeps them whole.
     private let lock = NSLock()
     init(verbose: Bool) { self.verbose = verbose }
 
@@ -108,15 +120,46 @@ final class Printer: @unchecked Sendable {
     }
 }
 
+// MARK: - Ctrl-C
+
+/// What the first Ctrl-C does: cancel the running command, which then still prints its summary
+/// and records the run. A second Ctrl-C, or one with nothing to cancel, restores record patches
+/// and quits. (Variables at the top level of main.swift belong to the main actor.)
+var cancelOnInterrupt: (() -> Void)?
+var interruptSource: DispatchSourceSignal?
+
+/// SIGINT is handled here and not by InterruptGuard (installed with `interrupt: false`): every
+/// source for a signal runs, and InterruptGuard's would exit before the cancelled run is recorded.
+@MainActor func handleInterrupts() {
+    signal(SIGINT, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+    source.setEventHandler {
+        MainActor.assumeIsolated {
+            if let cancel = cancelOnInterrupt {
+                cancelOnInterrupt = nil
+                warn("\nInterrupted — cancelling (press Ctrl-C again to force quit)…")
+                cancel()
+            } else {
+                for report in InterruptGuard.restoreAll() where !report.files.isEmpty { warn("snapkit: " + report.summary) }
+                exit(130)
+            }
+        }
+    }
+    source.resume()
+    interruptSource = source
+}
+
+@MainActor func onInterrupt(_ cancel: @escaping () -> Void) { cancelOnInterrupt = cancel }
+
 // MARK: - Helpers
 
-func repository(_ o: Options) -> URL {
+func repository(_ o: CommandArguments) -> URL {
     let path = o.value("--repo") ?? FileManager.default.currentDirectoryPath
     guard let git = Git.repository(containing: URL(fileURLWithPath: path)) else { fail("\(path) is not inside a git repository") }
     return git.root
 }
 
-func context(_ o: Options) -> ProjectContext {
+func context(_ o: CommandArguments) -> ProjectContext {
     let repo = repository(o)
     let store = ProjectStore()
     var settings = store.settings(for: Project(path: repo.path))
@@ -129,6 +172,10 @@ func context(_ o: Options) -> ProjectContext {
     }
 }
 
+func iterations(_ o: CommandArguments) -> Int? {
+    do { return try o.integer("--iterations", atLeast: 1) } catch { usageError(error.description) }
+}
+
 func environment(_ config: SnapshotConfig) -> TestEnvironment {
     do {
         let env = try EnvironmentValidator.validate(config)
@@ -136,6 +183,14 @@ func environment(_ config: SnapshotConfig) -> TestEnvironment {
         return env
     } catch {
         fail(error.localizedDescription, code: 2)
+    }
+}
+
+func remoteRunner(_ ctx: ProjectContext) -> RemoteRunner {
+    do {
+        return RemoteRunner(repository: ctx.repository, config: ctx.config, transport: try ctx.config.remoteTransport())
+    } catch {
+        fail(error.localizedDescription)
     }
 }
 
@@ -159,13 +214,18 @@ func record(_ result: TestRunResult, kind: RunKind, repo: URL, attachments: URL?
     if kind == .run { LastRun(result: result, attachmentsDirectory: attachments).save(repository: repo) }
 }
 
+func warnAboutConflicts(_ report: RestoreReport) {
+    for conflict in report.conflicts {
+        warn("WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)", color: "31")
+    }
+}
+
 /// Runs locally or remotely, wiring Ctrl-C to cancellation.
+@MainActor
 func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, iterations: Int?, printer: Printer) async -> (TestRunResult, [SnapshotFailureImages], URL?) {
     let config = ctx.config
     if remote {
-        let transport: RemoteTransport
-        do { transport = try config.remoteTransport() } catch { fail(error.localizedDescription) }
-        let runner = RemoteRunner(repository: ctx.repository, config: config, transport: transport)
+        let runner = remoteRunner(ctx)
         onInterrupt { runner.cancel() }
         do {
             let out = try await runner.run(mode: iterations.map { .flakeCheck(iterations: $0) } ?? .run, onlyTesting: onlyTesting,
@@ -186,46 +246,24 @@ func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, itera
     } catch { fail(error.localizedDescription) }
 }
 
-/// SIGINT handling that does not fight InterruptGuard: the first Ctrl-C cancels the run gracefully
-/// (InterruptGuard still restores patches if a second signal arrives).
-nonisolated(unsafe) var interruptHandler: (() -> Void)?
-nonisolated(unsafe) var interruptSource: DispatchSourceSignal?
-func onInterrupt(_ handler: @escaping () -> Void) {
-    interruptHandler = handler
-    guard interruptSource == nil else { return }
-    signal(SIGINT, SIG_IGN)
-    let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-    var count = 0
-    source.setEventHandler {
-        count += 1
-        if count == 1 {
-            say(color("33", "\nInterrupted — cancelling (press Ctrl-C again to force quit)…"))
-            interruptHandler?()
-        } else {
-            _ = InterruptGuard.restoreAll()
-            exit(130)
-        }
-    }
-    source.resume()
-    interruptSource = source
-}
-
-func failingSuites(_ ctx: ProjectContext, o: Options, printer: Printer) async -> [SuiteResult] {
+/// The suites `--suite` names, else the failing suites of the last run, else those of a new run.
+@MainActor
+func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer) async -> [SuiteResult] {
+    let last = LastRun.load(repository: ctx.repository)
     let requested = o.all("--suite")
-    if let last = LastRun.load(repository: ctx.repository) {
-        if !requested.isEmpty {
-            let matched = last.failingSuites.filter { requested.contains($0.identifier) || requested.contains($0.name) }
-            if matched.count == requested.count { return matched }
-        } else if !last.failingSuites.isEmpty {
-            say("snapkit: using failing suites from the last run (\(last.host), \(last.date.formatted(date: .omitted, time: .shortened)))")
-            return last.failingSuites
+    if !requested.isEmpty {
+        // The last run's own entries know the suites' source files.
+        let known = last?.suites ?? last?.failingSuites ?? []
+        return requested.map { id in
+            if let suite = known.first(where: { $0.identifier == id || $0.name == id }) { return suite }
+            let parts = id.split(separator: "/").map(String.init)
+            guard parts.count > 1 else { usageError("--suite \(id): name its test target too, as in --suite AppTests/\(id)") }
+            return SuiteResult(bundle: parts[0], path: Array(parts.dropFirst()), tests: [], failureFiles: [])
         }
     }
-    if !requested.isEmpty {
-        return requested.map { id in
-            let parts = id.split(separator: "/").map(String.init)
-            return SuiteResult(bundle: parts.count > 1 ? parts[0] : "", path: Array(parts.dropFirst(parts.count > 1 ? 1 : 0)), tests: [], failureFiles: [])
-        }
+    if let last, !last.failingSuites.isEmpty {
+        say("snapkit: using failing suites from the last run (\(last.host), \(last.date.formatted(date: .omitted, time: .shortened)))")
+        return last.failingSuites
     }
     say("snapkit: no previous run recorded; running tests to find failing suites")
     let (result, _, dir) = await runTests(ctx, remote: false, onlyTesting: nil, iterations: nil, printer: printer)
@@ -234,22 +272,69 @@ func failingSuites(_ ctx: ProjectContext, o: Options, printer: Printer) async ->
     return result.failingSuites
 }
 
+/// Records a re-record's verification run as the last run, and exits with its outcome.
+func finishVerification(_ verify: TestRunResult, repo: URL, attachments: URL? = nil) -> Never {
+    record(verify, kind: .verify, repo: repo)
+    LastRun(result: verify, attachmentsDirectory: attachments).save(repository: repo)
+    say(verify.succeeded ? color("32", "Verified: \(verify.passed) passed with the new references.")
+                         : color("31", "Verification failed: \(verify.failed) still failing (flaky?). Try `snapkit flaky`."))
+    exit(verify.succeeded ? 0 : 1)
+}
+
+/// The image at `path`, or an error saying why it can't be read.
+func readImage(_ path: String) throws -> PixelImage {
+    struct NotAnImage: LocalizedError {
+        var path: String
+        var errorDescription: String? { "\(path) is not an image" }
+    }
+    guard let image = PixelImage(data: try Data(contentsOf: URL(fileURLWithPath: path))) else { throw NotAnImage(path: path) }
+    return image
+}
+
+/// Prints how two images differ, and which precision would pass.
+@discardableResult
+func describeDiff(_ a: PixelImage, _ b: PixelImage) -> ImageDiffResult {
+    let diff = ImageDiff.compare(a, b)
+    say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@, largest ΔE %.1f", diff.changedPixels, diff.changedFraction * 100,
+                                                diff.sizeChanged ? ", size changed" : "", diff.maxPerceptualDelta))
+    let diagnosis = DiffDiagnosis(diff)
+    if !diff.isIdentical { say(diagnosis.summary) }
+    if let suggestion = diagnosis.suggestion { say("Would pass with: \(suggestion)") }
+    return diff
+}
+
 // MARK: - Commands
 
 @MainActor
 func main() async {
-    let o = parse(Array(CommandLine.arguments.dropFirst()))
-    InterruptGuard.install { report in FileHandle.standardError.write(Data(("snapkit: " + report.summary + "\n").utf8)) }
+    var arguments = Array(CommandLine.arguments.dropFirst())
+    let command = arguments.isEmpty ? "" : arguments.removeFirst()
+    InterruptGuard.install(interrupt: false) { report in warn("snapkit: " + report.summary) }
+    handleInterrupts()
     let leftovers = RecordSession.restoreAllLeftovers()
     for report in leftovers.reports where !report.files.isEmpty {
-        say(color("33", "snapkit: restored leftover record patch in \(report.repository.path):\n  ") + report.summary.replacingOccurrences(of: "\n", with: "\n  "))
+        warn("snapkit: restored leftover record patch in \(report.repository.path):\n  " + report.summary.replacingOccurrences(of: "\n", with: "\n  "))
     }
     for failure in leftovers.failures {
-        say(color("31", "snapkit: could not restore the record patch in \(failure.repository.path): ") + failure.error.localizedDescription)
+        warn("snapkit: could not restore the record patch in \(failure.repository.path): \(failure.error.localizedDescription)", color: "31")
     }
+
+    switch command {
+    case "", "help", "-h", "--help":
+        say(usage)
+        exit(0)
+    case "version", "--version", "-v":
+        say("snapkit \(SnapshotKitVersion.current)")
+        exit(0)
+    default:
+        break
+    }
+    guard let spec = commands[command] else { usageError("unknown command '\(command)'") }
+    let o: CommandArguments
+    do { o = try CommandArguments(arguments, options: spec.options, positional: spec.positional) } catch { usageError("snapkit \(command): \(error)") }
     let printer = Printer(verbose: o.has("--verbose"))
 
-    switch o.command {
+    switch command {
     case "config":
         let ctx = context(o)
         let c = ctx.config
@@ -259,7 +344,7 @@ func main() async {
         say("Repository: \(ctx.repository.path)")
         say("CI files:   \(ctx.resolved.ciFiles.isEmpty ? "none" : ctx.resolved.ciFiles.joined(separator: ", "))")
         say("Override:   \(ctx.resolved.overrideFile ?? "none")")
-        row("xcode", c.xcodeVersion ?? c.developerDir, .xcodeVersion)
+        row("xcode", c.xcodeVersion ?? c.developerDir, c.xcodeVersion == nil && c.developerDir != nil ? .developerDir : .xcodeVersion)
         row("device", c.deviceName, .deviceName)
         row("os", c.osVersion, .osVersion)
         row("scheme", c.scheme, .scheme)
@@ -277,7 +362,7 @@ func main() async {
 
     case "run":
         let ctx = context(o)
-        let iterations = o.value("--iterations").flatMap(Int.init)
+        let iterations = iterations(o)
         let only = o.all("--only")
         let (result, attachments, attachmentsDir) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: only.isEmpty ? nil : only, iterations: iterations, printer: printer)
         record(result, kind: iterations == nil ? .run : .flakeCheck, repo: ctx.repository, attachments: attachmentsDir)
@@ -293,9 +378,10 @@ func main() async {
         let orphans = SnapshotLibrary.orphans(library.files, repository: repo)
         if o.has("--orphans") { files = files.filter { orphans.contains($0.id) } }
         switch o.value("--sort") {
+        case nil: break
         case "size": files.sort { $0.byteSize > $1.byteSize }
         case "recent": files.sort { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
-        default: break
+        case let other?: usageError("--sort takes size or recent, not '\(other)'")
         }
         for file in files {
             let size = SnapshotLibrary.formatSize(file.byteSize)
@@ -311,8 +397,8 @@ func main() async {
             + (orphans.isEmpty ? "" : " · \(orphans.count) orphaned (`--orphans` lists them)"))
 
     case "record":
+        guard !o.positional.isEmpty else { usageError("usage: snapkit record TEXT… (part of a snapshot path, e.g. a test or suite name)") }
         let ctx = context(o)
-        guard !o.positional.isEmpty else { fail("usage: snapkit record TEXT… (part of a snapshot path, e.g. a test or suite name)") }
         let library: SnapshotLibrary
         do { library = try SnapshotLibrary.load(repository: ctx.repository) } catch { fail(error.localizedDescription) }
         let orphans = SnapshotLibrary.orphans(library.files, repository: ctx.repository)
@@ -330,7 +416,7 @@ func main() async {
                                                       onStage: { say(color("36", "▸ \($0.label)")) },
                                                       onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
-            for conflict in outcome.restore.conflicts { say(color("31", "WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)")) }
+            warnAboutConflicts(outcome.restore)
             if let verify = outcome.verifyRun {
                 record(verify, kind: .verify, repo: ctx.repository)
                 say(verify.succeeded ? color("32", "Recorded and verified: \(verify.passed) passed.")
@@ -349,15 +435,19 @@ func main() async {
         guard !suites.isEmpty else { say("Nothing to re-record: no failing suites."); exit(0) }
         say("snapkit: re-recording \(suites.map(\.identifier).joined(separator: ", "))")
         if o.has("--remote") {
-            let transport: RemoteTransport
-            do { transport = try ctx.config.remoteTransport() } catch { fail(error.localizedDescription) }
-            let runner = RemoteRunner(repository: ctx.repository, config: ctx.config, transport: transport)
+            // Recorded and verified on the remote Mac; only the new references come back.
+            let runner = remoteRunner(ctx)
             onInterrupt { runner.cancel() }
             do {
-                let out = try await runner.run(mode: .record(suites: suites), onStage: { say(color("36", "▸ \($0.label)")) },
-                                               onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
-                say("Downloaded \(out.downloadedSnapshots.count) snapshot(s) recorded on \(out.host).")
-                exit(out.run.cancelled ? 1 : 0)
+                let recorded = try await runner.run(mode: .record(suites: suites), onStage: { say(color("36", "▸ \($0.label)")) },
+                                                    onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
+                record(recorded.run, kind: .record, repo: ctx.repository)
+                say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
+                say("Downloaded \(recorded.downloadedSnapshots.count) snapshot(s) recorded on \(recorded.host).")
+                if recorded.run.cancelled || o.has("--no-verify") { exit(recorded.run.cancelled ? 1 : 0) }
+                let verify = try await runner.run(mode: .run, onlyTesting: suites.map(\.identifier), onStage: { say(color("36", "▸ \($0.label)")) },
+                                                  onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
+                finishVerification(verify.run, repo: ctx.repository, attachments: verify.attachmentsDirectory)
             } catch { fail(error.localizedDescription) }
         }
         let runner = TestRunner(repository: ctx.repository, config: ctx.config, environment: environment(ctx.config))
@@ -370,14 +460,8 @@ func main() async {
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
             say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
             say("Patched and restored: \(outcome.patchedFiles.joined(separator: ", "))")
-            for conflict in outcome.restore.conflicts { say(color("31", "WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)")) }
-            if let verify = outcome.verifyRun {
-                record(verify, kind: .verify, repo: ctx.repository)
-                LastRun(result: verify).save(repository: ctx.repository)
-                say(verify.succeeded ? color("32", "Verified: \(verify.passed) passed with the new references.")
-                                     : color("31", "Verification failed: \(verify.failed) still failing (flaky?). Try `snapkit flaky`."))
-                exit(verify.succeeded ? 0 : 1)
-            }
+            warnAboutConflicts(outcome.restore)
+            if let verify = outcome.verifyRun { finishVerification(verify, repo: ctx.repository) }
             exit(outcome.recordRun.cancelled ? 1 : 0)
         } catch {
             fail(error.localizedDescription)
@@ -387,16 +471,18 @@ func main() async {
         let ctx = context(o)
         let suites = await failingSuites(ctx, o: o, printer: printer)
         guard !suites.isEmpty else { say("No failing suites to check."); exit(0) }
-        let n = o.value("--iterations").flatMap(Int.init) ?? ProjectStore().settings.flakeIterations
+        let n = iterations(o) ?? ProjectStore().settings.flakeIterations
         say("snapkit: running \(suites.map(\.identifier).joined(separator: ", ")) \(n)×")
         let (result, _, _) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: suites.map(\.identifier), iterations: n, printer: printer)
         record(result, kind: .flakeCheck, repo: ctx.repository)
         guard let summary = result.summary else { printSummary(result); exit(1) }
         say("")
-        for r in Flakiness.classify(summary) {
-            let label = r.verdict == .flaky ? color("33", r.verdict.label) : r.verdict == .alwaysFails ? color("31", r.verdict.label) : color("32", r.verdict.label)
-            say("\(label.padding(toLength: isTTY ? 28 : 18, withPad: " ", startingAt: 0)) \(r.passed)✔ \(r.failed)✘  \(r.suite)/\(r.test)")
+        let verdicts = Flakiness.classify(summary)
+        for r in verdicts {
+            let code = r.verdict == .flaky ? "33" : r.verdict == .alwaysFails ? "31" : "32"
+            say("\(color(code, r.verdict.label.padding(toLength: 18, withPad: " ", startingAt: 0))) \(r.passed)✔ \(r.failed)✘  \(r.suite)/\(r.test)")
         }
+        exit(verdicts.allSatisfy { $0.verdict == .passes } ? 0 : 1)
 
     case "failures":
         let ctx = context(o)
@@ -417,8 +503,7 @@ func main() async {
                     }
                     for img in images where img.testIdentifier == test.identifier && img.repetition == 1 {
                         say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
-                        if let ref = img.reference.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)),
-                           let act = img.failure.flatMap({ FileManager.default.contents(atPath: $0.path) }).flatMap(PixelImage.init(data:)) {
+                        if let ref = img.reference.flatMap({ try? readImage($0.path) }), let act = img.failure.flatMap({ try? readImage($0.path) }) {
                             let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))
                             say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
                         }
@@ -472,21 +557,28 @@ func main() async {
         } catch { fail(error.localizedDescription) }
 
     case "diff":
-        // Explains what kind of difference it is and which precision would pass.
-        guard o.positional.count == 2, let diff = describeDiff(o.positional[0], o.positional[1])
-        else { fail("usage: snapkit diff A.png B.png [-o OUT.png]") }
-        if let out = o.value("-o") { try? diff.image.pngData()?.write(to: URL(fileURLWithPath: out)) }
+        // Explains what kind of difference it is and which precision would pass. Like diff(1):
+        // 0 identical, 1 different, 2 trouble.
+        guard o.positional.count == 2 else { usageError("usage: snapkit diff A.png B.png [-o OUT.png]") }
+        let diff: ImageDiffResult
+        do { diff = describeDiff(try readImage(o.positional[0]), try readImage(o.positional[1])) } catch { fail(error.localizedDescription, code: 2) }
+        if let out = o.value("-o") {
+            guard let png = diff.image.pngData() else { fail("could not encode the difference image", code: 2) }
+            do { try png.write(to: URL(fileURLWithPath: out)) } catch { fail(error.localizedDescription, code: 2) }
+        }
         exit(diff.isIdentical ? 0 : 1)
 
     case "open":
         // swift-snapshot-testing's diff tool: it appends the reference and the actual image's paths,
         // so the failure message ends in a command that opens the pair in SnapshotKit.
-        guard o.positional.count == 2 else { fail("usage: snapkit open REFERENCE.png ACTUAL.png [--app PATH]") }
+        guard o.positional.count == 2 else { usageError("usage: snapkit open REFERENCE.png ACTUAL.png [--app PATH]") }
         let request = CompareRequest(reference: URL(fileURLWithPath: o.positional[0]), actual: URL(fileURLWithPath: o.positional[1]))
         for url in [request.reference, request.actual] where !FileManager.default.fileExists(atPath: url.path) {
             fail("no such file: \(url.path)")
         }
-        _ = describeDiff(request.reference.path, request.actual.path)
+        if let reference = try? readImage(request.reference.path), let actual = try? readImage(request.actual.path) {
+            describeDiff(reference, actual)
+        }
         let app = o.value("--app") ?? ProcessInfo.processInfo.environment["SNAPSHOTKIT_APP"]
         let opened = try? Shell.run(["open"] + (app.map { ["-a", $0] } ?? ["-b", "org.snapshotkit.SnapshotKit"]) + [request.url.absoluteString])
         guard opened?.succeeded == true else {
@@ -496,8 +588,11 @@ func main() async {
 
     case "projects":
         let store = ProjectStore()
-        if o.positional.first == "scan" {
-            for root in o.positional.dropFirst() { store.addScanRoot(root) }
+        switch o.positional.first {
+        case "scan":
+            let roots = o.positional.dropFirst()
+            guard !roots.isEmpty else { usageError("usage: snapkit projects scan ROOT...") }
+            for root in roots { store.addScanRoot(root) }
             let reports = store.rescanReports()
             for report in reports where !report.readable {
                 say("Can't read \(report.root.path): allow access in System Settings › Privacy & Security › Files and Folders.")
@@ -505,32 +600,17 @@ func main() async {
             let found = reports.flatMap(\.projects)
             for p in found { say(p.path) }
             say("\(found.count) project(s) with snapshot tests (looked \(ProjectScanner.defaultDepth) folders deep).")
-        } else {
+        case nil, "list":
+            guard o.positional.count <= 1 else { usageError("usage: snapkit projects scan ROOT... | list") }
             for p in store.allProjects { say((store.isPinned(p) ? "📌 " : "   ") + p.path) }
+        default:
+            usageError("usage: snapkit projects scan ROOT... | list")
         }
 
-    case "", "help", "-h", "--help":
-        say(usage)
-    case "version", "--version", "-v":
-        say("snapkit \(SnapshotKitVersion.current)")
     default:
-        fail("unknown command '\(o.command)'\n\n" + usage)
+        preconditionFailure("\(command) is in `commands` but has no case here")
     }
     exit(0)
-}
-
-/// Prints how two PNGs differ (and which precision would pass); nil when either can't be read.
-@discardableResult
-func describeDiff(_ pathA: String, _ pathB: String) -> ImageDiffResult? {
-    guard let a = FileManager.default.contents(atPath: pathA).flatMap(PixelImage.init(data:)),
-          let b = FileManager.default.contents(atPath: pathB).flatMap(PixelImage.init(data:)) else { return nil }
-    let diff = ImageDiff.compare(a, b)
-    say(diff.isIdentical ? "identical" : String(format: "%d pixels differ (%.3f%%)%@, largest ΔE %.1f", diff.changedPixels, diff.changedFraction * 100,
-                                                diff.sizeChanged ? ", size changed" : "", diff.maxPerceptualDelta))
-    let diagnosis = DiffDiagnosis(diff)
-    if !diff.isIdentical { say(diagnosis.summary) }
-    if let suggestion = diagnosis.suggestion { say("Would pass with: \(suggestion)") }
-    return diff
 }
 
 await main()
