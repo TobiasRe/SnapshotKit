@@ -976,6 +976,25 @@ extension AppUITests {
             #expect(model.failures.map(\.verdict) == verdicts)
         }
 
+        /// A verification in which no test ran verified nothing: it says so rather than calling the test
+        /// flaky, and leaves the failures as they were.
+        @Test func aVerificationThatRanNoTestSaysSo() async throws {
+            let repo = try makeRecordableRepo()
+            let model = try runnableModel(repo, xcodebuild: """
+                [ -e "$0.ran" ] || { touch "$0.ran"; exit 0; }
+                for arg; do [ "$p" = -resultBundlePath ] && rm -rf "$arg"; p=$arg; done
+                exit 65
+                """, testResults: Self.cardPassed, failures: true)
+            let failures = model.failures.map(\.id)
+            model.reRecordFailed(suites: [Self.cardSuite])
+            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded CardTests. Could not verify: no test ran.")
+            #expect(model.lastMessageIsError)
+            #expect(model.failures.map(\.id) == failures)
+            #expect(LastRun.load(repository: repo) == nil)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")

@@ -1278,8 +1278,11 @@ final class ProjectModel {
                 if let verifyRun = outcome.verifyRun {
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: "local", repository: project.url, result: verifyRun))
                 }
-                // A cancelled verification has no results; the last run's failures stay.
-                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
+                // A cancelled verification has no results, nor one in which no test ran; the last run's failures stay.
+                if let verifyRun = outcome.verifyRun, let why = verifyRun.nothingTested {
+                    message += " Could not verify: \(why)."
+                    isError = true
+                } else if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
                     let (images, dir) = await Self.exportImages(of: verifyRun, developerDir: env.xcode.developerDir)
                     applyPartialRun(verifyRun, images: images, attachmentsDirectory: dir)
                     if verifyRun.succeeded {
