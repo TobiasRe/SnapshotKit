@@ -64,6 +64,32 @@ import Testing
         #expect(throws: RecordPatchError.self) { try RecordPatcher.patch(source: patched, suite: "CardTests") }
     }
 
+    @Test func bracesInCommentsAndStringsDontEndTheClass() throws {
+        let source = """
+        import XCTest
+
+        final class CardTests: XCTestCase {
+            // } a closing brace in a comment
+            /* } and /* nested */ } in a block comment */
+            let a = "}\\"}", b = #"}"}"#, c = "\\\\"
+            let d = \"\"\"
+                }
+                \"\"\"
+            override func invokeTest() { super.invokeTest() }
+        }
+        """
+        #expect(throws: RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "file")) {
+            try RecordPatcher.patch(source: source, suite: "CardTests")
+        }
+    }
+
+    @Test func parenthesesInSuiteStrings() throws {
+        #expect(try RecordPatcher.patch(source: #"@Suite("a\\", .serialized) struct A {}"#, suite: "A")
+                == #"@Suite("a\\", .serialized, .snapshots(record: .all)) struct A {}"#)
+        #expect(try RecordPatcher.patch(source: ##"@Suite(#"say "hi"#, .serialized) struct A {}"##, suite: "A")
+                == ##"@Suite(#"say "hi"#, .serialized, .snapshots(record: .all)) struct A {}"##)
+    }
+
     @Test func missingDeclaration() {
         #expect(throws: RecordPatchError.declarationNotFound(suite: "Nope", file: "file")) {
             try RecordPatcher.patch(source: "struct Other {}", suite: "Nope")

@@ -121,7 +121,7 @@ public enum RecordPatcher {
         let trimmed = args.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return ".snapshots(record: .all)" }
         // Keep trailing whitespace/newlines (multi-line attributes) after the new trait.
-        let trailing = args[args.index(args.startIndex, offsetBy: args.distance(from: args.startIndex, to: args.range(of: trimmed)!.upperBound))...]
+        let trailing = args[args.range(of: trimmed)!.upperBound...]
         let body = args[..<trailing.startIndex]
         return body + ", .snapshots(record: .all)" + trailing
     }
@@ -143,7 +143,7 @@ public enum RecordPatcher {
 
     // MARK: Scanning helpers
 
-    /// Index of the `)` matching the `(` at `open`, skipping string literals.
+    /// Index of the `)` matching the `(` at `open`, skipping comments and string literals.
     static func matchingParen(in text: String, open: String.Index) -> String.Index? {
         matching(in: text, open: open, openChar: "(", closeChar: ")")
     }
@@ -154,24 +154,63 @@ public enum RecordPatcher {
 
     private static func matching(in text: String, open: String.Index, openChar: Character, closeChar: Character) -> String.Index? {
         var depth = 0
-        var inString = false
-        var previous: Character = " "
         var i = open
         while i < text.endIndex {
-            let ch = text[i]
-            if inString {
-                if ch == "\"" && previous != "\\" { inString = false }
-            } else if ch == "\"" {
-                inString = true
-            } else if ch == openChar {
+            if let end = endOfCommentOrString(in: text, at: i) {
+                i = end
+                continue
+            }
+            if text[i] == openChar {
                 depth += 1
-            } else if ch == closeChar {
+            } else if text[i] == closeChar {
                 depth -= 1
                 if depth == 0 { return i }
             }
-            previous = ch
             i = text.index(after: i)
         }
         return nil
+    }
+
+    /// Where the comment or string literal starting at `i` ends, or nil if none starts there.
+    /// Handles `//` and (nested) `/* */` comments, escapes, multi-line `"""` and raw `#"…"#`
+    /// strings; an interpolation's own strings are not told apart.
+    private static func endOfCommentOrString(in text: String, at i: String.Index) -> String.Index? {
+        let rest = text[i...]
+        if rest.hasPrefix("//") { return rest.firstIndex(of: "\n") ?? text.endIndex }
+        if rest.hasPrefix("/*") {
+            var depth = 0
+            var j = i
+            while j < text.endIndex {
+                if text[j...].hasPrefix("/*") {
+                    depth += 1
+                    j = text.index(j, offsetBy: 2)
+                } else if text[j...].hasPrefix("*/") {
+                    depth -= 1
+                    j = text.index(j, offsetBy: 2)
+                    if depth == 0 { return j }
+                } else {
+                    j = text.index(after: j)
+                }
+            }
+            return text.endIndex
+        }
+        let hashes = String(rest.prefix { $0 == "#" })
+        let quoteStart = text.index(i, offsetBy: hashes.count)
+        guard text[quoteStart...].hasPrefix("\"") else { return nil }
+        let quotes = text[quoteStart...].hasPrefix("\"\"\"") ? "\"\"\"" : "\""
+        // In a raw string only `\#` escapes, and only `"#` closes it.
+        let close = quotes + hashes, escape = "\\" + hashes
+        var j = text.index(quoteStart, offsetBy: quotes.count)
+        while j < text.endIndex {
+            if text[j...].hasPrefix(escape) {
+                j = text.index(j, offsetBy: escape.count)
+                if j < text.endIndex { j = text.index(after: j) }
+            } else if text[j...].hasPrefix(close) {
+                return text.index(j, offsetBy: close.count)
+            } else {
+                j = text.index(after: j)
+            }
+        }
+        return text.endIndex
     }
 }
