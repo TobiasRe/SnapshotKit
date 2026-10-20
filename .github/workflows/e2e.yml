@@ -1,0 +1,32 @@
+name: End-to-end
+
+# scripts/e2e.sh against a real Xcode and iOS simulator: too slow for every pull request, so weekly and on
+# demand.
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      # The work directory, with the sample package and every step's log, goes under the runner's temp.
+      - name: End-to-end check
+        run: TMPDIR="$RUNNER_TEMP" scripts/e2e.sh --keep
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: ${{ runner.temp }}/snapkit-e2e.*/logs
+          if-no-files-found: ignore
