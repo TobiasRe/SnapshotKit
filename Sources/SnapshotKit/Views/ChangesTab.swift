@@ -189,7 +189,7 @@ struct ChangesTab: View {
                 .fixedSize()
                 .quietControl()
                 .accessibilityLabel("Compare with")
-                .help("Merge-base shows only this branch's changes; branch tip also shows changes made on the base branch since.")
+                .help("Merge-base shows only this branch’s changes; branch tip also shows changes made on the base branch since.")
 
                 Menu {
                     ForEach(SnapshotChangeKind.allCases, id: \.self) { kind in
@@ -299,7 +299,7 @@ struct ChangesTab: View {
     @ViewBuilder
     private var list: some View {
         if let error = project.changesError {
-            ContentUnavailableView("Can't Compare", systemImage: "arrow.triangle.branch", description: Text(error))
+            ContentUnavailableView("Can’t Compare", systemImage: "arrow.triangle.branch", description: Text(error))
         } else if project.isLoadingChanges && project.changeSet == nil {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {

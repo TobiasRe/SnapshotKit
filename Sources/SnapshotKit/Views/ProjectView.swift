@@ -447,8 +447,8 @@ struct RunStatusHeader: View {
 
     private var title: String {
         if project.isRunning { return project.stageLabel }
-        if project.configError != nil { return "Configuration can't be read" }
-        if project.environmentError != nil { return "Can't run on this Mac yet" }
+        if project.configError != nil { return "Configuration can’t be read" }
+        if project.environmentError != nil { return "Can’t run on this Mac yet" }
         if let message = project.lastMessage { return message }
         if project.failed > 0 { return "\(project.failed) failing test\(project.failed == 1 ? "" : "s") in the last run" }
         return "Ready to run"
@@ -464,7 +464,7 @@ struct RunStatusHeader: View {
     private var subtitle: String {
         if project.isRunning { return project.phase.label + "…" }
         if project.configError != nil { return "Fix the problem shown on the left, then try again." }
-        if project.environmentError != nil { return "Install what's missing, then check again." }
+        if project.environmentError != nil { return "Install what’s missing, then check again." }
         // The command itself is long and cut in the middle here; it's in the tooltip and the output.
         if project.lastResult != nil, let duration = project.lastDuration {
             return "Took \(Self.elapsed(duration))"

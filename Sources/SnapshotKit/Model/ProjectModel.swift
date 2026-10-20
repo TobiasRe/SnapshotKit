@@ -95,7 +95,7 @@ struct RepositoryGone: LocalizedError {
     var errorDescription: String? {
         let name = url.path.abbreviatingWithTildeInPath
         return FileManager.default.fileExists(atPath: url.path)
-            ? "\(name) isn't in a git repository any more."
+            ? "\(name) isn’t in a git repository any more."
             : "There is no folder at \(name) any more. Was it moved or deleted?"
     }
 }
@@ -1259,7 +1259,7 @@ final class ProjectModel {
                     : tests.count == 1 ? files[0].testName : "\(tests.count) tests"
                 reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
             case .failure(let error):
-                notify("Can't re-record: \(error.localizedDescription)", isError: true)
+                notify("Can’t re-record: \(error.localizedDescription)", isError: true)
             }
         }
     }

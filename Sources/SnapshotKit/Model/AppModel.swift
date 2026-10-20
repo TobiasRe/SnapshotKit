@@ -168,8 +168,8 @@ final class AppModel {
         guard Git.repository(containing: URL(fileURLWithPath: path)) != nil else {
             let name = path.abbreviatingWithTildeInPath
             startupNotice = FileManager.default.fileExists(atPath: path)
-                ? "Can't open \(name): it isn't in a git repository."
-                : "Can't open \(name): there is no such folder."
+                ? "Can’t open \(name): it isn’t in a git repository."
+                : "Can’t open \(name): there is no such folder."
             return nil
         }
         let project = Project(path: path)
@@ -232,7 +232,7 @@ final class AppModel {
         func name(_ url: URL) -> String { url.path.abbreviatingWithTildeInPath }
         let unreadable = reports.filter { !$0.readable }
         if !unreadable.isEmpty {
-            return "SnapshotKit can't read \(unreadable.map { name($0.root) }.joined(separator: ", ")). "
+            return "SnapshotKit can’t read \(unreadable.map { name($0.root) }.joined(separator: ", ")). "
                 + "Allow it in System Settings › Privacy & Security › Files and Folders, then rescan."
         }
         let count = reports.reduce(0) { $0 + $1.projects.count }

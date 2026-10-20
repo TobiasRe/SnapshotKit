@@ -139,7 +139,7 @@ struct FailuresTab: View {
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
                     GlassSplitButton(title: "Re-record", symbol: "camera",
-                                     help: "Record this test's snapshots again, then check that it passes (⇧⌘R)") {
+                                     help: "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
                         project.reRecord(failures: [item])
                     } menu: {
                         Button("Re-record Test") { project.reRecord(failures: [item]) }
@@ -212,7 +212,7 @@ struct FailuresTab: View {
                             afterLabel: "Actual · \(image?.device ?? project.failureSource?.host ?? "run")",
                             identity: item.id + "#\(rep)",
                             beforeMissing: "No reference was recorded yet.",
-                            afterMissing: "This run's images are no longer kept. Run the tests again to see what the test draws.")
+                            afterMissing: "This run’s images are no longer kept. Run the tests again to see what the test draws.")
             } else {
                 ContentUnavailableView("No Images Attached", systemImage: "photo.badge.exclamationmark",
                                        description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))

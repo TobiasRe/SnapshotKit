@@ -445,7 +445,7 @@ struct SnapshotDetail: View {
                     statusChips(status)
                     GlassSplitButton(title: "Re-record", symbol: "camera",
                                      help: status.orphaned ? "Its test no longer exists"
-                                         : "Record this test's snapshots again, then check that it passes (⇧⌘R)") {
+                                         : "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
                         project.reRecord([file], granularity: .tests)
                     } menu: {
                         Button("Re-record Test") { project.reRecord([file], granularity: .tests) }
