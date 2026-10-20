@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a tag such as v0.2.0 builds the app and the CLI and publishes them as a GitHub release, with the
+# tag's CHANGELOG.md section as its notes.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## $version" 'index($0, heading) == 1 { found = 1; next } /^## / && found { exit } found' \
+            CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+      - name: Build
+        run: scripts/make-app.sh
+      - name: Check the tag matches the version built
+        run: |
+          built="$(dist/snapkit --version)"
+          if [ "$built" != "snapkit ${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::$GITHUB_REF_NAME, but the build says '$built': update SnapshotKitVersion.current"
+            exit 1
+          fi
+      - name: Checksums
+        working-directory: dist
+        run: shasum -a 256 *.zip | tee SHA256SUMS.txt
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS.txt --verify-tag \
+            --title "SnapshotKit ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notes.md"
