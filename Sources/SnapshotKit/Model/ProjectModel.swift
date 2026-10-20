@@ -284,6 +284,7 @@ final class ProjectModel {
     // MARK: Loading
 
     @ObservationIgnored private var reloadGeneration = 0
+    @ObservationIgnored private var environmentGeneration = 0
 
     /// Re-reads configuration, branches and history off the main thread (git and file I/O
     /// can take a while in large repositories), then refreshes everything that depends on them.
@@ -327,13 +328,17 @@ final class ProjectModel {
 
     /// Checks Xcode and the simulator the configuration asks for; without one, there is nothing to check.
     func validateEnvironment() {
+        environmentGeneration += 1
         guard let config else {
             environment = nil
             environmentError = nil
             return
         }
+        let generation = environmentGeneration
         Task {
             let result = await offCooperativePool { Result { try EnvironmentValidator.validate(config) } }
+            // A check of an earlier configuration must not land after the one now chosen.
+            guard generation == environmentGeneration else { return }
             switch result {
             case .success(let env):
                 environment = env

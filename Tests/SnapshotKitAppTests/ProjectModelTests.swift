@@ -457,6 +457,31 @@ extension AppUITests {
             #expect(model.environmentError == nil)
         }
 
+        /// Checking Xcode again before an earlier check is done shows the later check's result,
+        /// whichever finishes first.
+        @Test func theLatestEnvironmentCheckWins() async throws {
+            let (repo, _) = try makeRepo()
+            // An Xcode whose simctl takes a second to fail.
+            let slow = AppFixtures.temporaryDirectory("slow").appendingPathComponent("Xcode.app")
+            let xcrun = slow.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
+            try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try "#!/bin/sh\nsleep 1\nexit 1\n".write(to: xcrun, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
+            try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "99.1"], format: .xml, options: 0)
+                .write(to: slow.appendingPathComponent("Contents/version.plist"))
+            let override = repo.appendingPathComponent(".snapshotkit.yml")
+
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
+            try "developerDir: \(slow.path)\n".write(to: override, atomically: true, encoding: .utf8)
+            model.reload()
+            for _ in 0..<200 where model.config?.developerDir != slow.path { try await Task.sleep(for: .milliseconds(20)) }
+            try "developerDir: /nonexistent/Xcode.app\n".write(to: override, atomically: true, encoding: .utf8)
+            model.reload()
+            for _ in 0..<200 where model.environmentError == nil { try await Task.sleep(for: .milliseconds(20)) }
+            try await Task.sleep(for: .seconds(1.5))       // the first check is done by now
+            #expect(model.environmentError?.contains("/nonexistent/Xcode.app does not exist") == true)
+        }
+
         // MARK: Selection
 
         /// The list groups by suite, so the first row is not the first path git reports.
