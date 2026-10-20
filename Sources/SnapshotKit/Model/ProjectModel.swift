@@ -658,6 +658,8 @@ final class ProjectModel {
         if fixtureImages == nil {
             ReviewMarks(repository: project.url).set(viewed, for: shown, keepingOnly: changeSet?.changes ?? [])
         }
+        // Hiding viewed changes, every one shown is now gone from the list: the review is done.
+        if viewed, hideViewed, shown.contains(where: { $0.id == selectedChangeID }) { selectedChangeID = nil }
     }
 
     var selectedChange: SnapshotChange? {

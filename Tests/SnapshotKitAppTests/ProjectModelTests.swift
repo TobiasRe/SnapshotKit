@@ -492,5 +492,15 @@ extension AppUITests {
             model.setViewed(true, for: badge)
             #expect(model.selectedChange?.testName == "payButton")
         }
+
+        /// With Hide Viewed on, marking everything viewed leaves nothing selected: the review is done.
+        @Test func markingAllViewedWhileHidingViewedEndsTheReview() {
+            let model = AppFixtures.project(.changes, store: AppFixtures.store())
+            model.hideViewed = true
+            #expect(model.selectedChange != nil)
+            model.setAllViewed(true)
+            #expect(model.displayedChanges.isEmpty)
+            #expect(model.selectedChange == nil)
+        }
     }
 }
