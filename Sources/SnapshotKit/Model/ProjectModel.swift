@@ -1297,7 +1297,7 @@ final class ProjectModel {
                     if verifyRun.succeeded {
                         message += " Verified: \(verifyRun.passed) passed."
                     } else {
-                        message += " Verification still fails (\(verifyRun.failed)) — the test may be flaky; try Check flakiness."
+                        message += " Verification still fails (\(verifyRun.failed)) — the test may be flaky; try Check Flakiness."
                         isError = true
                     }
                 }

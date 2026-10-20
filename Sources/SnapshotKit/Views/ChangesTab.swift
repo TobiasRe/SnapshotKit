@@ -99,7 +99,7 @@ struct ChangesTab: View {
         ) {
             Button("Revert", role: .destructive) { project.revertToBase(pendingRevert) }
         } message: {
-            Text("Modified snapshots get \(baseName)'s image, new ones are removed and deleted ones come back. "
+            Text("Modified snapshots get \(baseName)’s image, new ones are removed and deleted ones come back. "
                  + "Only the working tree changes: review the result and commit it.")
         }
     }
