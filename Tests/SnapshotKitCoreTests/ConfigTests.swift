@@ -19,6 +19,11 @@ import Testing
         #expect(values["skipTesting"] == .list(["Slow", "Flaky # not a comment"]))
     }
 
+    /// Many editors and linters start a YAML file with `---`.
+    @Test func documentMarkersAreNotSettings() throws {
+        #expect(try MiniYAML.parse("---\nscheme: App\n...\n") == ["scheme": .scalar("App")])
+    }
+
     @Test func rejectsNestedMappings() {
         #expect(throws: MiniYAML.ParseError.self) { try MiniYAML.parse("a:\n  b: c\n") }
     }

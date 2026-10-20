@@ -34,6 +34,8 @@ enum MiniYAML {
             if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
             let indented = line.first == " " || line.first == "\t"
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // The start and end of the document, not settings.
+            if !indented, trimmed == "---" || trimmed == "..." { continue }
 
             if trimmed.hasPrefix("- ") || trimmed == "-" {
                 guard let key = currentListKey else {
