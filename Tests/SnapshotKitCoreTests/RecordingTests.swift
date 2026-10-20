@@ -83,6 +83,13 @@ import Testing
         }
     }
 
+    /// In Swift "\r\n" is one Character, which isn't "\n".
+    @Test func lineCommentsEndAtWindowsLineEndings() throws {
+        let source = "import XCTest\r\n\r\nfinal class CardTests: XCTestCase { // cards\r\n    func testCard() {}\r\n}\r\n"
+        let patched = try RecordPatcher.patch(source: source, suite: "CardTests")
+        #expect(patched.contains("override func invokeTest()"))
+    }
+
     @Test func parenthesesInSuiteStrings() throws {
         #expect(try RecordPatcher.patch(source: #"@Suite("a\\", .serialized) struct A {}"#, suite: "A")
                 == #"@Suite("a\\", .serialized, .snapshots(record: .all)) struct A {}"#)
@@ -152,6 +159,18 @@ import Testing
         let report = session.restore()
         #expect(report.files.map(\.outcome) == [.undidPatchKeepingEdits])
         #expect(try repo.read(target.path) == Self.suiteSource + "\n// added while recording\n")
+    }
+
+    @Test func keepsEditsMadeDuringRunInAFileWithWindowsLineEndings() throws {
+        let repo = try TempRepo()
+        let source = Self.suiteSource.replacingOccurrences(of: "\n", with: "\r\n")
+        try repo.write(target.path, source)
+        try repo.commitAll("init")
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        try repo.write(target.path, try repo.read(target.path).replacingOccurrences(of: "card() {}", with: "card() { draw() }"))
+
+        #expect(session.restore().files.map(\.outcome) == [.undidPatchKeepingEdits])
+        #expect(try repo.read(target.path) == source.replacingOccurrences(of: "card() {}", with: "card() { draw() }"))
     }
 
     @Test func conflictKeepsFileAndSavesBackup() throws {

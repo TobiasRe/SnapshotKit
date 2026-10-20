@@ -27,11 +27,11 @@ public struct PatchedFile: Codable, Equatable, Sendable {
         while prefix < a.count, prefix < b.count, a[prefix] == b[prefix] { prefix += 1 }
         var suffix = 0
         while suffix < a.count - prefix, suffix < b.count - prefix, a[a.count - 1 - suffix] == b[b.count - 1 - suffix] { suffix += 1 }
-        // Widen to line boundaries.
+        // Widen to line boundaries (a "\r\n" is one Character, so not `== "\n"`).
         var start = prefix
-        while start > 0, a[start - 1] != "\n" { start -= 1 }
+        while start > 0, !a[start - 1].isNewline { start -= 1 }
         var endA = a.count - suffix
-        while endA < a.count, a[endA] != "\n" { endA += 1 }
+        while endA < a.count, !a[endA].isNewline { endA += 1 }
         let endB = b.count - (a.count - endA)
         return (String(a[start..<endA]), String(b[start..<endB]))
     }

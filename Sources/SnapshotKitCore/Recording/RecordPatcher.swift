@@ -176,7 +176,7 @@ public enum RecordPatcher {
     /// strings; an interpolation's own strings are not told apart.
     private static func endOfCommentOrString(in text: String, at i: String.Index) -> String.Index? {
         let rest = text[i...]
-        if rest.hasPrefix("//") { return rest.firstIndex(of: "\n") ?? text.endIndex }
+        if rest.hasPrefix("//") { return rest.firstIndex(where: \.isNewline) ?? text.endIndex } // "\r\n" is one Character
         if rest.hasPrefix("/*") {
             var depth = 0
             var j = i
