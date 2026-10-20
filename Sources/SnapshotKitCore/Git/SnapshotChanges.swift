@@ -116,16 +116,18 @@ public enum SnapshotChangeError: Error, LocalizedError {
 }
 
 extension Git {
-    /// Lists PNGs that differ between the base (merge-base or tip of `baseBranch`) and the working tree.
+    /// Lists the snapshots (the library's PNGs) that differ between the base (merge-base or tip of
+    /// `baseBranch`) and the working tree.
     public func snapshotChanges(baseBranch: String, against diffBase: DiffBase = .mergeBase) throws -> SnapshotChangeSet {
         guard let baseRef = resolveBaseRef(baseBranch) else { throw SnapshotChangeError.baseBranchNotFound(baseBranch) }
         let base = diffBase == .mergeBase ? try mergeBase(baseRef) : try run(["rev-parse", baseRef])
+        let snapshots = SnapshotLibrary.pathspec
 
         // Base → working tree (includes staged and unstaged edits of tracked files): status, path, status, path…
-        let sinceBase = try nulSeparated(["diff", "--name-status", "-z", "--no-renames", base, "--", "*.png"])
+        let sinceBase = try nulSeparated(["diff", "--name-status", "-z", "--no-renames", base, "--", snapshots])
         // HEAD → working tree, to tell committed from uncommitted modifications.
-        let sinceHead = Set(try nulSeparated(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--", "*.png"]))
-        let untracked = try nulSeparated(["ls-files", "-z", "--others", "--exclude-standard", "--", "*.png"])
+        let sinceHead = Set(try nulSeparated(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--", snapshots]))
+        let untracked = try nulSeparated(["ls-files", "-z", "--others", "--exclude-standard", "--", snapshots])
         let untrackedPaths = Set(untracked)
 
         var changes: [String: SnapshotChange] = [:]

@@ -120,6 +120,21 @@ import Testing
         #expect(FileManager.default.contents(atPath: repo.url.appendingPathComponent("\(snaps)/card.1.png").path) == red)
     }
 
+    /// The same PNGs as the library: an app icon or a test fixture is not a snapshot.
+    @Test func onlyImagesUnderSnapshotsFoldersAreChanges() throws {
+        let repo = try TempRepo()
+        try repo.write("App/Assets.xcassets/AppIcon.appiconset/icon.png", red)
+        try repo.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", red)
+        try repo.commitAll("base")
+        try repo.git.run(["checkout", "-q", "-b", "feature"])
+        try repo.write("App/Assets.xcassets/AppIcon.appiconset/icon.png", blue)
+        try repo.write("Tests/AppTests/Fixtures/photo.png", blue)
+        try repo.write("Tests/AppTests/__Snapshots__/CardTests/card.1.png", blue)
+
+        let changes = try repo.git.snapshotChanges(baseBranch: "develop").changes
+        #expect(changes.map(\.path) == ["Tests/AppTests/__Snapshots__/CardTests/card.1.png"])
+    }
+
     @Test func filterAndNames() {
         let changes = [
             SnapshotChange(path: "T/__Snapshots__/CardTests/darkMode.1.png", kind: .committed),

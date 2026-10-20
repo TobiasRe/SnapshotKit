@@ -107,10 +107,13 @@ public struct SnapshotLibrary: Sendable {
         self.files = files.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
+    /// The git pathspec for snapshot images: PNGs under a `__Snapshots__` folder, where
+    /// swift-snapshot-testing writes them. Other PNGs (app icons, test fixtures) are not snapshots.
+    public static let pathspec = ":(glob)**/__Snapshots__/**/*.png"
+
     /// Tracked and untracked (not ignored) PNGs under any `__Snapshots__` folder.
     public static func load(repository: URL) throws -> SnapshotLibrary {
         let git = Git(root: repository)
-        let pathspec = ":(glob)**/__Snapshots__/**/*.png"
         let listed = try git.nulSeparated(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", pathspec])
         var states: [String: SnapshotFile.State] = [:]
         for entry in (try? git.status(paths: [pathspec])) ?? [] {
