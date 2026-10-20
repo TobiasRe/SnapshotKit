@@ -1374,6 +1374,11 @@ final class ProjectModel {
             finish(message: "Cancelled.")
             return
         }
+        // Tests that don't build were not checked, nor were they when no test ran: no verdicts either.
+        if let why = result.nothingTested {
+            finish(message: "Nothing was checked: \(why).", isError: true)
+            return
+        }
         guard let summary = result.summary else {
             finish(message: "Flakiness check produced no results.", isError: true)
             return

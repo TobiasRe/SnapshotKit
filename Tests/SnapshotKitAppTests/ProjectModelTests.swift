@@ -1040,6 +1040,21 @@ extension AppUITests {
             #expect(payButton.verdictLabel == "Fails on iPhone SE")
         }
 
+        /// A flakiness check whose tests don't build says so, and keeps the verdicts.
+        @Test func aFlakinessCheckThatDoesNotBuildSaysSo() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: """
+                echo "\(repo.path)/Tests/AppTests/CardTests.swift:7:9: error: cannot find 'card' in scope"
+                exit 65
+                """, failures: true)
+            let verdicts = model.failures.map(\.verdict)
+            model.checkFlakiness()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasPrefix("Nothing was checked: the build failed") == true)
+            #expect(model.lastMessageIsError)
+            #expect(model.failures.map(\.verdict) == verdicts)
+        }
+
         /// Checking one test again says what that check found, not what earlier checks of other tests did.
         @Test func aFlakinessCheckCountsOnlyTheTestsItChecked() async throws {
             let (repo, _) = try makeRepo()
