@@ -172,6 +172,7 @@ grep -E "FAILING SUITE|Result:" "$LOGS/run-fail.log" || true
 check "run fails after the view change" "[ $status -ne 0 ]"
 check "failing suite is named" "grep -q 'FAILING SUITE: SampleUITests/GreetingViewTests' '$LOGS/run-fail.log'"
 check "failure images exported" "grep -q 'Failure images:' '$LOGS/run-fail.log'"
+check "progress says once that the run finished" "[ \"\$(grep -c '▸ Finished' '$LOGS/run-fail.log')\" = 1 ]"
 sk failures > "$LOGS/failures.log" 2>&1 || true
 check "failures lists reference path and diff image" "grep -q 'reference: $PNG' '$LOGS/failures.log' && grep -q 'difference: /' '$LOGS/failures.log'"
 
@@ -233,6 +234,7 @@ if [ "$SKIP_INTERRUPT" = 0 ]; then
   tail -3 "$LOGS/rerecord-int.log"
   check "SIGINT: test source restored" "(cd '$SAMPLE' && git diff --quiet HEAD -- '$TEST_FILE')"
   check "SIGINT: journal removed" "[ ! -f '$JOURNAL' ]"
+  check "SIGINT: says it was cancelled, not recorded" "grep -q '^Cancelled\.' '$LOGS/rerecord-int.log' && ! grep -q 'Recorded suites' '$LOGS/rerecord-int.log'"
 
   step "Terminate a re-record (SIGTERM) — patch restored and xcodebuild stopped"
   (cd "$SAMPLE" && exec -a snapkit-e2e "$SNAPKIT" rerecord --no-verify > "$LOGS/rerecord-term.log" 2>&1) &
