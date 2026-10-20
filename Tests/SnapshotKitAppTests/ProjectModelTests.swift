@@ -586,5 +586,20 @@ extension AppUITests {
             #expect(model.lastMessage == "Cancelled.")
             #expect(!model.lastMessageIsError)
         }
+
+        /// A cancelled run has no results; the last run's failures stay, here and on disk.
+        @Test func cancellingARunKeepsTheLastRunsFailures() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
+            let failures = model.failures.map(\.id)
+            model.runTests()
+            try await waitUntilStarted(model)
+            model.cancel()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Cancelled.")
+            #expect(model.failures.map(\.id) == failures)
+            #expect(model.failingSuites.count == 2)
+            #expect(LastRun.load(repository: repo) == nil)
+        }
     }
 }
