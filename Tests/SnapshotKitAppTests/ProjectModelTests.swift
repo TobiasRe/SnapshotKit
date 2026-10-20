@@ -600,6 +600,45 @@ extension AppUITests {
             #expect(changes.selectedChange?.testName == "payButton")
         }
 
+        /// A run that fixes the selected snapshot's test takes it out of the Failing scope: the selection
+        /// moves to the first snapshot shown, as when a filter hides it.
+        @Test func aRunThatFixesTheSelectionMovesIt() async throws {
+            let (repo, _) = try makeRepo()
+            let dark = "\(AppFixtures.snapshotDir)/CheckoutViewTests/payButton.dark.png"
+            let message = #"Snapshot does not match reference.\n\n@\u2212\n\"file://\#(repo.path)/\#(dark)\"\n@+\n\"file:///tmp/payButton.dark.png\""#
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: """
+                {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Failed",
+                     "children": [{"name": "\(message)", "nodeType": "Failure Message", "result": "Failed"}]}]},
+                  {"name": "ProfileViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "badge()", "nodeType": "Test Case", "nodeIdentifier": "ProfileViewTests/badge()", "result": "Passed"}]}]}]}
+                """, failures: true, library: true)
+            model.libraryScope = .failing
+            #expect(model.selectedSnapshot?.testName == "badge")
+            model.runTests()
+            try await waitUntilFinished(model)
+            #expect(model.failures.map(\.test.name) == ["payButton()"])
+            #expect(model.selectedSnapshotID == dark)
+        }
+
+        /// Reverting the selected snapshot takes it out of the Changed scope: the selection moves on.
+        @Test func revertingTheSelectionInTheChangedScopeMovesIt() async throws {
+            let (repo, png) = try makeRepo()
+            let other = png.replacingOccurrences(of: "card", with: "other")
+            try AppFixtures.badged.write(to: repo.appendingPathComponent(other))
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            await waitForChanges(model)
+            for _ in 0..<200 where model.library?.files.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
+            model.libraryScope = .changed
+            model.selectedSnapshotID = png
+            model.revertToBase([try #require(model.changeSet?.changes.first { $0.path == png })])
+            for _ in 0..<200 where model.changeSet?.changes.count != 1 || model.isLoadingLibrary { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(model.displayedSnapshots.map(\.id) == [other])
+            #expect(model.selectedSnapshotID == other)
+        }
+
         // MARK: Viewed marks
 
         /// Marking the change on screen viewed while the list's filter hides it moves to the first unviewed one shown.
@@ -706,7 +745,7 @@ extension AppUITests {
 
         /// A model of `repo` that can run, with `script` as xcodebuild.
         func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil, attachments: URL? = nil,
-                           failures: Bool = false, flakeResults: [FlakeResult] = []) throws -> ProjectModel {
+                           failures: Bool = false, flakeResults: [FlakeResult] = [], library: Bool = false) throws -> ProjectModel {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
@@ -718,6 +757,7 @@ extension AppUITests {
                 f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures"))
             }
             f.flakeResults = flakeResults
+            if library { f.library = SnapshotLibrary(files: AppFixtures.libraryImages.map(\.0)) }
             model.apply(f)
             return model
         }

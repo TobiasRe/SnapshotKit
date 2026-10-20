@@ -192,8 +192,11 @@ final class ProjectModel {
     // Failures
     private(set) var failures: [FailureItem] = [] {
         didSet {
-            failureByPath = [:]
-            for item in failures { for path in item.referencePaths where failureByPath[path] == nil { failureByPath[path] = item } }
+            var byPath: [String: FailureItem] = [:]
+            for item in failures { for path in item.referencePaths where byPath[path] == nil { byPath[path] = item } }
+            failureByPath = byPath
+            // A run that fixed the selected snapshot's test takes it out of the Failing scope.
+            keepSnapshotSelectionShown()
         }
     }
     private(set) var failureSource: FailureSource?
@@ -216,7 +219,11 @@ final class ProjectModel {
 
     // Changes
     private(set) var changeSet: SnapshotChangeSet? {
-        didSet { changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a }) }
+        didSet {
+            changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a })
+            // A revert takes the selected snapshot out of the Changed scope.
+            keepSnapshotSelectionShown()
+        }
     }
     /// Lookups for the library's status marks, rebuilt when changes or failures change.
     private var changeKindByPath: [String: SnapshotChangeKind] = [:] {
@@ -431,6 +438,8 @@ final class ProjectModel {
             orphanIDs = orphans
             if !(loaded?.files.contains { $0.id == selectedSnapshotID } ?? false) {
                 selectedSnapshotID = Self.replacement(for: selectedSnapshotID, shown: shown, now: displayedSnapshots.map(\.id))
+            } else {
+                keepSnapshotSelectionShown()        // still there, but committed or orphaned now, say
             }
         }
     }
@@ -629,6 +638,8 @@ final class ProjectModel {
                 changesError = nil
                 if !set.changes.contains(where: { $0.id == selectedChangeID }) {
                     selectedChangeID = Self.replacement(for: selectedChangeID, shown: shown, now: displayedChanges.map(\.id))
+                } else {
+                    keepChangeSelectionShown()          // still there, but of a kind the list hides now, say
                 }
             case .failure(let error):
                 changeSet = nil
