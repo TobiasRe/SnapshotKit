@@ -74,7 +74,7 @@ out and for tests.
 
 | Message | Fix |
 |---|---|
-| *No remote machine configured. Set `remoteHost:` in .snapshotkit.yml or in the project's settings.* | set a host (above). |
+| *No remote machine configured. Set `remoteHost:` in .snapshotkit.yml or in the project’s settings.* | set a host (above). |
 | *Cannot reach ci-mac over SSH (…). Check that key-based login works: `ssh ci-mac true`.* | set up an SSH key for the host (`ssh-copy-id`), or fix the host name. |
 | *On ci-mac: …* | an Xcode or simulator problem on the remote Mac; see [Troubleshooting](troubleshooting.md). |
 | *Copying files to/from ci-mac failed: …* | check disk space and permissions of the remote directory. |

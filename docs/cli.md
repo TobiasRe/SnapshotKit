@@ -34,7 +34,8 @@ Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it wi
 
 **Which repository.** `--repo PATH`, or the current directory. Any folder inside a repository works: `snapkit`
 uses the repository's root (`git rev-parse --show-toplevel`). Outside a repository: *error: … is not inside a
-git repository*.
+git repository*; a `--repo` folder that doesn't exist: *error: no such folder: …*. Without `git`: *error: `git`
+was not found on the PATH (…). Install Xcode or its command line tools (`xcode-select --install`).*
 
 **Configuration.** Commands that run tests read the CI files, `.snapshotkit.yml` and the per-project settings
 the app stores, in that order. See [Configuration](configuration.md). `snapshots`, `diff`, `open`, `restore`
@@ -99,8 +100,9 @@ Read-only; exits 0.
 snapkit changes [--repo PATH] [--base BRANCH] [--tip] [--filter TEXT]
 ```
 
-The PNGs that differ between the base branch and your working tree, grouped by folder, each with its kind:
-**Committed** (on this branch), **Uncommitted**, **New** or **Deleted**.
+The snapshots (PNGs under `__Snapshots__`, as `snapshots` lists them) that differ between the base branch and
+your working tree, grouped by folder, each with its kind: **Committed** (on this branch), **Uncommitted**,
+**New** or **Deleted**.
 
 | Option | |
 |---|---|
@@ -118,7 +120,16 @@ ReactionTests
   New          Tests/ChatTests/__Snapshots__/ReactionTests/reacted.dark.png
 ```
 
-`origin/<branch>` is preferred over a local branch. Read-only; exits 0.
+`origin/<branch>` is preferred over a local branch. Read-only; exits 0, or 1 when there is nothing to compare
+with:
+
+- *Base branch “x” was not found locally or on origin. Fetch it or choose a different base branch.*
+- *This shallow clone doesn’t have the commit where the branch left origin/develop. Fetch the history (`git
+  fetch --unshallow`), or compare with the branch tip.* `--tip` works without that history.
+- *This branch has no history in common with origin/develop. Compare with the branch tip, or choose a different
+  base branch.*
+- *This repository has no commits yet, so there is nothing to compare with.*
+- *No base branch; pass --base BRANCH*, when none is configured or detected.
 
 ## config
 
@@ -151,7 +162,7 @@ Runs the snapshot tests with the CI configuration (see [Running tests](running.m
 |---|---|
 | `--only ID` | run only this test identifier (`Bundle`, `Bundle/Suite` or `Bundle/Suite/test()`); repeatable; replaces CI's selection |
 | `--module TARGET` | run only this test target |
-| `--iterations N` | run every test N times (at least 2), each in a fresh process; a flakiness check |
+| `--iterations N` | run every test N times, each in a fresh process; a flakiness check. N must be at least 2 (else exit 64) |
 | `--remote` | run on the configured remote host |
 | `--remote HOST` | run on HOST, this once (`local` uses a local directory) |
 | `--verbose` | print all `xcodebuild` output |
@@ -166,15 +177,16 @@ Result bundle: …/Shop/.git/snapshotkit/results/2026-10-16T17-47-50Z-8C7AFB53.x
 Failure images: 2 (see `snapkit failures`)
 ```
 
-plus up to ten build errors when the build failed. The run is added to the history, and (without
-`--iterations`) remembered as the last run, which the app's Failures tab and `rerecord` / `failures` use.
+plus up to ten build errors when the build failed. A canceled run starts the summary with *Cancelled.* The run
+is added to the history and, without `--iterations`, remembered as the last run, which the app's Failures tab
+and `rerecord` / `failures` use. A canceled run isn't: the last run's failures stay as they were.
 
 Exits 0 when the tests passed, 1 when they failed, the build failed or the run was canceled.
 
 ## record
 
 ```
-snapkit record [--repo PATH] TEXT… [--whole-suite] [--no-verify]
+snapkit record [--repo PATH] TEXT… [--whole-suite] [--no-verify] [--verbose]
 ```
 
 Re-records the tests of every snapshot whose path contains all the words of TEXT (orphans excluded), then
@@ -184,6 +196,7 @@ verifies them. TEXT can name a test, a suite, a variant or any part of the path.
 |---|---|
 | `--whole-suite` | run the whole suites of the matching snapshots, not just their tests |
 | `--no-verify` | skip the verification run |
+| `--verbose` | print all `xcodebuild` output |
 
 ```
 $ snapkit record CheckoutViewTests dark
@@ -200,10 +213,16 @@ Recorded and verified: 2 passed.
 
 Other endings: *Recorded, but verification failed: 1 still failing (flaky?).* and, with `--no-verify`,
 *Recorded.* If the test source couldn't be restored automatically you get a `WARNING:` naming the backup.
+Canceled while recording: *Cancelled.* Canceled during the verification, or before it started: *Recorded; the
+verification was cancelled.*
 
-No match: *No snapshot path contains 'x' and 'y'.* When the build fails or no test runs, nothing is recorded:
-*Nothing was recorded: the build failed (…).* Exits 0 when verified, 1 when nothing was recorded, verification
-fails or the run is canceled. See [Re-recording](re-recording.md).
+The verification's results go into the last run: the tests it ran replace their earlier results, every other
+test keeps its own (see [`rerecord`](#rerecord)).
+
+No match: *No snapshot path contains “x” and “y”.* When the build fails or no test runs, nothing is recorded:
+*Nothing was recorded: the build failed (…).* or *Nothing was recorded: no test ran.* Exits 0 when verified (or
+recorded, with `--no-verify`), 1 when nothing was recorded, verification fails or something was canceled. See
+[Re-recording](re-recording.md).
 
 ## rerecord
 
@@ -226,7 +245,13 @@ Verified: 3 passed with the new references.
 ```
 
 Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* If the build fails or no test runs:
-*Nothing was recorded: …* (exit 1). Nothing failing: *Nothing to re-record: no failing suites.* (exit 0). The verification run becomes the new last run.
+*Nothing was recorded: …* (exit 1). Canceled: *Cancelled.*, or *Recorded; the verification was cancelled.* once
+the recording is done (exit 1). Nothing failing: *Nothing to re-record: no failing suites.* (exit 0).
+
+The verification is merged into the last run rather than replacing it: the suites it ran get their new
+results, and the last run's other failures stay, so you can re-record one suite at a time. The last run's
+result bundle switches to the verification's only once every suite that still fails was part of it. A
+canceled verification changes nothing.
 
 ## flaky
 
@@ -234,8 +259,8 @@ Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* If the 
 snapkit flaky [--repo PATH] [--iterations N] [--suite ID]… [--remote [HOST]] [--verbose]
 ```
 
-Runs the failing suites (as `rerecord` picks them) N times — `--iterations`, else the app's setting, default 5 —
-each repetition in a fresh process, and prints a verdict per test:
+Runs the failing suites (as `rerecord` picks them) N times — `--iterations` (at least 2), else the app's
+setting, default 5 — each repetition in a fresh process, and prints a verdict per test:
 
 ```
 snapkit: running AppSnapshotTests/CheckoutViewTests 5×
@@ -265,8 +290,28 @@ ShopTests/ProductCardTests
     recent runs: ✔ ✔ ✘
 ```
 
-For an invisible or tiny difference the diagnosis ends with *Would pass with precision: …* /
-*perceptualPrecision: …*.
+Every reference the test's failure messages name is listed once. When the test ran on several simulators, or
+is parameterized and several of its cases failed, each set of images is labeled with its device, its
+arguments, or both:
+
+```
+ShopTests/BadgeTests
+  ✘ badge(style:)  (2/2 repetitions failed)
+    reference: Tests/ShopTests/__Snapshots__/BadgeTests/badge-style.dark.png
+    reference: Tests/ShopTests/__Snapshots__/BadgeTests/badge-style.light.png
+    iPhone 16 Pro · "dark":
+    failure:    /…/…png
+    difference: /…/…png
+    Visible change in a 40×12 area at 8, 4.
+    iPhone SE (3rd generation) · "light":
+    failure:    /…/…png
+    difference: /…/…png
+    No visible difference (largest ΔE 0.8), typical of rendering on another machine or OS version. Would pass with perceptualPrecision: 0.99.
+```
+
+Images are shown for the first repetition. For an invisible or tiny difference the diagnosis ends with *Would
+pass with …*: `perceptualPrecision: …`, `precision: …`, or both (see
+[Comparing images](comparing.md#the-diagnosis)).
 
 | Option | |
 |---|---|
@@ -275,7 +320,7 @@ For an invisible or tiny difference the diagnosis ends with *Would pass with pre
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
 *No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* If the last run's bundle has been removed:
-*The last run's results are gone (…). Run the tests again (`snapkit run`), or pass --xcresult PATH.* Exits 0
+*The last run’s results are gone (…). Run the tests again (`snapkit run`), or pass --xcresult PATH.* Exits 0
 after listing, failures or not; 1 when there is no bundle or it can't be read.
 
 ## history
@@ -314,7 +359,8 @@ $ snapkit diff reference.png failure.png
 Visible change in a 105×58 area at 847, 136.
 ```
 
-For invisible or tiny differences it adds *Would pass with: perceptualPrecision: 0.99* (or `precision: …`).
+For invisible or tiny differences it adds *Would pass with: perceptualPrecision: 0.99* (or `precision: …`, or
+both).
 `-o OUT.png` writes the difference image (changed pixels in magenta). Exits 0 when the images are identical, 1
 when they differ, 2 when one can't be read or `-o` can't be written. See [Comparing images](comparing.md#the-diagnosis).
 
@@ -332,7 +378,7 @@ name as swift-snapshot-testing's diff tool — see [Using SnapshotKit as your di
 | `--app PATH` | the app to open, e.g. a development build; also `SNAPSHOTKIT_APP` |
 
 Without either, it opens the installed SnapshotKit.app by its bundle id. Missing files: *no such file: …*. No
-app: *Couldn't open SnapshotKit. Install SnapshotKit.app from https://github.com/TobiasRe/SnapshotKit/releases,
+app: *Couldn’t open SnapshotKit. Install SnapshotKit.app from https://github.com/TobiasRe/SnapshotKit/releases,
 or pass --app PATH.* (exit 1). Otherwise exits 0, whether or not the images differ.
 
 ## restore

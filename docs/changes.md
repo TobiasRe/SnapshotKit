@@ -8,8 +8,9 @@ marking each as viewed.
 
 ## What counts as a change
 
-SnapshotKit compares the PNG files in your working tree (including new files git doesn't track yet, unless
-they're ignored) with the base branch:
+SnapshotKit compares the snapshot images in your working tree with the base branch: the PNGs under a
+`__Snapshots__` folder, the same files the library lists, including new ones git doesn't track yet (unless
+they're ignored). Other PNGs, such as app icons or test fixtures, aren't snapshots and don't show up.
 
 | Kind | Meaning |
 |---|---|
@@ -30,8 +31,13 @@ The base branch is found in this order (see [Configuration](configuration.md#the
 4. `origin/HEAD`, else the first of `develop`, `main` and `master` that exists.
 
 `origin/<branch>` is preferred over a local branch of the same name, so fetch to compare with the latest
-state. If the branch doesn't exist, the tab says so: *Base branch 'x' was not found locally or on origin.
+state. If the branch doesn't exist, the tab says so: *Base branch “x” was not found locally or on origin.
 Fetch it or choose a different base branch.*
+
+Comparing at the merge-base needs the commit where your branch left the base branch. A shallow clone (common
+in CI) may not have it: *This shallow clone doesn’t have the commit where the branch left origin/develop.
+Fetch the history (`git fetch --unshallow`), or compare with the branch tip.* A repository without any commit
+says *This repository has no commits yet, so there is nothing to compare with.*
 
 The filter bar has three menus:
 
@@ -79,7 +85,7 @@ their own until you commit them. That's the difference to **Discard Change…**,
 *uncommitted* edits, back to your last commit.
 
 The info row says where the change comes from: the commit that last changed it on this branch (*Changed Oct 16
-by Sample in a1b2c3d "Rename the badge"*), or *Not committed yet · compared with develop*. **Show in Library**
+by Sample in a1b2c3d “Rename the badge”*), or *Not committed yet · compared with develop*. **Show in Library**
 jumps to the snapshot in the library.
 
 ## Viewed marks

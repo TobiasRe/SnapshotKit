@@ -19,9 +19,19 @@ The notice after the scan says why. Check that:
 
 Or add the repository directly with ⌘O.
 
-**"SnapshotKit can't read ~/…"** — macOS denied access to the folder (Desktop, Documents, Downloads and
+**“SnapshotKit can’t read ~/…”** — macOS denied access to the folder (Desktop, Documents, Downloads and
 external volumes are protected). Allow SnapshotKit in System Settings › Privacy & Security › Files and Folders,
 then **Rescan Folders**.
+
+**“Can’t open ~/…: it isn’t in a git repository.”**
+SnapshotKit only works on git repositories: choose a folder inside one, or make the folder a repository
+(`git init`). `snapkit` says *error: … is not inside a git repository*, and *no such folder: …* for a
+`--repo` that doesn't exist.
+
+**“`git` was not found on the PATH (…).”**
+SnapshotKit and `snapkit` run `git` (and `xcrun`, `xcodebuild`) from the PATH. Install Xcode or its command
+line tools (`xcode-select --install`); in a script or CI job, check that the PATH it prints contains
+`/usr/bin`.
 
 **A project shows no snapshots, but it has some.**
 SnapshotKit lists files under `__Snapshots__` folders that git tracks or that are untracked but not ignored. If
@@ -38,7 +48,7 @@ prints the same checks.
 | *Xcode at … does not exist.* | Fix `developerDir:` in `.snapshotkit.yml`, or the path in CI. |
 | *No Xcode installation found.* | Install Xcode and run `xcode-select -s /Applications/Xcode.app`. |
 | *The iOS 18.2 simulator runtime is not installed for Xcode 16.2.* | `xcodebuild -downloadPlatform iOS -buildVersion 18.2`, or Xcode › Settings › Components. |
-| *No 'iPhone 16 Pro' simulator on iOS 18.2. Available on that runtime: …* | Create it: `xcrun simctl create "iPhone 16 Pro" "iPhone 16 Pro" <runtime-id>`, or set `device:` to an available one. |
+| *No “iPhone 16 Pro” simulator on iOS 18.2. Available on that runtime: …* | Create it: `xcrun simctl create "iPhone 16 Pro" "iPhone 16 Pro" <runtime-id>`, or set `device:` to an available one. |
 | *No simulator is configured: CI has no `-destination` with a device name.* | Set `device:` (and `os:`) in `.snapshotkit.yml`. |
 | *No scheme found. CI files do not contain an `xcodebuild -scheme …` call* | Add `scheme:` to `.snapshotkit.yml`. |
 | *.snapshotkit.yml could not be read (line N: …)* | Fix that line; the file is flat `key: value` YAML without nesting. See [Configuration](configuration.md#format). |
@@ -66,11 +76,11 @@ re-record locally: that just moves the failure.
 The test isn't deterministic. Run **Check Flakiness** and look for animations, async loading, the current date or
 random data in the view.
 
-**Re-recording says "Refusing to re-record: these files have uncommitted changes."**
+**Re-recording says “Refusing to re-record: these files have uncommitted changes.”**
 SnapshotKit edits the test file temporarily and won't mix that with your edits. Commit or stash the test file,
 then try again.
 
-**"'CheckoutTests' in … already overrides invokeTest(); re-record it manually."**
+**Re-recording says: “CheckoutTests” in … already overrides invokeTest(); re-record it manually.**
 SnapshotKit adds an `invokeTest` override to XCTest classes to switch record mode on. If the class already has
 one, wrap its body in `withSnapshotTesting(record: .all) { … }` yourself for the recording run.
 
@@ -91,8 +101,17 @@ sure it's gone — `snapkit restore --force`.
 
 ## Changes
 
-**"Base branch 'develop' was not found locally or on origin."**
+**The Changes tab says: Base branch “develop” was not found locally or on origin.**
 Fetch it (`git fetch origin develop`), or pick another base branch in the Changes tab's branch menu.
+
+**“This shallow clone doesn’t have the commit where the branch left origin/develop.”**
+The clone has only the latest commits (CI often clones with `--depth`), so the merge-base isn't there. Fetch
+the history with `git fetch --unshallow`, or switch the Changes tab to **Branch tip** (`snapkit changes
+--tip`). Without a shallow clone, the same problem reads *This branch has no history in common with …*: pick
+another base branch, or compare with the tip.
+
+**“This repository has no commits yet, so there is nothing to compare with.”**
+Commit the snapshots once; from then on the Changes tab compares with the base branch.
 
 **Re-records with no visible change clutter my pull request.**
 Use **Discard…** on the Changes tab: it restores every uncommitted snapshot whose difference is invisible.
@@ -107,7 +126,7 @@ apply there.
 
 ## The diff tool
 
-**`snapkit open` says "Couldn't open SnapshotKit".**
+**`snapkit open` says “Couldn’t open SnapshotKit”.**
 Install SnapshotKit.app in `/Applications`, or tell it where the app is with `--app PATH` or `SNAPSHOTKIT_APP`.
 
 **The command from the failure message prints "usage: snapkit open …" or "no such file".**

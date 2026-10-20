@@ -105,7 +105,7 @@ Otherwise a `DEVELOPER_DIR=` or `xcode-select -s` path is used as the Xcode to r
 
 When the test job comes from a template SnapshotKit can't read (GitLab `project:`, `remote:`, `template:` or
 `component:` includes), it takes what it can from your variables and says so: *The test job comes from …,
-which SnapshotKit can't read. Settings were taken from CI variables; set anything missing in
+which SnapshotKit can’t read. Settings were taken from CI variables; set anything missing in
 .snapshotkit.yml.*
 
 ## `.snapshotkit.yml`
