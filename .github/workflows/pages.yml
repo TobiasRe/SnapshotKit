@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# Whole runs queue in push order, and a newer push replaces one still waiting, so the last push is the one
+# deployed. (A group on the deploy job alone let an older run's deploy, queued after a newer one's, win.)
+# A started run finishes.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,10 +53,6 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    # One deployment at a time, and a started one finishes.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
