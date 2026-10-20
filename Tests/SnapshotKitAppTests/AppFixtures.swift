@@ -58,7 +58,9 @@ enum AppFixtures {
 
     // MARK: Configuration
 
-    static var context: ProjectContext {
+    static var context: ProjectContext { context(at: repository) }
+
+    static func context(at repository: URL) -> ProjectContext {
         var config = SnapshotConfig()
         config.scheme = "SampleApp"
         config.workspace = "SampleApp.xcworkspace"
@@ -79,6 +81,20 @@ enum AppFixtures {
         simulator: Simulator(name: "Example Phone", udid: "00000000-0000-0000-0000-000000000000", osVersion: "99.0", platform: "iOS", state: "Booted"),
         xcodeIsDefault: false
     )
+
+    /// An environment whose xcodebuild is the shell `script`, for running operations without Xcode.
+    /// `/usr/bin/xcodebuild` hands over to `$DEVELOPER_DIR/usr/bin/xcrun xcodebuild …`; the other
+    /// tools (xcresulttool) fail, as if there were no result bundle.
+    static func fakeXcode(_ script: String) throws -> TestEnvironment {
+        let app = temporaryDirectory("xcode").appendingPathComponent("Xcode.app")
+        let xcrun = app.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
+        try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "#!/bin/sh\n[ \"$1\" = xcodebuild ] || exit 1\n\(script)\n".write(to: xcrun, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
+        var fake = environment
+        fake.xcode = XcodeInstall(path: app.path, version: environment.xcode.version)
+        return fake
+    }
 
     static let log = [
         "$ xcodebuild test -workspace SampleApp.xcworkspace -scheme SampleApp -testPlan Snapshots -destination 'platform=iOS Simulator,id=00000000'",

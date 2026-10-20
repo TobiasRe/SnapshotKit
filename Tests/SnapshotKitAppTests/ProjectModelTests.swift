@@ -531,5 +531,50 @@ extension AppUITests {
             for _ in 0..<200 where app.failingCounts[repo.path] == nil { try await Task.sleep(for: .milliseconds(50)) }
             #expect(app.failingCounts[repo.path] == 2)
         }
+
+        // MARK: Operations
+
+        /// A model of `repo` that can run, with `script` as xcodebuild.
+        func runnableModel(_ repo: URL, xcodebuild script: String, failures: Bool = false) throws -> ProjectModel {
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
+            var f = ProjectFixture()
+            f.context = AppFixtures.context(at: repo)
+            f.environment = try AppFixtures.fakeXcode(script)
+            f.tab = .failures
+            if failures {
+                f.lastResult = AppFixtures.lastResult
+                f.failingSuites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
+                f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures"))
+            }
+            model.apply(f)
+            return model
+        }
+
+        /// xcodebuild that says it started, then runs until cancelled.
+        static let longRun = "echo 'Testing started'\nexec sleep 60"
+
+        func waitUntilStarted(_ model: ProjectModel) async throws {
+            for _ in 0..<200 where !model.log.contains("Testing started") { try await Task.sleep(for: .milliseconds(50)) }
+            try #require(model.log.contains("Testing started"))
+        }
+
+        func waitUntilFinished(_ model: ProjectModel) async throws {
+            for _ in 0..<400 where model.isRunning { try await Task.sleep(for: .milliseconds(50)) }
+            try #require(!model.isRunning)
+        }
+
+        /// While one operation runs, another is refused; the first one carries on.
+        @Test func aSecondOperationWaitsForTheFirst() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
+            model.runTests()
+            try await waitUntilStarted(model)
+            model.reRecordFailed()
+            model.checkFlakiness()
+            #expect(model.operation == .run)
+            #expect(model.stageLabel == RunOperation.run.label)
+            model.cancel()
+            try await waitUntilFinished(model)
+        }
     }
 }
