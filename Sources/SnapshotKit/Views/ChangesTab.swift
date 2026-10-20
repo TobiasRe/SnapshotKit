@@ -60,7 +60,7 @@ struct ChangesTab: View {
                         CompareView(load: project.imageLoader(for: change),
                                     beforeLabel: "\(project.changeSet?.baseBranch ?? "Base") · \(project.diffBase.label.lowercased())",
                                     afterLabel: change.kind == .uncommitted || change.kind == .new ? "Working tree" : "This branch",
-                                    identity: change.id + "#" + (project.changeSet?.baseCommit ?? "") + "#\(change.kind)",
+                                    identity: change.compareKey(base: project.changeSet?.baseCommit ?? ""),
                                     beforeMissing: "Added on this branch.",
                                     afterMissing: "Deleted on this branch.")
                     }
@@ -387,7 +387,8 @@ struct ChangeOrigin: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .task(id: change.id) {
+        // Again once it's committed (its kind changes) or re-recorded and committed again.
+        .task(id: "\(change.id)#\(change.kind)#\(change.contentStamp ?? "")") {
             last = nil
             // A deletion may not be committed yet, so its last commit could predate it.
             guard change.kind == .committed else { return }
@@ -411,6 +412,11 @@ struct ChangeOrigin: View {
 extension SnapshotChange {
     /// The change read as a library file, for its test name and variant ("payButton", "dark").
     var file: SnapshotFile { SnapshotFile(path: path, byteSize: 0) }
+
+    /// Keys for its cached images. One path changes base, kind and content over a review (re-recorded
+    /// again, committed), and each of those is a different picture.
+    func compareKey(base: String) -> String { "\(id)#\(base)#\(kind)#\(contentStamp ?? "")" }
+    var thumbnailID: String { "change:\(path)#\(kind)#\(contentStamp ?? "")" }
 }
 
 struct ChangeRow: View {
@@ -424,7 +430,7 @@ struct ChangeRow: View {
     var body: some View {
         let load = load
         HStack(spacing: DS.Space.m) {
-            Thumbnail(id: "change:\(change.path)#\(change.kind)") {
+            Thumbnail(id: change.thumbnailID) {
                 let (base, current) = load()
                 return current ?? base
             }

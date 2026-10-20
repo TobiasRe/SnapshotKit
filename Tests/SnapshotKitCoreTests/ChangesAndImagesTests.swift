@@ -85,6 +85,31 @@ import Testing
         #expect(try repo.git.snapshotChanges(baseBranch: "develop").changes.map(\.kind) == [.uncommitted])
     }
 
+    /// Re-recording a snapshot that is already changed keeps its path and kind; only the stamp tells the
+    /// new picture from the old one, so the app doesn't show cached images of the old.
+    @Test func reRecordingAChangedSnapshotChangesItsStamp() throws {
+        let repo = try TempRepo()
+        let snaps = "Tests/AppTests/__Snapshots__"
+        try repo.write("\(snaps)/CardTests/card.1.png", red)
+        try repo.write("\(snaps)/CardTests/gone.1.png", red)
+        try repo.commitAll("base")
+        try repo.git.run(["checkout", "-q", "-b", "feature"])
+        try repo.write("\(snaps)/CardTests/card.1.png", blue)
+        try FileManager.default.removeItem(at: repo.url.appendingPathComponent("\(snaps)/CardTests/gone.1.png"))
+        let before = try #require(try repo.git.snapshotChanges(baseBranch: "develop").changes.first { $0.fileName == "card.1.png" })
+
+        let green = png(width: 4, height: 4, rgba: (0, 255, 0, 255))
+        let url = repo.url.appendingPathComponent("\(snaps)/CardTests/card.1.png")
+        try green.write(to: url)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: url.path)
+        let set = try repo.git.snapshotChanges(baseBranch: "develop")
+        let after = try #require(set.changes.first { $0.fileName == "card.1.png" })
+
+        #expect((after.path, after.kind) == (before.path, before.kind))
+        #expect(before.contentStamp != nil && after.contentStamp != before.contentStamp)
+        #expect(set.changes.first { $0.fileName == "gone.1.png" }?.contentStamp == nil)   // nothing on disk
+    }
+
     @Test func nonASCIINamesAreClassified() throws {
         let repo = try TempRepo()
         let snaps = "Tests/AppTests/__Snapshots__/ÜbersichtTests"

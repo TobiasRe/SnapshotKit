@@ -123,8 +123,8 @@ struct SnapshotsTab: View {
         } message: {
             Text("No test records or checks them any more. Commit the deletion to remove them from the repository.")
         }
-        .confirmationDialog("Re-record \(testCount(project.displayedSnapshots)) tests?", isPresented: $confirmRecordShown) {
-            Button("Re-record") { project.reRecord(project.displayedSnapshots, granularity: .tests) }
+        .confirmationDialog("Re-record \(testCount(project.recordableShownSnapshots)) tests?", isPresented: $confirmRecordShown) {
+            Button("Re-record") { project.reRecord(project.recordableShownSnapshots, granularity: .tests) }
         } message: {
             Text("Their reference images are recorded again and then verified. You can review the result on the Changes tab before committing.")
         }
@@ -138,16 +138,16 @@ struct SnapshotsTab: View {
             PaneFooter {
                 Text(LibraryStats(library).summary).lineLimit(1)
                 Spacer(minLength: DS.Space.s)
-                let shown = project.displayedSnapshots
+                let shown = project.displayedSnapshots, recordable = project.recordableShownSnapshots
                 if project.libraryScope == .orphaned && !shown.isEmpty {
                     // A quiet glass control, like every bulk action: grey text alone didn't read as one.
                     Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
                         .quietControl()
                         .disabled(project.isRunning)
                         .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
-                } else if !shown.isEmpty {
-                    Button(shownTitle(shown)) {
-                        if testCount(shown) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(shown, granularity: .tests) }
+                } else if !recordable.isEmpty {
+                    Button(shownTitle(recordable)) {
+                        if testCount(recordable) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(recordable, granularity: .tests) }
                     }
                     .quietControl()
                     .disabled(project.isRunning || project.environment == nil)
@@ -191,7 +191,7 @@ struct SnapshotsTab: View {
 
     /// "…" only when a confirmation follows (more than `confirmAbove` tests); a few run at once.
     private func shownTitle(_ files: [SnapshotFile]) -> String {
-        let all = files.count == (project.library?.files.count ?? 0)
+        let all = files.count == project.recordableSnapshots.count
         let ellipsis = testCount(files) > Self.confirmAbove ? "…" : ""
         return (all ? "Re-record All" : "Re-record \(testCount(files)) Shown") + ellipsis
     }
@@ -290,7 +290,7 @@ struct SnapshotRow: View {
 
     var body: some View {
         HStack(spacing: DS.Space.m) {
-            Thumbnail(id: "snapshot:\(file.path)#\(file.byteSize)", load: load)
+            Thumbnail(id: "snapshot:" + file.cacheKey, load: load)
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(file.testName).fontWeight(.medium).lineLimit(1)
                 if detail != .none {
@@ -498,19 +498,20 @@ struct SnapshotDetail: View {
             if let other = comparedVariant {
                 CompareView(load: { [a = project.snapshotLoader(for: other), b = project.snapshotLoader(for: file)] in (a(), b()) },
                             beforeLabel: other.variant, afterLabel: file.variant,
-                            identity: "\(other.path)#\(other.byteSize)~\(file.path)#\(file.byteSize)")
+                            identity: other.cacheKey + "~" + file.cacheKey)
             } else if let comparing {
                 let before = project.versionLoader(for: file, commit: comparing.commit), after = project.snapshotLoader(for: file)
                 CompareView(load: { (before(), after()) },
                             beforeLabel: "\(comparing.shortCommit) · \(day(comparing.date))",
                             afterLabel: file.state == .clean ? "Current" : "Working tree",
-                            identity: "\(file.path)#\(file.byteSize)@\(comparing.commit)")
+                            identity: file.cacheKey + "~" + comparing.commit)
             } else {
-                SnapshotViewer(load: project.snapshotLoader(for: file), identity: "\(file.path)#\(file.byteSize)",
+                SnapshotViewer(load: project.snapshotLoader(for: file), identity: file.cacheKey,
                                fileSize: file.byteSize)
             }
         }
-        .task(id: file.id) {
+        // Again when it's re-recorded or committed: both add to or change its history.
+        .task(id: file.cacheKey + "#\(file.state)") {
             versions = nil
             versions = await project.history(of: file)
         }
@@ -804,7 +805,7 @@ struct SnapshotGrid: View {
         let selected = project.selectedSnapshotID == file.id
         let status = project.status(of: file)
         return VStack(alignment: .leading, spacing: DS.Space.xs) {
-            Thumbnail(id: "snapshot:\(file.path)#\(file.byteSize)", size: Self.tile, load: project.snapshotLoader(for: file))
+            Thumbnail(id: "snapshot:" + file.cacheKey, size: Self.tile, load: project.snapshotLoader(for: file))
                 .overlay(alignment: .topTrailing) {
                     // Like a row: only failing gets a mark; the line below says how it changed.
                     if status.failureID != nil {

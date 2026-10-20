@@ -27,6 +27,16 @@ public struct SnapshotFile: Identifiable, Hashable, Sendable {
     public var id: String { path }
     public var fileName: String { parts.fileName }
 
+    /// Tells this version of the file from earlier ones at the same path, for caches of its image:
+    /// a re-recorded snapshot can keep its size.
+    public var cacheKey: String { "\(path)#\(byteSize)@\(modified?.timeIntervalSinceReferenceDate ?? 0)" }
+
+    /// The same for a file on disk that isn't in a library (a change's working-tree side).
+    public static func stamp(of url: URL) -> String? {
+        guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else { return nil }
+        return "\(values.fileSize ?? 0)@\(values.contentModificationDate?.timeIntervalSinceReferenceDate ?? 0)"
+    }
+
     /// The test target, e.g. `FeatureSnapshotTests`.
     public var module: String { parts.module }
 

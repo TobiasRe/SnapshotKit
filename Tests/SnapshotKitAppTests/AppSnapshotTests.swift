@@ -16,9 +16,10 @@ extension AppUITests {
     @Suite(.serialized)
     struct AppSnapshotTests {
         static let paneSize = CGSize(width: 1100, height: 700)
-        /// 99.9% of pixels: a text field's placeholder renders a little differently from run to run
-        /// (about 1,000 pixels), so an exact match fails at random. Wording is checked in model tests.
-        static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.999, perceptualPrecision: 0.99)
+        /// 99.99% of pixels: tight enough that a changed word fails (the smallest wording change found
+        /// moved 0.03% of a window; 99.9% let 16 stale references pass), with room for a stray
+        /// antialiased edge.
+        static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.9999, perceptualPrecision: 0.99)
 
         init() {
             DS.solidSurfaces = true
@@ -80,7 +81,7 @@ extension AppUITests {
             let file = project.displayedSnapshots[0]
             let old = AppFixtures.snapshotVersions[2]
             let pair = ComparePair.make(before: project.versionLoader(for: file, commit: old.commit)(), after: project.snapshotLoader(for: file)())
-            ComparePairCache.store(pair, for: "\(file.path)#\(file.byteSize)@\(old.commit)")
+            ComparePairCache.store(pair, for: file.cacheKey + "~" + old.commit)
             project.comparison = .version(old)
             assertPane(project, app: app, appearance: .aqua)
         }
@@ -91,7 +92,7 @@ extension AppUITests {
             let (app, project) = makeApp(.library)
             let dark = project.displayedSnapshots[0], light = project.displayedSnapshots[1]
             ComparePairCache.store(ComparePair.make(before: project.snapshotLoader(for: light)(), after: project.snapshotLoader(for: dark)()),
-                                   for: "\(light.path)#\(light.byteSize)~\(dark.path)#\(dark.byteSize)")
+                                   for: light.cacheKey + "~" + dark.cacheKey)
             project.comparison = .variant(light)
             assertPane(project, app: app, appearance: .aqua)
         }

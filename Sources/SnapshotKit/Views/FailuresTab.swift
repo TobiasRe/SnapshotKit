@@ -295,11 +295,13 @@ struct FailuresTab: View {
                 NSWorkspace.shared.activateFileViewerSelecting([project.project.url.appendingPathComponent(reference)])
             }
         }
-        if let failure = item.images.first?.failure {
+        // The attempt on screen (picked in the attempt menu), as ⌘C copies it.
+        let image = shownImage(of: item)
+        if let failure = image?.failure {
             Button("Open Actual Image") { NSWorkspace.shared.open(failure) }
         }
         Divider()
-        if let image = item.images.first {
+        if let image {
             Button("Copy Side-by-Side Image") {
                 let reference = image.reference, failure = image.failure
                 Clipboard.copyComparison { (reference.flatMap { try? Data(contentsOf: $0) }, failure.flatMap { try? Data(contentsOf: $0) }) }

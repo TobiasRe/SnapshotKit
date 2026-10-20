@@ -226,9 +226,9 @@ enum AppFixtures {
     static func warmChangeCaches() {
         let set = changeSet
         for (change, base, current) in changes {
-            ThumbnailCache.preload(id: "change:\(change.path)#\(change.kind)", data: current ?? base)
+            ThumbnailCache.preload(id: change.thumbnailID, data: current ?? base)
             ComparePairCache.store(ComparePair.make(before: base, after: current),
-                                   for: change.id + "#" + set.baseCommit + "#\(change.kind)")
+                                   for: change.compareKey(base: set.baseCommit))
         }
     }
 
@@ -380,9 +380,9 @@ enum AppFixtures {
         func add(_ images: [(SnapshotFile, Data)]) {
             for (file, data) in images {
                 f.snapshotImages[file.path] = data
-                ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data)
-                ThumbnailCache.preload(id: "snapshot:\(file.path)#\(file.byteSize)", data: data, size: SnapshotGrid.tile)
-                if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: "\(file.path)#\(file.byteSize)") }
+                ThumbnailCache.preload(id: "snapshot:" + file.cacheKey, data: data)
+                ThumbnailCache.preload(id: "snapshot:" + file.cacheKey, data: data, size: SnapshotGrid.tile)
+                if let entry = SnapshotImageCache.Entry(data: data) { SnapshotImageCache.store(entry, for: file.cacheKey) }
             }
         }
         add(libraryImages)

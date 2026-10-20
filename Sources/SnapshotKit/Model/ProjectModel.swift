@@ -1219,6 +1219,11 @@ final class ProjectModel {
         library?.files.filter { !orphanIDs.contains($0.id) } ?? []
     }
 
+    /// What "Re-record N Shown" records: the snapshots shown, less orphans (no test to run).
+    var recordableShownSnapshots: [SnapshotFile] {
+        displayedSnapshots.filter { !orphanIDs.contains($0.id) }
+    }
+
     /// The number of tests behind `files`, for "Re-record 24 tests?".
     static func testCount(_ files: [SnapshotFile]) -> Int {
         Set(files.map { $0.module + "/" + $0.suite + "/" + $0.testName }).count

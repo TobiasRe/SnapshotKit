@@ -63,7 +63,8 @@ struct CompareWindow: View {
         .ignoresSafeArea(edges: .top)
     }
 
-    /// Changes with the files, so re-running the test and opening the pair again shows the new image.
+    /// Changes with the files, so re-running the test and opening the pair again shows the new image
+    /// (`CompareWindows.show` builds an open window's view again for that).
     static func identity(of request: CompareRequest) -> String {
         let stamp = { (url: URL) in
             ((try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSince1970)
@@ -91,6 +92,8 @@ enum CompareWindows {
         // Closed windows stay alive (`isReleasedWhenClosed` is off) until they're let go of here.
         windows = windows.filter { $0.value.isVisible || $0.value.isMiniaturized }
         if let window = windows[request] {
+            // Built again: the test may have run since, and the files have new images.
+            window.contentView = content(request)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -108,11 +111,16 @@ enum CompareWindows {
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 420)
-        window.contentView = NSHostingView(rootView: view.environment(AppModel.shared).defaultAppStorage(.app))
+        window.contentView = content(request)
         window.center()
         window.setFrameAutosaveName("CompareWindow")
         windows[request] = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private static func content(_ request: CompareRequest) -> NSView {
+        let view = CompareWindow(request: request, location: request.location, leadingInset: 72)
+        return NSHostingView(rootView: view.environment(AppModel.shared).defaultAppStorage(.app))
     }
 }

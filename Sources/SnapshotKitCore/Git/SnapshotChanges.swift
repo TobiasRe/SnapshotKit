@@ -26,6 +26,9 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
     public var kind: SnapshotChangeKind
     /// A file git doesn't track yet: discarding the change deletes it.
     public var isUntracked: Bool
+    /// The working-tree file's size and modification time (nil when deleted): re-recording a snapshot
+    /// that is already changed keeps its path and kind, so caches of its image key on this as well.
+    public var contentStamp: String?
 
     public var id: String { path }
     public var fileName: String { (path as NSString).lastPathComponent }
@@ -41,10 +44,11 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
     /// library reads it.
     public var testName: String { SnapshotFile(path: path, byteSize: 0).testName }
 
-    public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false) {
+    public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false, contentStamp: String? = nil) {
         self.path = path
         self.kind = kind
         self.isUntracked = isUntracked
+        self.contentStamp = contentStamp
     }
 }
 
@@ -175,6 +179,9 @@ extension Git {
             changes[path] = SnapshotChange(path: path, kind: baseBlobs[path] == nil ? .new : .uncommitted, isUntracked: true)
         }
 
+        for (path, change) in changes where change.kind != .deleted {
+            changes[path]?.contentStamp = SnapshotFile.stamp(of: root.appendingPathComponent(path))
+        }
         return SnapshotChangeSet(
             baseBranch: baseBranch,
             baseRef: baseRef,
