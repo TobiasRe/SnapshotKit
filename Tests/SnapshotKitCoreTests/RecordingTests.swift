@@ -32,6 +32,13 @@ import Testing
         #expect(try RecordPatcher.patch(source: source, suite: "A") == "@Suite(\n    \"Cards\",\n    .serialized, .snapshots(record: .all)\n)\nstruct A {}")
     }
 
+    @Test func appendsTheTraitBeforeATrailingCommentAndAfterATrailingComma() throws {
+        #expect(try RecordPatcher.patch(source: "@Suite(\n    .serialized // shared state\n)\nstruct A {}", suite: "A")
+                == "@Suite(\n    .serialized, .snapshots(record: .all) // shared state\n)\nstruct A {}")
+        #expect(try RecordPatcher.patch(source: "@Suite(\n    \"Cards\",\n    .serialized,\n)\nstruct A {}", suite: "A")
+                == "@Suite(\n    \"Cards\",\n    .serialized, .snapshots(record: .all)\n)\nstruct A {}")
+    }
+
     @Test func insertsSuiteWhenMissing() throws {
         let source = "import Testing\n\n    @MainActor final class A {\n}\n"
         let patched = try RecordPatcher.patch(source: source, suite: "A")

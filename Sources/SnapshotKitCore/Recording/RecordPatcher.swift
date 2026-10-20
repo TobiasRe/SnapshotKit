@@ -118,12 +118,29 @@ public enum RecordPatcher {
             result.insert(contentsOf: insertion, at: args.index(after: open))
             return result
         }
-        let trimmed = args.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return ".snapshots(record: .all)" }
-        // Keep trailing whitespace/newlines (multi-line attributes) after the new trait.
-        let trailing = args[args.range(of: trimmed)!.upperBound...]
-        let body = args[..<trailing.startIndex]
-        return body + ", .snapshots(record: .all)" + trailing
+        // Right after the last argument, so a trailing comment or newline (multi-line attributes)
+        // stays after the new trait, and a trailing comma isn't doubled.
+        let end = endOfLastArgument(in: args)
+        if end == args.startIndex { return ".snapshots(record: .all)" }
+        var result = args
+        result.insert(contentsOf: args[..<end].hasSuffix(",") ? " .snapshots(record: .all)" : ", .snapshots(record: .all)", at: end)
+        return result
+    }
+
+    /// The index after the last character of `args` that isn't whitespace or in a comment.
+    private static func endOfLastArgument(in args: String) -> String.Index {
+        var end = args.startIndex
+        var i = args.startIndex
+        while i < args.endIndex {
+            if let next = endOfCommentOrString(in: args, at: i) {
+                if args[i] != "/" { end = next } // a string, not a comment
+                i = next
+            } else {
+                if !args[i].isWhitespace { end = args.index(after: i) }
+                i = args.index(after: i)
+            }
+        }
+        return end
     }
 
     // MARK: XCTest
