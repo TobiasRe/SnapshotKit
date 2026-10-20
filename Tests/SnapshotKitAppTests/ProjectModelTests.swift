@@ -1013,6 +1013,15 @@ extension AppUITests {
             #expect(model.dockBadge == "2")
         }
 
+        /// Moving snapshots to the Trash that all stay says so, without claiming any moved.
+        @Test func aTrashThatMovesNothingSaysSo() throws {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())   // its files aren't on disk
+            let file = try #require(model.displayedSnapshots.first)
+            model.moveToTrash([file])
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessage?.hasPrefix("Could not move \(file.fileName) to the Trash") == true)
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")

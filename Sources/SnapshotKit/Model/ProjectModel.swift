@@ -491,18 +491,23 @@ final class ProjectModel {
     func moveToTrash(_ files: [SnapshotFile]) {
         var moved = 0
         var failed: [String] = []
+        var reason: String?
         for file in files {
             do {
                 try FileManager.default.trashItem(at: project.url.appendingPathComponent(file.path), resultingItemURL: nil)
                 moved += 1
             } catch {
                 failed.append(file.fileName)
+                reason = reason ?? error.localizedDescription
             }
         }
         ThumbnailCache.shared.removeAllObjects()
-        notify("Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash."
-                + (failed.isEmpty ? "" : " Could not move \(failed.joined(separator: ", "))."),
-               isError: !failed.isEmpty)
+        if let reason {
+            let notMoved = "Could not move \(failed.joined(separator: ", ")) to the Trash: \(reason)"
+            notify(moved == 0 ? notMoved : "Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash. " + notMoved, isError: true)
+        } else {
+            notify("Moved \(moved) snapshot\(moved == 1 ? "" : "s") to the Trash.")
+        }
         refreshChanges()
     }
 
