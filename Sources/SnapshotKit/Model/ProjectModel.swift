@@ -192,6 +192,9 @@ final class ProjectModel {
     private(set) var startedAt: Date?
     /// How long the last operation took.
     private(set) var lastDuration: TimeInterval?
+    /// The number of tests in the last run of them all, which the next one measures its progress
+    /// against (a re-record's verification or a flakiness check runs only some).
+    @ObservationIgnored private var fullRunTotal: Int?
 
     // Failures
     private(set) var failures: [FailureItem] = [] {
@@ -388,6 +391,7 @@ final class ProjectModel {
         guard let last = LastRun.load(repository: project.url), failureSource.map({ last.date > $0.date }) ?? true else { return }
         lastFailingSuites = last.failingSuites
         restoredSuites = last.suites ?? []
+        fullRunTotal = last.suites.map { $0.reduce(0) { $0 + $1.tests.count } }
         passed = last.passed
         failed = last.failed
         setFailures(suites: last.failingSuites, images: last.failureImages(),
@@ -1142,7 +1146,7 @@ final class ProjectModel {
 
     func runTests() {
         guard begin(.run), let (ctx, env) = requireEnvironment() else { return }
-        expectedTotal = lastResult?.summary?.total
+        expectedTotal = fullRunTotal
         let runner = TestRunner(repository: ctx.repository, config: ctx.config, environment: env)
         cancelAction = { runner.cancel() }
         let onLine = onLine, onEvent = onEvent
@@ -1176,6 +1180,7 @@ final class ProjectModel {
         setHistory(RunHistory(repository: project.url).load())
         // A cancelled run has no results to speak of; the last run's failures stay.
         if kind == .run, !result.cancelled {
+            fullRunTotal = result.summary?.total
             LastRun.update(with: result, attachmentsDirectory: attachmentsDirectory, repository: project.url)
             lastFailingSuites = result.failingSuites
             flakeResults = []
@@ -1564,6 +1569,7 @@ extension ProjectModel {
         log = f.log
         recomputeVisibleLog()
         lastResult = f.lastResult
+        fullRunTotal = f.lastResult?.summary?.total
         runPane = f.operation == nil ? .results : .output
         notify(f.lastMessage, isError: f.lastMessageIsError, action: f.lastMessageAction)
         startedAt = f.startedAt

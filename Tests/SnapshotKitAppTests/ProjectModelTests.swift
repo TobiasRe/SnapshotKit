@@ -829,6 +829,18 @@ extension AppUITests {
             try await waitUntilFinished(model)
         }
 
+        /// A run's progress is measured against the last run of every test, not a flakiness check of one.
+        @Test func aRunExpectsAsManyTestsAsTheLastFullRun() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed, failures: true)
+            model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
+            try await waitUntilFinished(model)
+            #expect(model.lastResult?.summary?.total == 1)
+            model.runTests()
+            #expect(model.expectedTotal == 3)
+            try await waitUntilFinished(model)
+        }
+
         /// A repo whose CardTests suite can be patched into record mode.
         func makeRecordableRepo(suite: String = "CardTests") throws -> URL {
             let (repo, _) = try makeRepo()
