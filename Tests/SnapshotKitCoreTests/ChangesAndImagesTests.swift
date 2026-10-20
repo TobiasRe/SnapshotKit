@@ -156,6 +156,10 @@ import Testing
             SnapshotChange(path: "T/__Snapshots__/ListTests/empty.2.png", kind: .new),
         ]
         #expect(SnapshotChangeSet.filter(changes, text: "card dark").map(\.testName) == ["darkMode"])
+        // A named snapshot's test is the part before the name, as in the library.
+        let named = SnapshotChange(path: "T/__Snapshots__/CardTests/payButton.dark.png", kind: .new)
+        #expect(named.testName == "payButton")
+        #expect(named.testName == SnapshotFile(path: named.path, byteSize: 0).testName)
         #expect(SnapshotChangeSet.filter(changes, text: "", kinds: [.new]).map(\.suite) == ["ListTests"])
     }
 

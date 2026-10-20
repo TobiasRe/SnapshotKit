@@ -37,14 +37,9 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
         return parent.isEmpty ? "(root)" : parent
     }
 
-    /// The test name without the snapshot counter and extension.
-    public var testName: String {
-        var name = (fileName as NSString).deletingPathExtension
-        if let dot = name.lastIndex(of: "."), name[name.index(after: dot)...].allSatisfy(\.isNumber) {
-            name = String(name[..<dot])
-        }
-        return name
-    }
+    /// The test name without the variant (a counter or a `named:` value) and extension, as the
+    /// library reads it.
+    public var testName: String { SnapshotFile(path: path, byteSize: 0).testName }
 
     public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false) {
         self.path = path
