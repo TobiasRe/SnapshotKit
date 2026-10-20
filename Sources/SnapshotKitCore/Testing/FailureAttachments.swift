@@ -109,15 +109,25 @@ public enum FailureAttachments {
         return nil
     }
 
-    /// Reference snapshot paths from a swift-snapshot-testing failure message
-    /// (`@−\n"file:///…/__Snapshots__/Suite/test.1.png"`), made relative to `repository`.
+    /// Reference snapshot paths from a swift-snapshot-testing failure message, made relative to
+    /// `repository`. The message names the reference with the default diff tool
+    /// (`@−\n"file:///…/__Snapshots__/Suite/test.1.png"`), or a configured diff tool's command line
+    /// (`snapkit open "/…/__Snapshots__/Suite/test.1.png" "/…/tmp/…/test.1.png"`).
     public static func referencePaths(in message: String, repository: URL) -> [String] {
-        // `@−` + reference path for a mismatch; `open "file://…"` for a newly recorded reference.
-        let regex = try! NSRegularExpression(pattern: #"(?:@\x{2212}\s*\n\s*|No reference was found on disk[^\n]*\n\s*\n?\s*open )"file://([^"]+)""#)
         let ns = message as NSString
+        let all = NSRange(location: 0, length: ns.length)
+        var references = defaultDiffReference.matches(in: message, range: all).map { m in
+            let url = ns.substring(with: m.range(at: 1))
+            return url.removingPercentEncoding ?? url
+        }
+        if references.isEmpty {
+            // The failed image is written outside `__Snapshots__`, so every such path is a reference.
+            references = diffToolReference.matches(in: message, range: all).map { m in
+                ns.substring(with: m.range(at: 1).location != NSNotFound ? m.range(at: 1) : m.range(at: 2))
+            }
+        }
         let root = URL.canonicalPath(repository.path)
-        return regex.matches(in: message, range: NSRange(location: 0, length: ns.length)).compactMap { m in
-            let raw = ns.substring(with: m.range(at: 1)).removingPercentEncoding ?? ns.substring(with: m.range(at: 1))
+        return references.compactMap { raw in
             let path = URL.canonicalPath(raw)
             if path.hasPrefix(root + "/") { return String(path.dropFirst(root.count + 1)) }
             // Paths from another machine (CI): keep the part from the first __Snapshots__ ancestor's parent.
@@ -128,6 +138,16 @@ public enum FailureAttachments {
             return nil
         }
     }
+
+    /// `@−` + reference path for a mismatch; `open "file://…"` for a newly recorded reference.
+    private static let defaultDiffReference = try! NSRegularExpression(
+        pattern: #"(?:@\x{2212}\s*\n\s*|No reference was found on disk[^\n]*\n\s*\n?\s*open )"file://([^"]+)""#
+    )
+    /// An absolute path to a PNG under `__Snapshots__`, quoted (`"…"`) or, as a diff tool given as
+    /// a plain string leaves it, bare.
+    private static let diffToolReference = try! NSRegularExpression(
+        pattern: #""(/[^"\n]*/__Snapshots__/[^"\n]*\.png)"|(?<![^\s])(/[^\s"]*/__Snapshots__/[^\s"]*\.png)(?![^\s])"#
+    )
 
     /// swift-snapshot-testing's message for a test without a reference: it records one and fails
     /// once, so the next run passes. Not a mismatch.

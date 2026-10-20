@@ -112,6 +112,16 @@ import Testing
         #expect(FailureAttachments.referencePaths(in: message, repository: URL(fileURLWithPath: "/repo")) == ["Tests/AppTests/__Snapshots__/CardTests/dark.1.png"])
         #expect(FailureAttachments.referencePaths(in: message, repository: URL(fileURLWithPath: "/elsewhere")) == ["…/AppTests/__Snapshots__/CardTests/dark.1.png"])
     }
+
+    @Test func referencePathFromADiffToolCommand() {
+        let repo = URL(fileURLWithPath: "/my repo")
+        // `.snapshots(diffTool: .snapkit)` with `Self { "snapkit open \"\($0)\" \"\($1)\"" }`
+        let quoted = "Snapshot does not match reference.\n\nsnapkit open \"/my repo/Tests/AppTests/__Snapshots__/CardTests/dark 2.1.png\" \"/tmp/CardTests/dark 2.1.png\"\n\nNewly-taken snapshot does not match reference."
+        #expect(FailureAttachments.referencePaths(in: quoted, repository: repo) == ["Tests/AppTests/__Snapshots__/CardTests/dark 2.1.png"])
+        // `diffTool: "ksdiff"`: the string form leaves the paths bare.
+        let bare = "Snapshot does not match reference.\n\nksdiff /my-repo/Tests/AppTests/__Snapshots__/CardTests/dark.1.png /tmp/CardTests/dark.1.png\n"
+        #expect(FailureAttachments.referencePaths(in: bare, repository: URL(fileURLWithPath: "/my-repo")) == ["Tests/AppTests/__Snapshots__/CardTests/dark.1.png"])
+    }
 }
 
 @Suite struct TestRunnerArgumentTests {
