@@ -201,8 +201,9 @@ Recorded and verified: 2 passed.
 Other endings: *Recorded, but verification failed: 1 still failing (flaky?).* and, with `--no-verify`,
 *Recorded.* If the test source couldn't be restored automatically you get a `WARNING:` naming the backup.
 
-No match: *No snapshot path contains 'x' and 'y'.* Exits 0 when verified, 1 when verification fails or the
-run is canceled. See [Re-recording](re-recording.md).
+No match: *No snapshot path contains 'x' and 'y'.* When the build fails or no test runs, nothing is recorded:
+*Nothing was recorded: the build failed (…).* Exits 0 when verified, 1 when nothing was recorded, verification
+fails or the run is canceled. See [Re-recording](re-recording.md).
 
 ## rerecord
 
@@ -224,8 +225,8 @@ Patched and restored: Tests/AppSnapshotTests/CheckoutViewTests.swift
 Verified: 3 passed with the new references.
 ```
 
-Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* Nothing failing: *Nothing to
-re-record: no failing suites.* (exit 0). The verification run becomes the new last run.
+Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* If the build fails or no test runs:
+*Nothing was recorded: …* (exit 1). Nothing failing: *Nothing to re-record: no failing suites.* (exit 0). The verification run becomes the new last run.
 
 ## flaky
 
