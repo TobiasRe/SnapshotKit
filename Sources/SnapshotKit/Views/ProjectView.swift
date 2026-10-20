@@ -50,7 +50,8 @@ struct ProjectView: View {
                     }
             }
         }
-        .confirmationDialog("Re-record all \(ProjectModel.testCount(project.recordableSnapshots)) snapshot tests?",
+        .confirmationDialog(ProjectModel.testCount(project.recordableSnapshots) == 1 ? "Re-record the snapshot test?"
+                            : "Re-record all \(ProjectModel.testCount(project.recordableSnapshots)) snapshot tests?",
                             isPresented: $project.confirmReRecordAll) {
             Button("Re-record All") { project.reRecordAll() }
         } message: {
@@ -250,7 +251,8 @@ struct RunInspector: View {
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
                 }
-                Button("Check Again") { project.validateEnvironment() }
+                // Reload, not just re-check: the fix is often an edit to .snapshotkit.yml.
+                Button("Check Again") { project.reload() }
                     .quietControl()
             }
         } else if project.configError != nil {

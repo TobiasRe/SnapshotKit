@@ -116,7 +116,8 @@ struct SnapshotsTab: View {
             }
             .padding(.bottom, DS.Space.xs)
         }
-        .confirmationDialog("Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
+        .confirmationDialog(project.displayedSnapshots.count == 1 ? "Move the orphaned snapshot to the Trash?"
+                            : "Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
             Button("Move to Trash", role: .destructive) { project.moveToTrash(project.displayedSnapshots) }
         } message: {
             Text("No test records or checks them any more. Commit the deletion to remove them from the repository.")
