@@ -208,6 +208,21 @@ func png(width: Int, height: Int, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Data {
         marks.set(false, for: Array(changes.prefix(2)), keepingOnly: changes)
         #expect(marks.viewed(in: changes) == [changes[2].id])
     }
+
+    @Test func linkedWorktreesKeepTheirOwnMarks() throws {
+        let repo = try TempRepo()
+        try repo.write("README.md", "x")
+        try repo.commitAll("init")
+        let worktree = testTemp("worktree")
+        try repo.git.run(["worktree", "add", "-q", "-b", "feature", worktree.path])
+        let card = SnapshotChange(path: "Tests/AppTests/__Snapshots__/CardTests/card.1.png", kind: .deleted)
+
+        let marks = ReviewMarks(repository: worktree)
+        marks.set(true, for: card, keepingOnly: [card])
+        #expect(ReviewMarks(repository: worktree).viewed(in: [card]) == [card.id])
+        #expect(ReviewMarks(repository: repo.url).viewed(in: [card]).isEmpty)
+        #expect(marks.url.path.hasPrefix(try repo.git.gitDirectory().path + "/worktrees/"))
+    }
 }
 
 @Suite struct InvisibleChangesTests {

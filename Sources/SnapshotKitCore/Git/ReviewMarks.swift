@@ -4,29 +4,28 @@ import Foundation
 /// "Viewed" marks for changed snapshots, like the checkbox on a code review.
 ///
 /// A mark stores a fingerprint of the snapshot as it was when marked, so a snapshot that is
-/// re-recorded again shows up as unviewed. Kept in `.git/snapshotkit/viewed.json`: per clone,
-/// never committed.
+/// re-recorded again shows up as unviewed. Kept in the git directory (`.git/snapshotkit/viewed.json`
+/// in a plain clone): per checkout, never committed.
 public struct ReviewMarks: Sendable {
     public let url: URL
     let repository: URL
 
     public init(repository: URL) {
         self.repository = repository
-        url = repository.appendingPathComponent(".git/snapshotkit/viewed.json")
+        // In a linked worktree or a submodule `.git` is a file pointing elsewhere.
+        let gitDirectory = (try? Git(root: repository).gitDirectory()) ?? repository.appendingPathComponent(".git")
+        url = gitDirectory.appendingPathComponent("snapshotkit/viewed.json")
     }
 
     /// Path → fingerprint of every marked snapshot.
     public func load() -> [String: String] {
-        guard let data = FileManager.default.contents(atPath: url.path),
-              let marks = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
-        return marks
+        StateFile.read([String: String].self, from: url) ?? [:]
     }
 
     public func save(_ marks: [String: String]) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? encoder.encode(marks).write(to: url, options: .atomic)
+        StateFile.write(marks, to: url, encoder: encoder)
     }
 
     /// What the snapshot looks like now: a hash of the file, or "deleted".
