@@ -672,6 +672,13 @@ extension AppUITests {
             return repo
         }
 
+        /// xcresulttool's report of a run in which card() passed.
+        static let cardPassed = """
+            {"testNodes": [{"name": "AppTests", "nodeType": "Unit test bundle", "children": [
+              {"name": "CardTests", "nodeType": "Test Suite", "children": [
+                {"name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Passed"}]}]}]}
+            """
+
         static let cardSuite = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [
             TestCaseResult(name: "card()", identifier: "CardTests/card()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
         ], failureFiles: [])
@@ -692,7 +699,7 @@ extension AppUITests {
             let repo = try makeRecordableRepo()
             // Records at once; the second run, the verification, waits.
             let model = try runnableModel(repo, xcodebuild: "[ -e \"$0.ran\" ] || { touch \"$0.ran\"; exit 0; }\n" + Self.longRun,
-                                          failures: true)
+                                          testResults: Self.cardPassed, failures: true)
             let failures = model.failures.map(\.id)
             model.reRecordFailed(suites: [Self.cardSuite])
             try await waitUntilStarted(model)
@@ -713,7 +720,7 @@ extension AppUITests {
             let failures = model.failures.map(\.id)
             model.reRecordFailed(suites: [Self.cardSuite])
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasPrefix("Build failed:") == true)
+            #expect(model.lastMessage?.hasPrefix("Nothing was recorded: the build failed") == true)
             #expect(model.lastMessageIsError)
             #expect(model.lastMessageAction == nil)
             #expect(model.failures.map(\.id) == failures)

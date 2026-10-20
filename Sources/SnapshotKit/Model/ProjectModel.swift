@@ -1169,10 +1169,8 @@ final class ProjectModel {
                     onLine: onLine, onEvent: onEvent)
                 RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: outcome.recordRun))
                 let record = outcome.recordRun
-                // Tests that don't build recorded nothing, and verifying them tells nothing new.
-                let buildError = record.cancelled || record.summary != nil ? nil : record.buildErrors.first
-                var message = record.cancelled ? "Cancelled." : buildError.map { "Build failed: \($0)" } ?? "Re-recorded \(what)."
-                var isError = buildError != nil
+                var message = record.cancelled ? "Cancelled." : record.nothingTested.map { "Nothing was recorded: \($0)." } ?? "Re-recorded \(what)."
+                var isError = record.nothingTested != nil
                 if !outcome.restore.conflicts.isEmpty {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
                     isError = true
@@ -1181,7 +1179,7 @@ final class ProjectModel {
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: "local", repository: project.url, result: verifyRun))
                 }
                 // A cancelled verification has no results; the last run's failures stay.
-                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled, buildError == nil {
+                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
                     applyPartialRun(verifyRun)
                     if verifyRun.succeeded {
                         message += " Verified: \(verifyRun.passed) passed."
@@ -1192,7 +1190,7 @@ final class ProjectModel {
                 }
                 lastResult = outcome.verifyRun ?? outcome.recordRun
                 // New references are working-tree changes: the next step is to look at them.
-                finish(message: message, isError: isError, action: buildError == nil ? .reviewChanges : nil)
+                finish(message: message, isError: isError, action: record.nothingTested == nil ? .reviewChanges : nil)
             } catch {
                 finish(throwing: error)
             }
@@ -1319,8 +1317,12 @@ final class ProjectModel {
                     applyFlakeResult(out.run, iterations: n)
                 case .record:
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
-                    finish(message: out.run.cancelled ? "Cancelled." : "Recorded on \(out.host); downloaded \(out.downloadedSnapshots.count) snapshot\(out.downloadedSnapshots.count == 1 ? "" : "s"). Review them in Changes.")
-                    if !out.run.cancelled { tab = .changes }
+                    if let why = out.run.nothingTested {
+                        finish(message: "Nothing was recorded: \(why).", isError: true)
+                    } else {
+                        finish(message: out.run.cancelled ? "Cancelled." : "Recorded on \(out.host); downloaded \(out.downloadedSnapshots.count) snapshot\(out.downloadedSnapshots.count == 1 ? "" : "s"). Review them in Changes.")
+                        if !out.run.cancelled { tab = .changes }
+                    }
                 }
             } catch {
                 finish(throwing: error)
