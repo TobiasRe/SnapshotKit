@@ -1,0 +1,67 @@
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64-apple-ios17.0-simulator
+◇ Suite GreetingViewTests started.
+◇ Test greeting() started.
+◇ Test named(name:) started.
+◇ Test case passing 1 argument name → "Ada" to named(name:) started.
+◇ Test case passing 1 argument name → "Bob" to named(name:) started.
+⎙ Attached 'reference.png' to greeting().
+⎙ Attached 'failure.png' to greeting().
+⎙ Attached 'difference.png' to greeting().
+✘ Test greeting() recorded an issue at GreetingViewTests.swift:10:23: Issue recorded
+↳ Snapshot does not match reference.
+  
+  @−
+  "file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/greeting.1.png"
+  @+
+  "file:///sim/tmp/GreetingViewTests/greeting.1.png"
+  
+  To configure output for a custom diff tool, use 'withSnapshotTesting'. For example:
+  
+      withSnapshotTesting(diffTool: .ksdiff) {
+        // ...
+      }
+  
+  Newly-taken snapshot does not match reference.
+⎙ Attached 'reference.png' to named(name:).
+⎙ Attached 'failure.png' to named(name:).
+⎙ Attached 'difference.png' to named(name:).
+✘ Test named(name:) recorded an issue with 1 argument name → "Ada" at GreetingViewTests.swift:14:23: Issue recorded
+↳ Snapshot "Ada" does not match reference.
+  
+  @−
+  "file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Ada.png"
+  @+
+  "file:///sim/tmp/GreetingViewTests/named-name.Ada.png"
+  
+  To configure output for a custom diff tool, use 'withSnapshotTesting'. For example:
+  
+      withSnapshotTesting(diffTool: .ksdiff) {
+        // ...
+      }
+  
+  Newly-taken snapshot does not match reference.
+⎙ Attached 'reference.png' to named(name:).
+⎙ Attached 'failure.png' to named(name:).
+⎙ Attached 'difference.png' to named(name:).
+✘ Test named(name:) recorded an issue with 1 argument name → "Bob" at GreetingViewTests.swift:14:23: Issue recorded
+↳ Snapshot "Bob" does not match reference.
+  
+  @−
+  "file:///path/to/repo/Tests/SampleUITests/__Snapshots__/GreetingViewTests/named-name.Bob.png"
+  @+
+  "file:///sim/tmp/GreetingViewTests/named-name.Bob.png"
+  
+  To configure output for a custom diff tool, use 'withSnapshotTesting'. For example:
+  
+      withSnapshotTesting(diffTool: .ksdiff) {
+        // ...
+      }
+  
+  Newly-taken snapshot does not match reference.
+​​✘ Test greeting() failed after 0.287 seconds with 1 issue.
+✘ Test named(name:) with 2 test cases failed after 0.288 seconds with 2 issues.
+✘ Suite GreetingViewTests failed after 0.290 seconds with 3 issues.
+✘ Test run with 2 tests in 1 suite failed after 0.290 seconds with 3 issues.
+** TEST FAILED **

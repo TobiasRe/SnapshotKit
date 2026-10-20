@@ -39,7 +39,8 @@ public struct TestOutputParser: Sendable {
 
     public init() {}
 
-    public mutating func consume(_ line: String) -> [TestEvent] {
+    public mutating func consume(_ rawLine: String) -> [TestEvent] {
+        let line = String(Self.withoutInvisiblePrefix(rawLine))
         var events: [TestEvent] = []
         func setPhase(_ p: RunPhase) {
             // Phases only move forward (xcodebuild prints "Testing started" again at the very end).
@@ -68,20 +69,24 @@ public struct TestOutputParser: Sendable {
         }
 
         // Swift Testing: "◇ Suite X started." / "✔ Test name() passed after …" / "✘ Test name() failed after …"
+        // A parameterized test's cases start on lines of their own ("◇ Test case passing …"), and it
+        // ends "✘ Test name(x:) with 2 test cases failed after …".
         if line.hasPrefix("◇ Suite "), let name = Self.between(line, "◇ Suite ", " started") {
             events.append(.suiteStarted(name))
-        } else if line.hasPrefix("◇ Test "), !line.hasPrefix("◇ Test run"), let name = Self.between(line, "◇ Test ", " started") {
+        } else if line.hasPrefix("◇ Test "), !line.hasPrefix("◇ Test run"), !line.hasPrefix("◇ Test case "),
+                  let name = Self.between(line, "◇ Test ", " started") {
             events.append(.testStarted(name))
         } else if line.hasPrefix("✔ Test "), !line.hasPrefix("✔ Test run"), let name = Self.between(line, "✔ Test ", " passed") {
             passed += 1
-            events.append(.testPassed(name))
-        } else if line.hasPrefix("✘ Test "), !line.hasPrefix("✘ Test run"), line.contains(" failed after"), let name = Self.between(line, "✘ Test ", " failed") {
+            events.append(.testPassed(Self.withoutCaseCount(name)))
+        } else if line.hasPrefix("✘ Test "), !line.hasPrefix("✘ Test run"), line.contains(" failed after"),
+                  let name = Self.between(line, "✘ Test ", " failed").map(Self.withoutCaseCount) {
             failed += 1
             failedTests.append(name)
             events.append(.testFailed(name))
         } else if line.hasPrefix("➜ Test ") && line.contains(" skipped"), let name = Self.between(line, "➜ Test ", " skipped") {
             skipped += 1
-            events.append(.testSkipped(name))
+            events.append(.testSkipped(Self.withoutCaseCount(name)))
         } else if line.hasPrefix("Test Case '") || line.hasPrefix("Test case '") {
             // XCTest: "Test Case '-[Mod.Suite testX]' passed (0.1 seconds)." or
             //         "Test case 'Suite.testX()' failed on 'Clone 1 of …' (0.1 seconds)"
@@ -104,6 +109,18 @@ public struct TestOutputParser: Sendable {
             }
         }
         return events
+    }
+
+    /// The line without the zero-width spaces (and other invisible format characters) Swift Testing
+    /// can leave at its start, as after an issue's message: "\u{200B}\u{200B}✘ Test …".
+    public static func withoutInvisiblePrefix(_ line: String) -> Substring {
+        line.drop { $0.unicodeScalars.allSatisfy { $0.properties.generalCategory == .format } }
+    }
+
+    /// "named(name:) with 2 test cases" → "named(name:)".
+    static func withoutCaseCount(_ name: String) -> String {
+        guard let range = name.range(of: #" with \d+ test cases?$"#, options: .regularExpression) else { return name }
+        return String(name[..<range.lowerBound])
     }
 
     static func buildError(_ line: String) -> String? {

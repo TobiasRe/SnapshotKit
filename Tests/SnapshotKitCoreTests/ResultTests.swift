@@ -82,6 +82,18 @@ import Testing
         #expect(parser.failed == 0)
     }
 
+    /// Xcode 27: a parameterized test reports its cases and ends "with 2 test cases failed"; and a
+    /// result line can start with zero-width spaces (left over from the issue printed before it).
+    @Test func swiftTestingParameterizedTestsAndInvisiblePrefixes() throws {
+        var parser = TestOutputParser()
+        var events: [TestEvent] = []
+        for line in try lines("xcodebuild-swift-testing-parameterized.log") { events += parser.consume(line) }
+        #expect(parser.failedTests == ["greeting()", "named(name:)"])
+        #expect(parser.failed == 2)
+        #expect(events.filter { if case .testStarted = $0 { true } else { false } } == [.testStarted("greeting()"), .testStarted("named(name:)")])
+        #expect(TestOutputParser.withoutInvisiblePrefix("\u{200B}\u{200B}✘ Test greeting() failed") == "✘ Test greeting() failed")
+    }
+
     @Test func xctestLinesAndBuildErrors() {
         var parser = TestOutputParser()
         _ = parser.consume("Test Suite 'FeatureTests' started at 2026-01-01")

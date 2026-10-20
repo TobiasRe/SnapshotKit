@@ -104,12 +104,13 @@ final class Printer: Sendable {
     private let lock = NSLock()
     init(verbose: Bool) { self.verbose = verbose }
 
-    func line(_ line: String) {
+    func line(_ raw: String) {
+        let line = TestOutputParser.withoutInvisiblePrefix(raw)
         lock.withLock {
             if verbose || line.hasPrefix("$ ") || line.hasPrefix("snapkit:") || line.hasPrefix("◇ Suite") || line.hasPrefix("✘")
                 || line.hasPrefix("✔ Test run") || line.hasPrefix("** ") || line.contains(": error: ")
                 || line.hasPrefix("Test case '") && line.contains("failed") || line.hasPrefix("↳ ") && !line.contains("Testing Library") && !line.contains("Target Platform") {
-                say(line)
+                say(String(line))
             }
         }
     }
