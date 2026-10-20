@@ -1022,6 +1022,32 @@ extension AppUITests {
             #expect(model.lastMessage?.hasPrefix("Could not move \(file.fileName) to the Trash") == true)
         }
 
+        /// Failures selected together from two suites re-record just those tests, in both suites.
+        @Test func reRecordingFailuresOfTwoSuitesRunsJustThoseTests() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let profile = "Tests/AppTests/ProfileViewTests.swift"
+            try "import SnapshotTesting\nimport Testing\n\n@Suite(.snapshots(record: .missing))\nstruct ProfileViewTests {\n    @Test func badge() {}\n}\n"
+                .write(to: repo.appendingPathComponent(profile), atomically: true, encoding: .utf8)
+            try Shell.output(["git", "add", "--", profile], in: repo)
+            try Shell.output(["git", "commit", "-qm", "suite", "--", profile], in: repo)
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: Self.payButtonFailed, failures: true)
+            model.tab = .failures
+            model.selectFailures(Set(model.displayedFailures.map(\.id)))
+            #expect(model.selectedFailures.map(\.suite.name) == ["CheckoutViewTests", "ProfileViewTests"])
+            model.reRecordSelection()
+            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasPrefix("Re-recorded 2 tests.") == true)
+            let xcrun = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let runs = try String(contentsOfFile: xcrun, encoding: .utf8).split(separator: "\n")
+            #expect(runs.count == 2)                        // the record and the verification
+            for run in runs {
+                #expect(run.contains("-only-testing:AppSnapshotTests/CheckoutViewTests/payButton()"))
+                #expect(run.contains("-only-testing:AppSnapshotTests/ProfileViewTests/badge()"))
+                #expect(!run.contains("summary()"))
+            }
+        }
+
         /// A test that still fails after its re-record shows what it looks like now, as after a run.
         @Test func aFailedVerificationShowsItsImages() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
