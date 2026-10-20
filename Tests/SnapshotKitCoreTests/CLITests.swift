@@ -464,4 +464,10 @@ import Testing
         #expect(try snapkit("projects", "scan", ".", in: root).stdout.hasPrefix("\(project)\n"))
         #expect(snapkit.settings.settings.scanRoots == [Project(path: root.path).path])
     }
+
+    /// Not reported as a folder macOS doesn't let it read, nor kept to be rescanned forever.
+    @Test func aFolderThatDoesNotExistIsAnError() throws {
+        #expect(Outcome(try snapkit("projects", "scan", "/no/such/folder")) == failure("no such folder: /no/such/folder"))
+        #expect(snapkit.settings.settings.scanRoots.isEmpty)
+    }
 }

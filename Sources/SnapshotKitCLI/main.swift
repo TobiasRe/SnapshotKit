@@ -648,6 +648,8 @@ func main() async {
         case "scan":
             let roots = o.positional.dropFirst()
             guard !roots.isEmpty else { usageError("usage: snapkit projects scan ROOT...") }
+            // A mistyped folder isn't one macOS won't let us read, nor a scan folder to keep.
+            for root in roots where !FileManager.default.fileExists(atPath: root) { fail("no such folder: \(root)") }
             for root in roots { store.addScanRoot(root) }
             let reports = store.rescanReports()
             for report in reports where !report.readable {
