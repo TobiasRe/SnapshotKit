@@ -10,12 +10,18 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
     public var reference: URL?
     public var failure: URL?
     public var difference: URL?
+    /// The simulator's name, e.g. "iPhone 16 Pro".
     public var device: String?
+    /// Tells apart simulators of the same name in a run on several.
+    public var deviceID: String?
+    /// The case of a parameterized test, e.g. `["\"dark\""]`; nil for a test without arguments.
+    public var arguments: [String]?
     /// Repository-relative path of the reference PNG, when it could be read from the failure message.
     public var referencePath: String?
 
     public init(testIdentifier: String, repetition: Int, index: Int, reference: URL? = nil, failure: URL? = nil,
-                difference: URL? = nil, device: String? = nil, referencePath: String? = nil) {
+                difference: URL? = nil, device: String? = nil, deviceID: String? = nil, arguments: [String]? = nil,
+                referencePath: String? = nil) {
         self.testIdentifier = testIdentifier
         self.repetition = repetition
         self.index = index
@@ -23,10 +29,15 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
         self.failure = failure
         self.difference = difference
         self.device = device
+        self.deviceID = deviceID
+        self.arguments = arguments
         self.referencePath = referencePath
     }
 
-    public var id: String { "\(testIdentifier)#\(repetition)#\(index)" }
+    /// One assertion's images: per test, device, test case, repetition and assertion.
+    public var id: String {
+        [testIdentifier, deviceID ?? "", arguments?.joined(separator: ", ") ?? "", "\(repetition)", "\(index)"].joined(separator: "#")
+    }
 }
 
 public enum FailureAttachments {
@@ -36,6 +47,8 @@ public enum FailureAttachments {
             var suggestedHumanReadableName: String?
             var repetitionNumber: Int?
             var deviceName: String?
+            var deviceId: String?
+            var arguments: [String]?
         }
         var testIdentifier: String
         var attachments: [Attachment]
@@ -75,15 +88,17 @@ public enum FailureAttachments {
     public static func parse(manifest: Data, directory: URL) throws -> [SnapshotFailureImages] {
         let entries = try JSONDecoder().decode([ManifestEntry].self, from: manifest)
         var grouped: [String: SnapshotFailureImages] = [:]
+        var order: [String] = []   // ids as first seen: the run's order of devices and test cases
         for entry in entries {
             for attachment in entry.attachments {
                 guard let name = attachment.suggestedHumanReadableName,
                       let (role, index) = role(of: name) else { continue }
-                let repetition = attachment.repetitionNumber ?? 1
-                let key = "\(entry.testIdentifier)#\(repetition)#\(index)"
-                var images = grouped[key] ?? SnapshotFailureImages(
-                    testIdentifier: entry.testIdentifier, repetition: repetition, index: index, device: attachment.deviceName
+                let new = SnapshotFailureImages(
+                    testIdentifier: entry.testIdentifier, repetition: attachment.repetitionNumber ?? 1, index: index,
+                    device: attachment.deviceName, deviceID: attachment.deviceId, arguments: attachment.arguments
                 )
+                if grouped[new.id] == nil { order.append(new.id) }
+                var images = grouped[new.id] ?? new
                 let url = directory.appendingPathComponent(attachment.exportedFileName)
                 switch role {
                 case "reference": images.reference = url
@@ -91,10 +106,13 @@ public enum FailureAttachments {
                 case "difference": images.difference = url
                 default: break
                 }
-                grouped[key] = images
+                grouped[images.id] = images
             }
         }
-        return grouped.values.sorted { ($0.testIdentifier, $0.repetition, $0.index) < ($1.testIdentifier, $1.repetition, $1.index) }
+        let position = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        return order.compactMap { grouped[$0] }.sorted {
+            ($0.testIdentifier, $0.repetition, $0.index, position[$0.id]!) < ($1.testIdentifier, $1.repetition, $1.index, position[$1.id]!)
+        }
     }
 
     /// `failure_0_<uuid>.png` → ("failure", 0). Also accepts plain `failure.png`.

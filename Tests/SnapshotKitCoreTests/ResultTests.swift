@@ -106,6 +106,25 @@ import Testing
         }
     }
 
+    /// Both simulators of a run attach images for the same test, repetition and assertion.
+    @Test func keepsTheImagesOfEachDeviceApart() throws {
+        let images = try FailureAttachments.parse(manifest: fixture("attachments-manifest-two-devices.json"), directory: URL(fileURLWithPath: "/att"))
+        #expect(images.count == 4)
+        #expect(Set(images.map(\.id)).count == 4)
+        let first = try #require(images.first { $0.device == "Second iPhone" && $0.repetition == 1 })
+        #expect(first.reference?.lastPathComponent == "22DB9B19-4815-4EBC-8DE2-B153876E454B.png")
+        #expect(first.failure != nil && first.difference != nil)
+    }
+
+    /// Each case of a parameterized test attaches its own `failure_0_…` images.
+    @Test func keepsTheImagesOfEachTestCaseApart() throws {
+        let images = try FailureAttachments.parse(manifest: fixture("attachments-manifest-parameterized.json"), directory: URL(fileURLWithPath: "/att"))
+        let named = images.filter { $0.testIdentifier == "GreetingViewTests/named(name:)" }
+        #expect(named.map(\.arguments) == [[#""Ada""#], [#""Bob""#]])
+        #expect(named.allSatisfy { $0.reference != nil && $0.failure != nil && $0.difference != nil })
+        #expect(Set(images.map(\.id)).count == 3)
+    }
+
     @Test func reExportReplacesOnlyTheFilesOfTheLastExport() throws {
         let dir = testTemp("out")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

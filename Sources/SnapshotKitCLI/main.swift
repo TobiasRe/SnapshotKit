@@ -511,10 +511,19 @@ func main() async {
                 say(color("31", suite.identifier))
                 for test in suite.tests where test.outcome == .failed {
                     say("  ✘ \(test.name)  (\(test.failedRepetitions)/\(test.repetitions.count) repetitions failed)")
-                    for message in test.failureMessages.prefix(1) {
-                        for path in FailureAttachments.referencePaths(in: message, repository: ctx.repository) { say("    reference: \(path)") }
+                    // Every reference once: repetitions and devices repeat them, a parameterized test's cases don't.
+                    var references: [String] = []
+                    for path in test.failureMessages.flatMap({ FailureAttachments.referencePaths(in: $0, repository: ctx.repository) })
+                    where !references.contains(path) {
+                        references.append(path)
+                        say("    reference: \(path)")
                     }
-                    for img in images where img.testIdentifier == test.identifier && img.repetition == 1 {
+                    let shown = images.filter { $0.testIdentifier == test.identifier && $0.repetition == 1 }
+                    let severalDevices = Set(shown.map(\.deviceID)).count > 1, severalCases = Set(shown.map(\.arguments)).count > 1
+                    for img in shown {
+                        // Say whose images these are: which device, which case of a parameterized test.
+                        let owner = [severalDevices ? img.device : nil, severalCases ? img.arguments?.joined(separator: ", ") : nil].compactMap { $0 }
+                        if !owner.isEmpty { say("    " + owner.joined(separator: " · ") + ":") }
                         say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
                         if let ref = img.reference.flatMap({ try? readImage($0.path) }), let act = img.failure.flatMap({ try? readImage($0.path) }) {
                             let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))

@@ -1,0 +1,220 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "66B209C2-DFD5-4752-80ED-35F515AF5A01.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "difference_0_628FFDA9-7754-4FCC-85CF-BF81B1D3E48F.png",
+        "timestamp": 1792529109.878
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "B7BBE0B7-F0B7-4197-BAF3-4575D19A8232.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "failure_0_92A8D04A-F69E-4AC5-9B0E-95DA86698DEF.png",
+        "timestamp": 1792529109.878
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "C7768610-74EA-4BA6-A7EA-4917BB95633C.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "reference_0_150F5D57-F196-44CA-9A9C-B9D980A47DB1.png",
+        "timestamp": 1792529109.878
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "114DC2BF-9F7C-480B-8F97-EFB6EACED333.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "716F4A0F-F9CF-4D8F-9042-EF9A604D96A7.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "difference_0_F5DE2A9B-2AA7-443F-B2A2-57BBA085CECB.png",
+        "timestamp": 1792529119.979
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "2811AD90-62AD-4F63-9E1C-776924786556.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "failure_0_532EBA26-0888-4807-AF7E-328428288102.png",
+        "timestamp": 1792529119.979
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "22DB9B19-4815-4EBC-8DE2-B153876E454B.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "reference_0_D430BAA7-2D00-4C3C-9331-417B41855645.png",
+        "timestamp": 1792529119.979
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "317930F4-6A25-43D7-9D64-2C0A1E48F4E9.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "6153689F-17CC-4AF8-A6FE-BFE9D09EE648.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "difference_0_0C3C7AF1-3876-448E-A7F6-DC59E2284BFD.png",
+        "timestamp": 1792529110.086
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "F2108401-0034-4771-AE92-F9E2653D9BBC.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "failure_0_39E4FA89-22CF-4699-A49C-051ECE6B1097.png",
+        "timestamp": 1792529110.086
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "F6A9B99B-35F3-4329-8E42-B268A5560A7C.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "reference_0_2A8B5B90-E136-40F8-8058-BD3B37B1DD61.png",
+        "timestamp": 1792529110.085
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "617B66D1-9632-4E02-9BB7-0E00BF408485.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "11E3DE00-4621-4C31-AEFF-4903DC1BA1D1.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "difference_0_15073B2B-53FC-408F-B538-B93B2B8D0CDC.png",
+        "timestamp": 1792529120.435
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "AC5A1097-4A93-4543-8D56-4CF5B2A8983D.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "failure_0_65BDE074-03C4-4D80-90CD-6BC5E304D5C4.png",
+        "timestamp": 1792529120.434
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "BABBF8A7-F6C7-4FE8-A8C8-72D655094CE2.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "reference_0_CC1C55B6-66A2-422F-9CBD-AECA9997CC77.png",
+        "timestamp": 1792529120.434
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "FB25F9E0-302C-48CC-8102-A0911ABE786B",
+        "deviceName": "Second iPhone",
+        "exportedFileName": "FF0D6095-3FB7-4371-9FDF-2A5ED1ADB6A3.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 2,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      }
+    ],
+    "testIdentifier": "GreetingViewTests/greeting()",
+    "testIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/greeting()"
+  },
+  {
+    "attachments": [
+      {
+        "arguments": [
+          "\"Ada\""
+        ],
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "F2D01D17-52F4-438F-9934-7DF66D15E67A.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "named-name.Ada_0_C25F1558-BE80-497C-A6C5-A8ACAA4DC164.png",
+        "timestamp": 1792529110.132
+      },
+      {
+        "arguments": [
+          "\"Ada\""
+        ],
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "E50F61DE-A091-499F-AB26-A0D974418DCE.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      },
+      {
+        "arguments": [
+          "\"Bob\""
+        ],
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "CDA00A31-93AA-4950-A45E-E3EFBAE043CB.png",
+        "isAssociatedWithFailure": false,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "named-name.Bob_0_BC9061EC-129D-4F31-9F70-D805788751F4.png",
+        "timestamp": 1792529110.241
+      },
+      {
+        "arguments": [
+          "\"Bob\""
+        ],
+        "configurationName": "Test Scheme Action",
+        "deviceId": "3F044D84-31ED-4FA5-8A31-413DE9DFE220",
+        "deviceName": "SnapshotKit Samples",
+        "exportedFileName": "3107CC6A-6EBE-4AC2-841F-70AE7B94BF01.txt",
+        "isAssociatedWithFailure": true,
+        "repetitionNumber": 1,
+        "suggestedHumanReadableName": "Complete Issue Description.txt"
+      }
+    ],
+    "testIdentifier": "GreetingViewTests/named(name:)",
+    "testIdentifierURL": "test://com.apple.xcode/SampleUI/SampleUITests/GreetingViewTests/named(name:)"
+  }
+]
