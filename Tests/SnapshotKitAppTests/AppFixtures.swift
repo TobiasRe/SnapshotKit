@@ -202,7 +202,7 @@ enum AppFixtures {
             let failure = item.images.first?.failure
             ThumbnailCache.preload(id: "failure:\(item.id)#\(failure?.path ?? "")", data: failure.flatMap { try? Data(contentsOf: $0) })
             let pair = ComparePair.make(before: try? Data(contentsOf: item.images[0].reference!), after: try? Data(contentsOf: item.images[0].failure!))
-            ComparePairCache.store(pair, for: item.id + "#\(item.images[0].repetition)")
+            ComparePairCache.store(pair, for: item.id + "#" + item.images[0].id)
         }
         return items
     }

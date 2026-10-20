@@ -5,7 +5,8 @@ import SwiftUI
 struct FailuresTab: View {
     @Environment(AppModel.self) private var app
     let project: ProjectModel
-    @State private var repetition = 1
+    /// The attempt shown: one image's id (device, test case, run and assertion).
+    @State private var attempt: String?
 
     var body: some View {
         ListDetailSplit {
@@ -122,12 +123,31 @@ struct FailuresTab: View {
         }
     }
 
+    /// Names a failure's attempts by what tells them apart, each only when it varies across them:
+    /// the device, the test case, the run (numbered per device) and the assertion, e.g.
+    /// "iPhone SE · Run 2 of 5".
+    nonisolated static func attempts(of images: [SnapshotFailureImages], runsPerDevice: Int) -> [(id: String, title: String)] {
+        func device(_ image: SnapshotFailureImages) -> String { image.device ?? image.deviceID ?? "" }
+        func testCase(_ image: SnapshotFailureImages) -> String { image.arguments?.joined(separator: ", ") ?? "" }
+        let sorted = images.sorted {
+            (device($0), testCase($0), $0.repetition, $0.index) < (device($1), testCase($1), $1.repetition, $1.index)
+        }
+        let byDevice = Set(images.map(device)).count > 1, byCase = Set(images.map(testCase)).count > 1
+        let byRun = Set(images.map(\.repetition)).count > 1, byIndex = Set(images.map(\.index)).count > 1
+        let runs = max(runsPerDevice, images.map(\.repetition).max() ?? 1)
+        return sorted.map { image in
+            let parts = [byDevice ? device(image) : nil,
+                         byCase ? testCase(image) : nil,
+                         byRun ? "Run \(image.repetition) of \(runs)" : nil,
+                         byIndex ? "Snapshot \(image.index + 1)" : nil].compactMap { $0 }
+            return (image.id, parts.joined(separator: " · "))
+        }
+    }
+
     private func detail(_ item: FailureItem) -> some View {
-        let reps = Array(Set(item.images.map(\.repetition))).sorted()
-        let rep = reps.contains(repetition) ? repetition : (reps.first ?? 1)
-        // Attempts are numbered among all runs of the test, not only the failing ones with images.
-        let runs = max(item.test.repetitions.count, reps.last ?? 1)
-        let image = item.images.first { $0.repetition == rep }
+        let devices = max(Set(item.images.map { $0.deviceID ?? $0.device ?? "" }).count, 1)
+        let attempts = Self.attempts(of: item.images, runsPerDevice: item.test.repetitions.count / devices)
+        let image = item.images.first { $0.id == attempt } ?? attempts.first.flatMap { first in item.images.first { $0.id == first.id } }
         let referenceURL = image?.reference ?? item.referencePaths.first.map { project.project.url.appendingPathComponent($0) }
         let failureURL = image?.failure
 
@@ -172,20 +192,20 @@ struct FailuresTab: View {
                     Text("First failure on record").foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: DS.Space.s)
-                if reps.count > 1 {
+                if attempts.count > 1 {
                     Menu {
-                        Picker("Repetition", selection: $repetition) {
-                            ForEach(reps, id: \.self) { Text("Run \($0) of \(runs)").tag($0) }
+                        Picker("Attempt", selection: Binding(get: { image?.id }, set: { attempt = $0 })) {
+                            ForEach(attempts, id: \.id) { Text($0.title).tag(Optional($0.id)) }
                         }
                         .pickerStyle(.inline)
                         .labelsHidden()
                     } label: {
-                        Text("Run \(rep) of \(runs)")
+                        Text(attempts.first { $0.id == image?.id }?.title ?? "")
                     }
                     .fixedSize()
                     .quietControl()
-                    .accessibilityLabel("Repetition")
-                    .help("Which attempt of the flakiness check to show")
+                    .accessibilityLabel("Attempt")
+                    .help("Which device, test case or run of this test to show")
                 }
             }
             .font(DS.Font.caption)
@@ -210,7 +230,7 @@ struct FailuresTab: View {
                 CompareView(load: { (referenceURL.flatMap { try? Data(contentsOf: $0) }, failureURL.flatMap { try? Data(contentsOf: $0) }) },
                             beforeLabel: "Reference",
                             afterLabel: "Actual · \(image?.device ?? project.failureSource?.host ?? "run")",
-                            identity: item.id + "#\(rep)",
+                            identity: item.id + "#" + (image?.id ?? ""),
                             beforeMissing: "No reference was recorded yet.",
                             afterMissing: "This run’s images are no longer kept. Run the tests again to see what the test draws.")
             } else {

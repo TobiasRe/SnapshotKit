@@ -327,7 +327,7 @@ struct SnapshotStatusLine: View {
     var showVariant = true
 
     /// A working-tree state in words.
-    static func label(_ state: SnapshotFile.State) -> String {
+    nonisolated static func label(_ state: SnapshotFile.State) -> String {
         switch state {
         case .clean: "Committed"
         case .modified: "Modified"
@@ -336,7 +336,7 @@ struct SnapshotStatusLine: View {
     }
 
     /// The one state the line names, if any, with its color and tooltip.
-    static func state(of file: SnapshotFile, _ status: SnapshotStatus) -> (label: String, color: Color, help: String)? {
+    nonisolated static func state(of file: SnapshotFile, _ status: SnapshotStatus) -> (label: String, color: Color, help: String)? {
         if status.orphaned { return ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
         if let change = status.change { return (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
         guard file.state != .clean else { return nil }

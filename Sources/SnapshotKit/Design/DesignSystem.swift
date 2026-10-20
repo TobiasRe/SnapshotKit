@@ -618,7 +618,7 @@ struct StatusNote: View {
 
     /// Messages name commands in backticks ("Run `xcodes install 16.2`"); those parts are set in
     /// code type. Only backticks: full Markdown would turn `__Snapshots__` in a path bold.
-    static func code(_ text: String) -> AttributedString {
+    nonisolated static func code(_ text: String) -> AttributedString {
         let parts = text.split(separator: "`", omittingEmptySubsequences: false)
         guard parts.count >= 3, parts.count % 2 == 1 else { return AttributedString(text) }
         var result = AttributedString()
