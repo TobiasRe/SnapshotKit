@@ -237,9 +237,10 @@ func exitUnlessRecorded(_ run: TestRunResult) {
     if let why = run.nothingTested { fail("Nothing was recorded: \(why).") }
 }
 
-/// A verification that was cancelled says so instead of reporting a result, and exits 1.
-func exitIfCancelled(verification run: TestRunResult) {
-    guard run.cancelled else { return }
+/// A verification that was cancelled, or never started because of a Ctrl-C after recording, says
+/// so instead of reporting a result, and exits 1.
+func exitIfCancelled(verification run: TestRunResult?, requested: Bool = true) {
+    guard requested, run?.cancelled ?? true else { return }
     say(color("33", "Recorded; the verification was cancelled."))
     exit(1)
 }
@@ -448,9 +449,9 @@ func main() async {
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
             warnAboutConflicts(outcome.restore)
             exitUnlessRecorded(outcome.recordRun)
+            if let verify = outcome.verifyRun { record(verify, kind: .verify, repo: ctx.repository) }
+            exitIfCancelled(verification: outcome.verifyRun, requested: !o.has("--no-verify"))
             if let verify = outcome.verifyRun {
-                record(verify, kind: .verify, repo: ctx.repository)
-                exitIfCancelled(verification: verify)
                 say(verify.succeeded ? color("32", "Recorded and verified: \(verify.passed) passed.")
                                      : color("31", "Recorded, but verification failed: \(verify.failed) still failing (flaky?)."))
                 exit(verify.succeeded ? 0 : 1)
@@ -496,6 +497,7 @@ func main() async {
             say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
             say("Patched and restored: \(outcome.patchedFiles.joined(separator: ", "))")
             if let verify = outcome.verifyRun { finishVerification(verify, repo: ctx.repository) }
+            exitIfCancelled(verification: nil, requested: !o.has("--no-verify"))
             exit(0)
         } catch {
             fail(error.localizedDescription)
