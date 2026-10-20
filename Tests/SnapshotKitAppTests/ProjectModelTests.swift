@@ -1018,6 +1018,28 @@ extension AppUITests {
             #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
         }
 
+        /// A test that fails every time on one simulator and passes on the other is not called flaky:
+        /// it fails on that one.
+        @Test func aTestFailingOnOneDeviceIsNotFlaky() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: """
+                {"devices": [{"deviceId": "A", "deviceName": "iPhone SE"}, {"deviceId": "B", "deviceName": "iPhone 18 Pro"}],
+                 "testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Failed", "children": [
+                      {"name": "iPhone SE", "nodeIdentifier": "A", "nodeType": "Device", "children": [
+                        {"nodeType": "Repetition", "name": "1", "result": "Failed"}, {"nodeType": "Repetition", "name": "2", "result": "Failed"}]},
+                      {"name": "iPhone 18 Pro", "nodeIdentifier": "B", "nodeType": "Device", "children": [
+                        {"nodeType": "Repetition", "name": "1", "result": "Passed"}, {"nodeType": "Repetition", "name": "2", "result": "Passed"}]}]}]}]}]}
+                """, failures: true)
+            model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasSuffix(": 0 fail every time, 1 only on some devices, 0 flaky, 0 pass.") == true)
+            let payButton = try #require(model.failures.first { $0.test.name == "payButton()" })
+            #expect(payButton.verdict == .alwaysFails)
+            #expect(payButton.verdictLabel == "Fails on iPhone SE")
+        }
+
         /// Checking one test again says what that check found, not what earlier checks of other tests did.
         @Test func aFlakinessCheckCountsOnlyTheTestsItChecked() async throws {
             let (repo, _) = try makeRepo()

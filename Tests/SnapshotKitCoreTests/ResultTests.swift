@@ -39,7 +39,34 @@ import Testing
         #expect(tests[0].repetitions == [.failed, .failed, .failed, .failed])
         #expect(tests[1].repetitions == [.failed, .passed, .passed, .passed])
         #expect(tests[0].failureMessages.count == 4)
+        // By the simulators' names: both are an iPhone 18 Pro.
+        #expect(tests[0].repetitionDevices == ["SnapshotKit Samples", "SnapshotKit Samples", "Second iPhone", "Second iPhone"])
         #expect(Flakiness.classify(summary).map(\.verdict) == [.alwaysFails, .flaky])
+        #expect(Flakiness.classify(summary).map(\.failingDevices) == [nil, nil])
+    }
+
+    /// A test that fails every time on one device and passes every time on another is no flaky test:
+    /// it fails on that device.
+    @Test func aTestThatFailsOnOneDeviceOnly() throws {
+        func device(_ id: String, _ results: [String]) -> String {
+            let reps = results.enumerated().map { #"{"name": "Repetition \#($0 + 1)", "nodeIdentifier": "\#($0 + 1)", "nodeType": "Repetition", "result": "\#($1)"}"# }
+            return #"{"name": "Model", "nodeIdentifier": "\#(id)", "nodeType": "Device", "children": [\#(reps.joined(separator: ","))]}"#
+        }
+        func test(_ name: String, _ devices: [String]) -> String {
+            #"{"name": "\#(name)", "nodeType": "Test Case", "nodeIdentifier": "S/\#(name)", "result": "Failed", "children": [\#(devices.joined(separator: ","))]}"#
+        }
+        let json = #"""
+            {"devices": [{"deviceId": "A", "deviceName": "iPhone SE"}, {"deviceId": "B", "deviceName": "iPhone 18 Pro"}],
+             "testNodes": [{"name": "AppTests", "nodeType": "Unit test bundle", "children": [{"name": "S", "nodeType": "Test Suite", "children": [
+               \#(test("small()", [device("A", ["Failed", "Failed"]), device("B", ["Passed", "Passed"])])),
+               \#(test("flaky()", [device("A", ["Failed", "Passed"]), device("B", ["Passed", "Passed"])])),
+               \#(test("both()", [device("A", ["Failed", "Failed"]), device("B", ["Failed", "Failed"])]))]}]}]}
+            """#
+        let results = Flakiness.classify(try XCResultParser.parse(Data(json.utf8)))
+        #expect(results.map(\.verdict) == [.alwaysFails, .flaky, .alwaysFails])
+        #expect(results.map(\.failingDevices) == [["iPhone SE"], nil, nil])
+        #expect(results.map(\.label) == ["Fails on iPhone SE", "Flaky", "Fails every time"])
+        #expect(FlakeVerdict.alwaysFails.label(failingDevices: ["A", "B", "C"]) == "Fails on A, B and C")
     }
 
     @Test func parameterizedTestCasesWithoutRepetitions() throws {

@@ -18,7 +18,14 @@ public struct XCResultTests: Decodable, Sendable {
         public var lineNumber: Int?
     }
 
+    /// The simulators of a run on several: a Device node's `nodeIdentifier` is a `deviceId`.
+    public struct Device: Decodable, Sendable {
+        public var deviceId: String?
+        public var deviceName: String?
+    }
+
     public var testNodes: [Node]
+    public var devices: [Device]?
 }
 
 public enum TestOutcome: String, Codable, Sendable {
@@ -44,14 +51,19 @@ public struct TestCaseResult: Hashable, Codable, Sendable {
     public var duration: Double?
     /// One outcome per repetition when run with `-test-iterations`/retries; otherwise `[outcome]`.
     public var repetitions: [TestOutcome]
+    /// The simulator each repetition ran on, in step with `repetitions`, for a run on several;
+    /// nil for a run on one (and in files written by older versions).
+    public var repetitionDevices: [String]?
 
-    public init(name: String, identifier: String, outcome: TestOutcome, failureMessages: [String], duration: Double? = nil, repetitions: [TestOutcome]) {
+    public init(name: String, identifier: String, outcome: TestOutcome, failureMessages: [String], duration: Double? = nil,
+                repetitions: [TestOutcome], repetitionDevices: [String]? = nil) {
         self.name = name
         self.identifier = identifier
         self.outcome = outcome
         self.failureMessages = failureMessages
         self.duration = duration
         self.repetitions = repetitions
+        self.repetitionDevices = repetitionDevices
     }
 
     public var failedRepetitions: Int { repetitions.filter { $0 == .failed }.count }
@@ -116,6 +128,12 @@ public struct TestRunSummary: Codable, Sendable {
 public enum XCResultParser {
     public static func parse(_ data: Data) throws -> TestRunSummary {
         let tests = try JSONDecoder().decode(XCResultTests.self, from: data)
+        // A Device node is named after the model ("iPhone 18 Pro"); the simulator's own name tells
+        // two of one model apart, and is the one the attachments use.
+        var deviceNames: [String: String] = [:]
+        for device in tests.devices ?? [] {
+            if let id = device.deviceId, let name = device.deviceName { deviceNames[id] = name }
+        }
         var suites: [String: SuiteResult] = [:]
         var order: [String] = []
 
@@ -131,13 +149,15 @@ public enum XCResultParser {
                 var messages: [String] = []
                 var files: [String] = []
                 collectFailures(node, messages: &messages, files: &files)
+                let runs = runs(of: node, deviceNames: deviceNames)
                 let test = TestCaseResult(
                     name: node.name,
                     identifier: node.nodeIdentifier ?? (suitePath + [node.name]).joined(separator: "/"),
                     outcome: TestOutcome(xcresult: node.result),
                     failureMessages: messages,
                     duration: node.durationInSeconds,
-                    repetitions: runs(of: node)
+                    repetitions: runs.map(\.outcome),
+                    repetitionDevices: runs.contains { $0.device == nil } ? nil : runs.compactMap(\.device)
                 )
                 if suites[key] == nil {
                     suites[key] = SuiteResult(bundle: bundleName, path: suitePath, tests: [], failureFiles: [])
@@ -147,6 +167,7 @@ public enum XCResultParser {
                 // merge their repetitions, and a failure in any of them counts.
                 if let index = suites[key]!.tests.firstIndex(where: { $0.name == test.name }) {
                     var existing = suites[key]!.tests[index]
+                    existing.repetitionDevices = existing.repetitionDevices.flatMap { devices in test.repetitionDevices.map { devices + $0 } }
                     existing.repetitions += test.repetitions
                     existing.failureMessages += test.failureMessages
                     if test.outcome == .failed { existing.outcome = .failed }
@@ -168,23 +189,30 @@ public enum XCResultParser {
     /// One outcome per run of a test case: per repetition, on each device and test plan
     /// configuration. A repetition sits under the test, under a Device or Configuration node when
     /// there are several, and under each Arguments node of a parameterized test; the cases of one
-    /// repetition are one run, which failed if any case failed.
-    static func runs(of testCase: XCResultTests.Node) -> [TestOutcome] {
+    /// repetition are one run, which failed if any case failed. Each run names its device, when
+    /// under a Device node: by `deviceNames` (simulator names by id), else the node's name.
+    static func runs(of testCase: XCResultTests.Node, deviceNames: [String: String] = [:]) -> [(outcome: TestOutcome, device: String?)] {
         var order: [String] = []
         var outcomes: [String: [TestOutcome]] = [:]
+        var devices: [String: String] = [:]
+        var device: String?
         func add(_ key: String, _ node: XCResultTests.Node) {
             if outcomes[key] == nil { order.append(key) }
             outcomes[key, default: []].append(TestOutcome(xcresult: node.result))
+            devices[key] = device
         }
         /// Whether `node` holds a run; a device or configuration without repetitions is one.
         func visit(_ node: XCResultTests.Node, context: String) -> Bool {
             var context = context
+            let outer = device
+            defer { device = outer }
             switch node.nodeType {
             case "Repetition":
                 add(context + "#" + (node.nodeIdentifier ?? node.name), node)
                 return true
             case "Device", "Test Plan Configuration":
                 context += "/" + (node.nodeIdentifier ?? node.name)
+                if node.nodeType == "Device" { device = node.nodeIdentifier.flatMap { deviceNames[$0] } ?? node.name }
             case "Failure Message", "Attachment", "Runtime Warning", "Skip Message", "Source Code Reference":
                 return false
             default:
@@ -198,10 +226,10 @@ public enum XCResultParser {
             }
             return found
         }
-        guard visit(testCase, context: "") else { return [TestOutcome(xcresult: testCase.result)] }
+        guard visit(testCase, context: "") else { return [(TestOutcome(xcresult: testCase.result), nil)] }
         return order.map { key in
             let cases = outcomes[key]!
-            return cases.contains(.failed) ? .failed : cases.contains(.passed) ? .passed : cases[0]
+            return (cases.contains(.failed) ? .failed : cases.contains(.passed) ? .passed : cases[0], devices[key])
         }
     }
 

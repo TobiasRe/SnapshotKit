@@ -84,7 +84,11 @@ struct FailureItem: Identifiable, Hashable {
     var historyFlaky: FlakySignal?
     /// This test's results in recent recorded runs, oldest first.
     var timeline: [HistoryPoint] = []
+    /// The devices it fails on every time while passing on the others, per the flakiness check.
+    var failingDevices: [String]?
     var id: String { suite.identifier + "/" + test.name }
+    /// What the flakiness check found: "Fails on iPhone SE" when only some devices fail it.
+    var verdictLabel: String? { verdict?.label(failingDevices: failingDevices) }
     /// The test had no reference yet: one was just recorded, and the next run checks it.
     var isNewReference: Bool { test.failureMessages.contains(where: FailureAttachments.isNewReference) }
 }
@@ -968,7 +972,7 @@ final class ProjectModel {
 
     private func setFailures(suites: [SuiteResult], images: [SnapshotFailureImages], source: FailureSource) {
         let flaky = Dictionary(historyFlaky.map { ($0.test, $0) }, uniquingKeysWith: { a, _ in a })
-        let verdicts = Dictionary(flakeResults.map { ($0.id, $0.verdict) }, uniquingKeysWith: { a, _ in a })
+        let verdicts = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         failures = suites.flatMap { suite in
             suite.tests.filter { $0.outcome == .failed }.map { test in
                 FailureItem(
@@ -976,9 +980,10 @@ final class ProjectModel {
                     test: test,
                     images: images.filter { $0.testIdentifier == test.identifier },
                     referencePaths: test.failureMessages.flatMap { FailureAttachments.referencePaths(in: $0, repository: project.url) },
-                    verdict: verdicts[suite.identifier + "/" + test.name],
+                    verdict: verdicts[suite.identifier + "/" + test.name]?.verdict,
                     historyFlaky: flaky[suite.identifier + "/" + test.name],
-                    timeline: RunHistory.timeline(for: suite.identifier + "/" + test.name, in: history)
+                    timeline: RunHistory.timeline(for: suite.identifier + "/" + test.name, in: history),
+                    failingDevices: verdicts[suite.identifier + "/" + test.name]?.failingDevices
                 )
             }
         }
@@ -1383,16 +1388,20 @@ final class ProjectModel {
         failed = checked.reduce(0) { $0 + $1.failed }
         failures = failures.map { item in
             var item = item
-            item.verdict = flakeResults.first { $0.id == item.id }?.verdict
+            let flake = flakeResults.first { $0.id == item.id }
+            item.verdict = flake?.verdict
+            item.failingDevices = flake?.failingDevices
             return item
         }
         // What this check found: earlier checks' verdicts are not its news.
         let flaky = checked.filter { $0.verdict == .flaky }.count
-        let always = checked.filter { $0.verdict == .alwaysFails }.count
-        let passing = checked.count - always - flaky
+        let onSome = checked.filter { $0.failingDevices != nil }.count
+        let always = checked.filter { $0.verdict == .alwaysFails }.count - onSome
+        let passing = checked.count - always - onSome - flaky
         let start = operationTab
-        finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, \(flaky) flaky, "
-                + "\(passing) pass\(passing == 1 ? "es" : "").",
+        finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, "
+                + (onSome > 0 ? "\(onSome) only on some devices, " : "")
+                + "\(flaky) flaky, \(passing) pass\(passing == 1 ? "es" : "").",
                action: .showFailures)
         moveOn(to: .failures, from: start)
     }
