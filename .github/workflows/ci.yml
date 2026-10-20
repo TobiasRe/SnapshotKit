@@ -5,21 +5,51 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
-    # Building needs the macOS 26 SDK (Liquid Glass APIs); the app itself runs on macOS 14+.
+    # Building needs the macOS 26 SDK (Liquid Glass APIs), so Xcode 26 or later; Package.swift's tools
+    # version stops older ones. The app itself runs on macOS 14+.
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+      # The runner image's default Xcode; printed so a failure can be traced to the version that built it.
       - name: Toolchain
-        run: swift --version
+        id: toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "swift=$(swift --version 2>&1 | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.swift }}-${{ hashFiles('Package.resolved') }}
       - name: Build app and CLI
         run: swift build
-      # The app's own snapshot tests (SnapshotKitAppTests) compare pixels rendered on the
-      # recording machine, so they run locally rather than on CI hardware.
       - name: Core tests
         run: swift test --filter SnapshotKitCoreTests
+      # App tests that don't compare pixels. AppSnapshotTests run locally: their references are rendered on
+      # the recording machine's macOS (27), and CI's macOS 26 draws controls differently.
+      - name: App tests
+        run: swift test --filter 'ProjectModelTests|ListSelectionTests'
       # SwiftUI and AppKit report problems such as "Publishing changes from within view updates"
       # only at run time, to the system log; tests can't see them. Show every screen and fail on any.
       - name: No runtime warnings
         run: scripts/check-runtime-warnings.sh
+      - name: Keep the runtime-warning log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-warnings
+          path: |
+            ${{ runner.temp }}/snapkit-runtime-check.*/*.log
+            ${{ runner.temp }}/snapkit-runtime-check.*/*.out
+            ${{ runner.temp }}/snapkit-runtime-check.*/*.png
+          if-no-files-found: ignore
