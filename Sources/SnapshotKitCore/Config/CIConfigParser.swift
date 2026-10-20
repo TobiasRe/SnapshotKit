@@ -61,7 +61,7 @@ public struct CIConfigParser {
     // MARK: - Variables
 
     private static let assignment = try! NSRegularExpression(
-        pattern: #"^\s*(?:-\s+)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_-]*)\s*(?::(?:\s+|$)|=)(.*)$"#
+        pattern: #"^\s*(?:-\s+)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_-]*)\s*(:(?:\s+|$)|=)(.*)$"#
     )
 
     /// Collects `KEY: value`, `KEY=value` and `export KEY=value` definitions. First wins.
@@ -71,13 +71,16 @@ public struct CIConfigParser {
             let ns = line as NSString
             guard let m = assignment.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { continue }
             let key = ns.substring(with: m.range(at: 1))
-            var value = MiniYAML.stripComment(ns.substring(with: m.range(at: 2))).trimmingCharacters(in: .whitespaces)
+            var value = MiniYAML.stripComment(ns.substring(with: m.range(at: 3))).trimmingCharacters(in: .whitespaces)
             if value.isEmpty, let item = firstListItem(after: index, in: lines) { value = "[\(item)]" }
             if value.isEmpty || value.hasPrefix("|") || value.hasPrefix(">") || value.hasPrefix("&") || value.hasPrefix("*") { continue }
             if value.hasPrefix("["), value.hasSuffix("]") {
                 // Matrix-style lists: use the first entry.
                 guard let first = MiniYAML.splitInlineList(String(value.dropFirst().dropLast())).first else { continue }
                 value = first
+            } else if ns.substring(with: m.range(at: 2)) == "=" {
+                // The shell's value is one word: `SCHEME=App xcodebuild …` sets "App".
+                value = ShellWords.split(value).first ?? ""
             } else {
                 value = MiniYAML.unquote(value)
             }

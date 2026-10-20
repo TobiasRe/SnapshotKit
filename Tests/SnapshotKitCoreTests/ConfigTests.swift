@@ -196,6 +196,12 @@ import Testing
         #expect(x.config.deviceName == "Example Phone")
     }
 
+    @Test func aShellAssignmentEndsAtTheFirstWord() {
+        let script = "#!/bin/sh\nSCHEME=Snapshots xcodebuild test -scheme \"$SCHEME\" -destination 'platform=iOS Simulator,name=Example Phone'\n"
+        let x = CIConfigParser.extract(from: [.init(name: "scripts/snapshots.sh", text: script)])
+        #expect(x.config.scheme == "Snapshots")
+    }
+
     @Test func githubInlineBranchList() {
         let p = CIConfigParser()
         #expect(p.baseBranch(in: "on:\n  pull_request:\n    branches: [ 'feature/*', trunk ]\n") == "trunk")
