@@ -665,5 +665,21 @@ extension AppUITests {
             #expect(model.failures.map(\.id) == failures)
             #expect(LastRun.load(repository: repo) == nil)
         }
+
+        /// When the tests don't build, nothing was re-recorded: say why, and keep the failures.
+        @Test func aReRecordThatDoesNotBuildSaysSo() async throws {
+            let repo = try makeRecordableRepo()
+            let model = try runnableModel(repo, xcodebuild: """
+                echo "\(repo.path)/Tests/AppTests/CardTests.swift:7:9: error: cannot find 'card' in scope"
+                exit 65
+                """, failures: true)
+            let failures = model.failures.map(\.id)
+            model.reRecordFailed(suites: [Self.cardSuite])
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage?.hasPrefix("Build failed:") == true)
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessageAction == nil)
+            #expect(model.failures.map(\.id) == failures)
+        }
     }
 }

@@ -1163,8 +1163,11 @@ final class ProjectModel {
                     onStage: { stage in Task { @MainActor in self.stageLabel = stage.label } },
                     onLine: onLine, onEvent: onEvent)
                 RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: outcome.recordRun))
-                var message = outcome.recordRun.cancelled ? "Cancelled." : "Re-recorded \(what)."
-                var isError = false
+                let record = outcome.recordRun
+                // Tests that don't build recorded nothing, and verifying them tells nothing new.
+                let buildError = record.cancelled || record.summary != nil ? nil : record.buildErrors.first
+                var message = record.cancelled ? "Cancelled." : buildError.map { "Build failed: \($0)" } ?? "Re-recorded \(what)."
+                var isError = buildError != nil
                 if !outcome.restore.conflicts.isEmpty {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
                     isError = true
@@ -1173,7 +1176,7 @@ final class ProjectModel {
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: "local", repository: project.url, result: verifyRun))
                 }
                 // A cancelled verification has no results; the last run's failures stay.
-                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
+                if let verifyRun = outcome.verifyRun, !verifyRun.cancelled, buildError == nil {
                     LastRun(result: verifyRun).save(repository: project.url)
                     lastFailingSuites = verifyRun.failingSuites
                     setFailures(suites: verifyRun.failingSuites, images: [], source: FailureSource(label: "Verification run", date: Date(), host: "local"))
@@ -1186,7 +1189,7 @@ final class ProjectModel {
                 }
                 lastResult = outcome.verifyRun ?? outcome.recordRun
                 // New references are working-tree changes: the next step is to look at them.
-                finish(message: message, isError: isError, action: .reviewChanges)
+                finish(message: message, isError: isError, action: buildError == nil ? .reviewChanges : nil)
             } catch {
                 finish(throwing: error)
             }
