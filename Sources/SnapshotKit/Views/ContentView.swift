@@ -101,7 +101,6 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
                 Text(title).font(DS.Font.heading)
                 Text(detail).font(DS.Font.secondary).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)

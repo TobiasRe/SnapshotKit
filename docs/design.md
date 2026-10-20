@@ -153,7 +153,8 @@ can be followed between these views, and re-recording is available wherever a sn
 - **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every tab, compare mode,
   the palette and the welcome screen in the real window and fails on any SwiftUI or AppKit runtime issue,
   such as *Publishing changes from within view updates*. `ListSelectionTests` select rows in every list the
-  way a click does and read the same log in-process.
+  way a click does and read the same log in-process. The same captures fail when a list's scroll view is
+  taller than the window: a layout that overflows leaves the sidebar blank, which no test window shows.
 - **Models are `@Observable`.** On macOS 27, lists and segmented pickers write their bindings from inside a
   view update; written into an `ObservableObject`'s `@Published` property, that logged a runtime issue on
   every click. Observation doesn't. Stored properties that aren't state (tasks, caches, observers) are

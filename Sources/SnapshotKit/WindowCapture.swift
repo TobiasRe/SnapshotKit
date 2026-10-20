@@ -133,6 +133,16 @@ enum WindowCapture {
             model.zoomToChangeRequest += 1
             try? await Task.sleep(for: .seconds(1))
         }
+        // A view that asks for more height than the window has (text fixed to its ideal height in an
+        // unbounded stack) stretches the split view beyond the window: the sidebar's rows end up off
+        // screen and the detail is cut, as happened on the welcome screen. A list's scroll view shows
+        // it (the list itself is as tall as its rows).
+        if let content = window.contentView,
+           let scroll = tables(in: content).compactMap(\.enclosingScrollView)
+               .first(where: { $0.convert($0.bounds, to: content).height > content.bounds.height + 1 }) {
+            log("a list is \(Int(scroll.convert(scroll.bounds, to: content).height)) pt tall in a \(Int(content.bounds.height)) pt window: the layout overflows")
+            exit(6)
+        }
         guard let png = render(window) else { log("render failed"); exit(4) }
         do {
             try png.write(to: URL(fileURLWithPath: o.output))
@@ -142,6 +152,11 @@ enum WindowCapture {
             log("could not write \(o.output): \(error.localizedDescription)")
             exit(5)
         }
+    }
+
+    static func tables(in view: NSView?) -> [NSTableView] {
+        guard let view else { return [] }
+        return (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap { tables(in: $0) }
     }
 
     static func mainWindow() -> NSWindow? {
