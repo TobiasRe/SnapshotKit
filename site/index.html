@@ -5,11 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SnapshotKit · The companion app for swift-snapshot-testing</title>
 <meta name="description" content="The companion app for projects that test with swift-snapshot-testing: a native Mac app, menu bar item and CLI to browse reference images, review what changed, run the tests like CI and re-record what should change. Free and open source.">
-<meta property="og:title" content="SnapshotKit">
+<link rel="canonical" href="https://tobiasre.github.io/SnapshotKit/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tobiasre.github.io/SnapshotKit/">
+<meta property="og:site_name" content="SnapshotKit">
+<meta property="og:title" content="SnapshotKit · The companion app for swift-snapshot-testing">
 <meta property="og:description" content="The companion app for swift-snapshot-testing: review and re-run every snapshot test in one app.">
 <meta property="og:image" content="https://tobiasre.github.io/SnapshotKit/images/compare.png">
+<meta property="og:image:width" content="2800">
+<meta property="og:image:height" content="1760">
+<meta property="og:image:alt" content="SnapshotKit comparing a changed snapshot side by side: the same screen on the base branch and on the feature branch">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/png" href="images/app-icon.png">
+<link rel="apple-touch-icon" href="images/app-icon.png">
 <style>
   :root {
     --ground: #fbfbfd;
@@ -19,6 +28,7 @@
     --ink-3: #86868b;
     --line: #e5e5ea;
     --accent: #0a66e4;
+    --accent-text: #0a66e4;
     --accent-ink: #ffffff;
     --link: #0a5bd3;
     --band: #1d1d1f;
@@ -43,7 +53,10 @@
       --ink-2: #a1a1a6;
       --ink-3: #8e8e93;
       --line: #2c2c2e;
-      --accent: #2f7cf6;
+      /* 4.6:1 with white text on buttons and badges. */
+      --accent: #1f6feb;
+      /* Small accent text on the dark surfaces needs a lighter blue. */
+      --accent-text: #4c9bff;
       --link: #4c9bff;
       --band: #111113;
       --term: #000000;
@@ -125,7 +138,7 @@
   .steps h3 { font-size: 19px; }
   .steps p { font-size: 15px; color: var(--ink-2); }
   .steps pre { margin: 6px 0 0; overflow-x: auto; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
-  .steps .k { color: var(--accent); }
+  .steps .k { color: var(--accent-text); }
   .ticks.small li { font-size: 15px; color: var(--ink-2); }
   .ticks.small li::before { content: "✓"; color: var(--accent); font-weight: 600; }
   .fits-note { text-align: center; font-size: 15px; color: var(--ink-2); }
@@ -151,7 +164,7 @@
   .row .media { flex: 2 1 520px; min-width: 0; }
   .row h2 { font-size: clamp(28px, 3.4vw, 36px); line-height: 1.1; }
   .row p { font-size: 18px; color: var(--ink-2); }
-  .eyebrow { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .eyebrow { font-size: 14px; font-weight: 600; color: var(--accent-text); }
 
   /* Menu bar */
   .menubar-section { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -224,9 +237,10 @@
   footer nav { padding: 0; gap: 18px; }
 
   @media (max-width: 640px) {
-    /* The name and Download only: the section links would wrap into a header a quarter of the screen tall. */
-    .links { display: none; }
-    nav { justify-content: space-between; }
+    /* The name, Docs and Download only: the section links would wrap into a header a quarter of the screen tall. */
+    .links { flex: 0 0 auto; margin-left: auto; }
+    .links a:not(.keep) { display: none; }
+    nav { gap: 8px 16px; }
     .hero { padding-top: 56px; }
     .rows, .menubar-section .inner, .cli .inner, .keys { padding-top: 64px; padding-bottom: 64px; }
     .terms { grid-template-columns: minmax(0, 1fr); }
@@ -245,7 +259,7 @@
         <a href="#menu-bar">Menu bar</a>
         <a href="#cli">Command line</a>
         <a href="#install">Install</a>
-        <a href="docs/">Docs</a>
+        <a class="keep" href="docs/">Docs</a>
         <a href="https://github.com/TobiasRe/SnapshotKit">GitHub</a>
       </div>
       <a class="button small" href="https://github.com/TobiasRe/SnapshotKit/releases/latest">Download</a>
@@ -379,7 +393,7 @@
           <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>A pie fills as tests complete, with a done/total count, and shows the failing count when nothing runs.</span></li>
           <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Live progress for every running project, passed and failed so far, the test running now, and Cancel.</span></li>
           <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Your failing, pinned and recent projects, to open or run in one click.</span></li>
-          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Close the window and it keeps running. The dock icon shows the failing count too.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Close the window and it keeps running. The Dock icon shows the failing count too.</span></li>
         </ul>
       </div>
       <div class="menubar-demo" role="img" aria-label="The SnapshotKit menu bar item at 13 of 30 tests, with its panel open: SampleApp running tests, 12 passed and 1 failed, and a list of projects with payments-ui marked 3 failing">
@@ -425,17 +439,19 @@ ReactionTests
         </div>
         <div class="term">
           <div class="bar" aria-hidden="true"><span></span><span></span><span></span><em>Why did CI fail?</em></div>
-<pre><span class="p">$</span> snapkit failures
+<pre><span class="p">$</span> snapkit failures --xcresult ci.xcresult
 ShopTests/ProductCardTests
   <span class="bad">✘</span> trailShoes()  (1/1 repetitions failed)
     reference: …/ProductCardTests/trailShoes.light.png
     Visible change in a 105×58 area at 847, 136.
+    recent runs: <span class="ok">✔</span> <span class="ok">✔</span> <span class="bad">✘</span>
   <span class="bad">✘</span> waterBottle()  (1/1 repetitions failed)
-    reference: …/ProductCardTests/waterBottle.light.png
-    Visible change in a 105×58 area at 847, 136.
+    reference: …/ProductCardTests/waterBottle.dark.png
+    No visible difference (largest ΔE 0.5), typical of rendering on another machine or OS version. Would pass with perceptualPrecision: 0.99.
 ShopTests/ShopScreenTests
   <span class="bad">✘</span> productList()  (1/1 repetitions failed)
-    Visible change in a 105×956 area at 739, 516.</pre>
+    reference: …/ShopScreenTests/productList.iPhoneSE.png
+    The image size changed, so the device, scale or layout differs from the reference.</pre>
         </div>
       </div>
 
