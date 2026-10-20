@@ -69,6 +69,9 @@ enum ComparePairCache {
     static func store(_ pair: ComparePair, for identity: String) {
         shared.setObject(Box(pair), forKey: identity as NSString, cost: pair.byteCost)
     }
+
+    /// Pairs being decoded and diffed now; `--capture` waits for none, so it never shoots a spinner.
+    @MainActor static var loading = 0
 }
 
 struct CompareView: View {
@@ -150,6 +153,8 @@ struct CompareView: View {
                 return
             }
             pair = nil
+            ComparePairCache.loading += 1
+            defer { ComparePairCache.loading -= 1 }
             let load = load, identity = identity
             let computed = await Task.detached {
                 let (before, after) = load()

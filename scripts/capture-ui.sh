@@ -47,7 +47,9 @@ EOF
 capture() {
   local name="$1"; shift
   # Only the app's progress lines; with pipefail, a failing app still stops the script.
-  "$APP" --capture "$OUT/$name.png" "$@" ${APPEARANCE:+--appearance "$APPEARANCE"} 2>&1 | { grep '^capture:' || true; }
+  # In English whatever the Mac's language, so dates and numbers read like the docs around them.
+  "$APP" --capture "$OUT/$name.png" "$@" ${APPEARANCE:+--appearance "$APPEARANCE"} \
+    -AppleLanguages "(en)" -AppleLocale en_US 2>&1 | { grep '^capture:' || true; }
 }
 
 capture 00-snapshots --project "$REPO" --tab snapshots
