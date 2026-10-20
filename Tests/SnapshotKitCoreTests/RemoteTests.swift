@@ -108,9 +108,9 @@ import Testing
         let ssh = try SSHTransport(host: "ci-mac")
         let (exe, args) = ssh.command(for: "echo 'hi'", interactive: true)
         #expect(exe == "ssh")
-        #expect(args.contains("-tt"))
-        #expect(args.contains("BatchMode=yes"))
-        #expect(args.suffix(3) == ["--", "ci-mac", #"/bin/bash -lc 'echo '\''hi'\'''"#])
+        #expect(args == ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-tt", "--", "ci-mac", #"/bin/bash -lc 'echo '\''hi'\'''"#])
+        #expect(ssh.command(for: "true", interactive: false).arguments
+                == ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "--", "ci-mac", "/bin/bash -lc true"])
         #expect(try ssh.rsyncLocation("/x") == "ci-mac:/x")
     }
 

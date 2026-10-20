@@ -300,7 +300,7 @@ import Testing
         #expect(resolved.config.osVersion == "99.0")
         #expect(resolved.config.xcodeVersion == "99.1")
         #expect(resolved.config.baseBranch == "trunk")
-        #expect(resolved.notes.contains { $0.contains("typo") })
+        #expect(resolved.notes == ["Ignored unknown keys in .snapshotkit.yml: typo"])
     }
 
     @Test func listsWhereOneValueBelongsAreReported() throws {
@@ -367,14 +367,12 @@ import Testing
 
         config.xcodeVersion = "98.0"
         config.sources["xcode"] = ".gitlab-ci.yml"
-        do {
-            _ = try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, lookup: { _ in nil })
-            Issue.record("expected an error")
-        } catch let error as EnvironmentError {
-            let message = error.localizedDescription
-            #expect(message.contains("Xcode 98.0 is not installed (required by `.gitlab-ci.yml`)"))
-            #expect(message.contains("99.2 at `/Apps/Xcode-99.2.app`"))
+        let error = try #require(throws: EnvironmentError.self) {
+            try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, lookup: { _ in nil })
         }
+        #expect(error == .xcodeNotInstalled(required: "98.0", source: ".gitlab-ci.yml", installed: installs))
+        #expect(error.errorDescription == "Xcode 98.0 is not installed (required by `.gitlab-ci.yml`). Installed: 99.2 at `/Apps/Xcode-99.2.app`, "
+                + "99.1 at `/Apps/Xcode-99.1.app`. Install it (e.g. from developer.apple.com/download or with `xcodes install 98.0`), or set `xcode:` in `.snapshotkit.yml`.")
     }
 
     @Test func unpinnedUsesSelectedXcode() throws {

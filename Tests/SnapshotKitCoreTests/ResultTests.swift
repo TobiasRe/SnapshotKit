@@ -252,10 +252,9 @@ import Testing
         config.extraArguments = ["-collect-test-diagnostics", "on-failure"]
         let args = TestRunner.arguments(config: config, scheme: "S", destination: "d", resultBundlePath: "r",
                                         onlyTesting: ["B/Suite"], additional: Flakiness.arguments(iterations: 4))
-        #expect(args.contains("-only-testing:B/Suite"))
-        #expect(!args.contains("-only-testing:All"))
-        #expect(args.filter { $0 == "-collect-test-diagnostics" }.count == 1)
-        #expect(args.suffix(4) == ["-test-iterations", "4", "-test-repetition-relaunch-enabled", "YES"])
+        // The override replaces CI's selection, and the configured diagnostics setting isn't doubled.
+        #expect(args == ["test", "-scheme", "S", "-destination", "d", "-resultBundlePath", "r", "-only-testing:B/Suite",
+                         "-collect-test-diagnostics", "on-failure", "-test-iterations", "4", "-test-repetition-relaunch-enabled", "YES"])
     }
 
     @Test func modulesFromSnapshotPaths() {

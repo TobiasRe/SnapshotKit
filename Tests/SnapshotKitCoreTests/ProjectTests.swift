@@ -76,7 +76,8 @@ import Testing
         defer { try? FileManager.default.removeItem(atPath: "/private/var/tmp/\(name)") }
         try Data(#"{"discovered": ["/private/var/tmp/\#(name)", "/var/tmp/\#(name)"], "recents": ["/private/var/tmp/\#(name)"]}"#.utf8).write(to: url)
         let store = ProjectStore(url: url)
-        #expect(store.allProjects.count == 1)
+        #expect(store.allProjects.map(\.path) == ["/var/tmp/\(name)"])
+        #expect(store.settings.recents == ["/var/tmp/\(name)"])
     }
 
     /// A repository opened through a symlink (`~/code` → `/Volumes/Work/code`) is the one `git` and

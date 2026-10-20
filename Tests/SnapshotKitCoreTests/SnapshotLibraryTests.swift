@@ -163,10 +163,13 @@ import Testing
         #expect(TestSourceLocator.locate(sized, in: repo.url)?.line == 4)
     }
 
-    /// SnapshotKit's own snapshot tests: every reference belongs to a test.
-    @Test func noFalsePositivesInThisRepository() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        guard FileManager.default.fileExists(atPath: root.appendingPathComponent(".git").path) else { return }
+    static let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+    /// SnapshotKit's own snapshot tests: every reference belongs to a test. Skipped, not passed,
+    /// outside a git checkout (a source archive).
+    @Test(.enabled(if: FileManager.default.fileExists(atPath: packageRoot.appendingPathComponent(".git").path)))
+    func noFalsePositivesInThisRepository() throws {
+        let root = Self.packageRoot
         let library = try SnapshotLibrary.load(repository: root)
         #expect(library.files.count > 20)
         #expect(SnapshotLibrary.orphans(library.files, repository: root).isEmpty)

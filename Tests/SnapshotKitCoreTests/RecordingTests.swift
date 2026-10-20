@@ -11,9 +11,8 @@ import Testing
             @Test func card() {}
         }
         """
-        let patched = try RecordPatcher.patch(source: source, suite: "CardTests")
-        #expect(patched.contains("@Suite(.snapshots(record: .all, diffTool: .default))"))
-        #expect(!patched.contains(".missing"))
+        #expect(try RecordPatcher.patch(source: source, suite: "CardTests")
+                == source.replacingOccurrences(of: "record: .missing", with: "record: .all"))
     }
 
     @Test func addsRecordToSnapshotsTrait() throws {
@@ -52,9 +51,13 @@ import Testing
             @Test func t() {}
         }
         """
-        let patched = try RecordPatcher.patch(source: source, suite: "Target")
-        #expect(patched.hasPrefix("@Suite(.snapshots(record: .missing)) struct Other {}"))
-        #expect(patched.contains("@Suite(.snapshots(record: .all)) // snapshotkit:record\nstruct Target {"))
+        #expect(try RecordPatcher.patch(source: source, suite: "Target") == """
+            @Suite(.snapshots(record: .missing)) struct Other {}
+            @Suite(.snapshots(record: .all)) // snapshotkit:record
+            struct Target {
+                @Test func t() {}
+            }
+            """)
     }
 
     @Test func xctestOverridesInvokeTest() throws {
@@ -67,8 +70,18 @@ import Testing
         }
         """
         let patched = try RecordPatcher.patch(source: source, suite: "CardTests")
-        #expect(patched.contains("final class CardTests: XCTestCase {\n    override func invokeTest() { withSnapshotTesting(record: .all) { super.invokeTest() } } // snapshotkit:record\n    func testCard()"))
-        #expect(throws: RecordPatchError.self) { try RecordPatcher.patch(source: patched, suite: "CardTests") }
+        #expect(patched == """
+            import SnapshotTesting
+            import XCTest
+
+            final class CardTests: XCTestCase {
+                override func invokeTest() { withSnapshotTesting(record: .all) { super.invokeTest() } } // snapshotkit:record
+                func testCard() {}
+            }
+            """)
+        #expect(throws: RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "file")) {
+            try RecordPatcher.patch(source: patched, suite: "CardTests")
+        }
     }
 
     @Test func bracesInCommentsAndStringsDontEndTheClass() throws {
@@ -93,8 +106,10 @@ import Testing
     /// In Swift "\r\n" is one Character, which isn't "\n".
     @Test func lineCommentsEndAtWindowsLineEndings() throws {
         let source = "import XCTest\r\n\r\nfinal class CardTests: XCTestCase { // cards\r\n    func testCard() {}\r\n}\r\n"
-        let patched = try RecordPatcher.patch(source: source, suite: "CardTests")
-        #expect(patched.contains("override func invokeTest()"))
+        // Inserted right after the brace, so the class's comment ends up after the new line's own.
+        #expect(try RecordPatcher.patch(source: source, suite: "CardTests") == "import XCTest\r\n\r\nfinal class CardTests: XCTestCase {"
+                + "\n    override func invokeTest() { withSnapshotTesting(record: .all) { super.invokeTest() } } // snapshotkit:record"
+                + " // cards\r\n    func testCard() {}\r\n}\r\n")
     }
 
     @Test func parenthesesInSuiteStrings() throws {
