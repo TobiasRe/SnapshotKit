@@ -67,11 +67,17 @@ public enum RecordPatcher {
         let lineStart = Range(m.range(at: 2), in: source)!.lowerBound
         let keywordStart = Range(m.range(at: 3), in: source)!.lowerBound
         let bodyOpen = source.index(before: Range(m.range, in: source)!.upperBound)
-        let importsXCTest = source.range(of: #"(?m)^\s*(@testable\s+)?import\s+XCTest\b"#, options: .regularExpression) != nil
-        let importsTesting = source.range(of: #"(?m)^\s*import\s+Testing\b"#, options: .regularExpression) != nil
-        let isXCTest = keyword == "class" && inheritance.contains(":") && importsXCTest
-            && (!importsTesting || inheritance.contains("XCTestCase"))
+        let isXCTest = keyword == "class" && inheritance.contains(":") && imports("XCTest", in: source)
+            && (!imports("Testing", in: source) || inheritance.contains("XCTestCase"))
         return Declaration(lineStart: lineStart, keywordStart: keywordStart, bodyOpen: bodyOpen, indent: indent, isXCTest: isXCTest)
+    }
+
+    /// Whether `source` imports `module`, however: `@testable` or `@preconcurrency`, with an access
+    /// level (`internal import`), or one declaration of it (`import class XCTest.XCTestCase`).
+    static func imports(_ module: String, in source: String) -> Bool {
+        let pattern = #"(?m)^[ \t]*(?:@\w+\s+)*(?:(?:public|package|internal|fileprivate|private)\s+)?import\s+"#
+            + #"(?:(?:class|struct|enum|protocol|typealias|func|var|let)\s+)?"# + NSRegularExpression.escapedPattern(for: module) + #"\b"#
+        return source.range(of: pattern, options: .regularExpression) != nil
     }
 
     // MARK: Swift Testing
