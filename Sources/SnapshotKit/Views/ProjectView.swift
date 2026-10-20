@@ -37,7 +37,7 @@ struct ProjectView: View {
                                  })
                              },
                              onClose: { dismissedMessage = id })
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: DS.Pane.readableWidth)
                     .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
                     .padding(.bottom, 64)
                     .padding(.trailing, DS.Space.l)
@@ -411,6 +411,7 @@ struct RunStatusHeader: View {
                 Text(StatusNote.code(title, font: DS.Font.heading.monospaced()))
                     .font(DS.Font.heading)
                     .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
                 Group {
                     if let started = project.startedAt, project.isRunning {
                         TimelineView(.periodic(from: started, by: 1)) { context in
@@ -773,7 +774,6 @@ struct RunResultsList: View {
         return HStack(spacing: DS.Space.s) {
             Image(systemName: icon(test.outcome))
                 .foregroundStyle(color(test.outcome))
-                .accessibilityLabel(Self.spoken(test.outcome))
             Text(test.name).lineLimit(1)
             if test.repetitions.count > 1 {
                 Chip(text: "\(test.passedRepetitions) of \(test.repetitions.count) runs passed",
@@ -781,7 +781,7 @@ struct RunResultsList: View {
             }
             Spacer()
             if let duration = test.duration {
-                Text(Duration.seconds(duration).formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow, maximumUnitCount: 1)))
+                Text(Self.duration(duration))
                     .font(DS.Font.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -789,12 +789,16 @@ struct RunResultsList: View {
             Button { project.showFailure(id) } label: { Image(systemName: "arrow.forward.circle") }
                 .buttonStyle(.borderless)
                 .help("Compare on the Failures tab")
-                .accessibilityLabel("Show Failure")
                 .opacity(canOpen ? 1 : 0)
                 .disabled(!canOpen)
-                .accessibilityHidden(!canOpen)
         }
         .listRowSeparator(.hidden)
+        // One stop per test; the button becomes the row's action.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.spoken(test))
+        .accessibilityActions {
+            if canOpen { Button("Show Failure") { project.showFailure(id) } }
+        }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { if canOpen { project.showFailure(id) } }
     }
@@ -808,6 +812,18 @@ struct RunResultsList: View {
         case .expectedFailure: "Expected failure"
         case .unknown: "Unknown result"
         }
+    }
+
+    /// A test's row in words: "payButton(), Failed, 2 of 5 runs passed, 0.4s".
+    nonisolated static func spoken(_ test: TestCaseResult) -> String {
+        var parts = [test.name, spoken(test.outcome)]
+        if test.repetitions.count > 1 { parts.append("\(test.passedRepetitions) of \(test.repetitions.count) runs passed") }
+        if let duration = test.duration { parts.append(Self.duration(duration)) }
+        return parts.joined(separator: ", ")
+    }
+
+    nonisolated static func duration(_ seconds: TimeInterval) -> String {
+        Duration.seconds(seconds).formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow, maximumUnitCount: 1))
     }
 
     private func icon(_ outcome: TestOutcome) -> String {

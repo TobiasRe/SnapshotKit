@@ -28,6 +28,8 @@ enum DS {
 
     /// Concentric radii: thumbnails and chips sit inside panels, panels inside the window.
     enum Radius {
+        /// A project monogram's tile.
+        static let tiny: CGFloat = 4
         static let small: CGFloat = 6
         static let medium: CGFloat = 10
         static let large: CGFloat = 16
@@ -47,12 +49,21 @@ enum DS {
     enum Pane {
         /// A detail beside its list never gets narrower than this; the list gives way first.
         static let minDetailWidth: CGFloat = 440
+        /// Floating notices and the library's filter field: a comfortable line, never window-wide.
+        static let readableWidth: CGFloat = 420
+        /// Floating capsules over an image (the compare bar, the zoom readout, the diagnosis).
+        static let overlayInsets = EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
     }
 
     /// Header controls: icon buttons are circles of this size, text controls capsules of this height.
     enum Control {
         static let height: CGFloat = 28
         static let icon: CGFloat = 13
+        /// Text from a capsule's edge: quiet controls and segments, and the prominent primary button.
+        static let inset: CGFloat = 10
+        static let primaryInset: CGFloat = 14
+        /// A project monogram, and a palette command's icon in the same tile.
+        static let monogram: CGFloat = 18
     }
 
     enum Font {
@@ -63,6 +74,9 @@ enum DS {
         /// Paths, identifiers, commands and log output.
         static let code = SwiftUI.Font.system(.caption, design: .monospaced)
         static let log = SwiftUI.Font.system(size: 11, design: .monospaced)
+        /// Initials in a monogram tile, and a command's symbol in one (a symbol needs a point more).
+        static let monogram = SwiftUI.Font.system(size: 9, weight: .semibold)
+        static let monogramSymbol = SwiftUI.Font.system(size: 10, weight: .semibold)
     }
 
     /// Color only ever means status. Structure uses system label/separator colors.
@@ -194,6 +208,7 @@ struct Chip: View {
         }
         .font(.caption2.weight(.medium))
         .foregroundStyle(.secondary)
+        // A little less before the dot than after the text: a round dot reads as more space.
         .padding(.leading, DS.Space.s - 2)
         .padding(.trailing, DS.Space.s)
         .padding(.vertical, DS.Space.xxs)
@@ -339,7 +354,7 @@ extension View {
             .buttonStyle(.borderless)
             .menuStyle(.borderlessButton)
             .modifier(QuietControlText())
-            .padding(.horizontal, DS.Space.s + 2)
+            .padding(.horizontal, DS.Control.inset)
             .frame(height: DS.Control.height)
             .glassChrome(Capsule(style: .circular))
             .contentShape(Capsule(style: .circular))
@@ -375,7 +390,7 @@ struct PrimaryActionButtonStyle: ButtonStyle {
         let label = configuration.label
             .fontWeight(.medium)
             .foregroundStyle(.white.opacity(enabled ? 1 : 0.7))
-            .padding(.horizontal, DS.Space.m + 2)
+            .padding(.horizontal, DS.Control.primaryInset)
             .frame(height: DS.Control.height)
             .contentShape(Capsule(style: .circular))
         let fill = Color.accentColor.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
@@ -410,6 +425,7 @@ private struct SelectableRow: ViewModifier {
             .listRowBackground(
                 RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
                     .fill(hovering && !selected ? DS.Surface.hover : .clear)
+                    // Inset as far as the system's selection, so hover and selection have one shape.
                     .padding(.horizontal, DS.Space.s + 2)
             )
     }
@@ -701,7 +717,7 @@ struct GlassSegmented<Value: Hashable>: View {
                 } else {
                     Text(segment.title)
                         .lineLimit(1)
-                        .padding(.horizontal, DS.Space.s + 2)
+                        .padding(.horizontal, DS.Control.inset)
                 }
             }
             .frame(height: DS.Control.height - 2 * DS.Space.xxs)

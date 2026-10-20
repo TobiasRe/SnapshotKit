@@ -39,7 +39,7 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if let notice = model.startupNotice {
                 NoticeBanner(text: notice, isError: false, onClose: { model.dismissStartupNotice() })
-                    .frame(maxWidth: 520)
+                    .frame(maxWidth: DS.Pane.readableWidth)
                     .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
                     .padding()
             }
@@ -68,6 +68,7 @@ struct WelcomeView: View {
                 }
                 Text("All your snapshots in one place")
                     .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
                 Text("Add a repository that uses swift-snapshot-testing.")
                     .foregroundStyle(.secondary)
             }

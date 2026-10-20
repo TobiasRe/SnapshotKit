@@ -279,7 +279,10 @@ extension AppUITests {
             app.show(model)
             let titles = PaletteCommand.available(app: app).map(\.title)
             #expect(titles.contains("Re-record Failing Suites"))
+            #expect(!titles.contains("Run on Remote Machine"))               // no remote machine set up
             #expect(!titles.contains("Cancel Run"))
+            app.show(AppFixtures.project(.failedRun, store: app.store, remoteHost: "ci-mac"))
+            #expect(PaletteCommand.available(app: app).map(\.title).contains("Run on Remote Machine"))
         }
 
         @Test func severalFailuresCanBeSelectedTogether() {

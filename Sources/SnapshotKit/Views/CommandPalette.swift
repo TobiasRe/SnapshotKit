@@ -22,6 +22,14 @@ enum PaletteItem: Identifiable {
         }
     }
 
+    /// What the row is called, for VoiceOver as the highlight moves.
+    var title: String {
+        switch self {
+        case .project(let project): project.name
+        case .command(let command): command.title
+        }
+    }
+
     /// Projects first when nothing is typed; otherwise the best match first, a name or title
     /// match always ahead of a path match.
     @MainActor
@@ -57,6 +65,9 @@ extension PaletteCommand {
         let idle = !project.isRunning
         if idle && project.environment != nil {
             commands.append(.init(title: "Run Snapshot Tests", symbol: "play", shortcut: "⌘R") { project.runTests() })
+        }
+        if idle && project.hasRemote {
+            commands.append(.init(title: "Run on Remote Machine", symbol: "network", shortcut: "⌃⌘R") { project.runRemote() })
         }
         if project.canReRecordSelection {
             commands.append(.init(title: "Re-record Selected Test", symbol: "camera", shortcut: "⇧⌘R") { project.reRecordSelection() })
@@ -101,7 +112,7 @@ struct PaletteCommandRow: View {
     var body: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: command.symbol)
-                .font(.system(size: 10, weight: .semibold))
+                .font(DS.Font.monogramSymbol)
                 .monogramTile()
             Text(command.title).lineLimit(1)
             Spacer(minLength: DS.Space.m)

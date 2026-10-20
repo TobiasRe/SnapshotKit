@@ -34,6 +34,11 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   readable. The Changes footer counts “3 of 16 viewed”, and empty filter choices no longer read “(0)”.
 - File names, paths and settings in messages, notices and the Run inspector are set in code type, like the
   commands beside them.
+- The Failures list takes the same keys as the others: Space Quick Looks the actual image (or flips it in Toggle
+  mode), ← → move the slider, ⌘C copies the image. The ⌘K palette offers **Run on Remote Machine**.
+- VoiceOver: every row and tile is one stop that says what it shows (“payButton dark, in CheckoutViewTests,
+  Uncommitted, flaky”), test results offer **Show Failure** as an action, pane titles are headings, the end of a
+  run is announced, and the ⌘K palette reads the highlighted row and keeps Tab inside.
 - Faster with thousands of snapshots: the library loads in less than half the time, and a re-record starts
   seconds sooner.
 

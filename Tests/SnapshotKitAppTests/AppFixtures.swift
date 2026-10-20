@@ -60,7 +60,7 @@ enum AppFixtures {
 
     static var context: ProjectContext { context(at: repository) }
 
-    static func context(at repository: URL, xcode: String = "99.1") -> ProjectContext {
+    static func context(at repository: URL, xcode: String = "99.1", remoteHost: String? = nil) -> ProjectContext {
         var config = SnapshotConfig()
         config.scheme = "SampleApp"
         config.workspace = "SampleApp.xcworkspace"
@@ -69,6 +69,7 @@ enum AppFixtures {
         config.deviceName = "Example Phone"
         config.osVersion = "99.0"
         config.baseBranch = "develop"
+        config.remoteHost = remoteHost
         let ci = ".gitlab-ci.yml"
         // The device comes from the override file, so the inspector names that one source.
         config.sources = ["scheme": ci, "workspace": ci, "testPlan": ci, "xcode": ci, "device": ".snapshotkit.yml", "os": ".snapshotkit.yml", "baseBranch": ci]
@@ -365,11 +366,12 @@ enum AppFixtures {
          screen(accent: .systemPink, titleWidth: 0.3)),
     ]
 
-    static func project(_ scenario: Scenario, store: ProjectStore) -> ProjectModel {
+    /// `remoteHost`: a remote machine to run on; the screenshots show the field's placeholder instead.
+    static func project(_ scenario: Scenario, store: ProjectStore, remoteHost: String? = nil) -> ProjectModel {
         let model = ProjectModel(project: Project(path: repository.path), store: store, autoload: false)
         let tmp = temporaryDirectory("fixtures")
         var f = ProjectFixture()
-        f.context = context
+        f.context = context(at: repository, remoteHost: remoteHost)
         f.environment = environment
         f.modules = ["AppSnapshotTests", "DesignSystemSnapshotTests"]
         f.currentBranch = "feature/checkout-redesign"
@@ -435,7 +437,7 @@ enum AppFixtures {
             f.tab = .failures
         case .missingXcode:
             f.tab = .run
-            f.context = context(at: repository, xcode: "99.2") // what CI asks for, which this Mac lacks
+            f.context = context(at: repository, xcode: "99.2", remoteHost: remoteHost) // what CI asks for, which this Mac lacks
             f.environment = nil
             f.environmentError = EnvironmentError.xcodeNotInstalled(
                 required: "99.2", source: ".gitlab-ci.yml",

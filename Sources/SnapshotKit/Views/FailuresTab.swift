@@ -7,6 +7,8 @@ struct FailuresTab: View {
     let project: ProjectModel
     /// The attempt shown: one image's id (device, test case, run and assertion).
     @State private var attempt: String?
+    @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
+    @State private var quickLookURL: URL?
 
     var body: some View {
         ListDetailSplit {
@@ -47,6 +49,7 @@ struct FailuresTab: View {
                     Text(project.failureSource?.label ?? "No results yet")
                         .font(DS.Font.heading)
                         .lineLimit(1)
+                        .accessibilityAddTraits(.isHeader)
                     if let source = project.failureSource {
                         (Text("\(source.host) · ") + Text(source.date, format: DS.Dates.moment))
                             .font(DS.Font.caption)
@@ -114,6 +117,30 @@ struct FailuresTab: View {
                 }
             }
         }
+        // The same keys as the other lists: in Toggle mode Space flips the images beside the list,
+        // otherwise it Quick Looks the actual image; ← → move the slider.
+        .onKeyPress(.space) {
+            guard let item = project.selectedFailure else { return .ignored }
+            if compareMode == CompareMode.toggle.rawValue {
+                app.passToCompare(.flip)
+                return .handled
+            }
+            guard let url = shownImage(of: item)?.failure else { return .ignored }
+            quickLookURL = url
+            return .handled
+        }
+        .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+            guard compareMode == CompareMode.slider.rawValue, project.selectedFailure != nil else { return .ignored }
+            app.passToCompare(press.key == .leftArrow ? .left : .right)
+            return .handled
+        }
+        .quickLookPreview($quickLookURL)
+        // ⌘C copies the actual image of the attempt shown.
+        .onCopyCommand {
+            guard let item = project.selectedFailure, let url = shownImage(of: item)?.failure,
+                  let provider = NSItemProvider(contentsOf: url) else { return [] }
+            return [provider]
+        }
         .overlay {
             // "Nothing failing" only once there are results to say it about.
             if project.failures.isEmpty, project.failureSource == nil {
@@ -147,10 +174,19 @@ struct FailuresTab: View {
         }
     }
 
-    private func detail(_ item: FailureItem) -> some View {
+    private func attempts(of item: FailureItem) -> [(id: String, title: String)] {
         let devices = max(Set(item.images.map { $0.deviceID ?? $0.device ?? "" }).count, 1)
-        let attempts = Self.attempts(of: item.images, runsPerDevice: item.test.repetitions.count / devices)
-        let image = item.images.first { $0.id == attempt } ?? attempts.first.flatMap { first in item.images.first { $0.id == first.id } }
+        return Self.attempts(of: item.images, runsPerDevice: item.test.repetitions.count / devices)
+    }
+
+    /// The attempt the detail shows: the one picked, else the first.
+    private func shownImage(of item: FailureItem) -> SnapshotFailureImages? {
+        item.images.first { $0.id == attempt } ?? attempts(of: item).first.flatMap { first in item.images.first { $0.id == first.id } }
+    }
+
+    private func detail(_ item: FailureItem) -> some View {
+        let attempts = attempts(of: item)
+        let image = shownImage(of: item)
         let referenceURL = image?.reference ?? item.referencePaths.first.map { project.project.url.appendingPathComponent($0) }
         let failureURL = image?.failure
 
@@ -396,6 +432,8 @@ struct FailureRow: View {
         }
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
+        // One stop per failure: its name, chips and history read together.
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -405,13 +443,19 @@ struct DiagnosisChip: View {
     var help: String
 
     init?(_ diagnosis: DiffDiagnosis) {
-        switch diagnosis.kind {
-        case .imperceptible: label = "Invisible"
-        case .tiny: label = "Few pixels"
-        case .sizeChanged: label = "Size changed"
-        case .identical, .visible: return nil
-        }
+        guard let label = Self.label(diagnosis.kind) else { return nil }
+        self.label = label
         help = diagnosis.summary
+    }
+
+    /// The chip's word, for the kinds worth one: an ordinary visible change needs no chip.
+    nonisolated static func label(_ kind: DiffDiagnosis.Kind) -> String? {
+        switch kind {
+        case .imperceptible: "Invisible"
+        case .tiny: "Few pixels"
+        case .sizeChanged: "Size changed"
+        case .identical, .visible: nil
+        }
     }
 
     var body: some View {
@@ -522,7 +566,7 @@ struct BatchFailureDetail: View {
         VStack(spacing: 0) {
             PaneBar(height: DS.Bar.header) {
                 VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                    Text("\(items.count) failing tests selected").font(DS.Font.heading).lineLimit(1)
+                    Text("\(items.count) failing tests selected").font(DS.Font.heading).lineLimit(1).accessibilityAddTraits(.isHeader)
                     Text("in \(suites) suite\(suites == 1 ? "" : "s")")
                         .font(DS.Font.caption)
                         .foregroundStyle(.secondary)

@@ -414,7 +414,6 @@ extension SnapshotChange {
 }
 
 struct ChangeRow: View {
-    // Read as one element: "payButton, Committed".
     var change: SnapshotChange
     /// The variant to show ("dark"), or nil when it says nothing (see `ProjectModel.showsVariant`).
     var variant: String?
@@ -454,7 +453,16 @@ struct ChangeRow: View {
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(change.file.testName) \(variant ?? ""), \(change.kind.label), in \(change.suite)\(viewed ? ", viewed" : "")")
+        .accessibilityLabel(Self.spoken(change, variant: variant, viewed: viewed, diagnosis: diagnosis))
+    }
+
+    /// Read as one element, like it looks: "payButton dark, Committed, Invisible, in CheckoutViewTests, viewed".
+    nonisolated static func spoken(_ change: SnapshotChange, variant: String?, viewed: Bool, diagnosis: DiffDiagnosis?) -> String {
+        var parts = [variant.map { "\(change.file.testName) \($0)" } ?? change.file.testName, change.kind.label]
+        if let chip = diagnosis.flatMap({ DiagnosisChip.label($0.kind) }) { parts.append(chip) }
+        parts.append("in \(change.suite)")
+        if viewed { parts.append("viewed") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -474,7 +482,7 @@ struct DetailHeader<Accessory: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: DS.Space.m) {
             VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                Text(title).font(DS.Font.heading).lineLimit(1)
+                Text(title).font(DS.Font.heading).lineLimit(1).accessibilityAddTraits(.isHeader)
                 if let subtitle {
                     Text(subtitle)
                         .font(DS.Font.caption)

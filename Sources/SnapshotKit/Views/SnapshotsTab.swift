@@ -84,7 +84,7 @@ struct SnapshotsTab: View {
                 SearchField(prompt: "Filter snapshots", text: $project.libraryFilter, focusRequest: project.focusFilterRequest)
                     .help("Filter by module, suite, test or variant; every word must match")
                     // In the full-width grid a window-wide field reads as a page title.
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: DS.Pane.readableWidth)
                 Spacer(minLength: 0)
                 GlassIconMenu(title: "Sort By", symbol: "arrow.up.arrow.down", help: "Sort by name (grouped), size or most recently changed") {
                     Picker("Sort By", selection: $project.librarySort) {
@@ -317,10 +317,7 @@ struct SnapshotRow: View {
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(file.testName) \(file.variant), in \(file.suite)"
-                            + (file.state == .clean ? "" : ", \(SnapshotStatusLine.label(file.state))")
-                            + (status.failureID == nil ? "" : ", failing")
-                            + (status.change.map { ", \($0.label.lowercased()) change" } ?? ""))
+        .accessibilityLabel(SnapshotStatusLine.spoken(file, status))
     }
 }
 
@@ -355,6 +352,15 @@ struct SnapshotStatusLine: View {
         guard file.state != .clean else { return nil }
         return (SnapshotStatusLine.label(file.state),
                 file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet")
+    }
+
+    /// What VoiceOver reads for a row or tile: what a sighted user sees on it, the failing mark
+    /// included ("payButton dark, in CheckoutViewTests, Uncommitted, flaky").
+    nonisolated static func spoken(_ file: SnapshotFile, _ status: SnapshotStatus) -> String {
+        var parts = [file.variant.isEmpty ? file.testName : "\(file.testName) \(file.variant)", "in \(file.suite)"]
+        if let state = state(of: file, status) { parts.append(state.label) }
+        if status.failureID != nil { parts.append(status.verdict == .flaky ? "flaky" : "failing") }
+        return parts.joined(separator: ", ")
     }
 
     var body: some View {
@@ -669,8 +675,7 @@ struct SnapshotViewer: View {
                         Text(color.hex)
                     }
                     .font(DS.Font.code.monospacedDigit())
-                    .padding(.horizontal, DS.Space.m)
-                    .padding(.vertical, DS.Space.s - 2)
+                    .padding(DS.Pane.overlayInsets)
                     .floatingGlassCapsule()
                     .fixedSize()
                 }
@@ -708,8 +713,7 @@ struct SnapshotViewer: View {
                 ZoomControls()
             }
             .controlSize(.small)
-            .padding(.horizontal, DS.Space.m)
-            .padding(.vertical, DS.Space.s - 2)
+            .padding(DS.Pane.overlayInsets)
             .floatingGlassCapsule()
             .fixedSize()
         }
@@ -828,7 +832,7 @@ struct SnapshotGrid: View {
             SnapshotActions(project: project, file: file)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(file.testName) \(file.variant)")
+        .accessibilityLabel(SnapshotStatusLine.spoken(file, status))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { open(file) }
     }

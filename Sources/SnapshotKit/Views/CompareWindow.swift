@@ -30,7 +30,7 @@ struct CompareWindow: View {
         VStack(spacing: 0) {
             PaneBar(height: DS.Bar.header) {
                 VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                    Text(title).font(DS.Font.heading).lineLimit(1)
+                    Text(title).font(DS.Font.heading).lineLimit(1).accessibilityAddTraits(.isHeader)
                     Text(subtitle)
                         .font(DS.Font.caption)
                         .foregroundStyle(.secondary)

@@ -228,8 +228,7 @@ struct CompareView: View {
             ZoomControls()
         }
         .controlSize(.small)
-        .padding(.horizontal, DS.Space.m)
-        .padding(.vertical, DS.Space.s - 2)
+        .padding(DS.Pane.overlayInsets)
         .floatingGlassCapsule()
         .fixedSize()
     }
@@ -392,8 +391,7 @@ struct PixelReadout: View {
             }
         }
         .font(DS.Font.code.monospacedDigit())
-        .padding(.horizontal, DS.Space.m)
-        .padding(.vertical, DS.Space.s - 2)
+        .padding(DS.Pane.overlayInsets)
         .floatingGlassCapsule()
         .fixedSize()
         .accessibilityElement(children: .combine)
@@ -500,8 +498,7 @@ struct DiagnosisNote: View {
                 }
             }
             .font(DS.Font.caption)
-            .padding(.horizontal, DS.Space.m)
-            .padding(.vertical, DS.Space.s - 2)
+            .padding(DS.Pane.overlayInsets)
             .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
             .frame(maxWidth: 560)
             .padding(.horizontal, DS.Space.l)

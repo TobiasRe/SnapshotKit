@@ -1099,11 +1099,18 @@ final class ProjectModel {
     /// failed repetitions).
     var dockBadge: String? { failures.isEmpty ? nil : "\(failures.count)" }
 
-    /// Dock badge, and a bounce when the run ends while you're elsewhere.
+    /// Dock badge, and a bounce when the run ends while you're elsewhere; VoiceOver reads the outcome
+    /// where a sighted user sees the notice appear.
     private func announce(isError: Bool) {
         guard NSApp != nil, !DS.solidSurfaces else { return }
         NSApp.dockTile.badgeLabel = dockBadge
         if !NSApp.isActive { NSApp.requestUserAttention(isError ? .criticalRequest : .informationalRequest) }
+        if let lastMessage, isShown {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
+                .announcement: lastMessage.replacingOccurrences(of: "`", with: ""),
+                .priority: NSAccessibilityPriorityLevel.high.rawValue,
+            ])
+        }
     }
 
     func cancel() {

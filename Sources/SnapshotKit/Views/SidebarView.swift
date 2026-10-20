@@ -77,6 +77,8 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Projects and commands (⌘K)")
+                // Shows "⌘K"; says what it opens.
+                .accessibilityLabel("Go to Project or Command")
             }
             .padding(.horizontal, DS.Space.m)
             // Level with the lists' footers.
@@ -128,7 +130,7 @@ struct ProjectMonogram: View {
 
     var body: some View {
         Text(Self.initials(name))
-            .font(.system(size: 9, weight: .semibold))
+            .font(DS.Font.monogram)
             .monogramTile()
     }
 }
@@ -138,9 +140,9 @@ extension View {
     func monogramTile() -> some View {
         self
             .foregroundStyle(Color.primary.opacity(0.7))
-            .frame(width: 18, height: 18)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.primary.opacity(0.08)))
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(DS.Surface.hairline))
+            .frame(width: DS.Control.monogram, height: DS.Control.monogram)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.tiny, style: .continuous).fill(Color.primary.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.tiny, style: .continuous).strokeBorder(DS.Surface.hairline))
             .accessibilityHidden(true)
     }
 }
@@ -211,6 +213,9 @@ struct QuickSwitcherView: View {
                         .onKeyPress(.downArrow) { move(1); return .handled }
                         .onKeyPress(.upArrow) { move(-1); return .handled }
                         .onKeyPress(.escape) { close(); return .handled }
+                        // The palette is modal: Tab (and Shift-Tab, a backtab) would otherwise move
+                        // focus to the window behind it.
+                        .onKeyPress(keys: [.tab, KeyEquivalent("\u{19}")]) { _ in .handled }
                 }
                 .padding(.horizontal, DS.Space.l)
                 .frame(height: DS.Bar.header)
@@ -229,6 +234,8 @@ struct QuickSwitcherView: View {
                                     }
                                 }
                                 .onTapGesture { choose(at: index) }
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityAction { choose(at: index) }
                                 .id(index)
                             }
                             if results.isEmpty {
@@ -257,6 +264,9 @@ struct QuickSwitcherView: View {
     private func move(_ delta: Int) {
         guard !shown.isEmpty else { return }
         highlighted = (highlighted + delta + shown.count) % shown.count
+        // Focus stays in the field, so VoiceOver wouldn't otherwise say where the highlight went.
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: shown[highlighted].title])
     }
 
     private func choose(at index: Int) {

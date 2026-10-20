@@ -185,9 +185,13 @@ struct RunProgressRow: View {
                 Label { Text("\(project.passed)") } icon: {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.Status.passed)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(project.passed) passed")
                 Label { Text("\(project.failed)") } icon: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(project.failed > 0 ? DS.Status.failed : .secondary)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(project.failed) failed")
                 Spacer()
                 if let started = project.startedAt {
                     Text(started, style: .timer).foregroundStyle(.secondary)

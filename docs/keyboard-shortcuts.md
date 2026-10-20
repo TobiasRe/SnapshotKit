@@ -34,8 +34,8 @@
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
 | V (in the Changes list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
 | ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
-| Space | Quick Look the selected snapshot (while comparing in Toggle mode, it flips the images instead) |
-| ⌘C | Copy the selected snapshot’s image |
+| Space | Quick Look the selected snapshot, change or failure’s image (while comparing in Toggle mode, it flips the images instead) |
+| ⌘C | Copy the selected image (in Failures, the actual image of the attempt shown) |
 
 ## Comparing
 
@@ -51,7 +51,8 @@
 | ⌘0 | Zoom to Fit (also: double-click the image) |
 | ⇧⌘0 | Zoom to the changed pixels |
 
-Trackpad: pinch to zoom, two-finger drag to pan. Mouse: drag to pan.
+Trackpad: pinch to zoom, double-tap with two fingers to zoom in (again to fit), two-finger drag to pan. Mouse:
+drag to pan, ⌘-scroll to zoom at the pointer.
 
 ## The palette (⌘K)
 
