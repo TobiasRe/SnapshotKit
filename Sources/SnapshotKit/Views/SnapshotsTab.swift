@@ -324,12 +324,17 @@ struct SnapshotStatusLine: View {
     var status: SnapshotStatus
     var showVariant = true
 
+    /// The one state the line names, if any, with its color and tooltip.
+    static func state(of file: SnapshotFile, _ status: SnapshotStatus) -> (label: String, color: Color, help: String)? {
+        if status.orphaned { return ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
+        if let change = status.change { return (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
+        guard file.state != .clean else { return nil }
+        return (SnapshotStateChip.label(file.state),
+                file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet")
+    }
+
     var body: some View {
-        let state: (label: String, color: Color, help: String)? =
-            if status.orphaned { ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
-            else if let change = status.change { (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
-            else if file.state != .clean { (SnapshotStateChip.label(file.state), file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet") }
-            else { nil }
+        let state = Self.state(of: file, status)
         let variant = showVariant && !file.variant.isEmpty ? file.variant : nil
         HStack(spacing: DS.Space.xs) {
             if let state {
