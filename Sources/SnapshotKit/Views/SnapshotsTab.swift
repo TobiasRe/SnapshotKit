@@ -310,7 +310,7 @@ struct SnapshotRow: View {
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(file.testName) \(file.variant), in \(file.suite)"
-                            + (file.state == .clean ? "" : ", \(SnapshotStateChip.label(file.state))")
+                            + (file.state == .clean ? "" : ", \(SnapshotStatusLine.label(file.state))")
                             + (status.failureID == nil ? "" : ", failing")
                             + (status.change.map { ", \($0.label.lowercased()) change" } ?? ""))
     }
@@ -324,12 +324,21 @@ struct SnapshotStatusLine: View {
     var status: SnapshotStatus
     var showVariant = true
 
+    /// A working-tree state in words.
+    static func label(_ state: SnapshotFile.State) -> String {
+        switch state {
+        case .clean: "Committed"
+        case .modified: "Modified"
+        case .untracked: "New"
+        }
+    }
+
     /// The one state the line names, if any, with its color and tooltip.
     static func state(of file: SnapshotFile, _ status: SnapshotStatus) -> (label: String, color: Color, help: String)? {
         if status.orphaned { return ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
         if let change = status.change { return (change.label, DS.Status.color(for: change), "\(change.label) change against the base branch") }
         guard file.state != .clean else { return nil }
-        return (SnapshotStateChip.label(file.state),
+        return (SnapshotStatusLine.label(file.state),
                 file.state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted), "Not committed yet")
     }
 
@@ -367,22 +376,6 @@ struct StatusMarks: View {
             }
         }
         .accessibilityHidden(true)
-    }
-}
-
-struct SnapshotStateChip: View {
-    var state: SnapshotFile.State
-
-    static func label(_ state: SnapshotFile.State) -> String {
-        switch state {
-        case .clean: "Committed"
-        case .modified: "Modified"
-        case .untracked: "New"
-        }
-    }
-
-    var body: some View {
-        Chip(text: Self.label(state), color: state == .untracked ? DS.Status.color(for: .new) : DS.Status.color(for: .uncommitted))
     }
 }
 
@@ -506,25 +499,20 @@ struct SnapshotDetail: View {
             .help("Its test failed in the last run. Click to compare with the actual image.")
             .accessibilityLabel(status.verdict == .flaky ? "Flaky, compare with actual" : "Failing, compare with actual")
         }
-        // One chip for what changed: an uncommitted file says New or Modified, a committed change
-        // says Changed; either opens the change for review when there is one.
-        if let change = status.change {
-            Button { project.showChange(path: file.path) } label: {
-                if file.state == .clean {
-                    Chip(text: "Changed", color: DS.Status.color(for: change))
-                } else {
-                    SnapshotStateChip(state: file.state)
-                }
+        // The same word as the snapshot's row (and the Changes tab): the change against the base
+        // branch, else an uncommitted edit, else orphaned. A change opens for review.
+        if let state = SnapshotStatusLine.state(of: file, status) {
+            if status.change != nil, !status.orphaned {
+                Button { project.showChange(path: file.path) } label: { Chip(text: state.label, color: state.color) }
+                    .buttonStyle(.plain)
+                    .help("\(state.help). Click to review it.")
+                    .accessibilityLabel("\(state.label) against the base branch, review change")
+            } else if status.orphaned {
+                Chip(text: state.label, color: state.color)
+                    .help("No test named \(file.testName) in \(file.suite).swift any more. Move it to the Trash from the actions menu.")
+            } else {
+                Chip(text: state.label, color: state.color).help(state.help)
             }
-            .buttonStyle(.plain)
-            .help("\(change.label) change against \(project.baseBranch ?? "the base branch"). Click to review it.")
-            .accessibilityLabel("\(file.state == .clean ? "Changed" : SnapshotStateChip.label(file.state)) against the base branch, review change")
-        } else if file.state != .clean {
-            SnapshotStateChip(state: file.state)
-        }
-        if status.orphaned {
-            Chip(text: "Orphaned", color: DS.Status.neutral)
-                .help("No test named \(file.testName) in \(file.suite).swift any more. Move it to the Trash from the actions menu.")
         }
     }
 
@@ -653,7 +641,7 @@ struct SnapshotViewer: View {
             VStack(spacing: DS.Space.s) {
                 if let probe, let color = image?.color(x: probe.x, y: probe.y) {
                     HStack(spacing: DS.Space.m) {
-                        Text("x \(probe.x)  y \(probe.y)").foregroundStyle(.secondary)
+                        Text(verbatim: "x \(probe.x) y \(probe.y)").foregroundStyle(.secondary)
                         PixelSwatch(color: color)
                         Text(color.hex)
                     }
@@ -686,7 +674,8 @@ struct SnapshotViewer: View {
         GlassGroup {
             HStack(spacing: DS.Space.m) {
                 if size.width > 0 {
-                    Text("\(Int(size.width))×\(Int(size.height))")
+                    // Verbatim, like the compare bar's: a size, not a quantity to group.
+                    Text(verbatim: "\(Int(size.width))×\(Int(size.height))")
                         .font(DS.Font.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

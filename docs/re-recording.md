@@ -12,11 +12,11 @@ references.
 |---|---|---|
 | The selected test | camera button in a detail header; Snapshots › Re-record Selected Test | ⇧⌘R |
 | The selected test's whole suite | the camera button's arrow › Re-record Suite *name* | |
-| The failing suites of the last run | **Re-record All** in the Failures header; the Run button's arrow › **Re-record Failing Suites**; **Re-record Failed** on the Run tab; Snapshots › Re-record Failing Suites | ⌥⇧⌘R |
+| The failing suites of the last run | **Re-record Failing Suites** in the Failures header; the Run button's arrow › **Re-record Failing Suites**; **Re-record Failing Suites** on the Run tab; Snapshots › Re-record Failing Suites | ⌥⇧⌘R |
 | What the library shows | the library footer's **Re-record All…** / **Re-record N Shown…** (filter first, e.g. `dark`) | |
 | Every snapshot test in the project | the Run button's arrow › **Re-record All Snapshot Tests…**; Snapshots menu; ⌘K | |
 | A test from a change or failure | its ··· menu or right-click | |
-| On the CI machine | Run tab › ··· › On *host* › Re-record Failed. [Remote runs](remote-runs.md) | |
+| On the CI machine | Run tab › ··· › On *host* › Re-record Failing Suites. [Remote runs](remote-runs.md) | |
 
 Re-recording more than ten tests asks first, with the number of tests. Orphaned snapshots can't be re-recorded:
 their test no longer exists.
@@ -78,7 +78,7 @@ re-record it by hand.
 
 Granularity: when you re-record *tests*, `-only-testing` names each test (`Bundle/Suite/test()` for Swift
 Testing, `Bundle/Suite/test` for XCTest), so only those run. Parameterized tests, and tests whose function
-can't be found, run with their whole suite. *Re-record Suite* and *Re-record Failed* run whole suites.
+can't be found, run with their whole suite. *Re-record Suite* and *Re-record Failing Suites* run whole suites.
 
 ## Always restored
 

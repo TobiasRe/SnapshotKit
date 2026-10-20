@@ -86,7 +86,7 @@ re-recording will not fix it. Look for animations, async loading, dates or rando
 | **Size changed** | another device, scale or layout | Check the test's device and the simulator CI uses. |
 | **Flaky** | the test isn't deterministic | Find the animation, async load, date or random value. Re-recording won't help. |
 
-**Re-record All** in the Failures header re-records every failing suite of the last run (⌥⇧⌘R does the same
+**Re-record Failing Suites** in the Failures header re-records every failing suite of the last run (⌥⇧⌘R does the same
 from anywhere).
 
 ## Working on several failures at once

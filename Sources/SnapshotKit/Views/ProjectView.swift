@@ -490,7 +490,7 @@ struct RunStatusHeader: View {
                     Divider()
                     Section("On \(project.config?.remoteHost ?? "Remote Machine")") {
                         Button("Run Tests") { project.runRemote() }
-                        Button("Re-record Failed") { project.reRecordOnRemote() }
+                        Button("Re-record Failing Suites") { project.reRecordOnRemote() }
                             .disabled(project.failingSuites.isEmpty)
                         Button("Check Flakiness") { project.checkFlakiness(remote: true) }
                             .disabled(project.failingSuites.isEmpty)
@@ -504,7 +504,7 @@ struct RunStatusHeader: View {
                         .primaryActionStyle()
                         .fixedSize()
                 } else {
-                    Button("Re-record Failed") { project.reRecordFailed() }
+                    Button("Re-record Failing Suites") { project.reRecordFailed() }
                         .fixedSize()
                         .quietControl()
                         .disabled(project.failingSuites.isEmpty || project.environment == nil)

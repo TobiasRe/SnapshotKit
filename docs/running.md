@@ -76,16 +76,16 @@ run's, whatever other projects run.
 
 ## More run actions
 
-Next to **Run Tests**, the Run tab has a **Re-record Failed** button and a **···** menu. The same actions are
+Next to **Run Tests**, the Run tab has a **Re-record Failing Suites** button and a **···** menu. The same actions are
 in the **Snapshots** menu, some under other names:
 
 | On the Run tab | In the Snapshots menu | Shortcut | Does |
 |---|---|---|---|
-| **Re-record Failed** | Re-record Failing Suites | ⌥⇧⌘R | re-records the failing suites of the last run, then verifies. [Re-recording](re-recording.md) |
+| **Re-record Failing Suites** | Re-record Failing Suites | ⌥⇧⌘R | re-records the failing suites of the last run, then verifies. [Re-recording](re-recording.md) |
 | ··· › **Re-record All Snapshot Tests…** | Re-record All Snapshot Tests… | | re-records every snapshot test, after asking. |
 | ··· › **Check Flakiness (5×)** | Check Flakiness of Failing Tests | ⌥⌘R | runs the failing tests repeatedly. [Flakiness](failures.md#checking-for-flakiness) |
 | ··· › On *host* › **Run Tests** | Run on Remote Machine | ⌃⌘R | the same run on another Mac over SSH. [Remote runs](remote-runs.md) |
-| ··· › On *host* › **Re-record Failed** / **Check Flakiness** | | | the same, remotely. |
+| ··· › On *host* › **Re-record Failing Suites** / **Check Flakiness** | | | the same, remotely. |
 
 The number in *Check Flakiness (5×)* follows Settings › Flakiness check runs.
 

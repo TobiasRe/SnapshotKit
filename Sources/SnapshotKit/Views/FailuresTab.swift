@@ -66,7 +66,8 @@ struct FailuresTab: View {
                 }
             }
             PaneBar(height: DS.Bar.filters) {
-                Button("Re-record All") { project.reRecordFailed() }
+                // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
+                Button("Re-record Failing Suites") { project.reRecordFailed() }
                     .quietControl()
                     .disabled(project.isRunning || project.failingSuites.isEmpty)
                     .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
@@ -503,6 +504,12 @@ struct BatchFailureDetail: View {
                     .disabled(project.isRunning || project.environment == nil)
                     .help("Record these tests' snapshots again, then check that they pass (⇧⌘R)")
             }
+            // An info row like every detail's, so the hairline under it continues the list's.
+            DetailInfoRow {
+                Text("⌘-click to add or remove a test, ⇧-click to select a range.")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Space.s) {
@@ -519,10 +526,6 @@ struct BatchFailureDetail: View {
                             Spacer(minLength: 0)
                         }
                     }
-                    Text("⌘-click to add or remove a test, ⇧-click to select a range.")
-                        .font(DS.Font.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, DS.Space.s)
                 }
                 .padding(DS.Space.l)
                 .frame(maxWidth: .infinity, alignment: .leading)

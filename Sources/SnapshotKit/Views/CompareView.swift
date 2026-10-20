@@ -195,13 +195,14 @@ struct CompareView: View {
             if showSize, let size = pair?.pixelSize, size.width > 0 {
                 // When the sizes differ, both: that is the difference worth reading.
                 if let a = pair?.beforePixels, let b = pair?.afterPixels, a.width != b.width || a.height != b.height {
-                    Text("\(a.width)×\(a.height) → \(b.width)×\(b.height)")
+                    // Verbatim: sizes and coordinates are not quantities ("1.284" reads as a decimal).
+                    Text(verbatim: "\(a.width)×\(a.height) → \(b.width)×\(b.height)")
                         .font(DS.Font.caption.monospacedDigit())
                         .foregroundStyle(DS.Status.text(DS.Status.changed))
                         .fixedSize()
                         .help("The image size changed: a different device, scale or layout")
                 } else {
-                    Text("\(Int(size.width))×\(Int(size.height))")
+                    Text(verbatim: "\(Int(size.width))×\(Int(size.height))")
                         .font(DS.Font.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                         .fixedSize()
@@ -368,7 +369,7 @@ struct PixelReadout: View {
         let a = before?.color(x: probe.x, y: probe.y)
         let b = after?.color(x: probe.x, y: probe.y)
         HStack(spacing: DS.Space.m) {
-            Text("x \(probe.x)  y \(probe.y)")
+            Text(verbatim: "x \(probe.x) y \(probe.y)")
                 .foregroundStyle(.secondary)
             swatch(a, label: beforeLabel)
             Image(systemName: "arrow.right").foregroundStyle(.tertiary).accessibilityHidden(true)
@@ -518,9 +519,13 @@ struct ZoomableImage: View {
     var body: some View {
         Canvas { context, canvasSize in
             guard let image else { return }
-            let size = pixelSize.width > 0 ? pixelSize : image.size
-            let rect = viewport.imageRect(imageSize: size, canvas: canvasSize)
-            let scale = rect.width / max(size.width, 1)
+            // Both sides share one canvas (the larger image's size) so they zoom and pan together;
+            // each image is drawn at its own size from the top-left corner, where the diff aligns
+            // them, never stretched to the other's shape.
+            let canvas = pixelSize.width > 0 ? pixelSize : image.size
+            let frame = viewport.imageRect(imageSize: canvas, canvas: canvasSize)
+            let scale = frame.width / max(canvas.width, 1)
+            let rect = CGRect(origin: frame.origin, size: CGSize(width: image.size.width * scale, height: image.size.height * scale))
             // Nearest-neighbour when zoomed in so individual pixels stay crisp.
             context.draw(Image(nsImage: image).interpolation(scale >= 2 ? .none : .high), in: rect)
             // Hairline frame so the image edge is visible on any background.

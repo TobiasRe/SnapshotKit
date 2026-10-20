@@ -16,6 +16,8 @@ extension AppUITests {
     @Suite(.serialized)
     struct AppSnapshotTests {
         static let paneSize = CGSize(width: 1100, height: 700)
+        /// 99.9% of pixels: a text field's placeholder renders a little differently from run to run
+        /// (about 1,000 pixels), so an exact match fails at random. Wording is checked in model tests.
         static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.999, perceptualPrecision: 0.99)
 
         init() {
@@ -192,7 +194,9 @@ extension AppUITests {
         @Test func changesTabWithIncreasedContrast() {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.changes)
-            let view = ProjectView(project: project).environment(app)
+            // The setting changes both: the appearance (system colors) and SwiftUI's contrast value, which
+            // the glass controls read to draw their high-contrast stand-ins.
+            let view = ProjectView(project: project).environment(app).environment(\._colorSchemeContrast, .increased)
             assertView(view, size: Self.paneSize, appearance: .accessibilityHighContrastAqua)
         }
 
