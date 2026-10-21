@@ -220,6 +220,7 @@ The app manages it; edit it only while SnapshotKit isn’t running.
 |---|---|
 | `scanRoots` | scan folders |
 | `discovered` | projects found by scanning or added |
+| `removed` | projects removed from the list, which a rescan leaves out until you open them again |
 | `pinned`, `recents` | the sidebar’s Pinned and Recent sections (up to 10 recents) |
 | `projectSettings` | per project path: `baseBranch`, `remoteHost`, `module` (the test target) |
 | `lastProject` | the project to reopen |

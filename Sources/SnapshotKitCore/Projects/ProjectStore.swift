@@ -32,6 +32,8 @@ public struct Project: Codable, Hashable, Identifiable, Sendable {
 public struct AppSettings: Codable, Equatable, Sendable {
     public var scanRoots: [String] = []
     public var discovered: [String] = []
+    /// Projects removed from the list, which a rescan doesn't bring back (opening one does).
+    public var removed: [String] = []
     public var pinned: [String] = []
     /// Most recent first.
     public var recents: [String] = []
@@ -50,6 +52,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         let d = AppSettings()
         scanRoots = try c.decodeIfPresent([String].self, forKey: .scanRoots) ?? d.scanRoots
         discovered = try c.decodeIfPresent([String].self, forKey: .discovered) ?? d.discovered
+        removed = try c.decodeIfPresent([String].self, forKey: .removed) ?? d.removed
         pinned = try c.decodeIfPresent([String].self, forKey: .pinned) ?? d.pinned
         recents = try c.decodeIfPresent([String].self, forKey: .recents) ?? d.recents
         projectSettings = try c.decodeIfPresent([String: ProjectSettings].self, forKey: .projectSettings) ?? d.projectSettings
@@ -70,6 +73,7 @@ extension AppSettings {
         var s = self
         s.scanRoots = norm(scanRoots)
         s.discovered = norm(discovered)
+        s.removed = norm(removed)
         s.pinned = norm(pinned)
         s.recents = norm(recents)
         s.lastProject = lastProject.map { Project(path: $0).path }
@@ -138,6 +142,7 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
             if s.recents.count > Self.maxRecents { s.recents.removeLast(s.recents.count - Self.maxRecents) }
             s.lastProject = project.path
             if !s.discovered.contains(project.path) { s.discovered.append(project.path) }
+            s.removed.removeAll { $0 == project.path }
         }
     }
 
@@ -147,6 +152,7 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
             s.recents.removeAll { $0 == project.path }
             s.pinned.removeAll { $0 == project.path }
             if s.lastProject == project.path { s.lastProject = nil }
+            if !s.removed.contains(project.path) { s.removed.append(project.path) }
         }
     }
 
@@ -173,9 +179,9 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
         update { s in s.scanRoots.removeAll { $0 == path } }
     }
 
-    /// Scans all roots and adds what they hold to the discovered list. Nothing leaves it but by
-    /// `remove`: not a project added by hand, nor one a scan found before and doesn't now (the folder
-    /// may be one macOS no longer lets SnapshotKit read).
+    /// Scans all roots and adds what they hold to the discovered list, but for the projects removed
+    /// from it. Nothing leaves it but by `remove`: not a project added by hand, nor one a scan found
+    /// before and doesn't now (the folder may be one macOS no longer lets SnapshotKit read).
     @discardableResult
     public func rescan() -> [Project] {
         rescanReports().flatMap(\.projects)
@@ -186,7 +192,10 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
     public func rescanReports() -> [ProjectScanner.Report] {
         let reports = settings.scanRoots.map { ProjectScanner.scanReport(root: URL(fileURLWithPath: $0)) }
         let found = reports.flatMap(\.projects)
-        update { s in s.discovered = Array(Set(s.discovered + found.map(\.path) + s.recents + s.pinned)).sorted() }
+        update { s in
+            let new = found.map(\.path).filter { !s.removed.contains($0) }
+            s.discovered = Array(Set(s.discovered + new + s.recents + s.pinned)).sorted()
+        }
         return reports
     }
 

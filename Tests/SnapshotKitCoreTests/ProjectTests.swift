@@ -65,6 +65,33 @@ import Testing
         #expect(!store.allProjects.map(\.path).contains(added.path))
     }
 
+    /// A project removed from the list stays off it, though a scan folder holds it, until it is
+    /// opened again. Settings files from before `removed` existed still load.
+    @Test func aRemovedProjectStaysRemovedThroughARescan() throws {
+        let store = makeStore()
+        let root = testTemp("scan")
+        let scanned = Project(path: root.appendingPathComponent("app").path)
+        try FileManager.default.createDirectory(at: scanned.url.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        try Data().write(to: scanned.url.appendingPathComponent(SnapshotConfig.overrideFileName))
+        store.addScanRoot(root.path)
+        store.rescan()
+        #expect(store.allProjects == [scanned])
+
+        store.remove(scanned)
+        store.rescan()
+        #expect(store.allProjects.isEmpty)
+        #expect(ProjectStore(url: store.url).settings.removed == [scanned.path])
+
+        store.markOpened(scanned)
+        store.remove(Project(path: "/repos/other"))
+        store.rescan()
+        #expect(store.allProjects == [scanned])
+        #expect(store.settings.removed == ["/repos/other"])
+
+        try Data(#"{"discovered": ["/repos/a"]}"#.utf8).write(to: store.url)
+        #expect(ProjectStore(url: store.url).settings.removed.isEmpty)
+    }
+
     @Test func twoStoresOnOneFileKeepEachOthersChanges() {
         let app = makeStore()
         let cli = ProjectStore(url: app.url)
