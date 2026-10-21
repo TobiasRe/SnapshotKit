@@ -119,6 +119,58 @@ import Testing
                 == ##"@Suite(#"say "hi"#, .serialized, .snapshots(record: .all)) struct A {}"##)
     }
 
+    /// Tests outside any type get the trait on their own `@Test`, before `arguments:`; those in a
+    /// type are left alone.
+    @Test func recordsTheTestsOutsideAType() throws {
+        let source = """
+            import Testing
+
+            @Test func card() {}
+
+            @Test("Badge", .tags(.badges)) @MainActor
+            func badge() {}
+
+            @Test(arguments: ["a", "b"]) func named(name: String) {}
+
+            @Test(
+                "Sized",
+                arguments: [1, 2]
+            )
+            func sized(_ width: Int) {}
+
+            @Test(.snapshots(record: .missing)) func row() {}
+
+            @Suite struct Other {
+                @Test func inside() {}
+            }
+            """
+        #expect(RecordPatcher.topLevelTests(in: source).map(\.identifier) == ["card()", "badge()", "named(name:)", "sized(_:)", "row()"])
+        #expect(try RecordPatcher.patch(source: source, suite: nil) == """
+            import Testing
+
+            @Test(.snapshots(record: .all)) func card() {}
+
+            @Test("Badge", .tags(.badges), .snapshots(record: .all)) @MainActor
+            func badge() {}
+
+            @Test(.snapshots(record: .all), arguments: ["a", "b"]) func named(name: String) {}
+
+            @Test(
+                "Sized",
+                .snapshots(record: .all),
+                arguments: [1, 2]
+            )
+            func sized(_ width: Int) {}
+
+            @Test(.snapshots(record: .all)) func row() {}
+
+            @Suite struct Other {
+                @Test func inside() {}
+            }
+            """)
+        #expect(throws: RecordPatchError.noTopLevelTests(file: "file")) { try RecordPatcher.patch(source: "@Suite struct A { @Test func a() {} }", suite: nil) }
+    }
+
     @Test func missingDeclaration() {
         #expect(throws: RecordPatchError.declarationNotFound(suite: "Nope", file: "file")) {
             try RecordPatcher.patch(source: "struct Other {}", suite: "Nope")

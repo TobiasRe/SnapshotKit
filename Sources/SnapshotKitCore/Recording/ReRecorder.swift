@@ -40,9 +40,7 @@ public final class ReRecorder: @unchecked Sendable { // `currentRunner` and `can
 
     /// Source locations for each suite (relative paths). Throws if any cannot be found.
     public func targets(for suites: [SuiteResult]) throws -> [RecordSession.Target] {
-        try suites.map { suite in
-            RecordSession.Target(suite: suite.name, path: try SuiteLocator.locate(suite, in: runner.repository))
-        }
+        try SuiteLocator.targets(for: suites, in: runner.repository)
     }
 
     /// Re-records `suites` (only the tests in `onlyTesting`, when given) and then, with `verify`,
@@ -66,7 +64,7 @@ public final class ReRecorder: @unchecked Sendable { // `currentRunner` and `can
         let recordRun: TestRunResult
         do {
             onStage(.recording)
-            recordRun = try await runner.run(onlyTesting: onlyTesting ?? suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
+            recordRun = try await runner.run(onlyTesting: onlyTesting ?? suites.flatMap(\.onlyTestingIdentifiers), onLine: onLine, onEvent: onEvent)
         } catch {
             onStage(.restoring)
             let report = session.restore()
@@ -90,7 +88,7 @@ public final class ReRecorder: @unchecked Sendable { // `currentRunner` and `can
             if !cancelled {
                 onStage(.verifying)
                 do {
-                    verifyRun = try await verifier.run(onlyTesting: onlyTesting ?? suites.map(\.identifier), onLine: onLine, onEvent: onEvent)
+                    verifyRun = try await verifier.run(onlyTesting: onlyTesting ?? suites.flatMap(\.onlyTestingIdentifiers), onLine: onLine, onEvent: onEvent)
                 } catch is CancellationError {}
             }
         }

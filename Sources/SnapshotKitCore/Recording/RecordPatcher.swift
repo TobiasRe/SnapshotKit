@@ -4,6 +4,7 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
     case declarationNotFound(suite: String, file: String)
     case xctestAlreadyOverridesInvokeTest(suite: String, file: String)
     case suiteFileNotFound(String)
+    case noTopLevelTests(file: String)
     case uncommittedChanges([String])
     case patchAlreadyActive(String)
 
@@ -15,6 +16,8 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
             "“\(suite)” in \(file) already overrides invokeTest(); re-record it manually."
         case let .suiteFileNotFound(suite):
             "Could not find the source file for suite “\(suite)”."
+        case let .noTopLevelTests(file):
+            "Could not find a @Test function outside a type in \(file)."
         case let .uncommittedChanges(files):
             "Refusing to re-record: these files have uncommitted changes. Commit or stash them first:\n" + files.map { "  \($0)" }.joined(separator: "\n")
         case let .patchAlreadyActive(repo):
@@ -26,15 +29,18 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
 /// Rewrites a test suite's source so its snapshots are recorded instead of asserted.
 ///
 /// - Swift Testing: sets `.snapshots(record: .all)` on the suite's `@Suite` attribute
-///   (adding the attribute or trait when missing, replacing an existing `record:` value).
+///   (adding the attribute or trait when missing, replacing an existing `record:` value), or for
+///   the tests outside any type on each one's `@Test` attribute.
 /// - XCTest: adds an `invokeTest()` override that wraps the test in
 ///   `withSnapshotTesting(record: .all)`.
 public enum RecordPatcher {
     public static let marker = "snapshotkit:record"
 
-    public static func patch(source: String, suite: String, file: String = "file") throws -> String {
+    /// `source` with record mode on for `suite`, or, for nil, for its tests declared outside any type.
+    public static func patch(source: String, suite: String?, file: String = "file") throws -> String {
         // A byte order mark would hide a first-line `import XCTest` from the patterns below.
         if source.hasPrefix("\u{FEFF}") { return "\u{FEFF}" + (try patch(source: String(source.dropFirst()), suite: suite, file: file)) }
+        guard let suite else { return try patchTopLevelTests(source: source, file: file) }
         guard let decl = findDeclaration(of: suite, in: source) else {
             throw RecordPatchError.declarationNotFound(suite: suite, file: file)
         }
@@ -149,6 +155,121 @@ public enum RecordPatcher {
             }
         }
         return end
+    }
+
+    // MARK: Swift Testing, outside a type
+
+    /// A `@Test` function declared outside any type, as `-only-testing` names it (`sized(width:)`).
+    struct TopLevelTest {
+        /// `@Test` and its arguments, if any.
+        var attribute: Range<String.Index>
+        var identifier: String
+    }
+
+    /// The `@Test` functions of `source` declared outside any type, in order.
+    static func topLevelTests(in source: String) -> [TopLevelTest] {
+        var tests: [TopLevelTest] = []
+        var depth = 0
+        var i = source.startIndex
+        while i < source.endIndex {
+            if let next = endOfCommentOrString(in: source, at: i) {
+                i = next
+                continue
+            }
+            switch source[i] {
+            case "{": depth += 1
+            case "}": depth = max(depth - 1, 0)
+            case "@" where depth == 0 && source[i...].hasPrefix("@Test"):
+                var end = source.index(i, offsetBy: 5)
+                guard end == source.endIndex || !(source[end].isLetter || source[end].isNumber || source[end] == "_") else { break }
+                if end < source.endIndex, source[end] == "(", let close = matchingParen(in: source, open: end) { end = source.index(after: close) }
+                if let identifier = identifierOfFunction(in: source, after: end) { tests.append(TopLevelTest(attribute: i..<end, identifier: identifier)) }
+                i = end
+                continue
+            default: break
+            }
+            i = source.index(after: i)
+        }
+        return tests
+    }
+
+    /// The other attributes and modifiers a test function can have between `@Test` and `func`.
+    private static let functionAfterAttribute = try! NSRegularExpression(
+        pattern: #"^(?:\s+|@[\w.]+(?:\([^()]*\))?|(?:public|internal|private|fileprivate|package|nonisolated)\b)*func\s+(\w+)\s*\("#
+    )
+
+    /// `name(label:…)` for the function declared after `index`, if one is.
+    private static func identifierOfFunction(in source: String, after index: String.Index) -> String? {
+        let ns = source as NSString
+        let start = NSRange(index..<source.endIndex, in: source)
+        guard let m = functionAfterAttribute.firstMatch(in: source, options: .anchored, range: start),
+              let open = Range(m.range, in: source).map({ source.index(before: $0.upperBound) }),
+              let close = matchingParen(in: source, open: open) else { return nil }
+        // Each parameter's first word is its label: `_ x: Int` is `_:`, `width: Int` is `width:`.
+        let labels = splitTopLevel(String(source[source.index(after: open)..<close])).compactMap { parameter in
+            parameter.split(whereSeparator: { $0.isWhitespace || $0 == ":" }).first.map { $0 + ":" }
+        }
+        return ns.substring(with: m.range(at: 1)) + "(" + labels.joined() + ")"
+    }
+
+    /// `text` split at its commas outside brackets, comments and strings.
+    private static func splitTopLevel(_ text: String) -> [String] {
+        var parts: [String] = [], current = ""
+        var depth = 0
+        var i = text.startIndex
+        while i < text.endIndex {
+            if let next = endOfCommentOrString(in: text, at: i) {
+                current += text[i..<next]
+                i = next
+                continue
+            }
+            switch text[i] {
+            case "(", "[", "<": depth += 1
+            case "-" where text[i...].hasPrefix("->"):        // a function type's arrow, not a bracket
+                current += "->"
+                i = text.index(i, offsetBy: 2)
+                continue
+            case ")", "]", ">": depth -= 1
+            case "," where depth == 0:
+                parts.append(current)
+                current = ""
+                i = text.index(after: i)
+                continue
+            default: break
+            }
+            current.append(text[i])
+            i = text.index(after: i)
+        }
+        if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { parts.append(current) }
+        return parts
+    }
+
+    /// Sets `.snapshots(record: .all)` on every `@Test` function outside a type: swift-snapshot-testing
+    /// takes the trait on a test as well as on a suite.
+    static func patchTopLevelTests(source: String, file: String) throws -> String {
+        let tests = topLevelTests(in: source)
+        guard !tests.isEmpty else { throw RecordPatchError.noTopLevelTests(file: file) }
+        var result = source
+        for test in tests.reversed() {
+            let attribute = String(source[test.attribute])
+            let patched = attribute == "@Test" ? "@Test(.snapshots(record: .all))"
+                : "@Test(" + patchTestArguments(String(attribute.dropFirst(6).dropLast())) + ")"
+            result.replaceSubrange(test.attribute, with: patched)
+        }
+        return result
+    }
+
+    /// Given the text inside `@Test( … )`, returns it with record mode forced to `.all`. A new trait
+    /// goes before `arguments:`, which comes last.
+    static func patchTestArguments(_ args: String) -> String {
+        guard !args.contains(".snapshots("),
+              let arguments = splitTopLevel(args).firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("arguments:") })
+        else { return patchTraitArguments(args) }
+        var parts = splitTopLevel(args)
+        let indent = String(parts[arguments].prefix { $0.isWhitespace })
+        parts.insert(indent + ".snapshots(record: .all)", at: arguments)
+        if arguments == 0 { parts[1] = " " + parts[1].drop { $0.isWhitespace } }
+        return parts.joined(separator: ",")
     }
 
     // MARK: XCTest

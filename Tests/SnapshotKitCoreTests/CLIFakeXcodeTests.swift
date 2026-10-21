@@ -162,6 +162,32 @@ import Testing
         #expect(LastRun.load(repository: repo.url)?.resultBundle == verified)
     }
 
+    /// A `@Test` function outside any type records and verifies just that test, from the library and
+    /// from the last run's failures (whose suite is the target, without a path).
+    @Test func recordATestOutsideAType() throws {
+        let (repo, env, log) = try setUp()
+        let source = "import SnapshotTesting\nimport Testing\n\n@Test func card() {}\n"
+        try repo.write("Tests/AppTests/CardTests.swift", source)
+        try repo.commitAll("a test outside a type")
+
+        let result = try snapkit("record", "--repo", repo.url.path, "card", environment: env)
+        #expect(result.status == 0)
+        #expect(result.stdout.hasPrefix("snapkit: recording AppTests/card()\n"))
+        #expect(result.stdout.contains("snapkit: record mode enabled in Tests/AppTests/CardTests.swift (tests outside a type)\n"))
+        #expect(result.stdout.hasSuffix("Recorded and verified: 1 passed.\n"))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == source)
+
+        try repo.commitAll("recorded")
+        LastRun.update(with: LastRunTests.run([SuiteResult(bundle: "AppTests", path: [], tests: [
+            TestCaseResult(name: "card()", identifier: "card()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
+        ], failureFiles: [])], bundle: "earlier"), repository: repo.url)
+        #expect(try snapkit("rerecord", "--repo", repo.url.path, environment: env).status == 0)
+        let runs = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").suffix(2)
+        #expect(runs.count == 2 && runs.allSatisfy { $0.hasSuffix(" -only-testing:AppTests/card() -collect-test-diagnostics never") })
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == source)
+    }
+
     @Test func recordWithoutVerifying() throws {
         let (repo, env, _) = try setUp()
         let result = try snapkit("record", "--repo", repo.url.path, "card", "--no-verify", environment: env)

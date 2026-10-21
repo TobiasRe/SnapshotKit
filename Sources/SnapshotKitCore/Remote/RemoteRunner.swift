@@ -199,7 +199,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let patched = try await offCooperativePool { try self.uploadPatchedSources(for: suites, to: dir) }
         // From here on, every way out puts the original sources back on the remote copy.
         do {
-            let result = try await runTests(mode: mode, onlyTesting: suites.map(\.identifier), environment: environment, dir: dir,
+            let result = try await runTests(mode: mode, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers), environment: environment, dir: dir,
                                             onStage: onStage, onLine: onLine, onEvent: onEvent)
             await restoreSources(patched, in: dir)
             return result
@@ -333,8 +333,8 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
     func uploadPatchedSources(for suites: [SuiteResult], to dir: String) throws -> [String] {
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-patch-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: staging) }
-        var byFile: [String: [String]] = [:]
-        for suite in suites { byFile[try SuiteLocator.locate(suite, in: repository), default: []].append(suite.name) }
+        var byFile: [String: [String?]] = [:]
+        for target in try SuiteLocator.targets(for: suites, in: repository) { byFile[target.path, default: []].append(target.suite) }
         for (path, names) in byFile {
             var text = try String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8)
             for name in names { text = try RecordPatcher.patch(source: text, suite: name, file: path) }

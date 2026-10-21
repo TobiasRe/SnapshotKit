@@ -498,7 +498,7 @@ func main() async {
                 say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
                 say("Downloaded \(recorded.downloadedSnapshots.count) snapshot(s) recorded on \(recorded.host).")
                 if o.has("--no-verify") { exit(0) }
-                let verify = try await runner.run(mode: .run, onlyTesting: suites.map(\.identifier), onStage: { say(color("36", "▸ \($0.label)")) },
+                let verify = try await runner.run(mode: .run, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers), onStage: { say(color("36", "▸ \($0.label)")) },
                                                   onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
                 finishVerification(verify.run, repo: ctx.repository, attachments: verify.attachmentsDirectory)
             } catch {
@@ -534,7 +534,7 @@ func main() async {
         guard !suites.isEmpty else { say("No failing suites to check."); exit(0) }
         let n = requested ?? ProjectStore().settings.flakeIterations
         say("snapkit: running \(suites.map(\.identifier).joined(separator: ", ")) \(n)×")
-        let (result, _, _) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: suites.map(\.identifier), iterations: n, printer: printer)
+        let (result, _, _) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: suites.flatMap(\.onlyTestingIdentifiers), iterations: n, printer: printer)
         record(result, kind: .flakeCheck, repo: ctx.repository)
         // A cancelled check repeated its tests only partly (its bundle has what ran): no verdicts.
         if result.cancelled { exitCancelled() }

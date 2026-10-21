@@ -1401,7 +1401,7 @@ final class ProjectModel {
         }
         let iterations = store.settings.flakeIterations
         if remote {
-            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: tests ?? targets.map(\.identifier))
+            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: tests ?? targets.flatMap(\.onlyTestingIdentifiers))
             return
         }
         guard begin(.flakeCheck), let (ctx, env) = requireEnvironment() else { return }
@@ -1410,7 +1410,7 @@ final class ProjectModel {
         let onLine = onLine, onEvent = onEvent
         Task {
             do {
-                let result = try await runner.run(onlyTesting: tests ?? targets.map(\.identifier),
+                let result = try await runner.run(onlyTesting: tests ?? targets.flatMap(\.onlyTestingIdentifiers),
                                                   additionalArguments: Flakiness.arguments(iterations: iterations),
                                                   onLine: onLine, onEvent: onEvent)
                 applyFlakeResult(result, iterations: iterations)
@@ -1511,7 +1511,7 @@ final class ProjectModel {
                         // Verified where it was recorded, as `snapkit rerecord --remote` does.
                         if verify {
                             do {
-                                let checked = try await runner.run(mode: .run, onlyTesting: suites.map(\.identifier),
+                                let checked = try await runner.run(mode: .run, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers),
                                                                    onStage: onStage, onLine: onLine, onEvent: onEvent)
                                 lastResult = checked.run
                                 if let verified = await applyVerification(checked.run, images: { (checked.attachments, checked.attachmentsDirectory) }) {

@@ -91,6 +91,12 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
     public var identifier: String { ([bundle] + path).joined(separator: "/") }
     public var id: String { identifier }
 
+    /// What `-only-testing:` takes to run the suite. The tests outside any type (`path` empty) are
+    /// named one by one: the bundle alone would run every test in it.
+    public var onlyTestingIdentifiers: [String] {
+        path.isEmpty ? tests.map { bundle + "/" + $0.name } : [identifier]
+    }
+
     /// `suites` with the tests that `newer` has results for replaced by those results.
     public static func merging(_ newer: [SuiteResult], into suites: [SuiteResult]) -> [SuiteResult] {
         var merged = suites

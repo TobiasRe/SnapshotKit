@@ -33,22 +33,40 @@ public enum RecordPlanner {
         var order: [String] = []
         var only: [String] = [], listed = Set<String>()
         // A suite's snapshots share its test file, which is parsed once for all of them.
-        var parsed: [String: (text: String, suite: SuiteResult, isXCTest: Bool)] = [:]
+        var parsed: [String: (text: String, suite: SuiteResult?, isXCTest: Bool, topLevelTests: [String])] = [:]
         var nested: [String: Bool] = [:]   // "<key>#<test>" → declared in a type inside the suite
+        // A suite in two files (the target's tests outside a type, a type and its extension) has both.
+        func add(_ suite: SuiteResult) {
+            guard let known = suites[suite.identifier] else {
+                order.append(suite.identifier)
+                suites[suite.identifier] = suite
+                return
+            }
+            suites[suite.identifier]!.failureFiles += suite.failureFiles.filter { !known.failureFiles.contains($0) }
+        }
         for file in files {
             let source = try sources.testFile(for: file)
             let key = file.module + "/" + source
+            let path = sources.repository.appendingPathComponent(source).path
             if parsed[key] == nil {
-                guard let text = sources.text(of: source), let suitePath = suitePath(in: text, preferring: file.suite) else {
-                    throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)")
-                }
-                let suite = SuiteResult(bundle: file.module, path: suitePath, tests: [],
-                                        failureFiles: [sources.repository.appendingPathComponent(source).path])
-                parsed[key] = (text, suite, RecordPatcher.findDeclaration(of: suite.name, in: text)?.isXCTest ?? false)
+                guard let text = sources.text(of: source) else { throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)") }
+                let suite = suitePath(in: text, preferring: file.suite).map { SuiteResult(bundle: file.module, path: $0, tests: [], failureFiles: [path]) }
+                parsed[key] = (text, suite, suite.flatMap { RecordPatcher.findDeclaration(of: $0.name, in: text)?.isXCTest } ?? false,
+                               RecordPatcher.topLevelTests(in: text).map(\.identifier))
             }
-            let (text, suite, isXCTest) = parsed[key]!
-            if suites[suite.identifier] == nil { order.append(suite.identifier) }
-            suites[suite.identifier] = suite
+            let (text, typeSuite, isXCTest, topLevelTests) = parsed[key]!
+
+            // A test outside any type. The target's such tests are its suite without a path, whose
+            // tests run one by one: the target's identifier would run all of its tests.
+            let topLevel = topLevelTests.first { Self.snapshotName(ofTest: $0) == file.testName }
+            guard let suite = typeSuite, topLevel == nil else {
+                guard !topLevelTests.isEmpty else { throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)") }
+                add(SuiteResult(bundle: file.module, path: [], tests: [], failureFiles: [path]))
+                let tests = granularity == .tests ? topLevel.map { [$0] } ?? topLevelTests : topLevelTests
+                for id in tests.map({ file.module + "/" + $0 }) where listed.insert(id).inserted { only.append(id) }
+                continue
+            }
+            add(suite)
 
             let id: String
             switch granularity {
@@ -74,6 +92,12 @@ public enum RecordPlanner {
         let suiteIDs = Set(only.filter { suites[$0] != nil })
         only = only.filter { id in suiteIDs.contains(id) || !suiteIDs.contains(where: { id.hasPrefix($0 + "/") }) }
         return RecordSelection(suites: order.compactMap { suites[$0] }, onlyTesting: only)
+    }
+
+    /// The name swift-snapshot-testing gives a test's snapshots: its identifier with every run of
+    /// other characters than letters, digits and `_` turned into `-` (`sized(width:)` → `sized-width`).
+    static func snapshotName(ofTest identifier: String) -> String {
+        identifier.replacingOccurrences(of: #"\W+"#, with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 
     /// Whether the suite's body declares `func <test>(` only inside braces of its own (a nested

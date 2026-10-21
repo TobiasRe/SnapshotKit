@@ -104,6 +104,31 @@ import Testing
         #expect(try only("plain.1", "badge.1") == ["AppTests/CardTests"])
     }
 
+    /// `@Test` functions outside a type are their target's own: each runs by its identifier (a
+    /// parameterized one too, its snapshot name being the sanitized identifier), as the target's
+    /// identifier alone would run every test in it.
+    @Test func testsOutsideATypeRunOneByOne() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardSnapshots.swift", """
+            import Testing
+
+            @Test func compact() {}
+            @Test(arguments: [1, 2]) func sized(width: Int) {}
+            """)
+        try repo.write("Tests/AppTests/RowSnapshots.swift", "import Testing\n\n@Test func row() {}\n")
+        try repo.commitAll("tests")
+        let tests = try RecordPlanner.plan([file("CardSnapshots", "sized-width.1"), file("RowSnapshots", "row.1")],
+                                           granularity: .tests, repository: repo.url)
+        #expect(tests.onlyTesting == ["AppTests/sized(width:)", "AppTests/row()"])
+        #expect(tests.suites.map(\.identifier) == ["AppTests"])
+        #expect(tests.suites.first?.path == [])
+        #expect(tests.suites.first?.failureFiles.map { ($0 as NSString).lastPathComponent } == ["CardSnapshots.swift", "RowSnapshots.swift"])
+        // A whole "suite": every test of the file outside a type.
+        let file = try RecordPlanner.plan([file("CardSnapshots", "compact.1")], granularity: .suites, repository: repo.url)
+        #expect(file.onlyTesting == ["AppTests/compact()", "AppTests/sized(width:)"])
+        #expect(try SuiteLocator.targets(for: tests.suites, in: repo.url).map(\.path) == ["Tests/AppTests/CardSnapshots.swift", "Tests/AppTests/RowSnapshots.swift"])
+    }
+
     @Test func missingTestFileIsAnError() throws {
         let repo = try repo()
         #expect(throws: RecordPatchError.self) {

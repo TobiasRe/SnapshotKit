@@ -100,10 +100,11 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
     }
 
     public struct Target: Sendable {
-        public var suite: String
+        /// The suite type to record; nil for the tests the file declares outside any type.
+        public var suite: String?
         /// Path relative to the repository.
         public var path: String
-        public init(suite: String, path: String) {
+        public init(suite: String?, path: String) {
             self.suite = suite
             self.path = path
         }
@@ -136,7 +137,7 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
             for target in targets where target.path == path {
                 patched = try RecordPatcher.patch(source: patched, suite: target.suite, file: path)
             }
-            let suites = targets.filter { $0.path == path }.map(\.suite).joined(separator: ",")
+            let suites = targets.filter { $0.path == path }.map { $0.suite ?? "tests outside a type" }.joined(separator: ",")
             files.append(PatchedFile(path: path, suite: suites, original: original, patched: patched))
         }
 
