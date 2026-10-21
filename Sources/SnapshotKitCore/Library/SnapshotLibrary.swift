@@ -8,7 +8,7 @@ public struct SnapshotFile: Identifiable, Hashable, Sendable {
         case clean
         /// Changed in the working tree (for example just re-recorded).
         case modified
-        /// Not tracked by git yet (a newly recorded snapshot).
+        /// Not in the last commit (a newly recorded snapshot), whether or not it is staged.
         case untracked
     }
 
@@ -127,7 +127,8 @@ public struct SnapshotLibrary: Sendable {
         let listed = try git.nulSeparated(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", pathspec])
         var states: [String: SnapshotFile.State] = [:]
         for entry in (try? git.status(paths: [pathspec])) ?? [] {
-            states[entry.path] = entry.code == "??" ? .untracked : .modified
+            // New whether or not it has been added to the index ("A ", "AM").
+            states[entry.path] = entry.code == "??" || entry.code.hasPrefix("A") ? .untracked : .modified
         }
         var seen = Set<String>()
         // Resource values, not `attributesOfItem`: a fifth of the time, which shows with thousands of files.

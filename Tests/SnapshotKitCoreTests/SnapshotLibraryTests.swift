@@ -51,6 +51,21 @@ import Testing
         #expect(state == ["größe.1.png": .modified, "café.1.png": .untracked, "ök.1.png": .modified])
     }
 
+    /// A new snapshot added to the index is still new, not modified: there is no committed one.
+    @Test func aStagedNewSnapshotIsNew() throws {
+        let repo = try TempRepo()
+        let dir = "Tests/AppTests/__Snapshots__/CardTests"
+        try repo.write("\(dir)/card.1.png", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        try repo.commitAll("base")
+        try repo.write("\(dir)/staged.1.png", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        try repo.write("\(dir)/edited.1.png", png(width: 2, height: 2, rgba: (255, 0, 0, 255)))
+        try repo.git.run(["add", "--", dir])
+        try repo.write("\(dir)/edited.1.png", png(width: 2, height: 2, rgba: (0, 0, 255, 255)))     // "AM"
+
+        let state = Dictionary(uniqueKeysWithValues: try SnapshotLibrary.load(repository: repo.url).files.map { ($0.fileName, $0.state) })
+        #expect(state == ["card.1.png": .clean, "staged.1.png": .untracked, "edited.1.png": .untracked])
+    }
+
     @Test func namesAndFilters() {
         let file = SnapshotFile(path: "Tests/AppTests/__Snapshots__/CardTests/card-appearance.dark.png", byteSize: 1)
         #expect(file.module == "AppTests")
