@@ -232,6 +232,24 @@ import Testing
             /// Draws `{ }` placeholders.
             struct CardTests {}
             """),
+        Case(name: "@Suite named in a doc comment and a string before the type", source: """
+            import Testing
+
+            let note = "@Suite(.serialized)"
+            /// Not a @Suite(.serialized): the cards render in parallel.
+            struct CardTests {
+                @Test func card() {}
+            }
+            """, patched: """
+            import Testing
+
+            let note = "@Suite(.serialized)"
+            /// Not a @Suite(.serialized): the cards render in parallel.
+            @Suite(.snapshots(record: .all)) // snapshotkit:record
+            struct CardTests {
+                @Test func card() {}
+            }
+            """),
         Case(name: "a type named like the suite with more after it comes first", source: """
             import Testing
 

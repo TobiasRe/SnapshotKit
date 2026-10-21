@@ -160,9 +160,8 @@ public enum RecordPatcher {
     static func patchSwiftTesting(source: String, decl: Declaration) -> String {
         // The suite's own attributes sit between the previous `{`/`}` (or file start) and the keyword.
         let searchStart = lastScopeBrace(in: source, before: decl.lineStart).map { source.index(after: $0) } ?? source.startIndex
-        let attributeRegion = source[searchStart..<decl.keywordStart]
 
-        if let suiteRange = attributeRegion.range(of: #"@Suite\b"#, options: [.regularExpression, .backwards]) {
+        if let suiteRange = lastSuiteAttribute(in: source, searchStart..<decl.keywordStart) {
             let afterSuite = suiteRange.upperBound
             if afterSuite < source.endIndex, source[afterSuite] == "(",
                let close = matchingParen(in: source, open: afterSuite) {
@@ -175,6 +174,26 @@ public enum RecordPatcher {
         var result = source
         result.insert(contentsOf: "@Suite(.snapshots(record: .all)) // \(marker)\n" + decl.indent, at: decl.lineStart)
         return result
+    }
+
+    /// The last `@Suite` in `region`, not one in a comment or string (`/// Not a @Suite(…)`).
+    private static func lastSuiteAttribute(in source: String, _ region: Range<String.Index>) -> Range<String.Index>? {
+        var last: Range<String.Index>?
+        var i = region.lowerBound
+        while i < region.upperBound {
+            if let next = endOfCommentOrString(in: source, at: i) {
+                i = next
+                continue
+            }
+            if source[i...].hasPrefix("@Suite") {
+                let end = source.index(i, offsetBy: 6)
+                if end == source.endIndex || !(source[end].isLetter || source[end].isNumber || source[end] == "_") { last = i..<end }
+                i = end
+                continue
+            }
+            i = source.index(after: i)
+        }
+        return last
     }
 
     /// Given the text inside `@Suite( … )`, returns it with record mode forced to `.all`.
