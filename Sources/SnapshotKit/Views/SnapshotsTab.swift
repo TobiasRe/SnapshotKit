@@ -765,7 +765,7 @@ struct SnapshotGrid: View {
     let project: ProjectModel
     var open: (SnapshotFile) -> Void
 
-    static let tile = CGSize(width: 180, height: 124)
+    nonisolated static let tile = CGSize(width: 180, height: 124)
     /// As many tiles as fit; each brings its own padding (the selection fill). Leading in their
     /// cells: centered, the spare width of an adaptive column pushed the first tile off the edge
     /// the section header's text starts at.

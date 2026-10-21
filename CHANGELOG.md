@@ -103,6 +103,21 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Failures tab, as they already were on the Run tab.
 - Failure actions open and copy the attempt on screen; the library’s **Re-record N Shown** leaves out orphaned
   snapshots instead of failing on them.
+- Two test targets with a same-named test (`AppTests/CardTests/card()`, `FeatureTests/CardTests/card()`) keep
+  their own failure images, in the app and in `snapkit failures`.
+- A run whose tests don’t build keeps the last run’s failures, and `snapkit rerecord` / `flaky` stop with the
+  build error instead of “nothing to re-record”. A verification that doesn’t build says it couldn’t verify.
+- Ctrl-C in `snapkit` stops wherever it is: while finding the failing suites, looking up the scheme or checking
+  flakiness, never going on to record or reporting verdicts.
+- `snapkit failures` lists the last run as its verifications left it, not the tests they fixed.
+- A failure image a later verification didn’t touch is kept when old results are pruned.
+- CI working directories are read from GitHub Actions’ `working-directory` and from `cd` lines before the command
+  (including GitLab’s `before_script`), not only `cd DIR && xcodebuild`.
+- Discarding a snapshot that was deleted on the branch and recorded again works; a staged new snapshot reads as
+  New; a symlinked test file stays a symlink after re-recording; a rescan keeps every project you added.
+- The app picks up runs made with `snapkit` when you come back to it, and verifies a re-record on the remote Mac
+  like `snapkit rerecord --remote`. A missing Xcode or simulator on the remote Mac exits 2, as documented.
+- Swift Testing tests declared outside a type can be re-recorded.
 
 ## [0.2.0] - 2026-10-20
 

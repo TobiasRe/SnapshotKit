@@ -20,7 +20,8 @@ references.
 
 **Re-record All Snapshot Tests…** always asks first, and the library’s **Re-record N Shown…** does when it
 covers more than ten tests. Orphaned snapshots can’t be re-recorded (their test no longer exists), so those
-actions leave them out.
+actions leave them out. Tests declared outside a type (`@Test func card()` at file scope) are recorded through
+their own `@Test` attribute and run one by one.
 
 ## What happens, step by step
 

@@ -214,8 +214,8 @@ snapkit: record mode enabled in Tests/AppSnapshotTests/CheckoutViewTests.swift (
 Recorded and verified: 2 passed.
 ```
 
-Other endings: *Recorded, but verification failed: 1 still failing (flaky?).* and, with `--no-verify`,
-*Recorded.* If the test source couldn’t be restored automatically you get a `WARNING:` naming the backup.
+Other endings: *Recorded, but verification failed: 1 still failing (flaky?).*, *Recorded, but could not verify:
+…* when the verification’s build fails (exit 1), and, with `--no-verify`, *Recorded.* If the test source couldn’t be restored automatically you get a `WARNING:` naming the backup.
 Canceled while recording: *Cancelled.* Canceled during the verification, or before it started: *Recorded; the
 verification was cancelled.*
 
@@ -248,8 +248,8 @@ Patched and restored: Tests/AppSnapshotTests/CheckoutViewTests.swift
 Verified: 3 passed with the new references.
 ```
 
-Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.* If the build fails or no test runs:
-*Nothing was recorded: …* (exit 1). Canceled: *Cancelled.*, or *Recorded; the verification was cancelled.* once
+Or *Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.*, or *Could not verify: …* when the
+verification’s build fails. If the recording’s build fails or no test runs: *Nothing was recorded: …* (exit 1). Canceled: *Cancelled.*, or *Recorded; the verification was cancelled.* once
 the recording is done (exit 1). Nothing failing: *Nothing to re-record: no failing suites.* (exit 0).
 
 The verification is merged into the last run rather than replacing it: the suites it ran get their new
@@ -272,7 +272,8 @@ Fails every time   0✔ 5✘  AppSnapshotTests/CheckoutViewTests/payButton()
 Flaky              3✔ 2✘  AppSnapshotTests/CheckoutViewTests/summary()
 ```
 
-Verdicts: **Fails every time**, **Flaky**, **Passes**. Recorded in the history. Exits 0 when every test passes,
+Verdicts: **Fails every time**, **Fails on** *device* (fails every time there and passes on the others),
+**Flaky**, **Passes**. Recorded in the history. Exits 0 when every test passes,
 1 when one is flaky or fails every time (or no result could be read). When the last run had no failures it
 prints *No failing suites to check.* and exits 0. Canceled, it prints *Cancelled.* instead of verdicts and exits 1.
 

@@ -101,4 +101,5 @@ The number in *Check Flakiness (5×)* follows Settings › Flakiness check runs.
 | Sidebar, Dock, menu bar | the failing count |
 
 The last run is remembered per clone (`.git/snapshotkit/last-run.json`), so the Failures tab still shows it after
-a restart, and `snapkit rerecord` / `snapkit failures` in a terminal use it too.
+a restart, and `snapkit rerecord` / `snapkit failures` in a terminal use it too. A run made with `snapkit` shows
+in the app when you come back to it.

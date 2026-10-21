@@ -33,7 +33,8 @@ import Testing
     /// With `FAKE_INTERRUPT_AT` set to `list` (the configuration names no scheme) or `test`,
     /// `xcodebuild` creates `FAKE_INTERRUPT_MARKER` there and waits for the Ctrl-C, having written
     /// `FAKE_RESULTS` as the results of a test run, if set.
-    func setUp(fail: Bool = false, buildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
+    /// `verifyBuildError`: only the runs after recording (the verification) fail to build.
+    func setUp(fail: Bool = false, buildError: Bool = false, verifyBuildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
         let xcode = testTemp("Xcode").appendingPathExtension("app")
         try FileManager.default.createDirectory(at: xcode.appendingPathComponent("Contents/Developer"), withIntermediateDirectories: true)
         try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "99.0", "ProductBuildVersion": "99A1"], format: .xml, options: 0)
@@ -66,6 +67,7 @@ import Testing
               wait
             fi
             \(buildError ? #"echo "$PWD/Tests/AppTests/CardTests.swift:6:9: error: cannot find 'draw' in scope"; echo '** TEST FAILED **'; exit 65"# : "")
+            \(verifyBuildError ? #"grep -q 'record: .all' Tests/AppTests/CardTests.swift || { echo "$PWD/Tests/AppTests/CardTests.swift:6:9: error: cannot find 'draw' in scope"; echo '** TEST FAILED **'; exit 65; }"# : "")
             if grep -q 'record: .all' Tests/AppTests/CardTests.swift; then
               printf new > \(snapshot)
               echo '\(FakeMac.oneFailingTest)' > "$bundle/tests.json"
@@ -238,6 +240,20 @@ import Testing
             """))
         #expect(try repo.read(snapshot) == "new")
         #expect(LastRun.load(repository: repo.url)?.failingSuites.isEmpty == true)
+    }
+
+    /// A verification that didn't build found out nothing: not "0 still failing".
+    @Test func aVerificationThatDoesNotBuildSaysSo() throws {
+        let (repo, env, _) = try setUp(verifyBuildError: true)
+        LastRun.update(with: LastRunTests.run([SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [
+            TestCaseResult(name: "card()", identifier: "CardTests/card()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
+        ], failureFiles: [])], bundle: "earlier"), repository: repo.url)
+        let result = try snapkit("rerecord", "--repo", repo.url.path, environment: env)
+        #expect(result.status == 1)
+        #expect(result.stderr == "error: Could not verify: the build failed (CardTests.swift:6:9: cannot find 'draw' in scope).\n")
+        #expect(!result.stdout.contains("still failing"))
+        #expect(try repo.read(snapshot) == "new")                                       // recorded all the same
+        #expect(LastRun.load(repository: repo.url)?.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
     }
 
     /// The environment that has `xcodebuild` wait for a Ctrl-C at `point` (see `setUp`).

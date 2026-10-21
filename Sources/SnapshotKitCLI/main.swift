@@ -324,6 +324,7 @@ func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer)
 func finishVerification(_ verify: TestRunResult, repo: URL, attachments: URL? = nil) -> Never {
     record(verify, kind: .verify, repo: repo, attachments: attachments)
     exitIfCancelled(verification: verify)
+    if let why = verify.nothingTested { fail("Could not verify: \(why).") }
     say(verify.succeeded ? color("32", "Verified: \(verify.passed) passed with the new references.")
                          : color("31", "Verification failed: \(verify.failed) still failing (flaky?). Try `snapkit flaky`."))
     exit(verify.succeeded ? 0 : 1)
@@ -469,6 +470,8 @@ func main() async {
             if let verify = outcome.verifyRun { record(verify, kind: .verify, repo: ctx.repository) }
             exitIfCancelled(verification: outcome.verifyRun, requested: !o.has("--no-verify"))
             if let verify = outcome.verifyRun {
+                // A verification whose tests didn't build found out nothing, which isn't "0 still failing".
+                if let why = verify.nothingTested { fail("Recorded, but could not verify: \(why).") }
                 say(verify.succeeded ? color("32", "Recorded and verified: \(verify.passed) passed.")
                                      : color("31", "Recorded, but verification failed: \(verify.failed) still failing (flaky?)."))
                 exit(verify.succeeded ? 0 : 1)
@@ -496,7 +499,8 @@ func main() async {
                 exitUnlessRecorded(recorded.run)
                 recordedAlready = true
                 say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
-                say("Downloaded \(recorded.downloadedSnapshots.count) snapshot(s) recorded on \(recorded.host).")
+                let count = recorded.downloadedSnapshots.count
+                say("Downloaded \(count) snapshot\(count == 1 ? "" : "s") recorded on \(recorded.host).")
                 if o.has("--no-verify") { exit(0) }
                 let verify = try await runner.run(mode: .run, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers), onStage: { say(color("36", "▸ \($0.label)")) },
                                                   onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })

@@ -650,7 +650,7 @@ final class ProjectModel {
         changesGeneration += 1
         guard let base = baseBranch else {
             changeSet = nil
-            changesError = "No base branch. Set one in the project settings."
+            changesError = "No base branch. Choose one from the branch menu above."
             isLoadingChanges = false
             return
         }

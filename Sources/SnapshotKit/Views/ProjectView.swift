@@ -18,10 +18,10 @@ struct ProjectView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Snapshot files are watched; commits and branch switches made elsewhere are picked up
-        // when you come back to the app, on any tab.
+        // Snapshot files are watched; commits, branch switches and runs of `snapkit` made elsewhere
+        // are picked up when you come back to the app, on any tab.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            if !project.isRunning { project.refreshChanges() }
+            project.refreshAfterActivation()      // skips itself while a run is going on
         }
         // The outcome of the last action floats over the image area (above the compare toolbar)
         // instead of pushing every pane down. The Run tab says it in its own header.
