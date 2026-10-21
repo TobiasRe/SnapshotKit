@@ -386,6 +386,7 @@ struct ChangeOrigin: View {
     var change: SnapshotChange
     @State private var last: SnapshotVersion?
     @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
 
     var body: some View {
         HStack(spacing: DS.Space.s) {
@@ -415,7 +416,7 @@ struct ChangeOrigin: View {
         guard let last else {
             return Text("\(project.changeSet?.baseBranch ?? "Base") at \(project.diffBase.label.lowercased()) → this branch")
         }
-        return Text("Changed \(last.date.formatted(DS.Dates.day.locale(locale))) by \(last.author) in ")
+        return Text("Changed \(last.date.formatted(DS.Dates.day.localized(locale, timeZone))) by \(last.author) in ")
             + Text(last.shortCommit).font(DS.Font.code)
             + Text(" “\(last.subject)”")
     }

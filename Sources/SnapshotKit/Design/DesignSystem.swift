@@ -19,6 +19,7 @@ enum DS {
     }
 
     /// Dates come in two kinds: a commit's day, and the moment a run happened or a file changed.
+    /// Use them with `localized(_:_:)`, in the view's locale and time zone.
     enum Dates {
         /// "Oct 16, 2026" (in the user's region's order).
         static let day = Date.FormatStyle.dateTime.day().month(.abbreviated).year()
@@ -446,19 +447,31 @@ private struct ScrollsToSelection: ViewModifier {
     }
 }
 
+extension Date.FormatStyle {
+    /// In a view's locale and time zone (the user's, or those a test pins): a style on its own
+    /// formats in the process's, which a snapshot taken on another Mac would show.
+    func localized(_ locale: Locale, _ timeZone: TimeZone) -> Self {
+        var style = self.locale(locale)
+        style.timeZone = timeZone
+        return style
+    }
+}
+
 extension View {
     func scrollsToSelection(_ id: String?) -> some View { modifier(ScrollsToSelection(id: id)) }
 
     /// A text field's placeholder, drawn here instead of by AppKit: AppKit's sat a point higher or
-    /// lower depending on the field's focus history (screenshots of the same view differed), and in
-    /// a value's color, so a suggested default read like a setting. Use with an empty prompt.
+    /// lower from one render to the next, and in a value's color, so a suggested default read like a
+    /// setting. Use with an empty prompt.
     func placeholder(_ text: String, shown: Bool) -> some View {
-        // On the field's baseline, where typed text sits: centered, it rode half a point higher.
-        overlay(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+        overlay(alignment: .leading) {
             if shown {
                 Text(text)
                     .foregroundStyle(Color(nsColor: .placeholderTextColor))
                     .lineLimit(1)
+                    // Centered, it sits half a point above typed text. (Not aligned to the field's
+                    // baseline: the text field reports that differently depending on when it's asked.)
+                    .offset(y: 0.5)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

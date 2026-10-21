@@ -285,6 +285,8 @@ extension SnapshotFile {
 }
 
 struct SnapshotRow: View {
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
     /// Extra information for a flat, sorted list, where the suite header is missing.
     enum Detail { case none, size, modified }
     var file: SnapshotFile
@@ -313,7 +315,7 @@ struct SnapshotRow: View {
                     .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
             case .modified:
                 if let modified = file.modified {
-                    Text(modified, format: DS.Dates.moment)
+                    Text(modified, format: DS.Dates.moment.localized(locale, timeZone))
                         .font(DS.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
             case .none:
@@ -330,7 +332,7 @@ struct SnapshotRow: View {
     private var spokenDetail: String {
         switch detail {
         case .size: ", " + SnapshotLibrary.formatSize(file.byteSize)
-        case .modified: file.modified.map { ", changed " + $0.formatted(DS.Dates.moment) } ?? ""
+        case .modified: file.modified.map { ", changed " + $0.formatted(DS.Dates.moment.localized(locale, timeZone)) } ?? ""
         case .none: ""
         }
     }
@@ -470,10 +472,11 @@ struct SnapshotDetail: View {
            f.testName == file.testName { f } else { nil }
     }
     @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
 
     /// "Oct 12, 2026" in the view's locale (not the process's), like `Text(date, format:)`.
     private func day(_ date: Date) -> String {
-        date.formatted(DS.Dates.day.locale(locale))
+        date.formatted(DS.Dates.day.localized(locale, timeZone))
     }
 
     var body: some View {

@@ -269,6 +269,12 @@ struct RunInspector: View {
                         source: env.xcodeIsDefault ? "Not pinned by CI" : nil)
             PropertyRow("Simulator", value: "\(env.simulator.name) · \(env.simulator.platform) \(env.simulator.osVersion)",
                         source: env.simulator.state)
+            // What the check had to decide, e.g. a `developerDir` Xcode other than the version CI pins.
+            ForEach(project.environmentNotes, id: \.self) { note in
+                StatusNote(note, symbol: "info.circle", color: .secondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         } else if let error = project.environmentError {
             // The header's Check Again is the way on; one button for it is enough.
             StatusNote(error, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
@@ -380,6 +386,8 @@ struct PropertyValue: View {
 /// Outcome first, then the actions that act on it.
 struct RunStatusHeader: View {
     let project: ProjectModel
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -513,7 +521,7 @@ struct RunStatusHeader: View {
             return "Took \(Self.elapsed(duration))"
         }
         if let source = project.failureSource {
-            return "\(source.label) on \(source.host), \(source.date.formatted(DS.Dates.moment))"
+            return "\(source.label) on \(source.host), \(source.date.formatted(DS.Dates.moment.localized(locale, timeZone)))"
         }
         return "Runs the snapshot tests exactly like CI."
     }
@@ -644,7 +652,6 @@ struct LogView: View {
                 SearchField(prompt: showResults ? "Filter tests" : "Filter output", text: $project.logFilter,
                             focusRequest: project.focusFilterRequest)
                     .frame(maxWidth: 220)
-                    .controlSize(.small)
                 if !showResults {
                     // A glass toggle like Viewed, not a checkbox among glass controls.
                     Button { project.showFullLog.toggle() } label: {
@@ -804,7 +811,7 @@ struct RunResultsList: View {
     }
 
     private func row(_ test: TestCaseResult, suite: SuiteResult) -> some View {
-        let id = suite.identifier + "/" + test.name
+        let id = suite.onlyTestingIdentifier(of: test)   // as Failures names it: never by display name
         let canOpen = project.failures.contains { $0.id == id }
         return HStack(spacing: DS.Space.s) {
             Image(systemName: icon(test.outcome))

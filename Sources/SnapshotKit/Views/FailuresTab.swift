@@ -4,6 +4,8 @@ import SwiftUI
 
 struct FailuresTab: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
     let project: ProjectModel
     /// The attempt shown: one image's id (device, test case, run and assertion).
     @State private var attempt: String?
@@ -51,7 +53,7 @@ struct FailuresTab: View {
                         .lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
                     if let source = project.failureSource {
-                        (Text("\(source.host) · ") + Text(source.date, format: DS.Dates.moment))
+                        (Text("\(source.host) · ") + Text(source.date, format: DS.Dates.moment.localized(locale, timeZone)))
                             .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -477,13 +479,15 @@ struct HistoryStrip: View {
     /// Overrides the system setting (for tests).
     var differentiateWithoutColor: Bool?
     @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
 
     var body: some View {
         let d: CGFloat = size == .compact ? 6 : 9
         HStack(spacing: size == .compact ? 2 : 3) {
             ForEach(points) { point in
                 mark(point.result, width: d, height: d * (size == .compact ? 2 : 1.6))
-                    .help(Self.describe(point))
+                    .help(Self.describe(point, locale: locale, timeZone: timeZone))
             }
         }
         .accessibilityElement()
@@ -526,7 +530,7 @@ struct HistoryStrip: View {
         return text
     }
 
-    static func describe(_ point: HistoryPoint) -> String {
+    static func describe(_ point: HistoryPoint, locale: Locale, timeZone: TimeZone) -> String {
         let result = switch point.result {
         case .passed: "Passed"
         case .failed: "Failed"
@@ -539,7 +543,7 @@ struct HistoryStrip: View {
         case .run, .record: ""
         }
         let commit = point.commit.map { " · " + $0.prefix(7) } ?? ""
-        return "\(result)\(kind) · \(point.host)\(commit) · \(point.date.formatted(DS.Dates.moment))"
+        return "\(result)\(kind) · \(point.host)\(commit) · \(point.date.formatted(DS.Dates.moment.localized(locale, timeZone)))"
     }
 }
 
