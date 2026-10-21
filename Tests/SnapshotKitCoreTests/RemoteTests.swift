@@ -245,6 +245,76 @@ import Testing
     }
 }
 
+/// Runs and flakiness checks on a `FakeMac`: what comes back is as a local run's.
+@Suite(.isolated) struct RemoteRunTests {
+    let source = "Tests/AppTests/CardTests.swift"
+    let snapshot = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
+
+    func runner(_ repo: TempRepo, _ mac: FakeMac) -> RemoteRunner {
+        var config = SnapshotConfig()
+        config.scheme = "App"
+        config.deviceName = "Example Phone"
+        config.remoteDirectory = mac.checkout.path
+        return RemoteRunner(repository: repo.url, config: config, transport: mac)
+    }
+
+    /// The failure's source file and reference are named by their remote paths: they come back as
+    /// the local checkout's, and the failure image with them, next to the repository's own results.
+    @Test func aRunsFailuresPointIntoTheLocalCheckout() async throws {
+        let repo = try TempRepo()
+        try repo.write(source, RecordSessionTests.suiteSource)
+        try repo.commitAll("init")
+        let mac = try FakeMac(xcodebuild: #"""
+            mkdir -p "$bundle/attachments"
+            cat > "$bundle/tests.json" <<JSON
+            {"testNodes": [{"name": "AppTests", "nodeType": "Unit test bundle", "children": [
+              {"name": "CardTests", "nodeType": "Test Suite", "children": [
+                {"name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Failed", "children": [
+                  {"name": "Snapshot does not match reference.\n\n@−\n\"file://$PWD/\#(snapshot)\"", "nodeType": "Failure Message",
+                   "sourceLocation": {"filePath": "$PWD/\#(source)", "lineNumber": 6}}]}]}]}]}
+            JSON
+            printf png > "$bundle/attachments/F.png"
+            echo '[{"testIdentifier": "CardTests/card()", "attachments": [{"exportedFileName": "F.png", "suggestedHumanReadableName": "failure_0_A.png"}]}]' \
+              > "$bundle/attachments/manifest.json"
+            exit 65
+            """#)
+
+        let result = try await runner(repo, mac).run(mode: .run)
+        let suite = try #require(result.run.summary?.suites.first)
+        #expect(suite.failureFiles == [repo.url.path + "/" + source])
+        #expect(suite.tests.flatMap(\.failureMessages).flatMap { FailureAttachments.referencePaths(in: $0, repository: repo.url) } == [snapshot])
+        #expect(result.run.host == "fake-mac" && result.run.failed == 1)
+
+        let images = try #require(result.attachmentsDirectory)
+        #expect(images.deletingLastPathComponent().path == TestRunner.resultsDirectory(for: repo.url).path)
+        #expect(images.pathExtension == "attachments")
+        #expect(result.attachments.map(\.failure?.path) == [images.path + "/F.png"])
+        #expect(FileManager.default.contents(atPath: images.path + "/F.png") == Data("png".utf8))
+    }
+
+    /// A flakiness check runs the tests the given number of times there, and reads each repetition.
+    @Test func aFlakinessCheckRepeatsTheTests() async throws {
+        let repo = try TempRepo()
+        try repo.write(source, RecordSessionTests.suiteSource)
+        try repo.commitAll("init")
+        let mac = try FakeMac(xcodebuild: """
+            printf '%s\\n' "${args[@]}" > .snapshotkit/arguments
+            mkdir -p "$bundle" && echo '\(CLIFakeXcodeTests.flakyTest)' > "$bundle/tests.json"
+            exit 65
+            """)
+
+        let result = try await runner(repo, mac).run(mode: .flakeCheck(iterations: 3), onlyTesting: ["AppTests/CardTests"])
+        let arguments = try String(contentsOf: mac.checkout.appendingPathComponent(".snapshotkit/arguments"), encoding: .utf8)
+        #expect(arguments.split(separator: "\n") == [
+            "test", "-scheme", "App", "-destination", "platform=iOS Simulator,id=SIM-1", "-resultBundlePath", Substring(result.run.resultBundle.path),
+            "-only-testing:AppTests/CardTests", "-collect-test-diagnostics", "never", "-test-iterations", "3", "-test-repetition-relaunch-enabled", "YES",
+        ])
+        let verdicts = Flakiness.classify(try #require(result.run.summary))
+        #expect(verdicts.map { "\($0.label) \($0.passed)/\($0.failed) \($0.id)" } == ["Flaky 2/1 AppTests/CardTests/card()"])
+        #expect(result.attachmentsDirectory == nil)
+    }
+}
+
 /// A remote Mac in a local folder: scripts run with bash, with stand-ins for `xcodebuild` and
 /// `xcrun` (simctl and xcresulttool) first on the PATH; the preflight reports one Xcode. A result
 /// bundle's tests are its `tests.json`, and its attachments the folder `attachments` in it (with
@@ -253,13 +323,15 @@ struct FakeMac: RemoteTransport {
     let checkout: URL
     let bin: URL
 
-    /// `xcodebuild` runs `script` in the remote checkout, with `$bundle` set to the result bundle path.
+    /// `xcodebuild` runs `script` in the remote checkout, with `$bundle` set to the result bundle
+    /// path and `args` to its arguments.
     init(xcodebuild script: String) throws {
         checkout = testTemp("remote-checkout")
         bin = testTemp("fake-bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try Self.install("xcodebuild", """
             bundle=
+            args=("$@")
             while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
             \(script)
             """, in: bin)
