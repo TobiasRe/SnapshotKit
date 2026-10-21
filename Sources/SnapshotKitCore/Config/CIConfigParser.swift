@@ -188,7 +188,8 @@ public struct CIConfigParser {
         let outline = YAMLOutline(text)
         var found: [Invocation] = []
         for (fullLine, index) in lines {
-            let line = MiniYAML.stripComment(fullLine) // also a commented-out command
+            // Without a commented-out command, nor the YAML around one (`- "cd ios && xcodebuild …"`).
+            let line = Self.shellCommand(MiniYAML.stripComment(fullLine))
             // Every call on the line (`xcodebuild -version && xcodebuild test …`), also by its full path.
             let calls = Self.xcodebuildCall.matches(in: line, range: NSRange(location: 0, length: (line as NSString).length))
             for call in calls {
@@ -315,7 +316,7 @@ public struct CIConfigParser {
         var body = 0                // braces open in that body
         var bodyFollows = false     // a `name()` line without its `{`
         for i in range {
-            let command = Self.shellCommand(outline.content(i))
+            let command = Self.shellCommand(outline.lines[i])
             let braces = command.count(where: { $0 == "{" }) - command.count(where: { $0 == "}" })
             if bodyFollows {
                 bodyFollows = false
@@ -340,10 +341,13 @@ public struct CIConfigParser {
     /// `name() {`, `function name {`: a shell function starts.
     private static let functionHeader = #"^(?:function\s+[\w.-]+|[\w.-]+\s*\(\s*\))"#
 
-    /// A line of a CI file as the shell gets it: without a `run:` or `script:` key in front.
+    /// A line of a CI file as the shell gets it: without a list marker or a `run:` or `script:` key
+    /// in front, nor the quotes of the YAML scalar after them (`- 'cd ios'`).
     static func shellCommand(_ line: String) -> String {
-        line.trimmingCharacters(in: .whitespaces)
-            .replacingOccurrences(of: #"^(?:-\s+)?(?:(?:run|script|before_script):\s+)?"#, with: "", options: .regularExpression)
+        let text = line.trimmingCharacters(in: .whitespaces)
+        let command = text.replacingOccurrences(of: #"^(?:-\s+)?(?:(?:run|script|before_script):\s+)?"#, with: "", options: .regularExpression)
+        // Only a YAML value is quoted as a whole: a shell line can start and end with quotes of its own.
+        return command == text ? command : MiniYAML.unquote(command)
     }
 
     /// The folders the commands of a line of a CI file move the shell to, in order. GitHub replaces

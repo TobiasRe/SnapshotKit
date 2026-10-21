@@ -238,6 +238,27 @@ import Testing
             """) == nil)
     }
 
+    /// A command can be a quoted YAML scalar; the shell gets it without the quotes.
+    @Test func quotedScriptItems() {
+        func extract(_ script: String) -> CIConfigParser.Extraction {
+            CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: "snapshots:\n  script:\n" + script)])
+        }
+        let separate = extract("""
+                - 'cd ios'
+                - "xcodebuild test -scheme App"
+            """)
+        #expect(separate.config.workingDirectory == "ios")
+        #expect(separate.config.scheme == "App")
+        let chained = extract("""
+                - "cd ios && xcodebuild test -scheme 'My App'"
+            """)
+        #expect(chained.config.workingDirectory == "ios")
+        #expect(chained.config.scheme == "My App")
+        // A shell script's own quotes stay.
+        #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: "#!/bin/bash\n\"cd\" 'ios'\nxcodebuild test -scheme App\n")])
+                .config.workingDirectory == "ios")
+    }
+
     @Test func shellScriptWorkingDirectory() {
         let script = "#!/bin/bash\nset -euo pipefail\ncd ios\nif true; then\n  xcodebuild test -scheme App\nfi\n"
         #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: script)]).config.workingDirectory == "ios")
