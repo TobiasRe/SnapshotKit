@@ -205,16 +205,18 @@ struct RunInspector: View {
                     PropertySection("Comparison & Remote",
                                     footer: project.detectedBaseBranch.map { "Detected `\($0)` from `\(ctx.config.source(of: .baseBranch) ?? "git")`." }) {
                         PropertyRow("Base branch", alignment: .center) {
-                            TextField("Base branch", text: $baseBranch, prompt: Text(project.detectedBaseBranch ?? "develop"))
+                            TextField("", text: $baseBranch)
                                 .textFieldStyle(.plain)
+                                .placeholder(project.detectedBaseBranch ?? "develop", shown: baseBranch.isEmpty)
                                 .fieldChrome()
                                 .accessibilityLabel("Base branch")
                                 .focused($focused, equals: .baseBranch)
                                 .onSubmit(saveFields)
                         }
                         PropertyRow("Remote host", alignment: .center) {
-                            TextField("Remote host", text: $remoteHost, prompt: Text(ctx.resolved.config.remoteHost ?? "user@ci-mac"))
+                            TextField("", text: $remoteHost)
                                 .textFieldStyle(.plain)
+                                .placeholder(ctx.resolved.config.remoteHost ?? "user@ci-mac", shown: remoteHost.isEmpty)
                                 .fieldChrome()
                                 .accessibilityLabel("Remote host")
                                 .help("Remote runs sync the working tree to this Mac over SSH and run the same command there")

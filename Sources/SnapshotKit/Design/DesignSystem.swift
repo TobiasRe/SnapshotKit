@@ -448,6 +448,22 @@ private struct ScrollsToSelection: ViewModifier {
 
 extension View {
     func scrollsToSelection(_ id: String?) -> some View { modifier(ScrollsToSelection(id: id)) }
+
+    /// A text field's placeholder, drawn here instead of by AppKit: AppKit's sat a point higher or
+    /// lower depending on the field's focus history (screenshots of the same view differed), and in
+    /// a value's color, so a suggested default read like a setting. Use with an empty prompt.
+    func placeholder(_ text: String, shown: Bool) -> some View {
+        // On the field's baseline, where typed text sits: centered, it rode half a point higher.
+        overlay(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+            if shown {
+                Text(text)
+                    .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                    .lineLimit(1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 }
 
 private struct SelectableTile: ViewModifier {

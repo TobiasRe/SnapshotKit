@@ -555,8 +555,9 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField(prompt, text: $text)
+            TextField("", text: $text)
                 .textFieldStyle(.plain)
+                .placeholder(prompt, shown: text.isEmpty)
                 .focused($focused)
                 .onChange(of: focusRequest) { _, _ in focused = true }
                 .onKeyPress(.escape) {

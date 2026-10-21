@@ -205,9 +205,11 @@ struct QuickSwitcherView: View {
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                    TextField("Go to a project or run a command…", text: $query)
+                    TextField("", text: $query)
                         .textFieldStyle(.plain)
+                        .placeholder("Go to a project or run a command…", shown: query.isEmpty)
                         .font(.title3)
+                        .accessibilityLabel("Go to a project or run a command")
                         .focused($focused)
                         .onSubmit { choose(at: highlighted) }
                         .onKeyPress(.downArrow) { move(1); return .handled }
