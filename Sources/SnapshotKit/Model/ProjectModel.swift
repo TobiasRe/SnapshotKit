@@ -357,9 +357,6 @@ final class ProjectModel {
     /// When the last run on disk was saved, as of the last look at it.
     @ObservationIgnored private var lastRunSaved: Date?
 
-    /// Brings the project up to date when the app comes back to the front: commits, checkouts and
-    /// snapshots may have changed meanwhile, and so may the last run and the history, when the tests
-    /// ran in `snapkit`. Those are read again only if the last run was saved since.
     /// Saves the last run and notes when: coming back to the app reloads only a last run saved
     /// elsewhere (by `snapkit`). Taken for an outside run, the app's own save cleared the flakiness
     /// verdicts and the Run tab's result on the next activation.
@@ -368,12 +365,17 @@ final class ProjectModel {
         lastRunSaved = LastRun.savedDate(repository: project.url)
     }
 
-    func refreshAfterActivation() {
-        guard !isRunning else { return }
+    /// Brings the project up to date when the app comes back to the front: commits, checkouts and
+    /// snapshots may have changed meanwhile, and so may the last run and the history, when the tests
+    /// ran in `snapkit`. Those are read again only if the last run was saved since. The task ends
+    /// once they are.
+    @discardableResult
+    func refreshAfterActivation() -> Task<Void, Never> {
+        guard !isRunning else { return Task {} }
         refreshChanges()
-        guard fixtureImages == nil else { return }
+        guard fixtureImages == nil else { return Task {} }
         let url = project.url, known = lastRunSaved
-        Task {
+        return Task {
             let changed = await offCooperativePool { () -> (saved: Date?, history: [RunRecord])? in
                 let saved = LastRun.savedDate(repository: url)
                 return saved == known ? nil : (saved, RunHistory(repository: url).load())

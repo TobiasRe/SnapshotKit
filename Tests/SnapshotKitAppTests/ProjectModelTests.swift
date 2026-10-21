@@ -813,10 +813,48 @@ extension AppUITests {
             try #require(model.failingSuites.count == 2)
 
             saveLastRun(in: repo, suites: [AppFixtures.profileSuite], failed: 1)
-            model.refreshAfterActivation()
-            for _ in 0..<200 where model.failingSuites.count != 1 { try await Task.sleep(for: .milliseconds(50)) }
+            await model.refreshAfterActivation().value
             #expect(model.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
             #expect(model.failures.map(\.suite.identifier) == [AppFixtures.profileSuite.identifier])
+        }
+
+        /// Coming back to the app after its own verification saved the last run reads nothing again:
+        /// the flakiness verdicts and the Run tab's result stay. (They went, as the app's save looked
+        /// like a run in `snapkit`.) A run saved elsewhere since is read.
+        @Test func comingBackAfterTheAppsOwnSaveKeepsWhatItShows() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            var earlier = LastRun(result: AppFixtures.lastResult)
+            earlier.date = Date().addingTimeInterval(-3600)
+            earlier.save(repository: repo)
+            let model = try await loadedModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed)
+            let payButton = "AppSnapshotTests/CheckoutViewTests/payButton()", badge = "AppSnapshotTests/ProfileViewTests/badge()"
+            #expect(model.failures.map(\.id) == [payButton, badge])
+
+            model.checkFlakiness(tests: [payButton])
+            try await waitUntilFinished(model)
+            let verdicts = model.flakeResults
+            #expect(verdicts.map(\.id) == [payButton])
+            model.reRecord(failures: [try #require(model.failures.first { $0.id == payButton })])
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded payButton(). Verification still fails (1) — the test may be flaky; try Check Flakiness.")
+            let verification = try #require(model.lastResult)
+            // The verification saved the last run: newer than the failures shown, as a run elsewhere would be.
+            #expect(try #require(LastRun.load(repository: repo)).date > (try #require(model.failureSource)).date)
+
+            await model.refreshAfterActivation().value
+            #expect(model.flakeResults == verdicts)
+            #expect(model.lastResult?.resultBundle == verification.resultBundle)
+            #expect(model.failures.map(\.id) == [payButton, badge])
+
+            LastRun.update(with: TestRunResult(commandLine: "xcodebuild test", exitStatus: 65, cancelled: false,
+                                               resultBundle: repo.appendingPathComponent("snapkit.xcresult"),
+                                               summary: TestRunSummary(suites: [AppFixtures.profileSuite]),
+                                               passed: 0, failed: 1, skipped: 0, buildErrors: []),
+                           repository: repo)              // as `snapkit run` saves it
+            await model.refreshAfterActivation().value
+            #expect(model.lastResult == nil)
+            #expect(model.flakeResults.isEmpty)
+            #expect(model.failures.map(\.id) == [badge])
         }
 
         /// A project added while the counts are being read gets its count too.
@@ -850,6 +888,24 @@ extension AppUITests {
             f.flakeResults = flakeResults
             if library { f.library = SnapshotLibrary(files: AppFixtures.libraryImages.map(\.0)) }
             model.apply(f)
+            return model
+        }
+
+        /// A model of `repo` loaded as the app loads one, from the repository rather than a fixture,
+        /// whose `.snapshotkit.yml` names a fake Xcode with `script` as xcodebuild (see `AppFixtures.fakeXcode`).
+        func loadedModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil) async throws -> ProjectModel {
+            let xcode = try AppFixtures.fakeXcode(script, testResults: testResults).xcode
+            try """
+                developerDir: \(xcode.path)
+                scheme: SampleApp
+                device: Example Phone
+                os: "99.0"
+                baseBranch: develop
+                """.write(to: repo.appendingPathComponent(".snapshotkit.yml"), atomically: true, encoding: .utf8)
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            try await waitUntil(model.environment != nil || model.environmentError != nil || model.configError != nil,
+                                "Xcode was never checked")
+            try #require(model.environment?.xcode.path == xcode.path, "\(model.configError ?? model.environmentError ?? "")")
             return model
         }
 

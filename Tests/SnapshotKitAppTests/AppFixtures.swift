@@ -87,12 +87,21 @@ enum AppFixtures {
     /// `/usr/bin/xcodebuild` and `/usr/bin/xcrun` hand over to `$DEVELOPER_DIR/usr/bin/xcrun <tool> …`.
     /// Every run's result bundle reads as `testResults` (xcresulttool's JSON), or as unreadable, and
     /// exports the files in the folder `attachments` (a manifest.json and its images), or none.
+    /// It is Xcode 99.1 with an Example Phone on iOS 99.0, for a configuration that names it by its
+    /// folder (`developerDir`).
     static func fakeXcode(_ script: String, testResults: String? = nil, attachments: URL? = nil) throws -> TestEnvironment {
         let app = temporaryDirectory("xcode").appendingPathComponent("Xcode.app")
         let xcrun = app.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
         try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": environment.xcode.version],
+                                           format: .xml, options: 0)
+            .write(to: app.appendingPathComponent("Contents/version.plist"))
         try """
             #!/bin/sh
+            if [ "$1 $2" = "simctl list" ]; then
+            echo '{"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "\(environment.simulator.name)", "udid": "\(environment.simulator.udid)", "state": "Booted"}]}}'
+            exit
+            fi
             if [ "$1 $2 $3 $4" = "xcresulttool get test-results tests" ]; then
             \(testResults.map { "cat <<'JSON'\n\($0)\nJSON" } ?? "exit 1")
             exit
