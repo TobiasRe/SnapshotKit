@@ -56,7 +56,7 @@ import Testing
         let json = String(decoding: try fixture("xcresult-tests-display-names.json"), as: UTF8.self)
         let summary = try XCResultParser.parse(Data(json.replacingOccurrences(of: "/path/to/repo", with: repo.root).utf8))
         let targets = try SuiteLocator.targets(for: summary.failingSuites, in: repo.url)
-        #expect(targets.map(\.suite) == [nil, "CardTests"])
+        #expect(targets.map(\.suite) == [nil, ["CardTests"]])
         #expect(targets.map(\.path) == ["Tests/LibTests/LibTests.swift", "Tests/LibTests/LibTests.swift"])
         // Without failure locations, the files that declare the failing tests.
         var unlocated = summary.failingSuites[0]

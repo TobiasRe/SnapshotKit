@@ -51,7 +51,7 @@ public enum RecordPlanner {
             if parsed[key] == nil {
                 guard let text = sources.text(of: source) else { throw RecordPatchError.suiteFileNotFound("\(file.module)/\(file.suite)") }
                 let suite = suitePath(in: text, preferring: file.suite).map { SuiteResult(bundle: file.module, path: $0, tests: [], failureFiles: [path]) }
-                parsed[key] = (text, suite, suite.flatMap { RecordPatcher.findDeclaration(of: $0.name, in: text)?.isXCTest } ?? false,
+                parsed[key] = (text, suite, suite.flatMap { RecordPatcher.findDeclaration(of: $0.path, in: text)?.isXCTest } ?? false,
                                RecordPatcher.topLevelTests(in: text).map(\.identifier))
             }
             let (text, typeSuite, isXCTest, topLevelTests) = parsed[key]!
@@ -78,7 +78,7 @@ public enum RecordPlanner {
                 // a suite nested in the file's suite: its identifier goes through that suite.
                 let test = key + "#" + file.testName
                 if !file.testName.contains("-"), text.contains("func \(file.testName)("), nested[test] == nil {
-                    nested[test] = isDeclaredInANestedType(file.testName, suite: suite.name, in: text)
+                    nested[test] = isDeclaredInANestedType(file.testName, suite: suite.path, in: text)
                 }
                 if file.testName.contains("-") || !text.contains("func \(file.testName)(") || nested[test] == true {
                     id = suite.identifier
@@ -103,7 +103,7 @@ public enum RecordPlanner {
     /// Whether the suite's body declares `func <test>(` only inside braces of its own (a nested
     /// suite), not directly. Comments and strings don't count; a test declared outside the body
     /// (in an extension) isn't nested.
-    static func isDeclaredInANestedType(_ test: String, suite: String, in source: String) -> Bool {
+    static func isDeclaredInANestedType(_ test: String, suite: [String], in source: String) -> Bool {
         guard let decl = RecordPatcher.findDeclaration(of: suite, in: source),
               let close = RecordPatcher.matchingBrace(in: source, open: decl.bodyOpen) else { return false }
         let declaration = "func \(test)("

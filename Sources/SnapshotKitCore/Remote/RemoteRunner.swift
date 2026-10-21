@@ -337,7 +337,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
     func uploadPatchedSources(for suites: [SuiteResult], to dir: String) throws -> [String] {
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-patch-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: staging) }
-        var byFile: [String: [String?]] = [:]
+        var byFile: [String: [[String]?]] = [:]
         for target in try SuiteLocator.targets(for: suites, in: repository) { byFile[target.path, default: []].append(target.suite) }
         for (path, names) in byFile {
             var text = try String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8)

@@ -118,7 +118,7 @@ private func lastRun(_ outcome: TestOutcome, host: String = "local", bundle: Str
 private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws {
     let path = "Tests/AppTests/CardTests.swift"
     let original = try repo.read(path)
-    let patched = try RecordPatcher.patch(source: original, suite: "CardTests", file: path)
+    let patched = try RecordPatcher.patch(source: original, suite: ["CardTests"], file: path)
     try repo.write(path, patched)
     let journal = PatchJournal(repository: repo.url.path, createdAt: Date(), processIdentifier: owner,
                                files: [PatchedFile(path: path, suite: "CardTests", original: original, patched: patched)])

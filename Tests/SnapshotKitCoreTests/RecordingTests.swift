@@ -11,36 +11,36 @@ import Testing
             @Test func card() {}
         }
         """
-        #expect(try RecordPatcher.patch(source: source, suite: "CardTests")
+        #expect(try RecordPatcher.patch(source: source, suite: ["CardTests"])
                 == source.replacingOccurrences(of: "record: .missing", with: "record: .all"))
     }
 
     @Test func addsRecordToSnapshotsTrait() throws {
-        let patched = try RecordPatcher.patch(source: "@Suite(\"Cards\", .snapshots(diffTool: .ksdiff)) struct CardTests {}", suite: "CardTests")
+        let patched = try RecordPatcher.patch(source: "@Suite(\"Cards\", .snapshots(diffTool: .ksdiff)) struct CardTests {}", suite: ["CardTests"])
         #expect(patched == "@Suite(\"Cards\", .snapshots(record: .all, diffTool: .ksdiff)) struct CardTests {}")
     }
 
     @Test func appendsTraitToSuiteArguments() throws {
-        #expect(try RecordPatcher.patch(source: "@Suite(.serialized) struct A {}", suite: "A") == "@Suite(.serialized, .snapshots(record: .all)) struct A {}")
-        #expect(try RecordPatcher.patch(source: "@Suite() struct A {}", suite: "A") == "@Suite(.snapshots(record: .all)) struct A {}")
-        #expect(try RecordPatcher.patch(source: "@Suite struct A {}", suite: "A") == "@Suite(.snapshots(record: .all)) struct A {}")
+        #expect(try RecordPatcher.patch(source: "@Suite(.serialized) struct A {}", suite: ["A"]) == "@Suite(.serialized, .snapshots(record: .all)) struct A {}")
+        #expect(try RecordPatcher.patch(source: "@Suite() struct A {}", suite: ["A"]) == "@Suite(.snapshots(record: .all)) struct A {}")
+        #expect(try RecordPatcher.patch(source: "@Suite struct A {}", suite: ["A"]) == "@Suite(.snapshots(record: .all)) struct A {}")
     }
 
     @Test func multiLineSuiteAttribute() throws {
         let source = "@Suite(\n    \"Cards\",\n    .serialized\n)\nstruct A {}"
-        #expect(try RecordPatcher.patch(source: source, suite: "A") == "@Suite(\n    \"Cards\",\n    .serialized, .snapshots(record: .all)\n)\nstruct A {}")
+        #expect(try RecordPatcher.patch(source: source, suite: ["A"]) == "@Suite(\n    \"Cards\",\n    .serialized, .snapshots(record: .all)\n)\nstruct A {}")
     }
 
     @Test func appendsTheTraitBeforeATrailingCommentAndAfterATrailingComma() throws {
-        #expect(try RecordPatcher.patch(source: "@Suite(\n    .serialized // shared state\n)\nstruct A {}", suite: "A")
+        #expect(try RecordPatcher.patch(source: "@Suite(\n    .serialized // shared state\n)\nstruct A {}", suite: ["A"])
                 == "@Suite(\n    .serialized, .snapshots(record: .all) // shared state\n)\nstruct A {}")
-        #expect(try RecordPatcher.patch(source: "@Suite(\n    \"Cards\",\n    .serialized,\n)\nstruct A {}", suite: "A")
+        #expect(try RecordPatcher.patch(source: "@Suite(\n    \"Cards\",\n    .serialized,\n)\nstruct A {}", suite: ["A"])
                 == "@Suite(\n    \"Cards\",\n    .serialized, .snapshots(record: .all)\n)\nstruct A {}")
     }
 
     @Test func insertsSuiteWhenMissing() throws {
         let source = "import Testing\n\n    @MainActor final class A {\n}\n"
-        let patched = try RecordPatcher.patch(source: source, suite: "A")
+        let patched = try RecordPatcher.patch(source: source, suite: ["A"])
         #expect(patched == "import Testing\n\n    @Suite(.snapshots(record: .all)) // snapshotkit:record\n    @MainActor final class A {\n}\n")
     }
 
@@ -51,13 +51,55 @@ import Testing
             @Test func t() {}
         }
         """
-        #expect(try RecordPatcher.patch(source: source, suite: "Target") == """
+        #expect(try RecordPatcher.patch(source: source, suite: ["Target"]) == """
             @Suite(.snapshots(record: .missing)) struct Other {}
             @Suite(.snapshots(record: .all)) // snapshotkit:record
             struct Target {
                 @Test func t() {}
             }
             """)
+    }
+
+    static let nestedSuites = """
+        @Suite struct LightTests {
+            @Suite struct Large {
+                @Test func button() {}
+            }
+        }
+
+        @Suite struct DarkTests {
+            @Suite struct Large {
+                @Test func button() {}
+            }
+        }
+
+        extension DarkTests {
+            @Suite struct Small {}
+        }
+
+        extension DarkTests.Large {
+            @Suite struct Pressed {}
+        }
+        """
+
+    /// A nested suite is found along its path, not by its last name: two suites can each have a
+    /// `Large`, and an extension can declare one.
+    @Test func findsANestedSuiteAlongItsPath() throws {
+        let source = Self.nestedSuites
+        #expect(try RecordPatcher.patch(source: source, suite: ["DarkTests", "Large"])
+                == source.replacingOccurrences(of: "struct DarkTests {\n    @Suite struct Large", with: "struct DarkTests {\n    @Suite(.snapshots(record: .all)) struct Large"))
+        #expect(try RecordPatcher.patch(source: source, suite: ["LightTests", "Large"])
+                == source.replacingOccurrences(of: "struct LightTests {\n    @Suite struct Large", with: "struct LightTests {\n    @Suite(.snapshots(record: .all)) struct Large"))
+        #expect(try RecordPatcher.patch(source: source, suite: ["DarkTests", "Small"])
+                == source.replacingOccurrences(of: "@Suite struct Small", with: "@Suite(.snapshots(record: .all)) struct Small"))
+        #expect(try RecordPatcher.patch(source: source, suite: ["DarkTests", "Large", "Pressed"])
+                == source.replacingOccurrences(of: "@Suite struct Pressed", with: "@Suite(.snapshots(record: .all)) struct Pressed"))
+        #expect(throws: RecordPatchError.declarationNotFound(suite: "Large", file: "file")) {
+            try RecordPatcher.patch(source: source, suite: ["Large"])
+        }
+        #expect(throws: RecordPatchError.declarationNotFound(suite: "LightTests.Small", file: "file")) {
+            try RecordPatcher.patch(source: source, suite: ["LightTests", "Small"])
+        }
     }
 
     @Test func xctestOverridesInvokeTest() throws {
@@ -69,7 +111,7 @@ import Testing
             func testCard() {}
         }
         """
-        let patched = try RecordPatcher.patch(source: source, suite: "CardTests")
+        let patched = try RecordPatcher.patch(source: source, suite: ["CardTests"])
         #expect(patched == """
             import SnapshotTesting
             import XCTest
@@ -80,7 +122,7 @@ import Testing
             }
             """)
         #expect(throws: RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "file")) {
-            try RecordPatcher.patch(source: patched, suite: "CardTests")
+            try RecordPatcher.patch(source: patched, suite: ["CardTests"])
         }
     }
 
@@ -99,7 +141,7 @@ import Testing
         }
         """
         #expect(throws: RecordPatchError.xctestAlreadyOverridesInvokeTest(suite: "CardTests", file: "file")) {
-            try RecordPatcher.patch(source: source, suite: "CardTests")
+            try RecordPatcher.patch(source: source, suite: ["CardTests"])
         }
     }
 
@@ -107,15 +149,15 @@ import Testing
     @Test func lineCommentsEndAtWindowsLineEndings() throws {
         let source = "import XCTest\r\n\r\nfinal class CardTests: XCTestCase { // cards\r\n    func testCard() {}\r\n}\r\n"
         // Inserted right after the brace, so the class's comment ends up after the new line's own.
-        #expect(try RecordPatcher.patch(source: source, suite: "CardTests") == "import XCTest\r\n\r\nfinal class CardTests: XCTestCase {"
+        #expect(try RecordPatcher.patch(source: source, suite: ["CardTests"]) == "import XCTest\r\n\r\nfinal class CardTests: XCTestCase {"
                 + "\n    override func invokeTest() { withSnapshotTesting(record: .all) { super.invokeTest() } } // snapshotkit:record"
                 + " // cards\r\n    func testCard() {}\r\n}\r\n")
     }
 
     @Test func parenthesesInSuiteStrings() throws {
-        #expect(try RecordPatcher.patch(source: #"@Suite("a\\", .serialized) struct A {}"#, suite: "A")
+        #expect(try RecordPatcher.patch(source: #"@Suite("a\\", .serialized) struct A {}"#, suite: ["A"])
                 == #"@Suite("a\\", .serialized, .snapshots(record: .all)) struct A {}"#)
-        #expect(try RecordPatcher.patch(source: ##"@Suite(#"say "hi"#, .serialized) struct A {}"##, suite: "A")
+        #expect(try RecordPatcher.patch(source: ##"@Suite(#"say "hi"#, .serialized) struct A {}"##, suite: ["A"])
                 == ##"@Suite(#"say "hi"#, .serialized, .snapshots(record: .all)) struct A {}"##)
     }
 
@@ -173,7 +215,7 @@ import Testing
 
     @Test func missingDeclaration() {
         #expect(throws: RecordPatchError.declarationNotFound(suite: "Nope", file: "file")) {
-            try RecordPatcher.patch(source: "struct Other {}", suite: "Nope")
+            try RecordPatcher.patch(source: "struct Other {}", suite: ["Nope"])
         }
     }
 }
@@ -196,7 +238,7 @@ import Testing
         return repo
     }
 
-    let target = RecordSession.Target(suite: "CardTests", path: "Tests/AppTests/CardTests.swift")
+    let target = RecordSession.Target(suite: ["CardTests"], path: "Tests/AppTests/CardTests.swift")
 
     @Test func patchAndRestore() throws {
         let repo = try makeRepo()
@@ -400,6 +442,28 @@ import Testing
         #expect(try SuiteLocator.locate(viaSearch, in: repo.url) == target.path)
         let missing = SuiteResult(bundle: "AppTests", path: ["Nope"], tests: [], failureFiles: [])
         #expect(throws: RecordPatchError.self) { try SuiteLocator.locate(missing, in: repo.url) }
+    }
+
+    /// Two failing suites with the same last name each get their own declaration patched.
+    @Test func recordsTwoNestedSuitesOfTheSameName() throws {
+        let repo = try TempRepo()
+        let path = "Tests/AppTests/ButtonTests.swift"
+        try repo.write(path, RecordPatcherTests.nestedSuites)
+        try repo.write("Tests/AppTests/OtherTests.swift", "@Suite struct OtherTests {\n    @Suite struct Large {}\n}\n")
+        try repo.commitAll("init")
+        let suites = ["DarkTests", "LightTests"].map { parent in
+            SuiteResult(bundle: "AppTests", path: [parent, "Large"], tests: [
+                TestCaseResult(name: "button()", identifier: "\(parent)/Large/button()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
+            ], failureFiles: [])
+        }
+        let targets = try SuiteLocator.targets(for: suites, in: repo.url)
+        #expect(targets.map(\.suite) == [["DarkTests", "Large"], ["LightTests", "Large"]])
+        #expect(targets.map(\.path) == [path, path])
+
+        let session = try RecordSession.begin(repository: repo.url, targets: targets)
+        defer { session.restore() }
+        #expect(session.journal.files.map(\.suite) == ["DarkTests.Large,LightTests.Large"])
+        #expect(try repo.read(path) == RecordPatcherTests.nestedSuites.replacingOccurrences(of: "{\n    @Suite struct Large", with: "{\n    @Suite(.snapshots(record: .all)) struct Large"))
     }
 
     @Test func snippetsCoverWholeLines() {

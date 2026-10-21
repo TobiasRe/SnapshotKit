@@ -36,16 +36,19 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
 public enum RecordPatcher {
     public static let marker = "snapshotkit:record"
 
-    /// `source` with record mode on for `suite`, or, for nil, for its tests declared outside any type.
-    public static func patch(source: String, suite: String?, file: String = "file") throws -> String {
+    /// `source` with record mode on for the suite type at `suite`, its path in the test bundle
+    /// (`["DarkTests", "Large"]` for a `Large` nested in `DarkTests`), or, for nil, for the tests
+    /// declared outside any type.
+    public static func patch(source: String, suite: [String]?, file: String = "file") throws -> String {
         // A byte order mark would hide a first-line `import XCTest` from the patterns below.
         if source.hasPrefix("\u{FEFF}") { return "\u{FEFF}" + (try patch(source: String(source.dropFirst()), suite: suite, file: file)) }
         guard let suite else { return try patchTopLevelTests(source: source, file: file) }
+        let name = suite.joined(separator: ".")
         guard let decl = findDeclaration(of: suite, in: source) else {
-            throw RecordPatchError.declarationNotFound(suite: suite, file: file)
+            throw RecordPatchError.declarationNotFound(suite: name, file: file)
         }
         if decl.isXCTest {
-            return try patchXCTest(source: source, decl: decl, suite: suite, file: file)
+            return try patchXCTest(source: source, decl: decl, suite: name, file: file)
         }
         return patchSwiftTesting(source: source, decl: decl)
     }
@@ -59,23 +62,87 @@ public enum RecordPatcher {
         var isXCTest: Bool
     }
 
-    static func findDeclaration(of name: String, in source: String) -> Declaration? {
+    /// The declaration of the type at `path`: its first name declared at the top of the file, each
+    /// next one directly in the body of the one before, or in an `extension` of the types before it
+    /// (`extension DarkTests { struct Large {} }`, `extension DarkTests.Large`). Never a type of
+    /// that name nested elsewhere: two suites can each have a `Large`.
+    static func findDeclaration(of path: [String], in source: String) -> Declaration? {
+        if let found = findDeclaration(of: path[...], in: source, scope: source.startIndex..<source.endIndex) { return found }
+        for (extended, body) in extensions(in: source) where extended.count < path.count && path.starts(with: extended) {
+            if let found = findDeclaration(of: path.dropFirst(extended.count), in: source, scope: body) { return found }
+        }
+        return nil
+    }
+
+    private static func findDeclaration(of path: ArraySlice<String>, in source: String, scope: Range<String.Index>) -> Declaration? {
+        guard let name = path.first else { return nil }
+        for decl in declarations(named: name, in: source, scope: scope) {
+            if path.count == 1 { return decl }
+            if let close = matchingBrace(in: source, open: decl.bodyOpen),
+               let found = findDeclaration(of: path.dropFirst(), in: source, scope: source.index(after: decl.bodyOpen)..<close) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// The types named `name` declared directly in `scope`, in order.
+    private static func declarations(named name: String, in source: String, scope: Range<String.Index>) -> [Declaration] {
         let escaped = NSRegularExpression.escapedPattern(for: name)
         // Attributes may contain parentheses nested two levels deep: @Suite(.snapshots(record: .x)).
         let parens = #"\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)"#
-        let pattern = #"(?m)^([ \t]*)((?:@[\w.]+(?:"# + parens + #")?\s+|(?:public|internal|private|fileprivate|package|final|open|nonisolated)\s+)*)(struct|class|actor|enum)\s+"# + escaped + #"\b([^{]*)\{"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let pattern = #"(?m)^([ \t]*)((?:@[\w.]+(?:"# + parens + #")?\s+|(?:public|internal|private|fileprivate|package|final|open|nonisolated)\s+)*)(struct|class|actor|enum)\s+"#
+            + escaped + #"\b([^{]*)\{"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = source as NSString
-        guard let m = regex.firstMatch(in: source, range: NSRange(location: 0, length: ns.length)) else { return nil }
-        let indent = ns.substring(with: m.range(at: 1))
-        let keyword = ns.substring(with: m.range(at: 3))
-        let inheritance = ns.substring(with: m.range(at: 4))
-        let lineStart = Range(m.range(at: 2), in: source)!.lowerBound
-        let keywordStart = Range(m.range(at: 3), in: source)!.lowerBound
-        let bodyOpen = source.index(before: Range(m.range, in: source)!.upperBound)
-        let isXCTest = keyword == "class" && inheritance.contains(":") && imports("XCTest", in: source)
-            && (!imports("Testing", in: source) || inheritance.contains("XCTestCase"))
-        return Declaration(lineStart: lineStart, keywordStart: keywordStart, bodyOpen: bodyOpen, indent: indent, isXCTest: isXCTest)
+        return regex.matches(in: source, range: NSRange(scope, in: source)).compactMap { m in
+            let lineStart = Range(m.range(at: 2), in: source)!.lowerBound
+            guard isDirectly(in: scope, lineStart, of: source) else { return nil }
+            let keyword = ns.substring(with: m.range(at: 3))
+            let inheritance = ns.substring(with: m.range(at: 4))
+            let isXCTest = keyword == "class" && inheritance.contains(":") && imports("XCTest", in: source)
+                && (!imports("Testing", in: source) || inheritance.contains("XCTestCase"))
+            return Declaration(lineStart: lineStart, keywordStart: Range(m.range(at: 3), in: source)!.lowerBound,
+                               bodyOpen: source.index(before: Range(m.range, in: source)!.upperBound),
+                               indent: ns.substring(with: m.range(at: 1)), isXCTest: isXCTest)
+        }
+    }
+
+    private static let extensionDeclaration = try! NSRegularExpression(
+        pattern: #"(?m)^[ \t]*((?:@[\w.]+\s+|(?:public|internal|private|fileprivate|package|nonisolated)\s+)*)extension\s+((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))*)[^{]*\{"#
+    )
+
+    /// The file's extensions: the path of the type each one extends, and the inside of its body.
+    private static func extensions(in source: String) -> [(type: [String], body: Range<String.Index>)] {
+        let file = source.startIndex..<source.endIndex
+        let ns = source as NSString
+        return extensionDeclaration.matches(in: source, range: NSRange(file, in: source)).compactMap { m in
+            let open = source.index(before: Range(m.range, in: source)!.upperBound)
+            guard isDirectly(in: file, Range(m.range(at: 1), in: source)!.lowerBound, of: source),
+                  let close = matchingBrace(in: source, open: open) else { return nil }
+            let type = ns.substring(with: m.range(at: 2)).matches(of: /`[^`]+`|\w+/).map { String($0.output) }
+            return (type, source.index(after: open)..<close)
+        }
+    }
+
+    /// Whether `index` is directly in `scope`: not in braces opened in it, nor in a comment or string.
+    private static func isDirectly(in scope: Range<String.Index>, _ index: String.Index, of source: String) -> Bool {
+        var depth = 0
+        var i = scope.lowerBound
+        while i < index {
+            if let next = endOfCommentOrString(in: source, at: i) {
+                if next > index { return false }
+                i = next
+                continue
+            }
+            switch source[i] {
+            case "{": depth += 1
+            case "}": depth -= 1
+            default: break
+            }
+            i = source.index(after: i)
+        }
+        return depth == 0
     }
 
     /// Whether `source` imports `module`, however: `@testable` or `@preconcurrency`, with an access

@@ -8,7 +8,7 @@ public enum SuiteLocator {
         try suites.flatMap { suite in
             suite.path.isEmpty
                 ? try locateTopLevelTests(suite, in: repository).map { RecordSession.Target(suite: nil, path: $0) }
-                : [RecordSession.Target(suite: suite.name, path: try locate(suite, in: repository))]
+                : [RecordSession.Target(suite: suite.path, path: try locate(suite, in: repository))]
         }
     }
 
@@ -38,13 +38,13 @@ public enum SuiteLocator {
         for file in suite.failureFiles {
             let path = URL.canonicalPath(file)
             guard path.hasPrefix(root + "/"), let text = try? String(contentsOfFile: path, encoding: .utf8),
-                  RecordPatcher.findDeclaration(of: suite.name, in: text) != nil else { continue }
+                  RecordPatcher.findDeclaration(of: suite.path, in: text) != nil else { continue }
             return String(path.dropFirst(root.count + 1))
         }
         let git = Git(root: repository)
         let candidates = git.lsFiles(["*.swift"]).filter { path in
             guard let text = try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8) else { return false }
-            return RecordPatcher.findDeclaration(of: suite.name, in: text) != nil
+            return RecordPatcher.findDeclaration(of: suite.path, in: text) != nil
         }
         // Prefer files inside the suite's test bundle directory.
         if let inBundle = candidates.first(where: { $0.split(separator: "/").contains(Substring(suite.bundle)) }) {

@@ -7,7 +7,7 @@ import Testing
 @Suite(.isolated) struct RecordPatcherCorpusTests {
     struct Case: Sendable, CustomTestStringConvertible {
         var name: String
-        var suite = "CardTests"
+        var suite = ["CardTests"]
         var source: String
         var patched: String
         var testDescription: String { name }
@@ -101,7 +101,7 @@ import Testing
                 func testCard() {}
             }
             """),
-        Case(name: "a suite nested in an extension", source: """
+        Case(name: "a suite nested in an extension", suite: ["AllSnapshotTests", "CardTests"], source: """
             import Testing
 
             extension AllSnapshotTests {
@@ -120,7 +120,7 @@ import Testing
                 }
             }
             """),
-        Case(name: "a suite nested in another suite", source: """
+        Case(name: "a suite nested in another suite", suite: ["AllTests", "CardTests"], source: """
             import Testing
 
             @Suite(.snapshots(record: .missing)) struct AllTests {
@@ -257,7 +257,7 @@ import Testing
     @Test(arguments: cases)
     func thePatchCanBeUndoneAroundEdits(_ c: Case) throws {
         let patched = try RecordPatcher.patch(source: c.source, suite: c.suite)
-        let file = PatchedFile(path: "CardTests.swift", suite: c.suite, original: c.source, patched: patched)
+        let file = PatchedFile(path: "CardTests.swift", suite: c.suite.joined(separator: "."), original: c.source, patched: patched)
         #expect(patched.components(separatedBy: file.patchedSnippet).count == 2)
         let edited = "// edited during the run\n" + patched + "\n// and here\n"
         #expect(edited.replacingOccurrences(of: file.patchedSnippet, with: file.originalSnippet)
