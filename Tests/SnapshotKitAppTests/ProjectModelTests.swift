@@ -1312,12 +1312,49 @@ extension AppUITests {
 
         /// An import that fails says why as soon as it has (a capture waits for it, then stops).
         @Test func aFailedImportSaysWhy() async throws {
-            let model = AppFixtures.project(.failures, store: AppFixtures.store())
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 0", failures: true)    // its xcresulttool reads no bundle
             let failures = model.failures.map(\.id)
-            await model.importResultBundle(AppFixtures.temporaryDirectory("missing").appendingPathExtension("xcresult")).value
+            let bundle = AppFixtures.temporaryDirectory("missing").appendingPathExtension("xcresult")
+            await model.importResultBundle(bundle).value
             #expect(model.lastMessageIsError)
-            #expect(model.lastMessage?.hasPrefix("Could not read missing-") == true)
+            #expect(model.lastMessage == "Could not read \(bundle.lastPathComponent): `xcresulttool get test-results tests` exited with 1")
             #expect(model.failures.map(\.id) == failures)
+        }
+
+        /// An imported bundle's failures replace the ones shown, with their images, as a run's would;
+        /// the verdicts of earlier checks go (they were of other runs), the history has the import,
+        /// and the Failures tab shows it.
+        @Test func anImportShowsTheBundlesFailures() async throws {
+            let (repo, _) = try makeRepo()
+            let app = AppModel(store: AppFixtures.store())
+            let earlier = FlakeResult(suite: AppFixtures.profileSuite.identifier, test: "badge()", passed: 5, failed: 0, verdict: .passes)
+            let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.payButtonFailed,
+                                          attachments: try payButtonAttachments(), failures: true, flakeResults: [earlier])
+            model.scratchDirectory = AppFixtures.temporaryDirectory("scratch")
+            app.show(model)
+            model.tab = .run
+            let bundle = AppFixtures.temporaryDirectory("ci").appendingPathComponent("ci.xcresult")
+            try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+
+            await model.importResultBundle(bundle).value
+            #expect(model.lastMessage == "Imported 1 failing test from ci.xcresult.")
+            #expect(!model.lastMessageIsError)
+            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.tab == .failures)
+            #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
+            #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier])
+            #expect(model.flakeResults.isEmpty)
+            let source = try #require(model.failureSource)
+            #expect(source == FailureSource(label: "ci.xcresult", date: source.date, host: "imported", resultBundle: bundle))
+            let failure = try #require(model.failures.first?.images.first?.failure)
+            #expect(try Data(contentsOf: failure) == AppFixtures.actual)
+            #expect(failure.path.hasPrefix(model.scratchDirectory.appendingPathComponent("imported").path + "/"))
+            let record = try #require(model.history.last)
+            #expect(record.kind == .imported)
+            #expect(record.host == "ci.xcresult")
+            #expect(record.failed == 1)
+            #expect(record.resultBundle == bundle.path)
         }
 
         /// Moving snapshots to the Trash that all stay says so, without claiming any moved.

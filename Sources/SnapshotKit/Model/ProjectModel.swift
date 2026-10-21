@@ -1058,11 +1058,14 @@ final class ProjectModel {
         notify("Reading \(url.lastPathComponent)…")
         let repo = project.url, start = tab
         let dir = scratchDirectory.appendingPathComponent("imported/\(UUID().uuidString)", isDirectory: true)
+        // The Xcode CI runs, once found, rather than the selected one: an older xcresulttool can't
+        // read a newer Xcode's bundles.
+        let developerDir = environment?.xcode.developerDir
         return Task {
             let result = await offCooperativePool {
                 Result { () -> (TestRunSummary, [SnapshotFailureImages]) in
-                    let summary = try XCResultParser.load(resultBundle: url, developerDir: nil)
-                    let images = (try? FailureAttachments.export(resultBundle: url, to: dir, developerDir: nil)) ?? []
+                    let summary = try XCResultParser.load(resultBundle: url, developerDir: developerDir)
+                    let images = (try? FailureAttachments.export(resultBundle: url, to: dir, developerDir: developerDir)) ?? []
                     return (summary, images)
                 }
             }
