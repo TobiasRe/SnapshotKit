@@ -11,16 +11,25 @@ public final class SnapshotWatcher: @unchecked Sendable { // `stream` is set in 
     /// What the stream calls back. The stream owns it (released along with the stream), so a
     /// callback never reaches a watcher that is already gone.
     private final class Callback: Sendable {
+        let isRelevant: @Sendable (String) -> Bool
         let onChange: @Sendable () -> Void
-        init(_ onChange: @escaping @Sendable () -> Void) { self.onChange = onChange }
+        init(_ isRelevant: @escaping @Sendable (String) -> Bool, _ onChange: @escaping @Sendable () -> Void) {
+            self.isRelevant = isRelevant
+            self.onChange = onChange
+        }
     }
 
     /// - Parameters:
     ///   - latency: how long to wait for more events before calling back.
     ///   - onChange: called on a background queue after snapshot files changed. Don't call `stop()`
     ///     from it.
-    public init(repository: URL, latency: TimeInterval = 0.5, onChange: @escaping @Sendable () -> Void) {
-        start(path: repository.resolvingSymlinksInPath().path, latency: latency, onChange: onChange)
+    public convenience init(repository: URL, latency: TimeInterval = 0.5, onChange: @escaping @Sendable () -> Void) {
+        self.init(repository: repository, latency: latency, isRelevant: Self.isSnapshotPath, onChange: onChange)
+    }
+
+    /// Calls back for the changed paths `isRelevant` picks: tests watch every change with it.
+    init(repository: URL, latency: TimeInterval, isRelevant: @escaping @Sendable (String) -> Bool, onChange: @escaping @Sendable () -> Void) {
+        start(path: repository.resolvingSymlinksInPath().path, latency: latency, isRelevant: isRelevant, onChange: onChange)
     }
 
     deinit { stop() }
@@ -37,21 +46,28 @@ public final class SnapshotWatcher: @unchecked Sendable { // `stream` is set in 
         }
     }
 
+    /// Delivers the events that have happened but wait out the latency, before it returns.
+    func flush() {
+        dispatchPrecondition(condition: .notOnQueue(queue))
+        guard let stream = queue.sync(execute: { stream }) else { return }
+        FSEventStreamFlushSync(stream)
+    }
+
     /// Whether an event path concerns a snapshot image.
     public static func isSnapshotPath(_ path: String) -> Bool {
         path.contains("/__Snapshots__/") || path.hasSuffix("/__Snapshots__")
     }
 
-    private func start(path: String, latency: TimeInterval, onChange: @escaping @Sendable () -> Void) {
+    private func start(path: String, latency: TimeInterval, isRelevant: @escaping @Sendable (String) -> Bool, onChange: @escaping @Sendable () -> Void) {
         var context = FSEventStreamContext(
-            version: 0, info: Unmanaged.passRetained(Callback(onChange)).toOpaque(), retain: nil,
+            version: 0, info: Unmanaged.passRetained(Callback(isRelevant, onChange)).toOpaque(), retain: nil,
             release: { info in info.map { Unmanaged<Callback>.fromOpaque($0).release() } }, copyDescription: nil
         )
         let callback: FSEventStreamCallback = { _, info, count, paths, _, _ in
             guard let info else { return }
             let callback = Unmanaged<Callback>.fromOpaque(info).takeUnretainedValue()
             let list = Unmanaged<CFArray>.fromOpaque(paths).takeUnretainedValue() as? [String] ?? []
-            if list.prefix(count).contains(where: SnapshotWatcher.isSnapshotPath) { callback.onChange() }
+            if list.prefix(count).contains(where: callback.isRelevant) { callback.onChange() }
         }
         let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
         guard let stream = FSEventStreamCreate(nil, callback, &context, [path] as CFArray,
