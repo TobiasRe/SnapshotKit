@@ -157,6 +157,59 @@ import Testing
             }
             #endif
             """),
+        Case(name: "a suite declared in each branch of an #if", source: """
+            import Testing
+
+            #if os(macOS)
+            @Suite struct CardTests {
+                @Test func card() {}
+            }
+            #else
+            struct CardTests {
+                @Test func card() {}
+            }
+            #endif
+            """, patched: """
+            import Testing
+
+            #if os(macOS)
+            @Suite(.snapshots(record: .all)) struct CardTests {
+                @Test func card() {}
+            }
+            #else
+            @Suite(.snapshots(record: .all)) // snapshotkit:record
+            struct CardTests {
+                @Test func card() {}
+            }
+            #endif
+            """),
+        Case(name: "an XCTest case declared in each branch of an #if", source: """
+            import XCTest
+
+            #if os(macOS)
+            final class CardTests: XCTestCase {
+                func testCard() {}
+            }
+            #else
+            final class CardTests: XCTestCase {
+                func testCard() {}
+            }
+            #endif
+            """, patched: """
+            import XCTest
+
+            #if os(macOS)
+            final class CardTests: XCTestCase {
+                \(xctestLine)
+                func testCard() {}
+            }
+            #else
+            final class CardTests: XCTestCase {
+                \(xctestLine)
+                func testCard() {}
+            }
+            #endif
+            """),
         Case(name: "a multi-line @Suite with a multi-line snapshots trait", source: """
             import Testing
 

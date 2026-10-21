@@ -88,6 +88,9 @@ final class CheckoutViewTests: XCTestCase {
 A test case that already overrides `invokeTest()` can’t be patched this way; SnapshotKit says so and you
 re-record it by hand.
 
+A type declared in each branch of an `#if` (`#if os(macOS)` … `#else` …) is patched in each, so whichever
+branch is built records.
+
 Granularity: when you re-record *tests*, `-only-testing` names each test (`Bundle/Suite/test()` for Swift
 Testing, `Bundle/Suite/test` for XCTest), so only those run. Parameterized tests, and tests whose function
 can’t be found, run with their whole suite. *Re-record Suite* and *Re-record Failing Suites* run whole suites.

@@ -44,13 +44,17 @@ public enum RecordPatcher {
         if source.hasPrefix("\u{FEFF}") { return "\u{FEFF}" + (try patch(source: String(source.dropFirst()), suite: suite, file: file)) }
         guard let suite else { return try patchTopLevelTests(source: source, file: file) }
         let name = suite.joined(separator: ".")
-        guard let decl = findDeclaration(of: suite, in: source) else {
-            throw RecordPatchError.declarationNotFound(suite: name, file: file)
+        // A type declared more than once is so in the branches of an `#if`: each one gets the patch.
+        let count = findDeclarations(of: suite, in: source).count
+        guard count > 0 else { throw RecordPatchError.declarationNotFound(suite: name, file: file) }
+        var patched = source
+        for i in 0..<count {
+            // Found again in the text patched so far: the patches before moved it.
+            let decl = findDeclarations(of: suite, in: patched)[i]
+            patched = decl.isXCTest ? try patchXCTest(source: patched, decl: decl, suite: name, file: file)
+                : patchSwiftTesting(source: patched, decl: decl)
         }
-        if decl.isXCTest {
-            return try patchXCTest(source: source, decl: decl, suite: name, file: file)
-        }
-        return patchSwiftTesting(source: source, decl: decl)
+        return patched
     }
 
     struct Declaration {
@@ -67,23 +71,23 @@ public enum RecordPatcher {
     /// (`extension DarkTests { struct Large {} }`, `extension DarkTests.Large`). Never a type of
     /// that name nested elsewhere: two suites can each have a `Large`.
     static func findDeclaration(of path: [String], in source: String) -> Declaration? {
-        if let found = findDeclaration(of: path[...], in: source, scope: source.startIndex..<source.endIndex) { return found }
-        for (extended, body) in extensions(in: source) where extended.count < path.count && path.starts(with: extended) {
-            if let found = findDeclaration(of: path.dropFirst(extended.count), in: source, scope: body) { return found }
-        }
-        return nil
+        findDeclarations(of: path, in: source).first
     }
 
-    private static func findDeclaration(of path: ArraySlice<String>, in source: String, scope: Range<String.Index>) -> Declaration? {
-        guard let name = path.first else { return nil }
-        for decl in declarations(named: name, in: source, scope: scope) {
-            if path.count == 1 { return decl }
-            if let close = matchingBrace(in: source, open: decl.bodyOpen),
-               let found = findDeclaration(of: path.dropFirst(), in: source, scope: source.index(after: decl.bodyOpen)..<close) {
-                return found
-            }
+    /// Every declaration of the type at `path`, as `findDeclaration` finds one, in order.
+    static func findDeclarations(of path: [String], in source: String) -> [Declaration] {
+        findDeclarations(of: path[...], in: source, scope: source.startIndex..<source.endIndex)
+            + extensions(in: source).filter { $0.type.count < path.count && path.starts(with: $0.type) }
+                .flatMap { findDeclarations(of: path.dropFirst($0.type.count), in: source, scope: $0.body) }
+    }
+
+    private static func findDeclarations(of path: ArraySlice<String>, in source: String, scope: Range<String.Index>) -> [Declaration] {
+        guard let name = path.first else { return [] }
+        return declarations(named: name, in: source, scope: scope).flatMap { decl -> [Declaration] in
+            if path.count == 1 { return [decl] }
+            guard let close = matchingBrace(in: source, open: decl.bodyOpen) else { return [] }
+            return findDeclarations(of: path.dropFirst(), in: source, scope: source.index(after: decl.bodyOpen)..<close)
         }
-        return nil
     }
 
     /// The types named `name` declared directly in `scope`, in order.
