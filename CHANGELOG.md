@@ -48,86 +48,91 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   seconds sooner.
 
 ### Fixed
+
+**App**
 - The sidebar stayed blank, and ⌘K showed only its backdrop, whenever no project was open at launch
   (including the first launch).
-- Failures match their reference images when the repository was moved or copied, or the bundle came from CI.
-- A test that ran on several simulators, or a parameterized test, counts a run per device and keeps every
-  device’s and case’s images; a flakiness check on two simulators no longer calls a flaky test “Fails every
-  time”. Run progress names a parameterized test once, by its name.
-- Reverting a snapshot renamed only in case no longer deletes it.
-- Recording works in test files with Windows line endings, a byte order mark, or a `@Suite(...)` ending in a
-  comment or a comma.
-- Tests named with raw identifiers (`` `pay button`() ``) no longer show as orphaned, and a change names its
-  test like the library does (`payButton`, not `payButton.dark`).
-- CI files: block-list matrices, `KEY=value xcodebuild …`, folded (`>`) commands, unquoted `${{ … }}`, several
-  `xcodebuild` calls on one line and commented-out lines are read correctly.
-- A `.snapshotkit.yml` that starts with `---` can be read.
-- Without an OS, or with `latest`, runs use the newest simulator runtime, as CI does, not an older booted one.
-- A run that records a new reference no longer makes the test look flaky.
-- The diagnosis never suggests `perceptualPrecision: 1` or `precision: 0`, which can’t pass or pass anything;
-  a few visible pixels over rendering noise get both `precision` and `perceptualPrecision`.
-- Remote runs sync submodules, and download recorded snapshots with spaces or non-ASCII names.
-- The ⌘K palette no longer lists projects whose path merely contains the typed letters somewhere.
-- A project opened through a symbolic link shares its settings and history with the real path, as `snapkit`
-  does.
-- VoiceOver reads the names of icon menus (··· and the re-record arrow) instead of “More” or “Down”.
-- Re-recording one test no longer clears the other failures of the last run; only the tests that ran are
-  updated, in the app, in `snapkit` and in `.git/snapshotkit/last-run.json`. A test that still fails after
-  re-recording shows its images.
-- A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts
-  instead of wiping them, and says “Cancelled.” rather than reporting a result. In `snapkit`, a Ctrl-C after
-  recording says “Recorded; the verification was cancelled.” and exits 1.
-- A re-record whose build failed, or that ran no test, says “Nothing was recorded” (and `snapkit record` /
-  `rerecord` exit 1) instead of “Recorded”; a verification that ran no test says it couldn’t verify.
-- Counts read right with one (“1 test passed”, “1 fails every time”), a run in which no test ran says so, and
-  `snapkit` prints “▸ Finished” once.
-- The Dock badge counts failing tests, not a flakiness check’s failed repetitions.
-- Moving snapshots to the Trash says which couldn’t be moved, and why.
+- Re-recording a snapshot that was already changed shows the new image on the Changes tab and in the library,
+  not the cached old one; an open compare window shows the new pair when it is opened again. A slow image or
+  history that arrives after you moved on no longer lands on the newly selected snapshot.
+- Each compare window (`snapkit open`) has its own zoom and keys; zooming or flipping in one no longer moves
+  another, and the View menu acts on the window in front.
+- Double-clicking a grid tile opens that tile, not the one scrolled under the pointer; lists and the grid
+  scroll to a selection made elsewhere (Show in Library, Show Failure).
+- When the image size changed, each side is drawn at its own size; sizes and coordinates no longer read as
+  decimals in locales like German. Zooming keeps the pixel under the pointer in place.
 - Deleting, discarding or reverting the selected item selects the next one instead of jumping to the top, and
   lists start at their first visible row. A filter that hides the selection moves it to the first row shown.
 - Overlapping refreshes of the library, Changes or the Xcode check no longer show an older result over a newer
   one; a reload no longer replaces imported failures with the last local run’s.
-- A branch checked out outside the app shows up when you come back to it; a repository folder deleted or moved
-  while open is reported as gone.
+- A branch checked out outside the app, and a run made with `snapkit`, show up when you come back to the app;
+  a repository folder deleted or moved while open is reported as gone.
 - A flakiness check, remote re-record or import that finishes no longer pulls you away from the tab you moved
   to meanwhile.
-- When the image size changed, each side is drawn at its own size; sizes and coordinates no longer read as
-  decimals in locales like German. Zooming keeps the pixel under the pointer in place.
-- Opening a folder that doesn’t exist or isn’t a git repository says so instead of adding it as a project.
+- Without Xcode, running, re-recording and checking flakiness are disabled in the menus, ⌘K and the Failures
+  tab, as on the Run tab; importing a result bundle is off during a run, which would replace it.
+- Opening a folder that doesn’t exist or isn’t a git repository says so instead of adding it as a project; a
+  project opened through a symbolic link shares its settings and history with the real path.
 - Opening the base version of two snapshots of the same test, or of a branch like `release/1.0`, opens the
   right image.
-- The same notice (“All 12 tests passed.”) shows again after it was closed.
-- Re-recording a snapshot that was already changed shows the new image on the Changes tab and in the library,
-  not the cached old one; an open compare window shows the new pair when it is opened again.
-- Without Xcode, ⌘R, Re-record Failing Suites and Check Flakiness are disabled in the menus and on the
-  Failures tab, as they already were on the Run tab.
-- Failure actions open and copy the attempt on screen; the library’s **Re-record N Shown** leaves out orphaned
-  snapshots instead of failing on them.
-- Two test targets with a same-named test (`AppTests/CardTests/card()`, `FeatureTests/CardTests/card()`) keep
-  their own failure images, in the app and in `snapkit failures`.
-- A run whose tests don’t build keeps the last run’s failures, and `snapkit rerecord` / `flaky` stop with the
-  build error instead of “nothing to re-record”. A verification that doesn’t build says it couldn’t verify.
-- Ctrl-C in `snapkit` stops wherever it is: while finding the failing suites, looking up the scheme or checking
-  flakiness, never going on to record or reporting verdicts.
-- `snapkit failures` lists the last run as its verifications left it, not the tests they fixed.
-- A failure image a later verification didn’t touch is kept when old results are pruned.
-- CI working directories are read from GitHub Actions’ `working-directory` and from `cd` lines before the command
-  (including GitLab’s `before_script`), not only `cd DIR && xcodebuild`.
-- Discarding a snapshot that was deleted on the branch and recorded again works; a staged new snapshot reads as
-  New; a symlinked test file stays a symlink after re-recording; a rescan keeps every project you added.
-- The app picks up runs made with `snapkit` when you come back to it, and verifies a re-record on the remote Mac
-  like `snapkit rerecord --remote`. A missing Xcode or simulator on the remote Mac exits 2, as documented.
-- Swift Testing tests declared outside a type can be re-recorded, and only the failing ones are when
-  re-recording failing suites. Tests with a display name (`@Test("Pay button")`) or a raw identifier are run and
-  recorded by their function, which before ran no test or the wrong suite.
-- `snapkit rerecord` / `record` keep the images of tests that still fail after the verification.
-- CI working directories follow every `cd` of a command chain (`cd ios && pod install && cd ..`), `pushd`, a
-  GitLab `script:` after `before_script`, and shell functions; an unresolvable `cd` no longer loses later ones.
-- `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ), and `snapkit
-  config` shows the Xcode used and every value set.
-- `snapkit failures` lists a remote last run; `rerecord` / `flaky --remote` find the failing suites on the remote
-  Mac; `snapkit flaky` says *Nothing was checked* and exits 1 when no test ran; Ctrl-C stops a scheme lookup.
-- A project removed from the list stays removed through rescans.
+- The ⌘K palette no longer lists projects whose path merely contains the typed letters somewhere.
+- The same notice (“All 12 tests passed.”) shows again after it was closed; moving snapshots to the Trash
+  says which couldn’t be moved, and why.
+- The Dock badge counts the open project’s failing tests, not a flakiness check’s failed repetitions, from
+  launch and as you switch projects.
+- VoiceOver reads the names of icon menus (··· and the re-record arrow) instead of “More” or “Down”.
+
+**Runs, failures and flakiness**
+- Failures match their reference images when the repository was moved or copied, or the bundle came from CI;
+  two test targets with a same-named test keep their own images.
+- A test that ran on several simulators, or a parameterized test, counts a run per device and keeps every
+  device’s and case’s images; a flakiness check on two simulators no longer calls a flaky test “Fails every
+  time”. Run progress names a parameterized test once, by its name.
+- A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts, and
+  the Run tab keeps showing the last run, with “Cancelled.” rather than a result.
+- A run whose tests don’t build keeps the last run’s failures, and says so.
+- A run that records a new reference no longer makes the test look flaky; **Check Flakiness of Failing Tests**
+  repeats just the failing tests, not the passing ones beside them.
+- Counts read right with one (“1 test passed”, “1 fails every time”), and a run in which no test ran says so.
+- The diagnosis never suggests `perceptualPrecision: 1` or `precision: 0`, which can’t pass or pass anything;
+  a few visible pixels over rendering noise get both `precision` and `perceptualPrecision`.
+
+**Re-recording**
+- Re-recording one test no longer clears the other failures of the last run; only the tests that ran are
+  updated, in the app, in `snapkit` and in `.git/snapshotkit/last-run.json`. A test that still fails after its
+  verification keeps its images, also when old results are pruned.
+- A re-record whose build failed, or that ran no test, says “Nothing was recorded” instead of “Recorded”; a
+  verification that ran no test, or didn’t build, says it couldn’t verify.
+- Tests with a display name (`@Test("Pay button")`) or a raw identifier (`` `pay button`() ``) are run and
+  recorded by their function: before, they ran no test, the wrong suite, or showed as orphaned. Swift Testing
+  tests declared outside a type can be re-recorded, only the failing ones when re-recording failing suites.
+- Recording works in test files with Windows line endings, a byte order mark, or a `@Suite(...)` ending in a
+  comment or a comma; a symlinked test file stays a symlink.
+- Discarding a snapshot that was deleted on the branch and recorded again works; reverting a snapshot renamed
+  only in case no longer deletes it; a staged new snapshot reads as New.
+- The library’s **Re-record N Shown** leaves out orphaned snapshots, and **Re-record All…** always asks first.
+
+**Configuration**
+- CI files: block-list matrices, `KEY=value xcodebuild …`, folded (`>`) commands, unquoted `${{ … }}`, several
+  `xcodebuild` calls on one line and commented-out lines are read correctly.
+- The working directory follows GitHub Actions’ `working-directory` and every `cd` before the command:
+  command chains (`cd ios && pod install && cd ..`), `pushd`, GitLab’s `before_script` and shell functions.
+- `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ).
+- A `.snapshotkit.yml` that starts with `---` can be read.
+- Without an OS, or with `latest`, runs use the newest simulator runtime, as CI does, not an older booted one.
+
+**`snapkit`**
+- Ctrl-C stops wherever it is: while finding the failing suites, looking up the scheme, recording or checking
+  flakiness, never going on to record or reporting verdicts. After recording it says “Recorded; the
+  verification was cancelled.” and exits 1.
+- `snapkit record` / `rerecord` exit 1 when nothing was recorded; `rerecord` / `flaky` stop with the build error
+  when the failing suites can’t be found; `flaky` says *Nothing was checked* and exits 1 when no test ran.
+- `snapkit failures` lists the last run as its verifications left it, also a remote one; `config` shows the
+  Xcode used and every value set; `snapkit` prints “▸ Finished” once.
+- Remote: runs sync submodules and download recorded snapshots with spaces or non-ASCII names; `rerecord` /
+  `flaky --remote` find the failing suites on the remote Mac; the app verifies a remote re-record as `snapkit`
+  does; a missing Xcode or simulator there exits 2.
+- A rescan keeps every project you added, and one you removed stays removed.
 
 ## [0.2.0] - 2026-10-20
 
