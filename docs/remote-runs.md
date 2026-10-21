@@ -47,6 +47,7 @@ refused, so a repository can’t slip `ssh` options in.
 4. **Collecting results** — the result summary and failure images are fetched, and remote paths are mapped back
    to your repository, so the Failures tab and `snapkit failures` work as for a local run. (`snapkit failures
    --out` needs the bundle itself: it stays on the remote Mac, so pass a downloaded one with `--xcresult`.)
+   The remote Mac keeps the bundles of the last 10 runs, in `.snapshotkit/results` of its copy.
 
 The run is recorded in the history with the host’s name, so the strips and the flakiness signal include
 remote runs.

@@ -321,6 +321,21 @@ import Testing
                                                                 options: .regularExpression) != nil)
     }
 
+    /// The remote Mac keeps the bundles of as many runs as this one: the newest.
+    @Test func theRemoteMacKeepsTheNewestRuns() async throws {
+        let repo = try TempRepo()
+        try repo.write("README", "x")
+        try repo.commitAll("init")
+        let mac = try FakeMac(xcodebuild: "mkdir -p \"$bundle\" && echo '\(CLIFakeXcodeTests.passingTest)' > \"$bundle/tests.json\"")
+        let results = mac.checkout.appendingPathComponent(".snapshotkit/results")
+        let earlier = (10..<22).map { "2001-01-01T00-00-\($0)Z-0000ABCD.xcresult" }
+        for name in earlier { try FileManager.default.createDirectory(at: results.appendingPathComponent(name), withIntermediateDirectories: true) }
+
+        let result = try await runner(repo, mac).run(mode: .run)
+        let kept = try FileManager.default.contentsOfDirectory(atPath: results.path).sorted()
+        #expect(kept == earlier.suffix(9) + [result.run.resultBundle.lastPathComponent])
+    }
+
     /// A flakiness check runs the tests the given number of times there, and reads each repetition.
     @Test func aFlakinessCheckRepeatsTheTests() async throws {
         let repo = try TempRepo()

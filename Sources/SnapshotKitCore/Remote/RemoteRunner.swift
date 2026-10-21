@@ -268,6 +268,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let attachments = (try? await offCooperativePool {
             try self.collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)
         }) ?? []
+        try? await offCooperativePool { try self.pruneResults(in: stateDir + "/results") }
         let run = TestRunResult(
             commandLine: "[\(transport.label)] " + process.commandLine,
             exitStatus: status,
@@ -349,6 +350,14 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let paths = byFile.keys.sorted()
         try transport.upload(files: paths, from: staging, to: dir)
         return paths
+    }
+
+    /// Leaves the newest of the remote Mac's result bundles in `dir`, as many runs as are kept here
+    /// (its runs' images come here, their bundles stay there). A bundle's name starts with the time
+    /// its run started.
+    func pruneResults(in dir: String) throws {
+        try transport.run("cd \(Shell.quote(dir)) && ls -1d -- *.xcresult 2>/dev/null | sort -r | tail -n +\(TestRunner.keptResults + 1) "
+            + #"| while IFS= read -r bundle; do rm -rf -- "$bundle"; done"#)
     }
 
     func downloadRecordedSnapshots(dir: String, stateDir: String) throws -> [String] {
