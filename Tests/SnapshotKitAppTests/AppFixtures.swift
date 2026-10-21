@@ -234,30 +234,23 @@ enum AppFixtures {
 
     // MARK: Hosting
 
-    /// The defaults that hosted views read and write through `@AppStorage`, emptied by `resetDefaults()`,
-    /// so a test sees neither an earlier test's compare mode or layout nor the test runner's own defaults.
+    /// The app's view settings (`UserDefaults.app`): what hosted views read and write through
+    /// `@AppStorage`, and the library's sort order. Emptied by `resetDefaults()`, so a test sees neither
+    /// an earlier test's compare mode, layout or sort nor the user's.
     ///
-    /// One suite per test process: the user's defaults are shared by every process, so a run in another
-    /// checkout at the same time would otherwise reset or set them in the middle of this one's snapshots.
-    /// Those of earlier runs are removed once their process has ended.
+    /// A plist in this process's `home`, never in ~/Library/Preferences: the user's defaults are shared
+    /// by every process, so a run in another checkout at the same time would otherwise reset or set them
+    /// in the middle of this one's snapshots.
     static let defaults: UserDefaults = {
-        let preferences = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
-        for file in (try? FileManager.default.contentsOfDirectory(atPath: preferences.path)) ?? []
-        where file.hasPrefix(defaultsPrefix) && file.hasSuffix(".plist") {
-            let suite = String(file.dropLast(".plist".count))
-            if let pid = Int32(suite.dropFirst(defaultsPrefix.count)), pid != getpid(), kill(pid, 0) == 0 { continue }
-            UserDefaults.standard.removePersistentDomain(forName: suite)
-            try? FileManager.default.removeItem(at: preferences.appendingPathComponent(file))
-        }
-        return UserDefaults(suiteName: defaultsSuite)!
+        _ = home                                        // names the suite before the app first reads it
+        precondition(UserDefaults.app !== UserDefaults.standard,
+                     "UserDefaults.app was read before AppFixtures.home chose the tests' suite")
+        return .app
     }()
-    private static let defaultsPrefix = "SnapshotKitAppTests."
-    private static let defaultsSuite = defaultsPrefix + "\(getpid())"
+    private static var defaultsSuite: String { home.appendingPathComponent("defaults").path }
 
     static func resetDefaults() {
         defaults.removePersistentDomain(forName: defaultsSuite)
-        // ProjectModel keeps its sort order in the standard defaults.
-        UserDefaults.standard.removeObject(forKey: "librarySort")
     }
 
     /// Shows `view` in an off-screen window, as the app's window would, lets it settle, hands the hosting
@@ -311,8 +304,14 @@ enum AppFixtures {
 
     // MARK: Models
 
-    /// One directory per test process for settings and repositories. Those of earlier runs are removed
-    /// once their process has ended, so runs don't pile up temp directories.
+    /// One directory per test process for settings, history, view settings and repositories. Those of
+    /// earlier runs are removed once their process has ended, so runs don't pile up temp directories.
+    ///
+    /// Made once, it also isolates the process: the app's settings, history and patch registry
+    /// (`SNAPSHOTKIT_HOME`) and view settings (`SNAPSHOTKIT_DEFAULTS`) go here instead of the user's,
+    /// and git ignores the user's and the system's configuration (hooks, templates or signing would
+    /// change what the tests see). Set here and only here: the environment is the whole process's,
+    /// read by other threads meanwhile, and the core tests running alongside read it too.
     static let home: URL = {
         let runs = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-app-test-runs")
         for old in (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [] {
@@ -321,6 +320,10 @@ enum AppFixtures {
         }
         let home = runs.appendingPathComponent("\(getpid())")
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        setenv("SNAPSHOTKIT_HOME", home.path, 1)
+        setenv("SNAPSHOTKIT_DEFAULTS", home.appendingPathComponent("defaults").path, 1)
+        setenv("GIT_CONFIG_GLOBAL", "/dev/null", 1)
+        setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
         return home
     }()
 
@@ -330,7 +333,6 @@ enum AppFixtures {
     }
 
     static func store() -> ProjectStore {
-        setenv("SNAPSHOTKIT_HOME", home.path, 1)
         try? FileManager.default.removeItem(at: home.appendingPathComponent("settings.json"))
         let store = ProjectStore(url: home.appendingPathComponent("settings.json"))
         store.update { s in

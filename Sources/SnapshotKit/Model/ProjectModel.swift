@@ -822,12 +822,16 @@ final class ProjectModel {
         project.url.appendingPathComponent(change.path)
     }
 
+    /// Where files for other apps to open go: base images, and an imported bundle's failure images.
+    /// The temporary folder's, or a test's own.
+    @ObservationIgnored var scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit", isDirectory: true)
+
     /// Writes the base-side image to a temporary file (for opening in another app).
     func exportBaseImage(for change: SnapshotChange) -> URL? {
         guard let data = imageLoader(for: change)().0 else { return nil }
         // In the snapshot's own folder, so no other snapshot's base image (a test's second one, a
         // test of the same name in another suite) takes its place.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/base-images", isDirectory: true)
+        let dir = scratchDirectory.appendingPathComponent("base-images", isDirectory: true)
             .appendingPathComponent((change.path as NSString).deletingLastPathComponent, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let name = (change.fileName as NSString).deletingPathExtension
@@ -1049,8 +1053,8 @@ final class ProjectModel {
     func importResultBundle(_ url: URL) -> Task<Void, Never> {
         notify("Reading \(url.lastPathComponent)…")
         let repo = project.url, start = tab
+        let dir = scratchDirectory.appendingPathComponent("imported/\(UUID().uuidString)", isDirectory: true)
         return Task {
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapshotKit/imported/\(UUID().uuidString)")
             let result = await offCooperativePool {
                 Result { () -> (TestRunSummary, [SnapshotFailureImages]) in
                     let summary = try XCResultParser.load(resultBundle: url, developerDir: nil)

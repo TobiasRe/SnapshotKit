@@ -10,10 +10,8 @@ extension AppUITests {
     @Suite(.serialized)
     struct ProjectModelTests {
         init() {
+            // Also isolates the process (see `AppFixtures.home`): no git configuration of this machine's user.
             AppFixtures.resetDefaults()
-            // The tests' git and the app's must not pick up hooks, templates or settings of this machine's user.
-            setenv("GIT_CONFIG_GLOBAL", "/dev/null", 1)
-            setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
         }
 
         /// A repo on `feature` with one committed snapshot change and one uncommitted re-record.
@@ -443,10 +441,12 @@ extension AppUITests {
             for path in [second, other] { try AppFixtures.actual.write(to: repo.appendingPathComponent(path)) }
 
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            // Not the temporary folder's SnapshotKit/base-images, which the app itself writes to.
+            model.scratchDirectory = AppFixtures.temporaryDirectory("scratch")
             model.updateSettings { $0.baseBranch = "release/1.0" }
             await waitForChanges(model)
             let changes = try #require(model.changeSet?.changes)
-            #expect(changes.count == 3)
+            #expect(Set(changes.map(\.path)) == [png, second, other])
             let base = [png: AppFixtures.reference, second: AppFixtures.badged, other: AppFixtures.renderingNoise]
             var urls: Set<URL> = []
             for change in changes {
@@ -454,7 +454,10 @@ extension AppUITests {
                 urls.insert(url)
                 #expect(try Data(contentsOf: url) == base[change.path])
             }
-            #expect(urls.count == 3)
+            let snapshots = model.scratchDirectory.appendingPathComponent("base-images/Tests/AppTests/__Snapshots__")
+            #expect(urls == [snapshots.appendingPathComponent("CardTests/card.1 (release-1.0).png"),
+                             snapshots.appendingPathComponent("CardTests/card.2 (release-1.0).png"),
+                             snapshots.appendingPathComponent("OtherCardTests/card.1 (release-1.0).png")])
         }
 
         @Test func incrementalLogMatchesFullFilter() {

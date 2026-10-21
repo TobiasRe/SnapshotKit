@@ -42,10 +42,16 @@ struct SnapshotKitApp: App {
 }
 
 extension UserDefaults {
-    /// Where the app keeps view settings (compare mode, layout, column width). A `--capture` run gets
-    /// a scratch suite, so showing a screen in some mode never changes the user's own choice.
+    /// Where the app keeps view settings (compare mode, layout, column width, library sort). A
+    /// `--capture` run gets a scratch suite, so showing a screen in some mode never changes the user's
+    /// own choice. `SNAPSHOTKIT_DEFAULTS` names another suite, or a plist by its path without
+    /// `.plist`, as the tests do, like `SNAPSHOTKIT_HOME` for the settings.
     /// `nonisolated(unsafe)`: UserDefaults is thread-safe, just not marked Sendable.
     nonisolated(unsafe) static let app: UserDefaults = {
+        if let name = ProcessInfo.processInfo.environment["SNAPSHOTKIT_DEFAULTS"], !name.isEmpty,
+           let suite = UserDefaults(suiteName: name) {
+            return suite
+        }
         guard CaptureOptions.parse(CommandLine.arguments) != nil else { return .standard }
         let name = "org.snapshotkit.SnapshotKit.capture"
         UserDefaults.standard.removePersistentDomain(forName: name)
