@@ -415,6 +415,26 @@ import Testing
         #expect(x.config.deviceName == "Example Phone")
     }
 
+    /// So are those a `cd` goes to.
+    @Test func gitHubExpressionsInACdAreOneFolder() {
+        func workingDirectory(_ cd: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: ".github/workflows/snapshots.yml", text: """
+                env:
+                  APP_DIR: ios
+                jobs:
+                  snapshots:
+                    steps:
+                      - run: |
+                          \(cd)
+                          xcodebuild test -scheme App
+                """)]).config.workingDirectory
+        }
+        #expect(workingDirectory("cd ${{ env.APP_DIR }}") == "ios")
+        #expect(workingDirectory("cd ${{ github.workspace }}/ios") == "ios")
+        #expect(workingDirectory("cd ${{ env.APP_DIR }}/App && pod install") == "ios/App")
+        #expect(workingDirectory("cd ${{ inputs.folder }}") == nil)
+    }
+
     @Test func everyXcodebuildOnALineCountsAndAFullPathToo() {
         let text = """
         snapshots:

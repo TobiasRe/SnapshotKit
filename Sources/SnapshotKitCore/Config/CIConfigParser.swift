@@ -202,7 +202,7 @@ public struct CIConfigParser {
                 // What runs before it on its line (`cd ios && pod install && `), less the folder it
                 // is called from (`/usr/bin/`).
                 let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
-                let folders = Self.folders(around: index, in: outline) + Self.folderChanges(in: Self.shellCommand(prefix))
+                let folders = folders(around: index, in: outline) + folderChanges(inLine: prefix)
                 invocation.workingDirectory = Self.path(following: folders.map { expand(MiniYAML.unquote($0)) })
 
                 // Score: prefer `test`, and anything that mentions snapshots nearby.
@@ -277,7 +277,7 @@ public struct CIConfigParser {
     /// `working-directory` (the step's, else its job's or the workflow's `defaults.run`), then every
     /// `cd` before it in the same shell (earlier in its `run:` block or `script:` list, after GitLab's
     /// `before_script:` of the job, else of `default:`). In a shell script, every `cd` before it.
-    static func folders(around index: Int, in outline: YAMLOutline) -> [String] {
+    func folders(around index: Int, in outline: YAMLOutline) -> [String] {
         func child(_ key: String, of scope: Int) -> Int? { outline.children(of: scope).first { outline.key($0) == key } }
         guard outline.children(of: -1).contains(where: { outline.key($0) != nil }) else {
             return cdTargets(in: 0..<index, of: outline)        // a shell script
@@ -309,13 +309,13 @@ public struct CIConfigParser {
     /// The folders the commands on the lines in `range` move to, in order. A shell function's body
     /// runs where the function is called, not where it is written: its lines count only when the
     /// range ends in it (the call to look at is in the function).
-    private static func cdTargets(in range: Range<Int>, of outline: YAMLOutline) -> [String] {
+    private func cdTargets(in range: Range<Int>, of outline: YAMLOutline) -> [String] {
         var folders: [String] = []
         var inBody: [String] = []   // of the function whose body is open
         var body = 0                // braces open in that body
         var bodyFollows = false     // a `name()` line without its `{`
         for i in range {
-            let command = shellCommand(outline.content(i))
+            let command = Self.shellCommand(outline.content(i))
             let braces = command.count(where: { $0 == "{" }) - command.count(where: { $0 == "}" })
             if bodyFollows {
                 bodyFollows = false
@@ -325,13 +325,13 @@ public struct CIConfigParser {
                 }
             }
             if body > 0 {
-                inBody += folderChanges(in: command)
+                inBody += folderChanges(inLine: command)
                 body = max(body + braces, 0)
                 if body == 0 { inBody = [] }
-            } else if command.range(of: functionHeader, options: .regularExpression) != nil {
+            } else if command.range(of: Self.functionHeader, options: .regularExpression) != nil {
                 if command.contains("{") { body = max(braces, 0) } else { bodyFollows = true }
             } else {
-                folders += folderChanges(in: command)
+                folders += folderChanges(inLine: command)
             }
         }
         return folders + inBody
@@ -344,6 +344,12 @@ public struct CIConfigParser {
     static func shellCommand(_ line: String) -> String {
         line.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: #"^(?:-\s+)?(?:(?:run|script|before_script):\s+)?"#, with: "", options: .regularExpression)
+    }
+
+    /// The folders the commands of a line of a CI file move the shell to, in order. GitHub replaces
+    /// `${{ … }}` before the shell splits the line, so `cd ${{ env.APP_DIR }}` is one `cd`.
+    private func folderChanges(inLine line: String) -> [String] {
+        Self.folderChanges(in: expandingExpressions(Self.shellCommand(line)))
     }
 
     /// The folders the commands of `line` move the shell to, in order: each `cd` and `pushd`, and
