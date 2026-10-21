@@ -225,10 +225,8 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
         let repo = try TempRepo()
         let history = snapkit.history(of: repo.url)
         for i in 0..<20 { history.append(record(.passed, minutes: Double(i))) }
-        let lines = try snapkit("history", "--repo", repo.url.path).stdout.split(separator: "\n")
-        #expect(lines.count == 16)
-        #expect(lines.first?.hasPrefix(date(5) + "  ") == true)
-        #expect(lines.last == "No flaky signals.")
+        let runs = (5..<20).map { "\(date(Double($0)))  run        local        1✔ 0✘  01234567\n" }.joined()
+        #expect(Outcome(try snapkit("history", "--repo", repo.url.path)) == Outcome(status: 0, stdout: runs + "No flaky signals.\n"))
     }
 }
 
@@ -389,9 +387,15 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
             """))
         // Exported again where it is told, its images are listed from there.
         let out = testTemp("snapshot-failures")
-        let result = try snapkit("failures", "--repo", repo.url.path, "--out", out.path, environment: try fakeXcrun())
-        #expect(result.stdout.contains("\n    failure:    \(out.path)/F.png\n    difference: \(out.path)/D.png\n"))
-        #expect(!result.stdout.contains("ListTests"))
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--out", out.path, environment: try fakeXcrun())) == Outcome(status: 0, stdout: """
+            AppTests/CardTests
+              ✘ card()  (1/1 repetitions failed)
+                reference: \(reference)
+                failure:    \(out.path)/F.png
+                difference: \(out.path)/D.png
+                Visible change in a 3×1 area at 0, 0.
+
+            """))
         #expect(snapkit.history(of: repo.url).load().isEmpty)
     }
 
@@ -400,8 +404,15 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
         let out = testTemp("snapshot-failures")
         let result = try snapkit("failures", "--repo", repo.url.path, "--xcresult", try bundle(repo: repo).path, "--out", out.path,
                                  environment: try fakeXcrun())
-        #expect(result.status == 0)
-        #expect(result.stdout.contains("\n    failure:    \(out.path)/F.png\n    difference: \(out.path)/D.png\n"))
+        #expect(Outcome(result) == Outcome(status: 0, stdout: """
+            AppTests/CardTests
+              ✘ card()  (1/1 repetitions failed)
+                reference: \(reference)
+                failure:    \(out.path)/F.png
+                difference: \(out.path)/D.png
+                Visible change in a 3×1 area at 0, 0.
+
+            """))
         #expect(try FileManager.default.contentsOfDirectory(atPath: out.path).sorted() == ["D.png", "F.png", "R.png", "manifest.json"])
     }
 
