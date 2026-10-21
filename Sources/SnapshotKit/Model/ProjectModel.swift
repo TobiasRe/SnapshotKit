@@ -395,15 +395,17 @@ final class ProjectModel {
     }
 
     /// Checks Xcode and the simulator the configuration asks for; without one, there is nothing to check.
-    func validateEnvironment() {
+    /// The task ends once the check is done, and its result shown unless a later check's is.
+    @discardableResult
+    func validateEnvironment() -> Task<Void, Never> {
         environmentGeneration += 1
         guard let config else {
             environment = nil
             environmentError = nil
-            return
+            return Task {}
         }
         let generation = environmentGeneration
-        Task {
+        return Task {
             let result = await offCooperativePool { Result { try EnvironmentValidator.validate(config) } }
             // A check of an earlier configuration must not land after the one now chosen.
             guard generation == environmentGeneration else { return }

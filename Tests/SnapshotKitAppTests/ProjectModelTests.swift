@@ -31,12 +31,19 @@ extension AppUITests {
             return (dir, png)
         }
 
-        /// Waits for the changes to load: up to ten seconds, as git is slow while the rest of the
-        /// suite runs in parallel (two and a half seconds was not always enough).
-        func waitForChanges(_ model: ProjectModel) async {
-            for _ in 0..<200 where model.isLoadingChanges || model.changeSet == nil {
-                try? await Task.sleep(for: .milliseconds(50))
-            }
+        /// Waits until `condition` holds, and fails the test if it doesn't within ten seconds: git and
+        /// the fake Xcodes are slow while other test processes run (two and a half seconds was not
+        /// always enough).
+        func waitUntil(_ condition: @autoclosure () -> Bool, _ comment: Comment,
+                       sourceLocation: SourceLocation = #_sourceLocation) async throws {
+            for _ in 0..<200 where !condition() { try await Task.sleep(for: .milliseconds(50)) }
+            try #require(condition(), comment, sourceLocation: sourceLocation)
+        }
+
+        /// Waits for the changes to load.
+        func waitForChanges(_ model: ProjectModel, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+            try await waitUntil(!model.isLoadingChanges && model.changeSet != nil, "the changes didn't load",
+                                sourceLocation: sourceLocation)
         }
 
         /// A snapshot recorded outside the app (Xcode, the CLI) appears without a manual refresh.
@@ -44,7 +51,7 @@ extension AppUITests {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             for _ in 0..<200 where model.library == nil { try await Task.sleep(for: .milliseconds(50)) }
             #expect(model.library?.files.count == 1)
 
@@ -58,7 +65,7 @@ extension AppUITests {
             let (repo, png) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             let change = try #require(model.changeSet?.changes.first)
             #expect(change.kind == .uncommitted)
             #expect(model.canDiscard(change))
@@ -81,7 +88,7 @@ extension AppUITests {
                 if staged { try Shell.output(["git", "add", "--", png], in: repo) }
                 let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
                 model.updateSettings { $0.baseBranch = "develop" }
-                await waitForChanges(model)
+                try await waitForChanges(model)
                 let change = try #require(model.changeSet?.changes.first)
                 #expect(change.kind == .uncommitted)
                 #expect(change.isUntracked == !staged)
@@ -100,7 +107,7 @@ extension AppUITests {
             try AppFixtures.badged.write(to: repo.appendingPathComponent(second))
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             let first = try #require(model.filteredChanges.first)
             model.selectedChangeID = first.id
             model.setViewed(true, for: first)
@@ -110,7 +117,7 @@ extension AppUITests {
             // A fresh model reads the marks back.
             let reopened = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             reopened.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(reopened)
+            try await waitForChanges(reopened)
             #expect(reopened.viewedChanges == [first.id])
             reopened.hideViewed = true
             #expect(reopened.filteredChanges.map(\.id) == [next.id])
@@ -131,7 +138,7 @@ extension AppUITests {
 
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             for _ in 0..<500 where model.invisibleUncommitted.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
             #expect(model.invisibleUncommitted.map(\.fileName) == ["noisy.1.png"])
 
@@ -378,7 +385,7 @@ extension AppUITests {
             try Shell.output(["git", "commit", "-qam", "re-record"], in: repo)
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             let change = try #require(model.changeSet?.changes.first)
             #expect(change.kind == .committed)
             #expect(!model.canDiscard(change))
@@ -444,7 +451,7 @@ extension AppUITests {
             // Not the temporary folder's SnapshotKit/base-images, which the app itself writes to.
             model.scratchDirectory = AppFixtures.temporaryDirectory("scratch")
             model.updateSettings { $0.baseBranch = "release/1.0" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             let changes = try #require(model.changeSet?.changes)
             #expect(Set(changes.map(\.path)) == [png, second, other])
             let base = [png: AppFixtures.reference, second: AppFixtures.badged, other: AppFixtures.renderingNoise]
@@ -483,10 +490,11 @@ extension AppUITests {
         @Test func reloadIsAsynchronousAndLoadsConfiguration() async throws {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
-            for _ in 0..<500 where model.context == nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(model.context == nil)                   // nothing read yet: the window shows at once
+            try await waitUntil(model.context != nil, "the configuration never loaded")
             #expect(model.context?.repository.path == repo.path)
             #expect(model.currentBranch == "feature")
-            #expect(model.branches.prefix(1) == ["develop"])
+            #expect(model.branches == ["develop", "feature"])
         }
 
         /// When the configuration breaks, the Xcode and simulator checked for it go too: nothing can
@@ -507,25 +515,37 @@ extension AppUITests {
         /// whichever finishes first.
         @Test func theLatestEnvironmentCheckWins() async throws {
             let (repo, _) = try makeRepo()
-            // An Xcode whose simctl takes a second to fail.
+            // An Xcode whose simctl fails only once the test lets it, so the first check is still going
+            // when the second one ends.
             let slow = AppFixtures.temporaryDirectory("slow").appendingPathComponent("Xcode.app")
             let xcrun = slow.appendingPathComponent("Contents/Developer/usr/bin/xcrun")
+            let release = slow.appendingPathComponent("release"), asked = slow.appendingPathComponent("asked")
             try FileManager.default.createDirectory(at: xcrun.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try "#!/bin/sh\nsleep 1\nexit 1\n".write(to: xcrun, atomically: true, encoding: .utf8)
+            // (Half a minute at most, so a test that fails before letting it go leaves no process behind.)
+            try "#!/bin/sh\ni=0\nuntil [ -e '\(release.path)' ] || [ $i -ge 600 ]; do sleep 0.05; i=$((i + 1)); done\ntouch '\(asked.path)'\nexit 1\n"
+                .write(to: xcrun, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
             try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "99.1"], format: .xml, options: 0)
                 .write(to: slow.appendingPathComponent("Contents/version.plist"))
-            let override = repo.appendingPathComponent(".snapshotkit.yml")
 
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
-            try "developerDir: \(slow.path)\n".write(to: override, atomically: true, encoding: .utf8)
-            model.reload()
-            for _ in 0..<200 where model.config?.developerDir != slow.path { try await Task.sleep(for: .milliseconds(20)) }
-            try "developerDir: /nonexistent/Xcode.app\n".write(to: override, atomically: true, encoding: .utf8)
-            model.reload()
-            for _ in 0..<200 where model.environmentError == nil { try await Task.sleep(for: .milliseconds(20)) }
-            try await Task.sleep(for: .seconds(1.5))       // the first check is done by now
-            #expect(model.environmentError?.contains("`/nonexistent/Xcode.app` does not exist") == true)
+            var f = ProjectFixture()
+            f.context = AppFixtures.context(at: repo)
+            f.context?.resolved.config.xcodeVersion = nil      // the developer folder alone picks the Xcode
+            f.context?.resolved.config.developerDir = slow.path
+            model.apply(f)
+            let first = model.validateEnvironment()
+            f.context?.resolved.config.developerDir = "/nonexistent/Xcode.app"
+            model.apply(f)
+            await model.validateEnvironment().value
+            let missing = "Xcode at `/nonexistent/Xcode.app` does not exist. Install it there or set `xcode:` / `developerDir:` in `.snapshotkit.yml`."
+            #expect(model.environmentError == missing)
+
+            try Data().write(to: release)
+            await first.value
+            #expect(FileManager.default.fileExists(atPath: asked.path), "the first check never got to simctl")
+            #expect(model.environmentError == missing)
+            #expect(model.environment == nil)
         }
 
         // MARK: Selection
@@ -541,7 +561,7 @@ extension AppUITests {
 
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             #expect(model.displayedChanges.map(\.suite) == ["CardTests", "ZebraTests"])
             #expect(model.selectedChangeID == model.displayedChanges.first?.id)
             #expect(model.displayedFailures.map(\.suite.name) == ["CheckoutViewTests", "ProfileViewTests"])
@@ -561,7 +581,7 @@ extension AppUITests {
             for name in names { try AppFixtures.badged.write(to: repo.appendingPathComponent(name)) }
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             for _ in 0..<200 where model.library?.files.count != 4 { try await Task.sleep(for: .milliseconds(50)) }
             let b = try #require(model.changeSet?.changes.first { $0.path == names[1] })
             model.selectedChangeID = b.id
@@ -661,7 +681,7 @@ extension AppUITests {
             try AppFixtures.badged.write(to: repo.appendingPathComponent(other))
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             for _ in 0..<200 where model.library?.files.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
             model.libraryScope = .changed
             model.selectedSnapshotID = png
@@ -695,17 +715,22 @@ extension AppUITests {
 
         // MARK: Refreshing
 
-        /// Switching what to compare with twice in a row shows the second, whichever git finishes first.
+        /// Switching what to compare with several times in a row shows the last, whichever git finishes first.
         @Test func theLatestRefreshWins() async throws {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
+            try #require(model.changeSet?.diffBase == .mergeBase)
             for _ in 0..<10 {
-                model.diffBase = .tip
-                model.diffBase = .mergeBase
-                for _ in 0..<200 where model.isLoadingChanges { try await Task.sleep(for: .milliseconds(20)) }
-                #expect(model.changeSet?.diffBase == .mergeBase)
+                // Three refreshes in flight, ending on the other diff base than the round before: a
+                // refresh that never lands fails as surely as an earlier one landing last.
+                let other: DiffBase = model.diffBase == .tip ? .mergeBase : .tip, start = model.diffBase
+                model.diffBase = other
+                model.diffBase = start
+                model.diffBase = other
+                try await waitUntil(!model.isLoadingChanges, "the changes never finished loading")
+                #expect(model.changeSet?.diffBase == other)
             }
         }
 
@@ -714,7 +739,7 @@ extension AppUITests {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             model.updateSettings { $0.baseBranch = "develop" }
-            await waitForChanges(model)
+            try await waitForChanges(model)
             #expect(model.currentBranch == "feature")
             try Shell.output(["git", "checkout", "-q", "-b", "release"], in: repo)
             model.refreshChanges()
@@ -753,11 +778,15 @@ extension AppUITests {
             f.failureSource = FailureSource(label: "ci.xcresult", date: Date(), host: "imported")
             model.apply(f)
             let failures = model.failures.map(\.id)
+            try #require(model.changeSet == nil)
 
             model.setBaseBranch("develop")
-            await waitForChanges(model)
+            // The reload reads the last run on disk before it refreshes the changes, so changes
+            // compared with develop say it has looked at that run.
+            try await waitForChanges(model)
+            #expect(model.changeSet?.baseBranch == "develop")
             #expect(model.failures.map(\.id) == failures)
-            #expect(model.failureSource?.host == "imported")
+            #expect(model.failureSource == f.failureSource)
         }
 
         /// Coming back to the app after running the tests in `snapkit` shows that run.
