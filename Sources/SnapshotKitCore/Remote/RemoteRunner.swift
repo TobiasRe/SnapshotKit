@@ -109,7 +109,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let (xcode, isDefault): (XcodeInstall, Bool)
         do {
             (xcode, isDefault) = try EnvironmentValidator.selectXcode(
-                for: config, installed: info.xcodes, selected: info.selected,
+                for: config, installed: info.xcodes, selected: info.selected, home: info.home,
                 lookup: { path in info.xcodes.first { $0.path == (path as NSString).standardizingPath } }
             )
         } catch let error as EnvironmentError {

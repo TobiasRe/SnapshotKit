@@ -129,17 +129,18 @@ public enum EnvironmentValidator {
             guard path.hasSuffix("/Contents/Developer") else { return nil }
             return xcode(at: String(path.dropLast("/Contents/Developer".count)))
         }
-        return try selectXcode(for: config, installed: installed, selected: selected, lookup: { xcode(at: $0) })
+        return try selectXcode(for: config, installed: installed, selected: selected, home: NSHomeDirectory(), lookup: { xcode(at: $0) })
     }
 
     /// Machine-independent selection, also used for remote hosts. `developerDir` names one Xcode,
-    /// and is used even when a version is pinned too (see `notes(for:xcode:)`).
+    /// and is used even when a version is pinned too (see `notes(for:xcode:)`); one in `~/` is in
+    /// `home`, the machine's home folder.
     public static func selectXcode(
-        for config: SnapshotConfig, installed: [XcodeInstall], selected: XcodeInstall?,
+        for config: SnapshotConfig, installed: [XcodeInstall], selected: XcodeInstall?, home: String,
         lookup: (String) -> XcodeInstall?
     ) throws -> (XcodeInstall, isDefault: Bool) {
         if let dir = config.developerDir {
-            var app = dir
+            var app = dir.hasPrefix("~/") ? home + dir.dropFirst(1) : dir
             if app.hasSuffix("/") { app.removeLast() }
             if app.hasSuffix("/Contents/Developer") { app = String(app.dropLast("/Contents/Developer".count)) }
             guard let install = lookup(app) else { throw EnvironmentError.xcodePathMissing(app) }

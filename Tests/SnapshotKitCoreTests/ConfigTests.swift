@@ -621,17 +621,31 @@ import Testing
         #expect(EnvironmentValidator.parseRuntime("com.apple.CoreSimulator.SimRuntime.unknown") == nil)
     }
 
+    /// A `developerDir` in `~/` is in the home folder of the Mac it runs on.
+    @Test func aDeveloperDirInTheHomeFolder() throws {
+        let xcode = XcodeInstall(path: "/Users/me/Applications/Xcode-98.0.app", version: "98.0")
+        var config = SnapshotConfig()
+        config.developerDir = "~/Applications/Xcode-98.0.app/Contents/Developer"
+        let (picked, _) = try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, home: "/Users/me",
+                                                               lookup: { $0 == xcode.path ? xcode : nil })
+        #expect(picked == xcode)
+        #expect(throws: EnvironmentError.xcodePathMissing("/Users/someone/Applications/Xcode-98.0.app")) {
+            try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, home: "/Users/someone",
+                                                 lookup: { $0 == xcode.path ? xcode : nil })
+        }
+    }
+
     @Test func selectsPinnedXcodeOrExplainsWhatIsMissing() throws {
         var config = SnapshotConfig()
         config.xcodeVersion = "99.1"
-        let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: installs[0], lookup: { _ in nil })
+        let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: installs[0], home: "/Users/me", lookup: { _ in nil })
         #expect(picked.version == "99.1")
         #expect(!isDefault)
 
         config.xcodeVersion = "98.0"
         config.sources["xcode"] = ".gitlab-ci.yml"
         let error = try #require(throws: EnvironmentError.self) {
-            try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, lookup: { _ in nil })
+            try EnvironmentValidator.selectXcode(for: config, installed: installs, selected: nil, home: "/Users/me", lookup: { _ in nil })
         }
         #expect(error == .xcodeNotInstalled(required: "98.0", source: ".gitlab-ci.yml", installed: installs))
         #expect(error.errorDescription == "Xcode 98.0 is not installed (required by `.gitlab-ci.yml`). Installed: 99.2 at `/Apps/Xcode-99.2.app`, "
@@ -647,7 +661,7 @@ import Testing
         config.xcodeVersion = "99.1"
         config.sources = ["developerDir": ".snapshotkit.yml", "xcode": ".gitlab-ci.yml"]
         let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: config, installed: installs + [older], selected: installs[0],
-                                                                       lookup: { $0 == older.path ? older : nil })
+                                                                       home: "/Users/me", lookup: { $0 == older.path ? older : nil })
         #expect(picked == older)
         #expect(!isDefault)
         #expect(EnvironmentValidator.notes(for: config, xcode: picked) == [
@@ -660,7 +674,7 @@ import Testing
     }
 
     @Test func unpinnedUsesSelectedXcode() throws {
-        let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: SnapshotConfig(), installed: installs, selected: installs[1], lookup: { _ in nil })
+        let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: SnapshotConfig(), installed: installs, selected: installs[1], home: "/Users/me", lookup: { _ in nil })
         #expect(picked == installs[1])
         #expect(isDefault)
     }

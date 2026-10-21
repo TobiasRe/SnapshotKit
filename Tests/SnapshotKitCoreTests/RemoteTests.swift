@@ -16,6 +16,17 @@ import Testing
         #expect(info.selected?.version == "99.2")
     }
 
+    /// A `developerDir` in `~/` is in the remote Mac's home, not this one's.
+    @Test func aDeveloperDirInTheRemoteHomeFolder() throws {
+        var mac = try FakeMac(xcodebuild: "exit 0")
+        mac.preflight = "HOME=/Users/ci\nSELECTED=\nXCODE=/Users/ci/Applications/Xcode-99.app|99.0|99A1"
+        var config = SnapshotConfig()
+        config.deviceName = "Example Phone"
+        config.developerDir = "~/Applications/Xcode-99.app"
+        let (environment, _) = try RemoteRunner(repository: URL(fileURLWithPath: "/repos/app"), config: config, transport: mac).preflight()
+        #expect(environment.xcode.path == "/Users/ci/Applications/Xcode-99.app")
+    }
+
     @Test func remoteDirectoryDefaultsAndOverrides() {
         var config = SnapshotConfig()
         let runner = RemoteRunner(repository: URL(fileURLWithPath: "/repos/app"), config: config, transport: LocalDirectoryTransport())
@@ -337,6 +348,8 @@ import Testing
 struct FakeMac: RemoteTransport {
     let checkout: URL
     let bin: URL
+    /// What the preflight finds there.
+    var preflight = "HOME=/Users/ci\nSELECTED=/Applications/Xcode.app/Contents/Developer\nXCODE=/Applications/Xcode.app|99.0|99A1"
 
     /// `xcodebuild` runs `script` in the remote checkout, with `$bundle` set to the result bundle
     /// path and `args` to its arguments.
@@ -372,7 +385,7 @@ struct FakeMac: RemoteTransport {
 
     func command(for script: String, interactive: Bool) -> (executable: String, arguments: [String]) {
         if script == RemoteRunner.preflightScript {
-            return ("/bin/echo", ["HOME=/Users/ci\nSELECTED=/Applications/Xcode.app/Contents/Developer\nXCODE=/Applications/Xcode.app|99.0|99A1"])
+            return ("/bin/echo", [preflight])
         }
         return ("/usr/bin/env", ["PATH=\(bin.path):/usr/bin:/bin", "/bin/bash", "-c", script])
     }

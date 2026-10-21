@@ -96,7 +96,7 @@ import Testing
         #expect(values(config)["xcode"] == "99.1 (.gitlab-ci.yml)")
         let older = XcodeInstall(path: "/Apps/Xcode-98.0.app", version: "98.0")
         let (picked, _) = try EnvironmentValidator.selectXcode(for: config, installed: [XcodeInstall(path: "/Apps/Xcode-99.1.app", version: "99.1"), older],
-                                                               selected: nil, lookup: { $0 == older.path ? older : nil })
+                                                               selected: nil, home: "/Users/me", lookup: { $0 == older.path ? older : nil })
         #expect(picked == older)
 
         let github = try TempRepo()
