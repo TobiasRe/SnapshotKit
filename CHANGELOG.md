@@ -110,14 +110,18 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   comment or a comma; a symlinked test file stays a symlink.
 - Discarding a snapshot that was deleted on the branch and recorded again works; reverting a snapshot renamed
   only in case no longer deletes it; a staged new snapshot reads as New.
+- A suite nested in another type is found along its path (`DarkTests.Large`, not the first `Large` in the
+  file), and a suite named with a raw identifier can be re-recorded.
 - The library’s **Re-record N Shown** leaves out orphaned snapshots, and **Re-record All…** always asks first.
 
 **Configuration**
 - CI files: block-list matrices, `KEY=value xcodebuild …`, folded (`>`) commands, unquoted `${{ … }}`, several
   `xcodebuild` calls on one line and commented-out lines are read correctly.
 - The working directory follows GitHub Actions’ `working-directory` and every `cd` before the command:
-  command chains (`cd ios && pod install && cd ..`), `pushd`, GitLab’s `before_script` and shell functions.
-- `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ).
+  command chains (`cd ios && pod install && cd ..`), `pushd` and `popd`, GitLab’s `before_script` (also in
+  lists written level with their key), quoted script items, `${{ … }}` in the folder, and shell functions.
+- `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ), and may
+  start with `~/`. A last run saved by 0.2.0 is read with its suites named by type.
 - A `.snapshotkit.yml` that starts with `---` can be read.
 - Without an OS, or with `latest`, runs use the newest simulator runtime, as CI does, not an older booted one.
 
@@ -129,10 +133,11 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   when the failing suites can’t be found; `flaky` says *Nothing was checked* and exits 1 when no test ran.
 - `snapkit failures` lists the last run as its verifications left it, also a remote one; `config` shows the
   Xcode used and every value set; `snapkit` prints “▸ Finished” once.
-- Remote: runs sync submodules and download recorded snapshots with spaces or non-ASCII names; `rerecord` /
-  `flaky --remote` find the failing suites on the remote Mac; the app verifies a remote re-record as `snapkit`
-  does; a missing Xcode or simulator there exits 2.
-- A rescan keeps every project you added, and one you removed stays removed.
+- Remote: runs sync submodules and download recorded snapshots with spaces or non-ASCII names, and nothing
+  from a record whose tests never ran; the remote Mac keeps only the last 10 result bundles; `rerecord` /
+  `flaky --remote` find the failing suites there; the app verifies a remote re-record as `snapkit` does; a
+  missing Xcode or simulator there exits 2.
+- A rescan keeps every project you added, and one you removed stays removed (`projects scan` leaves it out).
 
 ## [0.2.0] - 2026-10-20
 
