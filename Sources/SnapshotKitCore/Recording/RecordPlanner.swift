@@ -34,7 +34,7 @@ public enum RecordPlanner {
         var only: [String] = [], listed = Set<String>()
         // A suite's snapshots share its test file, which is parsed once for all of them.
         var parsed: [String: (text: String, suite: SuiteResult?, isXCTest: Bool, topLevelTests: [String])] = [:]
-        var nested: [String: Bool] = [:]   // "<key>#<test>" → declared in a type inside the suite
+        var functions: [String: SuiteFunctions] = [:]    // as `parsed`, found once for all of a file's tests
         // A suite in two files (the target's tests outside a type, a type and its extension) has both.
         func add(_ suite: SuiteResult) {
             guard let known = suites[suite.identifier] else {
@@ -76,11 +76,9 @@ public enum RecordPlanner {
                 // A parameterized test's snapshot name ("name-label") can't be turned back into its
                 // full identifier ("name(label:)"), so its whole suite runs instead. So does a test of
                 // a suite nested in the file's suite: its identifier goes through that suite.
-                let test = key + "#" + file.testName
-                if !file.testName.contains("-"), text.contains("func \(file.testName)("), nested[test] == nil {
-                    nested[test] = isDeclaredInANestedType(file.testName, suite: suite.path, in: text)
-                }
-                if file.testName.contains("-") || !text.contains("func \(file.testName)(") || nested[test] == true {
+                let declared = functions[key] ?? SuiteFunctions(of: suite.path, in: text)
+                functions[key] = declared
+                if file.testName.contains("-") || !declared.anywhere.contains(file.testName) || declared.isDeclaredInANestedType(file.testName) {
                     id = suite.identifier
                 } else {
                     id = suite.identifier + "/" + file.testName + (isXCTest ? "" : "()")
@@ -100,31 +98,54 @@ public enum RecordPlanner {
         identifier.replacingOccurrences(of: #"\W+"#, with: "-", options: .regularExpression).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 
-    /// Whether the suite's body declares `func <test>(` only inside braces of its own (a nested
-    /// suite), not directly. Comments and strings don't count; a test declared outside the body
-    /// (in an extension) isn't nested.
-    static func isDeclaredInANestedType(_ test: String, suite: [String], in source: String) -> Bool {
-        guard let decl = RecordPatcher.findDeclaration(of: suite, in: source),
-              let close = RecordPatcher.matchingBrace(in: source, open: decl.bodyOpen) else { return false }
-        let declaration = "func \(test)("
-        var depth = 0, inside = false
-        var i = source.index(after: decl.bodyOpen)
-        while i < close {
-            if let next = RecordPatcher.endOfCommentOrString(in: source, at: i) {
-                i = next
-                continue
+    /// The functions (`func name(`) of a test file and of its suite, each found in one pass over the
+    /// file and one over the suite's body: a big file's hundreds of tests, each looked for with a
+    /// pass of its own, took seconds.
+    struct SuiteFunctions {
+        /// The names after a `func ` anywhere in the file, as far as their `(`.
+        private(set) var anywhere: Set<String> = []
+        /// Those declared directly in the suite's body, and those in braces of its own (a nested
+        /// suite's). Comments and strings don't count, nor functions outside the body (in an extension).
+        private var direct: Set<String> = [], nested: Set<String> = []
+
+        init(of suite: [String], in source: String) {
+            for match in source.ranges(of: "func ") {
+                if let name = Self.name(at: match.lowerBound, in: source) { anywhere.insert(name) }
             }
-            switch source[i] {
-            case "{": depth += 1
-            case "}": depth -= 1
-            case "f" where source[i...].hasPrefix(declaration):
-                if depth == 0 { return false }
-                inside = true
-            default: break
+            guard let decl = RecordPatcher.findDeclaration(of: suite, in: source),
+                  let close = RecordPatcher.matchingBrace(in: source, open: decl.bodyOpen) else { return }
+            var depth = 0
+            var i = source.index(after: decl.bodyOpen)
+            while i < close {
+                if let next = RecordPatcher.endOfCommentOrString(in: source, at: i) {
+                    i = next
+                    continue
+                }
+                switch source[i] {
+                case "{": depth += 1
+                case "}": depth -= 1
+                case "f":
+                    if let name = Self.name(at: i, in: source) {
+                        if depth == 0 { direct.insert(name) } else { nested.insert(name) }
+                    }
+                default: break
+                }
+                i = source.index(after: i)
             }
-            i = source.index(after: i)
         }
-        return inside
+
+        /// Whether the suite's body declares `func <test>(` only inside braces of its own (a nested
+        /// suite), not directly.
+        func isDeclaredInANestedType(_ test: String) -> Bool {
+            !direct.contains(test) && nested.contains(test)
+        }
+
+        /// The name of the function declared at `i`, if `func ` starts there: up to its `(`.
+        private static func name(at i: String.Index, in source: String) -> String? {
+            guard source[i...].hasPrefix("func ") else { return nil }
+            let start = source.index(i, offsetBy: 5)
+            return source[start...].firstIndex(of: "(").map { String(source[start..<$0]) }
+        }
     }
 
     /// The suite's path for `-only-testing`, through the types and extensions it is nested in

@@ -206,4 +206,61 @@ import Testing
             try RecordPlanner.plan([file("GoneTests", "x.1")], granularity: .tests, repository: repo.url)
         }
     }
+
+    /// Finding a file's suite and planning its tests take time in proportion to the file: with the
+    /// work for each type or test growing with the file, a 2,000-line file of 100 nested suites took
+    /// 11 seconds, and 300 tests of a 4,000-line one 20.
+    ///
+    /// What is timed is the CPU time of this thread, not the clock, which other processes and the
+    /// tests running alongside stretch; as a ratio between a file and one four times its size, not
+    /// in seconds, which a slow machine or a debug build stretch; the least of runs taken in turns,
+    /// so a hiccup or a busy stretch doesn't count against one size only. In proportion, the ratio
+    /// is about 4; growing with the file, it was about 16. The bound leaves room on both sides.
+    @Test func findingASuiteAndPlanningItsTestsTakeTimeInProportionToTheFile() throws {
+        let sizes = [10, 40]    // suites
+        let repo = try TempRepo()
+        for suites in sizes { try repo.write("Tests/AppTests/Snapshots\(suites).swift", Self.testFile(suites: suites)) }
+        try repo.commitAll("tests")
+        let sources = TestSources(repository: repo.url)
+        func findAndPlan(suites: Int) throws -> (suite: [String]?, onlyTesting: [String]) {
+            let name = "Snapshots\(suites)"
+            let text = try #require(sources.text(of: "Tests/AppTests/\(name).swift"))
+            let files = (0..<suites).flatMap { s in (0..<3).map { t in file(name, "test\(s)_\(t).1") } }
+            return (RecordPlanner.suitePath(in: text, preferring: name), try RecordPlanner.plan(files, granularity: .tests, sources: sources).onlyTesting)
+        }
+        for suites in sizes {
+            let found = try findAndPlan(suites: suites)
+            #expect(found.suite == ["Snapshots\(suites)"])
+            #expect(found.onlyTesting == ["AppTests/Snapshots\(suites)"])    // its tests are in suites nested in it
+        }
+
+        var least = sizes.map { _ in UInt64.max }
+        for _ in 0..<3 {
+            for (i, suites) in sizes.enumerated() {
+                let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+                _ = try findAndPlan(suites: suites)
+                least[i] = min(least[i], clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start)
+            }
+        }
+        let ratio = Double(least[1]) / Double(least[0])
+        #expect(ratio < 8, "Four times the file took \(ratio) times as long")
+    }
+
+    /// A test file of `suites` suites nested in one named like it, each with three tests, and with
+    /// the types, comments and strings around them a real one has.
+    static func testFile(suites: Int) -> String {
+        let groups = (0..<suites).map { s in
+            ["    /// Group \(s), with a { in its documentation.", "    @Suite(\"Group \(s) }\") struct Group\(s)Tests {"]
+                + (0..<3).flatMap { t in
+                    ["        @Test func test\(s)_\(t)() {",
+                     "            struct Row { var title = \"a { brace\" }    // and } one in a comment",
+                     "            assertSnapshot(of: Row(), as: .dump)",
+                     "        }"]
+                }
+                + ["        enum Fixture { case light, dark }", "    }"]
+        }
+        let helpers = (0..<suites).map { "final class Helper\($0): NSObject {}" }
+        return (["import Foundation", "import Testing", "", "@Suite struct Snapshots\(suites) {"] + groups.joined() + ["}", ""] + helpers)
+            .joined(separator: "\n") + "\n"
+    }
 }

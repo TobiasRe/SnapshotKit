@@ -64,7 +64,10 @@ public enum RecordPatcher {
         var keywordStart: String.Index
         var bodyOpen: String.Index
         var indent: String
-        var isXCTest: Bool
+        /// A class's inheritance clause (` : XCTestCase `), if it is a class that has one.
+        var classInheritance: String?
+        /// Set by `findDeclarations`, which reads what the file imports once for all its types.
+        var isXCTest = false
     }
 
     /// The declaration of the type at `path`: its first name declared at the top of the file, each
@@ -77,9 +80,16 @@ public enum RecordPatcher {
 
     /// Every declaration of the type at `path`, as `findDeclaration` finds one, in order.
     static func findDeclarations(of path: [String], in source: String) -> [Declaration] {
-        findDeclarations(of: path[...], in: source, scope: source.startIndex..<source.endIndex)
+        let found = findDeclarations(of: path[...], in: source, scope: source.startIndex..<source.endIndex)
             + extensions(in: source).filter { $0.type.count < path.count && path.starts(with: $0.type) }
                 .flatMap { findDeclarations(of: path.dropFirst($0.type.count), in: source, scope: $0.body) }
+        guard found.contains(where: { $0.classInheritance != nil }) else { return found }
+        let xctest = imports("XCTest", in: source), testing = imports("Testing", in: source)
+        return found.map { decl in
+            var decl = decl
+            decl.isXCTest = xctest && decl.classInheritance.map { !testing || $0.contains("XCTestCase") } ?? false
+            return decl
+        }
     }
 
     private static func findDeclarations(of path: ArraySlice<String>, in source: String, scope: Range<String.Index>) -> [Declaration] {
@@ -117,18 +127,17 @@ public enum RecordPatcher {
             + identifier + #")(?=[\s:<{])([^{]*)\{"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = source as NSString
+        var scanner = ScopeScanner(scope, of: source)
         return regex.matches(in: source, range: NSRange(scope, in: source)).compactMap { m in
             let lineStart = Range(m.range(at: 2), in: source)!.lowerBound
             let name = ns.substring(with: m.range(at: 4))
             // `class func`, `class var`: a class member, not a type.
-            guard !memberKeywords.contains(name), isDirectly(in: scope, lineStart, of: source) else { return nil }
-            let keyword = ns.substring(with: m.range(at: 3))
+            guard !memberKeywords.contains(name), scanner.isDirectlyIn(lineStart) else { return nil }
             let inheritance = ns.substring(with: m.range(at: 5))
-            let isXCTest = keyword == "class" && inheritance.contains(":") && imports("XCTest", in: source)
-                && (!imports("Testing", in: source) || inheritance.contains("XCTestCase"))
             return Declaration(name: name, lineStart: lineStart, keywordStart: Range(m.range(at: 3), in: source)!.lowerBound,
                                bodyOpen: source.index(before: Range(m.range, in: source)!.upperBound),
-                               indent: ns.substring(with: m.range(at: 1)), isXCTest: isXCTest)
+                               indent: ns.substring(with: m.range(at: 1)),
+                               classInheritance: ns.substring(with: m.range(at: 3)) == "class" && inheritance.contains(":") ? inheritance : nil)
         }
     }
 
@@ -143,34 +152,46 @@ public enum RecordPatcher {
     /// The file's extensions: the path of the type each one extends, and the inside of its body.
     private static func extensions(in source: String) -> [(type: [String], body: Range<String.Index>)] {
         let file = source.startIndex..<source.endIndex
+        var scanner = ScopeScanner(file, of: source)
         let ns = source as NSString
         return extensionDeclaration.matches(in: source, range: NSRange(file, in: source)).compactMap { m in
             let open = source.index(before: Range(m.range, in: source)!.upperBound)
-            guard isDirectly(in: file, Range(m.range(at: 1), in: source)!.lowerBound, of: source),
+            guard scanner.isDirectlyIn(Range(m.range(at: 1), in: source)!.lowerBound),
                   let close = matchingBrace(in: source, open: open) else { return nil }
             let type = ns.substring(with: m.range(at: 2)).matches(of: /`[^`]+`|\w+/).map { String($0.output) }
             return (type, source.index(after: open)..<close)
         }
     }
 
-    /// Whether `index` is directly in `scope`: not in braces opened in it, nor in a comment or string.
-    private static func isDirectly(in scope: Range<String.Index>, _ index: String.Index, of source: String) -> Bool {
-        var depth = 0
-        var i = scope.lowerBound
-        while i < index {
-            if let next = endOfCommentOrString(in: source, at: i) {
-                if next > index { return false }
-                i = next
-                continue
-            }
-            switch source[i] {
-            case "{": depth += 1
-            case "}": depth -= 1
-            default: break
-            }
-            i = source.index(after: i)
+    /// Tells whether indexes of a scope are directly in it: not in braces opened in it, nor in a
+    /// comment or string. Asked in increasing order, it reads the scope once for all of them: read
+    /// again from its start for each, a file of a hundred nested suites took seconds.
+    private struct ScopeScanner {
+        private let source: String
+        private var position: String.Index
+        private var depth = 0
+
+        init(_ scope: Range<String.Index>, of source: String) {
+            self.source = source
+            position = scope.lowerBound
         }
-        return depth == 0
+
+        /// Whether `index`, at or after the one asked about before, is directly in the scope.
+        mutating func isDirectlyIn(_ index: String.Index) -> Bool {
+            while position < index {
+                if let next = endOfCommentOrString(in: source, at: position) {
+                    position = next     // past `index` if it is in there
+                    continue
+                }
+                switch source[position] {
+                case "{": depth += 1
+                case "}": depth -= 1
+                default: break
+                }
+                position = source.index(after: position)
+            }
+            return position == index && depth == 0
+        }
     }
 
     /// Whether `source` imports `module`, however: `@testable` or `@preconcurrency`, with an access
@@ -458,6 +479,11 @@ public enum RecordPatcher {
     /// Handles `//` and (nested) `/* */` comments, escapes, multi-line `"""` and raw `#"…"#`
     /// strings; an interpolation's own strings are not told apart.
     static func endOfCommentOrString(in text: String, at i: String.Index) -> String.Index? {
+        // Asked at every character a scan passes: most of them can't start either.
+        switch text[i] {
+        case "/", "\"", "#": break
+        default: return nil
+        }
         let rest = text[i...]
         if rest.hasPrefix("//") { return rest.firstIndex(where: \.isNewline) ?? text.endIndex } // "\r\n" is one Character
         if rest.hasPrefix("/*") {
