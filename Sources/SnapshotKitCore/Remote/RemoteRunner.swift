@@ -268,13 +268,6 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let attachments = (try? await offCooperativePool {
             try self.collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)
         }) ?? []
-        var downloaded: [String] = []
-        if case .record = mode, !process.isCancelled {
-            downloaded = try await offCooperativePool { try self.downloadRecordedSnapshots(dir: dir, stateDir: stateDir) }
-            for path in downloaded { onLine("snapkit: downloaded \(path)") }
-        }
-        onStage(.done)
-
         let run = TestRunResult(
             commandLine: "[\(transport.label)] " + process.commandLine,
             exitStatus: status,
@@ -287,6 +280,13 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
             buildErrors: parser.buildErrors,
             host: transport.label
         )
+        // A record whose tests never ran (its build failed) recorded nothing, whatever it wrote.
+        var downloaded: [String] = []
+        if case .record = mode, !run.cancelled, run.nothingTested == nil {
+            downloaded = try await offCooperativePool { try self.downloadRecordedSnapshots(dir: dir, stateDir: stateDir) }
+            for path in downloaded { onLine("snapkit: downloaded \(path)") }
+        }
+        onStage(.done)
         return RemoteRunResult(host: transport.label, environment: environment, remoteDirectory: dir,
                                run: run, attachments: attachments,
                                attachmentsDirectory: attachments.isEmpty ? nil : attachmentsDir,

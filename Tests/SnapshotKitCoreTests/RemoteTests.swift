@@ -210,9 +210,12 @@ import Testing
         #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
     }
 
+    /// A record whose build failed brings back nothing, not even what it wrote: the CLI and the app
+    /// say nothing was recorded.
     @Test func aBuildThatFailsRemotelyRecordsNothing() async throws {
         let repo = try makeRepo()
         let mac = try FakeMac(xcodebuild: """
+            printf new > \(snapshot)
             echo "$PWD/\(source):6:9: error: cannot find 'draw' in scope"
             exit 65
             """)
