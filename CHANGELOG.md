@@ -117,7 +117,17 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   New; a symlinked test file stays a symlink after re-recording; a rescan keeps every project you added.
 - The app picks up runs made with `snapkit` when you come back to it, and verifies a re-record on the remote Mac
   like `snapkit rerecord --remote`. A missing Xcode or simulator on the remote Mac exits 2, as documented.
-- Swift Testing tests declared outside a type can be re-recorded.
+- Swift Testing tests declared outside a type can be re-recorded, and only the failing ones are when
+  re-recording failing suites. Tests with a display name (`@Test("Pay button")`) or a raw identifier are run and
+  recorded by their function, which before ran no test or the wrong suite.
+- `snapkit rerecord` / `record` keep the images of tests that still fail after the verification.
+- CI working directories follow every `cd` of a command chain (`cd ios && pod install && cd ..`), `pushd`, a
+  GitLab `script:` after `before_script`, and shell functions; an unresolvable `cd` no longer loses later ones.
+- `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ), and `snapkit
+  config` shows the Xcode used and every value set.
+- `snapkit failures` lists a remote last run; `rerecord` / `flaky --remote` find the failing suites on the remote
+  Mac; `snapkit flaky` says *Nothing was checked* and exits 1 when no test ran; Ctrl-C stops a scheme lookup.
+- A project removed from the list stays removed through rescans.
 
 ## [0.2.0] - 2026-10-20
 

@@ -45,14 +45,16 @@ refused, so a repository can’t slip `ssh` options in.
 3. **Running tests remotely** — `xcodebuild test` with the CI configuration, over `ssh -tt`, so canceling here
    stops it there. The output streams into the Run tab.
 4. **Collecting results** — the result summary and failure images are fetched, and remote paths are mapped back
-   to your repository, so the Failures tab works as for a local run.
+   to your repository, so the Failures tab and `snapkit failures` work as for a local run. (`snapkit failures
+   --out` needs the bundle itself: it stays on the remote Mac, so pass a downloaded one with `--xcresult`.)
 
 The run is recorded in the history with the host’s name, so the strips and the flakiness signal include
 remote runs.
 
 ## Re-recording remotely
 
-**Run tab › ··· › On *host* › Re-record Failing Suites** (or `snapkit rerecord --remote`):
+**Run tab › ··· › On *host* › Re-record Failing Suites** (or `snapkit rerecord --remote`; without a last run it
+first runs the tests there to find the failing suites):
 
 - Your files are **never patched**. The record patch is applied to the remote copy only, and the original sources
   are put back there after the run.

@@ -21,7 +21,9 @@ references.
 **Re-record All Snapshot Tests…** always asks first, and the library’s **Re-record N Shown…** does when it
 covers more than ten tests. Orphaned snapshots can’t be re-recorded (their test no longer exists), so those
 actions leave them out. Tests declared outside a type (`@Test func card()` at file scope) are recorded through
-their own `@Test` attribute and run one by one.
+their own `@Test` attribute and run one by one; re-recording failing suites records only the failing ones.
+Tests are run by their function (`payButton()`), never by a display name (`@Test("Pay button")`), so naming
+them for people doesn’t change what runs.
 
 ## What happens, step by step
 
