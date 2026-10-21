@@ -48,6 +48,8 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
     private let lock = NSLock()
     private var process: StreamingProcess?
     private var cancelRequested = false
+    /// `xcodebuild -list` can take a while (it resolves packages first): a cancel stops it too.
+    private let schemeLookup = Shell.Cancellation()
 
     /// What runs the tests: `xcodebuild` from the PATH, or a stand-in in tests.
     let xcodebuild: String
@@ -96,13 +98,16 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         return args
     }
 
-    /// The configured scheme, or the only scheme `xcodebuild -list` reports.
+    /// The configured scheme, or the only scheme `xcodebuild -list` reports. Throws
+    /// `CancellationError` when the run is cancelled meanwhile.
     public func resolveScheme() throws -> String {
         if let scheme = config.scheme { return scheme }
         var args = [xcodebuild, "-list", "-json"]
         if let workspace = config.workspace { args += ["-workspace", workspace] }
         else if let project = config.project { args += ["-project", project] }
-        let result = try Shell.run(args, in: workingDirectory, environment: environment.processEnvironment)
+        if schemeLookup.isCancelled { throw CancellationError() }
+        let result = try Shell.run(args, in: workingDirectory, environment: environment.processEnvironment, cancellation: schemeLookup)
+        if schemeLookup.isCancelled { throw CancellationError() }
         guard result.succeeded else { throw CommandError(command: args, result: result) }
         struct Listing: Decodable {
             struct Container: Decodable { var schemes: [String]? }
@@ -210,13 +215,14 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
         )
     }
 
-    /// Stops the run: xcodebuild gets SIGINT (then SIGTERM and SIGKILL if it lingers), and a run
-    /// that hasn't started yet throws `CancellationError`.
+    /// Stops the run: xcodebuild gets SIGINT (then SIGTERM and SIGKILL if it lingers), as does the
+    /// scheme lookup, and a run that hasn't started yet throws `CancellationError`.
     public func cancel() {
         let process: StreamingProcess? = lock.withLock {
             cancelRequested = true
             return self.process
         }
+        schemeLookup.cancel()
         process?.cancel()
     }
 }

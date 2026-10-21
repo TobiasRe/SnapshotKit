@@ -32,7 +32,8 @@ import Testing
     ///
     /// With `FAKE_INTERRUPT_AT` set to `list` (the configuration names no scheme) or `test`,
     /// `xcodebuild` creates `FAKE_INTERRUPT_MARKER` there and waits for the Ctrl-C, having written
-    /// `FAKE_RESULTS` as the results of a test run, if set.
+    /// `FAKE_RESULTS` as the results of a test run, if set; `-list` logs that it was interrupted.
+    /// `FAKE_SCHEMES` replaces what `-list` reports.
     /// `verifyBuildError`: only the runs after recording (the verification) fail to build.
     func setUp(fail: Bool = false, buildError: Bool = false, verifyBuildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
         let xcode = testTemp("Xcode").appendingPathExtension("app")
@@ -50,8 +51,13 @@ import Testing
         try """
             #!/bin/bash
             if [ "$1" = -list ]; then
-              [ "$FAKE_INTERRUPT_AT" = list ] && { touch "$FAKE_INTERRUPT_MARKER"; sleep 1; }
-              echo '{"project": {"schemes": ["App"]}}'
+              if [ "$FAKE_INTERRUPT_AT" = list ]; then
+                # Only the interrupt ends the wait (the bound only keeps a broken cancel from hanging the tests).
+                trap 'echo "-list interrupted" >> "$FAKE_XCODEBUILD_LOG"; exit 130' INT
+                touch "$FAKE_INTERRUPT_MARKER"
+                for _ in $(seq 600); do sleep 0.1; done
+              fi
+              if [ -n "${FAKE_SCHEMES+set}" ]; then echo "$FAKE_SCHEMES"; else echo '{"project": {"schemes": ["App"]}}'; fi
               exit 0
             fi
             echo "$*" >> "$FAKE_XCODEBUILD_LOG"
@@ -96,6 +102,17 @@ import Testing
     }
 
     let environmentLine = "snapkit: Xcode 99.0 · Example Phone iOS 99.0\n"
+    /// What `record … card` prints until its record run starts.
+    var recordingCard: String {
+        "snapkit: recording AppTests/CardTests/card()\n" + environmentLine + """
+            ▸ Finding suite sources
+            ▸ Enabling record mode
+            snapkit: record mode enabled in Tests/AppTests/CardTests.swift (CardTests)
+            ▸ Recording snapshots
+
+            """
+    }
+    let restored = "▸ Restoring test sources\nsnapkit: restored Tests/AppTests/CardTests.swift\n"
     let failed = "▸ Testing\n✘ Test card() failed after 0.1 seconds with 1 issue.\n** TEST FAILED **\n▸ Finished\n"
     let passed = "▸ Testing\n** TEST SUCCEEDED **\n▸ Finished\n"
 
@@ -263,15 +280,42 @@ import Testing
 
     let interrupted = "\nInterrupted — cancelling (press Ctrl-C again to force quit)…\n"
 
-    /// It said "The operation couldn’t be completed. (Swift.CancellationError error 1.)".
+    /// It said "The operation couldn’t be completed. (Swift.CancellationError error 1.)". The lookup
+    /// itself is stopped: `xcodebuild -list` can take minutes, resolving packages.
     @Test func ctrlCWhileTheSchemeIsLookedUpCancels() throws {
-        let (repo, env, _) = try setUp()
+        let (repo, env, log) = try setUp()
         try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml").replacingOccurrences(of: "scheme: App\n", with: ""))
         let marker = testTemp("interrupt")
         let result = try snapkit.interrupted("run", "--repo", repo.url.path, at: marker,
                                              environment: interrupting(env, at: "list", marker: marker))
         #expect(Outcome(result) == Outcome(status: 1, stdout: environmentLine + "Cancelled.\n", stderr: interrupted))
+        #expect(try String(contentsOf: log, encoding: .utf8) == "-list interrupted\n")
         #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
+    /// `record` without a scheme to run: the run throws after the patch, which is undone all the same.
+    @Test func aRecordThatCannotFindTheSchemeRestoresTheSource() throws {
+        let (repo, env, _) = try setUp()
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml").replacingOccurrences(of: "scheme: App\n", with: ""))
+        let result = try snapkit("record", "--repo", repo.url.path, "card",
+                                 environment: env.merging(["FAKE_SCHEMES": #"{"project": {"schemes": []}}"#]) { $1 })
+        #expect(Outcome(result) == failure(ConfigError.missingScheme.errorDescription!, stdout: recordingCard + restored))
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == RecordSessionTests.suiteSource)
+        #expect(!FileManager.default.fileExists(atPath: try RecordSession.journalURL(for: repo.url).path))
+        #expect(snapkit.history(of: repo.url).load().isEmpty)
+    }
+
+    /// Ctrl-C while the patched suite's scheme is looked up: cancelled, and the source restored.
+    @Test func ctrlCWhileARecordLooksUpTheSchemeRestoresTheSource() throws {
+        let (repo, env, log) = try setUp()
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml").replacingOccurrences(of: "scheme: App\n", with: ""))
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("record", "--repo", repo.url.path, "card", at: marker,
+                                             environment: interrupting(env, at: "list", marker: marker))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: recordingCard + restored + "Cancelled.\n", stderr: interrupted))
+        #expect(try String(contentsOf: log, encoding: .utf8) == "-list interrupted\n")
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == RecordSessionTests.suiteSource)
+        #expect(!FileManager.default.fileExists(atPath: try RecordSession.journalURL(for: repo.url).path))
     }
 
     /// Without a last run, `rerecord` runs the tests to find the failing suites; cancelled, that

@@ -37,14 +37,16 @@ public struct CommandError: Error, LocalizedError, Sendable {
 /// These calls block until the command exits; async code runs them through `offCooperativePool`.
 public enum Shell {
     /// Runs `arguments[0]` (resolved through `/usr/bin/env`) with the remaining arguments.
+    /// `cancellation` can stop the command from another thread.
     @discardableResult
     public static func run(
         _ arguments: [String],
         in directory: URL? = nil,
         environment: [String: String]? = nil,
-        input: Data? = nil
+        input: Data? = nil,
+        cancellation: Cancellation? = nil
     ) throws -> CommandResult {
-        let (status, out, err) = try execute(arguments, in: directory, environment: environment, input: input)
+        let (status, out, err) = try execute(arguments, in: directory, environment: environment, input: input, cancellation: cancellation)
         return CommandResult(status: status, stdout: String(decoding: out, as: UTF8.self), stderr: String(decoding: err, as: UTF8.self))
     }
 
@@ -62,7 +64,7 @@ public enum Shell {
 
     /// Raw stdout bytes, for binary output such as `git show <rev>:<png>`.
     public static func data(_ arguments: [String], in directory: URL? = nil) throws -> Data {
-        let (status, out, err) = try execute(arguments, in: directory, environment: nil, input: nil)
+        let (status, out, err) = try execute(arguments, in: directory, environment: nil, input: nil, cancellation: nil)
         guard status == 0 else {
             throw CommandError(command: arguments, result: CommandResult(status: status, stdout: "", stderr: String(decoding: err, as: UTF8.self)))
         }
@@ -70,7 +72,7 @@ public enum Shell {
     }
 
     private static func execute(
-        _ arguments: [String], in directory: URL?, environment: [String: String]?, input: Data?
+        _ arguments: [String], in directory: URL?, environment: [String: String]?, input: Data?, cancellation: Cancellation?
     ) throws -> (status: Int32, stdout: Data, stderr: Data) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -87,6 +89,8 @@ public enum Shell {
         let exited = exitSemaphore(for: process)
 
         try process.run()
+        cancellation?.started(process)
+        defer { cancellation?.finished() }
         out.closeWriteEndInParent()
         err.closeWriteEndInParent()
         if let input, let inPipe {
@@ -141,6 +145,41 @@ public enum Shell {
         let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./=:,@+%")
         if !argument.isEmpty, argument.unicodeScalars.allSatisfy(safe.contains) { return argument }
         return "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+}
+
+extension Shell {
+    /// Stops a command that `Shell.run` waits for, from another thread: it gets SIGINT, as from
+    /// Ctrl-C in a terminal. A command cancelled before it started gets it once it has.
+    public final class Cancellation: @unchecked Sendable { // `process` and `cancelled` are guarded by `lock`.
+        private let lock = NSLock()
+        private var process: Process?
+        private var cancelled = false
+
+        public init() {}
+
+        public var isCancelled: Bool { lock.withLock { cancelled } }
+
+        public func cancel() {
+            let running: Process? = lock.withLock {
+                cancelled = true
+                return process
+            }
+            if let running, running.isRunning { running.interrupt() }
+        }
+
+        func started(_ process: Process) {
+            let cancelled: Bool = lock.withLock {
+                self.process = process
+                return self.cancelled
+            }
+            if cancelled { process.interrupt() }
+        }
+
+        /// Once it has exited: its process identifier may be another process's next.
+        func finished() {
+            lock.withLock { process = nil }
+        }
     }
 }
 
