@@ -114,6 +114,105 @@ import Testing
         #expect(x.config.baseBranch == "main")
     }
 
+    /// GitHub Actions: the step's `working-directory`, else the job's `defaults`, else the
+    /// workflow's; a `cd` in the step's script goes on from there.
+    @Test func githubWorkingDirectories() {
+        func workingDirectory(_ job: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: "ci.yml", text: """
+                defaults:
+                  run:
+                    working-directory: ./App
+                jobs:
+                \(job)
+                """)]).config.workingDirectory
+        }
+        #expect(workingDirectory("""
+              snapshots:
+                steps:
+                  - run: xcodebuild test -scheme App
+            """) == "App")
+        #expect(workingDirectory("""
+              snapshots:
+                defaults:
+                  run:
+                    working-directory: ios
+                steps:
+                  - uses: actions/checkout@v4
+                  - name: Snapshots
+                    run: xcodebuild test -scheme App
+            """) == "ios")
+        #expect(workingDirectory("""
+              snapshots:
+                defaults:
+                  run:
+                    working-directory: ios
+                steps:
+                  - name: Snapshots
+                    run: |
+                      cd Feature
+                      xcodebuild test -scheme App
+                    working-directory: "${{ github.workspace }}/Modules"
+            """) == "Modules/Feature")
+        // The workflow's default applies to no other step's `cd`.
+        #expect(workingDirectory("""
+              snapshots:
+                steps:
+                  - run: cd Elsewhere
+                  - run: xcodebuild test -scheme App
+            """) == "App")
+    }
+
+    /// GitLab: a `cd` in the job's `before_script`, else the `default:` one, carries on into `script`.
+    @Test func gitlabWorkingDirectories() {
+        func workingDirectory(_ text: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.workingDirectory
+        }
+        #expect(workingDirectory("""
+            snapshots:
+              before_script:
+                - cd ios
+                - bundle install
+              script:
+                - xcodebuild test -scheme App
+            """) == "ios")
+        #expect(workingDirectory("""
+            default:
+              before_script:
+                - cd "$CI_PROJECT_DIR/ios"
+            snapshots:
+              script:
+                - cd App && pod install
+                - xcodebuild test -scheme App
+            """) == "ios/App")
+        // A job's own before_script replaces the default one.
+        #expect(workingDirectory("""
+            default:
+              before_script:
+                - cd ios
+            snapshots:
+              before_script:
+                - echo hello
+              script:
+                - xcodebuild test -scheme App
+            """) == nil)
+    }
+
+    @Test func shellScriptWorkingDirectory() {
+        let script = "#!/bin/bash\nset -euo pipefail\ncd ios\nif true; then\n  xcodebuild test -scheme App\nfi\n"
+        #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: script)]).config.workingDirectory == "ios")
+    }
+
+    @Test func workingDirectoriesFollowEachOther() {
+        #expect(CIConfigParser.path(following: ["ios", "./App"]) == "ios/App")
+        #expect(CIConfigParser.path(following: ["ios", ".."]) == nil)
+        #expect(CIConfigParser.path(following: ["ios", "../Modules"]) == "Modules")
+        #expect(CIConfigParser.path(following: ["ios", "$CI_PROJECT_DIR/Modules"]) == "Modules")
+        // Out of the repository, or out of sight.
+        #expect(CIConfigParser.path(following: [".."]) == nil)
+        #expect(CIConfigParser.path(following: ["/Users/ci/build"]) == nil)
+        #expect(CIConfigParser.path(following: ["$BUILD_DIR"]) == nil)
+    }
+
     @Test func xcodeSelectionVariants() {
         let p = CIConfigParser()
         #expect(p.xcodeSelection(in: "- uses: maxim-lobanov/setup-xcode@v1\n  with:\n    xcode-version: '98.4'").version == "98.4")

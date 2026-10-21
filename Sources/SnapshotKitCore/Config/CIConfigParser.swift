@@ -185,6 +185,7 @@ public struct CIConfigParser {
     func invocations(in text: String) -> [Invocation] {
         let lines = Self.logicalLines(text)
         let rawLines = text.components(separatedBy: .newlines)
+        let outline = YAMLOutline(text)
         var found: [Invocation] = []
         for (fullLine, index) in lines {
             let line = MiniYAML.stripComment(fullLine) // also a commented-out command
@@ -199,11 +200,12 @@ public struct CIConfigParser {
                 var invocation = parseArguments(words.map(expand))
 
                 // What runs before it, less the folder it is called from (`/usr/bin/`).
+                var folders = Self.folders(around: index, in: outline)
                 let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
                 if let cd = prefix.range(of: #"cd\s+([^\s;&]+)\s*&&\s*$"#, options: .regularExpression) {
-                    let dir = String(prefix[cd]).replacingOccurrences(of: #"^cd\s+|\s*&&\s*$"#, with: "", options: .regularExpression)
-                    invocation.workingDirectory = expand(MiniYAML.unquote(dir))
+                    folders.append(String(prefix[cd]).replacingOccurrences(of: #"^cd\s+|\s*&&\s*$"#, with: "", options: .regularExpression))
                 }
+                invocation.workingDirectory = Self.path(following: folders.map { expand(MiniYAML.unquote($0)) })
 
                 // Score: prefer `test`, and anything that mentions snapshots nearby.
                 if invocation.actions.contains("test") || invocation.actions.contains("test-without-building") { invocation.score += 4 }
@@ -269,6 +271,71 @@ public struct CIConfigParser {
             i += 1
         }
         return inv
+    }
+
+    // MARK: - Working directory
+
+    /// The folders the shell moves to before line `index` runs, in order, as written: GitHub Actions'
+    /// `working-directory` (the step's, else its job's or the workflow's `defaults.run`), then every
+    /// `cd` before it in the same shell (earlier in its `run:` block or `script:` list, after GitLab's
+    /// `before_script:` of the job, else of `default:`). In a shell script, every `cd` before it.
+    static func folders(around index: Int, in outline: YAMLOutline) -> [String] {
+        func child(_ key: String, of scope: Int) -> Int? { outline.children(of: scope).first { outline.key($0) == key } }
+        guard outline.children(of: -1).contains(where: { outline.key($0) != nil }) else {
+            return cdTargets(in: 0..<index, of: outline)        // a shell script
+        }
+        let ancestors = outline.ancestors(of: index)
+        var folders: [String] = []
+        for scope in (outline.isListItem(index) ? [index] : []) + ancestors + [-1] {
+            if scope >= 0, outline.isListItem(scope), let step = outline.value(at: ["working-directory"], under: scope) {
+                folders.append(step)
+                break
+            }
+            if let defaults = outline.value(at: ["defaults", "run", "working-directory"], under: scope) {
+                folders.append(defaults)
+                break
+            }
+        }
+        guard let script = ancestors.first(where: { ["run", "script", "before_script"].contains(outline.key($0)) }) else { return folders }
+        if outline.key(script) == "script" {
+            let job = ancestors.first { $0 < script } ?? -1     // the next one out
+            let before = child("before_script", of: job) ?? child("default", of: -1).flatMap { child("before_script", of: $0) }
+                ?? child("before_script", of: -1)
+            if let before { folders += cdTargets(in: outline.block(of: before), of: outline) }
+        }
+        return folders + cdTargets(in: (script + 1)..<index, of: outline)
+    }
+
+    /// The folders of the `cd` commands that start lines in `range`.
+    private static func cdTargets(in range: Range<Int>, of outline: YAMLOutline) -> [String] {
+        range.compactMap { i in
+            let command = outline.content(i)
+            guard let cd = command.range(of: #"^cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)"#, options: .regularExpression) else { return nil }
+            return String(command[cd].dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    /// What the CI's checkout folder is called: where a job starts.
+    private static let checkoutFolders = ["$CI_PROJECT_DIR", "${CI_PROJECT_DIR}", "$GITHUB_WORKSPACE", "${GITHUB_WORKSPACE}",
+                                          "${{ github.workspace }}", "${{github.workspace}}"]
+
+    /// Where following `folders` one after the other from the repository's root leads, relative to
+    /// it, as `cd` goes; nil for the root itself, or when a folder is outside the repository or
+    /// unknown (a variable that isn't defined in sight).
+    static func path(following folders: [String]) -> String? {
+        var components: [String] = []
+        for folder in folders {
+            var folder = folder
+            if let root = checkoutFolders.first(where: { folder == $0 || folder.hasPrefix($0 + "/") }) {
+                folder = "." + folder.dropFirst(root.count)
+                components = []
+            }
+            guard isResolved(folder), !folder.hasPrefix("/"), !folder.hasPrefix("~"), folder != "-" else { return nil }
+            for component in folder.split(separator: "/") where component != "." {
+                if component != ".." { components.append(String(component)) } else if components.popLast() == nil { return nil }
+            }
+        }
+        return components.isEmpty ? nil : components.joined(separator: "/")
     }
 
     // MARK: - Xcode version
