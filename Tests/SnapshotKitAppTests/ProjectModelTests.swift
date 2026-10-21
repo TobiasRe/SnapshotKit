@@ -1656,15 +1656,7 @@ extension AppUITests {
             let store = AppFixtures.store()
             for verify in [true, false] {
                 store.update { $0.verifyAfterRecord = verify }
-                let model = ProjectModel(project: Project(path: repo.path), store: store, autoload: false)
-                var f = ProjectFixture()
-                f.context = AppFixtures.context(at: repo, remoteHost: "fake-mac")
-                f.context?.resolved.config.remoteDirectory = mac.checkout.path
-                f.failingSuites = [AppFixtures.checkoutSuite]
-                f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures")).filter { $0.test.name == "payButton()" }
-                model.apply(f)
-                model.remoteTransport = { _ in mac }
-
+                let model = remoteModel(repo, on: mac, store: store)
                 model.reRecordOnRemote()
                 try await waitUntilFinished(model)
                 #expect(try String(contentsOf: repo.appendingPathComponent(snapshot), encoding: .utf8) == "new")
@@ -1679,12 +1671,115 @@ extension AppUITests {
                 try FileManager.default.removeItem(at: repo.appendingPathComponent(snapshot))
             }
         }
+
+        /// A model of `repo` whose remote Mac is `mac`, with payButton() failing from the last run.
+        func remoteModel(_ repo: URL, on mac: FakeRemoteMac, store: ProjectStore = AppFixtures.store()) -> ProjectModel {
+            let model = ProjectModel(project: Project(path: repo.path), store: store, autoload: false)
+            var f = ProjectFixture()
+            f.context = AppFixtures.context(at: repo, remoteHost: "fake-mac")
+            f.context?.resolved.config.remoteDirectory = mac.checkout.path
+            f.failingSuites = [AppFixtures.checkoutSuite]
+            f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures")).filter { $0.test.name == "payButton()" }
+            model.apply(f)
+            model.remoteTransport = { _ in mac }
+            return model
+        }
+
+        /// A run on the remote Mac shows its failures as a local run does, from that Mac, and saves
+        /// them as the last run; a flakiness check there repeats just the failing tests.
+        @Test func aRemoteRunAndCheckShowWhatTheMacFound() async throws {
+            let (repo, _) = try makeRepo()
+            let arguments = AppFixtures.temporaryDirectory("remote-args")
+            let mac = try FakeRemoteMac(xcodebuild: """
+                echo "$args" >> '\(arguments.path)'
+                cat > "$bundle/tests.json" <<'JSON'
+                \(Self.payButtonFailed)
+                JSON
+                exit 65
+                """)
+            let model = remoteModel(repo, on: mac)
+            model.runRemote()
+            #expect(model.operation == .remoteRun)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "1 failing test in 1 suite")
+            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
+            let source = try #require(model.failureSource)
+            #expect(source == FailureSource(label: "Remote run", date: source.date, host: "fake-mac", resultBundle: nil))
+            let last = try #require(LastRun.load(repository: repo))
+            #expect((last.host, last.failed) == ("fake-mac", 1))
+
+            model.checkFlakiness(remote: true)
+            #expect(model.operation == .remoteFlakeCheck)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "5× on fake-mac: 1 fails every time, 0 flaky, 0 pass.")
+            #expect(model.failures.first?.verdict == .alwaysFails)
+            let runs = try String(contentsOf: arguments, encoding: .utf8).split(separator: "\n")
+            try #require(runs.count == 2)
+            #expect(!runs[0].contains("-only-testing:"))                  // the run: every test
+            #expect(runs[1].contains("-only-testing:AppSnapshotTests/CheckoutViewTests"))
+            #expect(runs[1].contains("-test-iterations 5"))
+        }
+
+        /// A remote re-record whose tests don't build recorded nothing, and one cancelled says so:
+        /// neither brings back a snapshot or changes the failures.
+        @Test func aRemoteReRecordThatRecordsNothingSaysSo() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let broken = try FakeRemoteMac(xcodebuild: """
+                echo "$PWD/Tests/AppTests/CheckoutViewTests.swift:7:9: error: cannot find 'card' in scope"
+                exit 65
+                """)
+            let model = remoteModel(repo, on: broken)
+            let failures = model.failures.map(\.id)
+            model.reRecordOnRemote()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Nothing was recorded: the build failed (CheckoutViewTests.swift:7:9: cannot find 'card' in scope).")
+            #expect(model.lastMessageIsError)
+            #expect(model.failures.map(\.id) == failures)
+
+            let slow = try FakeRemoteMac(xcodebuild: Self.longRun)
+            let cancelled = remoteModel(repo, on: slow)
+            cancelled.reRecordOnRemote()
+            try await waitUntilStarted(cancelled)
+            cancelled.cancel()
+            try await waitUntilFinished(cancelled)
+            #expect(cancelled.lastMessage == "Cancelled.")
+            #expect(!cancelled.lastMessageIsError)
+            #expect(cancelled.failures.map(\.id) == failures)
+            #expect(try Shell.output(["git", "status", "--porcelain", "--", "Tests/AppTests/__Snapshots__/CheckoutViewTests"], in: repo).isEmpty)
+        }
+
+        /// A remote re-record whose verification can't run keeps what it recorded and says why it
+        /// couldn't verify; the failures stay until a run that could.
+        @Test func aRemoteVerificationThatCannotRunSaysWhy() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let snapshot = "Tests/AppTests/__Snapshots__/CheckoutViewTests/payButton.1.png"
+            // Records, then loses its simulators: the verification's check of the Mac fails.
+            let mac = try FakeRemoteMac(xcodebuild: """
+                mkdir -p "$(dirname \(snapshot))" && printf new > \(snapshot)
+                cat > "$bundle/tests.json" <<'JSON'
+                \(Self.payButtonFailed)
+                JSON
+                touch "$(dirname "$(command -v xcrun)")/no-simulators"
+                exit 65
+                """)
+            let model = remoteModel(repo, on: mac)
+            let failures = model.failures.map(\.id)
+            model.reRecordOnRemote()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Recorded on fake-mac; downloaded 1 snapshot. Could not verify: Command on fake-mac failed: No simulators.")
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessageAction == .reviewChanges)
+            #expect(try String(contentsOf: repo.appendingPathComponent(snapshot), encoding: .utf8) == "new")
+            #expect(model.failures.map(\.id) == failures)
+        }
     }
 }
 
 /// A remote Mac that is a local folder, with stand-ins for its `xcodebuild` (the shell `script`, run
-/// in the checkout with `$bundle` set to the result bundle) and `xcrun`: Xcode 99.1, an Example
-/// Phone with iOS 99.0, result bundles read from their `tests.json` and without attachments.
+/// in the checkout with `$bundle` set to the result bundle and `$args` to its arguments) and `xcrun`:
+/// Xcode 99.1, an Example Phone with iOS 99.0 (none once a `no-simulators` file is next to it),
+/// result bundles read from their `tests.json` and without attachments.
 struct FakeRemoteMac: RemoteTransport {
     let checkout: URL
     let bin: URL
@@ -1694,11 +1789,15 @@ struct FakeRemoteMac: RemoteTransport {
         bin = AppFixtures.temporaryDirectory("remote-bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try install("xcodebuild", """
+            args="$*"
             while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
             mkdir -p "$bundle"
             \(script)
             """)
         try install("xcrun", """
+            if [ "$1 $2" = "simctl list" ] && [ -e "$(dirname "$0")/no-simulators" ]; then
+              echo 'No simulators.' >&2; exit 70
+            fi
             case "$1 $2" in
               "simctl list") echo '{"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "Example Phone", "udid": "SIM-1", "state": "Shutdown"}]}}' ;;
               "xcresulttool get") while [ "$1" != --path ]; do shift; done; cat "$2/tests.json" ;;
