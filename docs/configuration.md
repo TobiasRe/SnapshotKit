@@ -57,8 +57,8 @@ With none of these, `.snapshotkit.yml` is the only configuration.
 ### The test command
 
 SnapshotKit looks for `xcodebuild` invocations. Line continuations (`\`) and YAML-folded lines are joined; the
-command ends at the first `|`, `;`, `>`, `<`, `&&` or comment. When there are several, it picks the one most
-likely to run snapshot tests:
+command ends at the first `|`, `;`, `>`, `<`, `&&`, comment or the `)` of the subshell it runs in. When there
+are several, it picks the one most likely to run snapshot tests:
 
 - `test` / `test-without-building` actions score highest, `build-for-testing` a little,
 - a command that mentions “snapshot”, or follows a line that does, scores more.
@@ -66,8 +66,9 @@ likely to run snapshot tests:
 From the chosen command it takes `-scheme`, `-workspace`, `-project`, `-testPlan`, `-destination` (`name=`,
 `OS=`, `platform=`), every `-only-testing` and `-skip-testing`, and the working directory: GitHub Actions’
 `working-directory` (the step’s, else `defaults.run` of the job or workflow), followed by every `cd`, `pushd`
-and `popd` before the command in the same shell (also in GitLab’s `before_script`). For a command in a shell
-function, that is those before the function is first called, then those in its body before the command.
+and `popd` before the command in the same shell (also in GitLab’s `before_script`; for a command in a `( … )`
+subshell, those before it in there too). For a command in a shell function, that is those before the function
+is first called, then those in its body before the command.
 
 Only `xcodebuild` is understood. Swift packages tested with `swift test` in CI: set `scheme:` (the
 `<Package>-Package` scheme) and `device:` in `.snapshotkit.yml`, or let SnapshotKit find the package scheme.

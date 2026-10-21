@@ -56,6 +56,15 @@ import Testing
         #expect(ShellWords.firstCommand("xcodebuild test -scheme A | xcpretty") == "xcodebuild test -scheme A ")
         #expect(ShellWords.firstCommand("xcodebuild test && echo done") == "xcodebuild test ")
         #expect(ShellWords.firstCommand("xcodebuild test -scheme 'a|b'") == "xcodebuild test -scheme 'a|b'")
+        #expect(ShellWords.firstCommand("xcodebuild test -scheme App) && echo done") == "xcodebuild test -scheme App")
+        #expect(ShellWords.firstCommand("xcodebuild test -scheme $(scheme)") == "xcodebuild test -scheme $(scheme)")
+    }
+
+    /// The commands of a line's start up to a command in a subshell: those in the subshell before it too.
+    @Test func commandsBeforeOneInASubshell() {
+        #expect(ShellWords.commands("cd a && (cd b) && (cd c && ") == ["cd a"])
+        #expect(ShellWords.commands("cd a && (cd b) && (cd c && ", enteringOpenSubshells: true) == ["cd a", "cd c"])
+        #expect(ShellWords.commands("x=$(cd b && ", enteringOpenSubshells: true) == ["x=$(cd b &&"])
     }
 }
 
@@ -317,6 +326,23 @@ import Testing
         #expect(workingDirectory("main() {\n  cd ios\n  " + test + "}\nmain\n") == "ios")
         // A folder found out only when it runs leads back to the root, where a later `cd` goes on.
         #expect(workingDirectory("cd \"$(dirname \"$0\")/..\"\ncd ios\n" + test) == "ios")
+    }
+
+    /// A command run in a subshell runs where the subshell's commands before it lead, and ends
+    /// with the subshell; a subshell closed before it still doesn't move its shell.
+    @Test func aCommandInASubshell() {
+        func invocation(_ script: String) -> CIConfigParser.Invocation? {
+            CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: "#!/bin/bash\n" + script)]).invocation
+        }
+        let inSubshell = invocation("(cd ios && xcodebuild test -scheme App)\n")
+        #expect(inSubshell?.arguments == ["test", "-scheme", "App"])
+        #expect(inSubshell?.workingDirectory == "ios")
+        #expect(invocation("cd ios && (cd App && xcodebuild test -scheme App) | xcpretty\n")?.workingDirectory == "ios/App")
+        #expect(invocation("( (cd docs && make) && cd ios && xcodebuild test -scheme App )\n")?.workingDirectory == "ios")
+        #expect(invocation("(cd docs && make) && xcodebuild test -scheme App\n")?.workingDirectory == nil)
+        #expect(invocation("cd ios\n( xcodebuild test -scheme App )\n")?.arguments == ["test", "-scheme", "App"])
+        #expect(invocation("xcodebuild test -scheme App -destination \"$(destination)\" -only-testing:$(suite)\n")?.arguments
+                == ["test", "-scheme", "App", "-destination", "$(destination)", "-only-testing:$(suite)"])
     }
 
     /// GitLab's `script:` can be the command itself, after a `before_script:` that moves.

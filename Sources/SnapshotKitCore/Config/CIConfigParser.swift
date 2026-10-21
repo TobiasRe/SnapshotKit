@@ -201,9 +201,11 @@ public struct CIConfigParser {
                 var invocation = parseArguments(words.map(expand))
 
                 // What runs before it on its line (`cd ios && pod install && `), less the folder it
-                // is called from (`/usr/bin/`).
+                // is called from (`/usr/bin/`). In a subshell (`(cd ios && xcodebuild …)`), what runs before
+                // it in there too.
                 let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
-                invocation.workingDirectory = Self.path(following: folders(around: index, in: outline) + folderChanges(inLine: prefix))
+                let moves = folders(around: index, in: outline) + folderChanges(inLine: prefix, enteringOpenSubshells: true)
+                invocation.workingDirectory = Self.path(following: moves)
 
                 // Score: prefer `test`, and anything that mentions snapshots nearby.
                 if invocation.actions.contains("test") || invocation.actions.contains("test-without-building") { invocation.score += 4 }
@@ -398,9 +400,11 @@ public struct CIConfigParser {
     /// The moves of the commands of a line of a CI file, in order. GitHub replaces `${{ … }}` before
     /// the shell splits the line, so `cd ${{ env.APP_DIR }}` is one `cd`. A function's header in
     /// front (`build() { cd ios && …`) isn't a command: what follows it is the function's body.
-    private func folderChanges(inLine line: String) -> [FolderChange] {
+    /// `enteringOpenSubshells` as for `ShellWords.commands`.
+    private func folderChanges(inLine line: String, enteringOpenSubshells: Bool = false) -> [FolderChange] {
         let command = Self.shellCommand(line).replacingOccurrences(of: Self.bodyStart, with: "", options: .regularExpression)
-        return ShellWords.commands(expandingExpressions(command)).flatMap(folderChanges(inCommand:))
+        return ShellWords.commands(expandingExpressions(command), enteringOpenSubshells: enteringOpenSubshells)
+            .flatMap(folderChanges(inCommand:))
     }
 
     /// `name() {`, `function name {` or the `{` of a group in front of a line's commands.
