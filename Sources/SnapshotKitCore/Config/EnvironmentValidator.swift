@@ -36,11 +36,14 @@ public struct TestEnvironment: Sendable {
     public var simulator: Simulator
     /// True when CI does not pin Xcode and the currently selected one is used.
     public var xcodeIsDefault: Bool
+    /// What to know about the choice: the Xcode at `developerDir` isn't the version pinned.
+    public var notes: [String]
 
-    public init(xcode: XcodeInstall, simulator: Simulator, xcodeIsDefault: Bool) {
+    public init(xcode: XcodeInstall, simulator: Simulator, xcodeIsDefault: Bool, notes: [String] = []) {
         self.xcode = xcode
         self.simulator = simulator
         self.xcodeIsDefault = xcodeIsDefault
+        self.notes = notes
     }
 
     public var destination: String { "platform=\(simulator.platform) Simulator,id=\(simulator.udid)" }
@@ -129,7 +132,8 @@ public enum EnvironmentValidator {
         return try selectXcode(for: config, installed: installed, selected: selected, lookup: { xcode(at: $0) })
     }
 
-    /// Machine-independent selection, also used for remote hosts.
+    /// Machine-independent selection, also used for remote hosts. `developerDir` names one Xcode,
+    /// and is used even when a version is pinned too (see `notes(for:xcode:)`).
     public static func selectXcode(
         for config: SnapshotConfig, installed: [XcodeInstall], selected: XcodeInstall?,
         lookup: (String) -> XcodeInstall?
@@ -139,7 +143,7 @@ public enum EnvironmentValidator {
             if app.hasSuffix("/") { app.removeLast() }
             if app.hasSuffix("/Contents/Developer") { app = String(app.dropLast("/Contents/Developer".count)) }
             guard let install = lookup(app) else { throw EnvironmentError.xcodePathMissing(app) }
-            if config.xcodeVersion == nil { return (install, false) }
+            return (install, false)
         }
         if let required = config.xcodeVersion {
             let matches = installed.filter { versionMatches(installed: $0.version, required: required) }
@@ -151,6 +155,17 @@ public enum EnvironmentValidator {
         if let selected { return (selected, true) }
         guard let first = installed.first else { throw EnvironmentError.noXcode }
         return (first, true)
+    }
+
+    /// Says so when `xcode`, the one at `developerDir`, isn't the version that is pinned as well:
+    /// its snapshots may not match CI's.
+    public static func notes(for config: SnapshotConfig, xcode: XcodeInstall) -> [String] {
+        guard config.developerDir != nil, let required = config.xcodeVersion,
+              !versionMatches(installed: xcode.version, required: required) else { return [] }
+        let dirSource = config.source(of: .developerDir).map { ", from \($0)" } ?? ""
+        let pinnedBy = config.source(of: .xcodeVersion).map { " by \($0)" } ?? ""
+        return ["Using Xcode \(xcode.version) at `\(xcode.path)` (`developerDir`\(dirSource)), not Xcode \(required) as pinned\(pinnedBy): "
+                + "snapshots may differ from CI’s."]
     }
 
     /// "X" matches "X.Y"; "X.Y" matches "X.Y" and "X.Y.0"; "X.1" does not match "X.10".
@@ -248,6 +263,6 @@ public enum EnvironmentValidator {
         let (xcode, isDefault) = try selectXcode(for: config)
         let sims = try simulators(xcode: xcode)
         let sim = try selectSimulator(for: config, from: sims, xcode: xcode)
-        return TestEnvironment(xcode: xcode, simulator: sim, xcodeIsDefault: isDefault)
+        return TestEnvironment(xcode: xcode, simulator: sim, xcodeIsDefault: isDefault, notes: notes(for: config, xcode: xcode))
     }
 }

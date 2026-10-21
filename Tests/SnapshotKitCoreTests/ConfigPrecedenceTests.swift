@@ -85,6 +85,36 @@ import Testing
                     "-collect-test-diagnostics", "never"])
     }
 
+    /// The Xcode `.snapshotkit.yml` chooses beats CI's, whichever way either names it. Its
+    /// `developerDir` is used though CI pins a version (kept, for the note that they differ); its
+    /// version replaces CI's `DEVELOPER_DIR`, which would otherwise win.
+    @Test func theOverrideFilesXcodeWinsOverCIs() throws {
+        let repo = try makeRepo()
+        try repo.write(".snapshotkit.yml", "developerDir: /Apps/Xcode-98.0.app\n")
+        let config = try ProjectContext.load(repository: repo.url).config
+        #expect(config.developerDir == "/Apps/Xcode-98.0.app" && config.source(of: .developerDir) == ".snapshotkit.yml")
+        #expect(values(config)["xcode"] == "99.1 (.gitlab-ci.yml)")
+        let older = XcodeInstall(path: "/Apps/Xcode-98.0.app", version: "98.0")
+        let (picked, _) = try EnvironmentValidator.selectXcode(for: config, installed: [XcodeInstall(path: "/Apps/Xcode-99.1.app", version: "99.1"), older],
+                                                               selected: nil, lookup: { $0 == older.path ? older : nil })
+        #expect(picked == older)
+
+        let github = try TempRepo()
+        try github.write(".github/workflows/ci.yml", """
+            jobs:
+              snapshots:
+                env:
+                  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+                steps:
+                  - run: xcodebuild test -scheme App
+            """)
+        #expect(try ProjectContext.load(repository: github.url).config.developerDir == "/Applications/Xcode.app/Contents/Developer")
+        try github.write(".snapshotkit.yml", "xcode: \"99.1\"\n")
+        let pinned = try ProjectContext.load(repository: github.url).config
+        #expect(pinned.developerDir == nil && pinned.source(of: .developerDir) == nil)
+        #expect(values(pinned)["xcode"] == "99.1 (.snapshotkit.yml)")
+    }
+
     /// An empty setting (a cleared field in the app) is no setting.
     @Test func emptyProjectSettingsDontOverride() throws {
         let repo = try makeRepo()

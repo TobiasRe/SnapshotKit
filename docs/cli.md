@@ -140,13 +140,15 @@ snapkit config [--repo PATH]
 ```
 
 Prints the repository, the CI files read, whether a `.snapshotkit.yml` exists, every resolved value with its
-source, the test targets with snapshots, notes about anything guessed or ignored, and checks Xcode and the
-simulator:
+source (`developerDir`, `platform`, `skipTesting`, `extraArgs` and `remoteDir` only when set), the test targets
+with snapshots, notes about anything guessed or ignored, and checks Xcode and the simulator, then names the
+Xcode used:
 
 ```
   scheme         Shop  (.github/workflows/snapshots.yml)
   …
 snapkit: Xcode 16.2 · iPhone 16 Pro iOS 18.2
+Xcode used: /Applications/Xcode-16.2.app
 ```
 
 Exits 2 when Xcode or the simulator is missing, 1 when the configuration can’t be read. See

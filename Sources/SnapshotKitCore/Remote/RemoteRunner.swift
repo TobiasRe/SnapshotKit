@@ -119,7 +119,8 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         let sims = try EnvironmentValidator.parseSimulators(Data(json.utf8))
         do {
             let sim = try EnvironmentValidator.selectSimulator(for: config, from: sims, xcode: xcode)
-            return (TestEnvironment(xcode: xcode, simulator: sim, xcodeIsDefault: isDefault), info)
+            return (TestEnvironment(xcode: xcode, simulator: sim, xcodeIsDefault: isDefault,
+                                    notes: EnvironmentValidator.notes(for: config, xcode: xcode)), info)
         } catch let error as EnvironmentError {
             throw RemoteEnvironmentError(host: transport.label, underlying: error)
         }
@@ -183,6 +184,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         onStage(.connecting)
         let (environment, info) = try await offCooperativePool { try self.preflight() }
         onLine("snapkit: \(transport.label): Xcode \(environment.xcode.version), \(environment.simulator.name) (\(environment.simulator.platform) \(environment.simulator.osVersion))")
+        for note in environment.notes { onLine("snapkit: \(transport.label): note: \(note)") }
         try checkCancelled()
 
         let dir = remoteDirectory(home: info.home)

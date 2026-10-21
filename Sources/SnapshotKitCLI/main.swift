@@ -202,6 +202,7 @@ func environment(_ config: SnapshotConfig) -> TestEnvironment {
     do {
         let env = try EnvironmentValidator.validate(config)
         say("snapkit: Xcode \(env.xcode.version)\(env.xcodeIsDefault ? " (not pinned by CI; using selected)" : "") · \(env.simulator.name) \(env.simulator.platform) \(env.simulator.osVersion)")
+        for note in env.notes { warn("note: " + note) }
         return env
     } catch {
         fail(error.localizedDescription, code: 2)
@@ -396,10 +397,16 @@ func main() async {
         func row(_ name: String, _ value: String?, _ field: SnapshotConfig.Field) {
             say("  \(name.padding(toLength: 14, withPad: " ", startingAt: 0)) \(value ?? "—")" + (c.source(of: field).map { color("90", "  (\($0))") } ?? ""))
         }
+        /// A row for a value that is rarely set, only when it is.
+        func rowIfSet(_ name: String, _ value: String?, _ field: SnapshotConfig.Field) {
+            if value?.isEmpty == false || c.source(of: field) != nil { row(name, value, field) }
+        }
         say("Repository: \(ctx.repository.path)")
         say("CI files:   \(ctx.resolved.ciFiles.isEmpty ? "none" : ctx.resolved.ciFiles.joined(separator: ", "))")
         say("Override:   \(ctx.resolved.overrideFile ?? "none")")
-        row("xcode", c.xcodeVersion ?? c.developerDir, c.xcodeVersion == nil && c.developerDir != nil ? .developerDir : .xcodeVersion)
+        row("xcode", c.xcodeVersion, .xcodeVersion)
+        rowIfSet("developerDir", c.developerDir, .developerDir)
+        rowIfSet("platform", c.platform, .platform)
         row("device", c.deviceName, .deviceName)
         row("os", c.osVersion, .osVersion)
         row("scheme", c.scheme, .scheme)
@@ -407,13 +414,17 @@ func main() async {
         row("project", c.project, .project)
         row("testPlan", c.testPlan, .testPlan)
         row("onlyTesting", c.onlyTesting.isEmpty ? nil : c.onlyTesting.joined(separator: ", "), .onlyTesting)
+        rowIfSet("skipTesting", c.skipTesting.joined(separator: ", "), .skipTesting)
+        rowIfSet("extraArgs", c.extraArguments.map(Shell.quote).joined(separator: " "), .extraArguments)
         row("baseBranch", c.baseBranch, .baseBranch)
         row("workingDir", c.workingDirectory, .workingDirectory)
         row("remoteHost", c.remoteHost, .remoteHost)
+        rowIfSet("remoteDir", c.remoteDirectory, .remoteDirectory)
         let modules = ctx.modules()
         say("  modules        \(modules.isEmpty ? "—" : modules.joined(separator: ", "))")
         for note in ctx.resolved.notes { say(color("33", "note: ") + note) }
-        _ = environment(c)
+        let env = environment(c)
+        say("Xcode used: \(env.xcode.path)")
 
     case "run":
         let ctx = context(o)

@@ -270,7 +270,8 @@ import Testing
 
     func rows(baseBranch: String = "develop  (git (auto-detected))") -> String {
         """
-          xcode          /no/such/Xcode.app  (.snapshotkit.yml)
+          xcode          —
+          developerDir   /no/such/Xcode.app  (.snapshotkit.yml)
           device         Example Phone  (.snapshotkit.yml)
           os             99.0  (.snapshotkit.yml)
           scheme         App  (.snapshotkit.yml)

@@ -66,6 +66,12 @@ public struct SnapshotConfig: Codable, Equatable, Sendable {
                 sources[field.rawValue] = other.sources[field.rawValue]
             }
         }
+        // `developerDir` wins over a version (it names one Xcode), so a version set here also
+        // replaces a path set before: otherwise CI's path would beat `xcode:` in .snapshotkit.yml.
+        if other.xcodeVersion != nil, other.developerDir == nil {
+            developerDir = nil
+            sources[Field.developerDir.rawValue] = nil
+        }
         take(\.xcodeVersion, .xcodeVersion)
         take(\.developerDir, .developerDir)
         take(\.platform, .platform)

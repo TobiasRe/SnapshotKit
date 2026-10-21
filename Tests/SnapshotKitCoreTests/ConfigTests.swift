@@ -524,6 +524,27 @@ import Testing
                 + "99.1 at `/Apps/Xcode-99.1.app`. Install it (e.g. from developer.apple.com/download or with `xcodes install 98.0`), or set `xcode:` in `.snapshotkit.yml`.")
     }
 
+    /// `developerDir` names one Xcode: it is the one used, though a version is pinned too, which
+    /// the note says when that Xcode is another version. It used to take the newest 99.1.x instead.
+    @Test func developerDirWinsOverAPinnedVersionAndSaysSo() throws {
+        let older = XcodeInstall(path: "/Apps/Xcode-98.0.app", version: "98.0")
+        var config = SnapshotConfig()
+        config.developerDir = older.developerDir
+        config.xcodeVersion = "99.1"
+        config.sources = ["developerDir": ".snapshotkit.yml", "xcode": ".gitlab-ci.yml"]
+        let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: config, installed: installs + [older], selected: installs[0],
+                                                                       lookup: { $0 == older.path ? older : nil })
+        #expect(picked == older)
+        #expect(!isDefault)
+        #expect(EnvironmentValidator.notes(for: config, xcode: picked) == [
+            "Using Xcode 98.0 at `/Apps/Xcode-98.0.app` (`developerDir`, from .snapshotkit.yml), not Xcode 99.1 as pinned by .gitlab-ci.yml: "
+                + "snapshots may differ from CI’s.",
+        ])
+        // The version it is: nothing to say.
+        config.xcodeVersion = "98"
+        #expect(EnvironmentValidator.notes(for: config, xcode: picked).isEmpty)
+    }
+
     @Test func unpinnedUsesSelectedXcode() throws {
         let (picked, isDefault) = try EnvironmentValidator.selectXcode(for: SnapshotConfig(), installed: installs, selected: installs[1], lookup: { _ in nil })
         #expect(picked == installs[1])

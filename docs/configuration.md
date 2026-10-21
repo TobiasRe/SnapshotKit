@@ -175,7 +175,10 @@ When comparing, `origin/<branch>` is used if it exists, so fetch to see the late
 SnapshotKit finds installed Xcodes in `/Applications` and `~/Applications` (`Xcode*.app`) plus the one
 `xcode-select` points at. (`SNAPSHOTKIT_XCODE_SEARCH_PATHS`, colon-separated, replaces the folders searched.)
 
-1. `developerDir` set: that Xcode, which must exist.
+1. `developerDir` set: that Xcode, which must exist, also when a version is pinned as well. If it is another
+   version, a note says so: *Using Xcode 16.1 at `/Applications/Xcode-16.1.app` (`developerDir`, from
+   .snapshotkit.yml), not Xcode 16.2 as pinned by .gitlab-ci.yml: snapshots may differ from CI’s.*
+   `xcode:` in `.snapshotkit.yml` replaces a path CI sets (`DEVELOPER_DIR`, `xcode-select -s`).
 2. A version pinned by CI or `xcode:`: the newest installed match. `16` matches any 16.x; `16.2` matches
    16.2 and 16.2.0 but not 16.20.
 3. Nothing pinned: the `xcode-select` Xcode (shown as *not pinned by CI; using selected*).

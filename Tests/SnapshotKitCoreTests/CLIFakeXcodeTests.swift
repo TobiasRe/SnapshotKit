@@ -156,6 +156,48 @@ import Testing
     let failed = "▸ Testing\n✘ Test card() failed after 0.1 seconds with 1 issue.\n** TEST FAILED **\n▸ Finished\n"
     let passed = "▸ Testing\n** TEST SUCCEEDED **\n▸ Finished\n"
 
+    /// Every value set, the rarer ones too, with its source; then the Xcode used, with a note that
+    /// it isn't the version pinned.
+    @Test func configShowsEveryValueAndTheXcodeUsed() throws {
+        let (repo, env, _) = try setUp()
+        let base = try repo.read(".snapshotkit.yml")
+        let xcode = try #require(base.components(separatedBy: "developerDir: ").last?.trimmingCharacters(in: .newlines))
+        try repo.write(".snapshotkit.yml", base + """
+            xcode: "99.1"
+            platform: iOS Simulator
+            skipTesting: [AppTests/SlowTests]
+            extraArguments: -configuration Debug
+            remoteDirectory: ~/work/app
+
+            """)
+        #expect(Outcome(try snapkit("config", "--repo", repo.url.path, environment: env)) == Outcome(status: 0, stdout: """
+            Repository: \(repo.root)
+            CI files:   none
+            Override:   .snapshotkit.yml
+              xcode          99.1  (.snapshotkit.yml)
+              developerDir   \(xcode)  (.snapshotkit.yml)
+              platform       iOS Simulator  (.snapshotkit.yml)
+              device         Example Phone  (.snapshotkit.yml)
+              os             —
+              scheme         App  (.snapshotkit.yml)
+              workspace      —
+              project        —
+              testPlan       —
+              onlyTesting    —
+              skipTesting    AppTests/SlowTests  (.snapshotkit.yml)
+              extraArgs      -configuration Debug  (.snapshotkit.yml)
+              baseBranch     develop  (git (auto-detected))
+              workingDir     —
+              remoteHost     —
+              remoteDir      ~/work/app  (.snapshotkit.yml)
+              modules        AppTests
+            note: No .gitlab-ci.yml or .github/workflows found; using .snapshotkit.yml only.
+            \(environmentLine)Xcode used: \(xcode)
+
+            """, stderr: "note: Using Xcode 99.0 at `\(xcode)` (`developerDir`, from .snapshotkit.yml), not Xcode 99.1 as pinned by "
+                + ".snapshotkit.yml: snapshots may differ from CI’s.\n"))
+    }
+
     @Test func runReportsTheFailingSuitesAndRemembersTheRun() throws {
         let (repo, env, _) = try setUp(fail: true)
         let result = try snapkit("run", "--repo", repo.url.path, environment: env)
