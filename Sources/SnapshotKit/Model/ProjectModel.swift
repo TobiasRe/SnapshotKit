@@ -124,6 +124,8 @@ final class ProjectModel {
     private(set) var configError: String?
     private(set) var environment: TestEnvironment?
     private(set) var environmentError: String?
+    /// What to know about the Xcode found, such as that the one at `developerDir` isn't the version CI pins.
+    var environmentNotes: [String] { environment?.notes ?? [] }
     private(set) var modules: [String] = []
     private(set) var detectedBaseBranch: String?
     private(set) var currentBranch: String?

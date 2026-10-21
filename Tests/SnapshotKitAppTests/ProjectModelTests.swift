@@ -892,7 +892,9 @@ extension AppUITests {
 
         /// A model of `repo` loaded as the app loads one, from the repository rather than a fixture,
         /// whose `.snapshotkit.yml` names a fake Xcode with `script` as xcodebuild (see `AppFixtures.fakeXcode`).
-        func loadedModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil) async throws -> ProjectModel {
+        /// `pinning`: the Xcode version the configuration pins as well.
+        func loadedModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil,
+                         pinning version: String? = nil) async throws -> ProjectModel {
             let xcode = try AppFixtures.fakeXcode(script, testResults: testResults).xcode
             try """
                 developerDir: \(xcode.path)
@@ -900,6 +902,7 @@ extension AppUITests {
                 device: Example Phone
                 os: "99.0"
                 baseBranch: develop
+                \(version.map { "xcode: \"\($0)\"" } ?? "")
                 """.write(to: repo.appendingPathComponent(".snapshotkit.yml"), atomically: true, encoding: .utf8)
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
             try await waitUntil(model.environment != nil || model.environmentError != nil || model.configError != nil,
@@ -1294,6 +1297,19 @@ extension AppUITests {
                 #expect(!run.contains("Shows card"))
             }
         }
+
+        /// The environment's notes come with it: here, that the Xcode at `developerDir` isn't the
+        /// version the configuration pins as well.
+        @Test func theXcodeChecksNotesShow() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try await loadedModel(repo, xcodebuild: "exit 0", pinning: "99.2")
+            let xcode = try #require(model.environment).xcode
+            #expect(model.environmentNotes == [
+                "Using Xcode 99.1 at `\(xcode.path)` (`developerDir`, from .snapshotkit.yml), not Xcode 99.2 as pinned by .snapshotkit.yml: "
+                    + "snapshots may differ from CI’s.",
+            ])
+        }
+
         /// A flakiness check's summary reads right for one test.
         @Test func aFlakinessCheckOfOneTestReadsRight() async throws {
             let (repo, _) = try makeRepo()
