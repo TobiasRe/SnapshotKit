@@ -1353,22 +1353,10 @@ final class ProjectModel {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
                     isError = true
                 }
-                if let verifyRun = outcome.verifyRun {
-                    RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: "local", repository: project.url, result: verifyRun))
-                }
-                // A cancelled verification has no results, nor one in which no test ran; the last run's failures stay.
-                if let verifyRun = outcome.verifyRun, let why = verifyRun.nothingTested {
-                    message += " Could not verify: \(why)."
-                    isError = true
-                } else if let verifyRun = outcome.verifyRun, !verifyRun.cancelled {
-                    let (images, dir) = await Self.exportImages(of: verifyRun, developerDir: env.xcode.developerDir)
-                    applyPartialRun(verifyRun, images: images, attachmentsDirectory: dir)
-                    if verifyRun.succeeded {
-                        message += " Verified: \(verifyRun.passed) passed."
-                    } else {
-                        message += " Verification still fails (\(verifyRun.failed)) — the test may be flaky; try Check Flakiness."
-                        isError = true
-                    }
+                if let verifyRun = outcome.verifyRun,
+                   let verified = await applyVerification(verifyRun, images: { await Self.exportImages(of: verifyRun, developerDir: env.xcode.developerDir) }) {
+                    message += " " + verified.note
+                    isError = isError || verified.isError
                 }
                 lastResult = outcome.verifyRun ?? outcome.recordRun
                 // New references are working-tree changes: the next step is to look at them.
@@ -1377,6 +1365,20 @@ final class ProjectModel {
                 finish(throwing: error)
             }
         }
+    }
+
+    /// Records a re-record's verification in the history and takes it into the last run, and says
+    /// how it went; nil for a cancelled one. A cancelled verification has no results, nor one in
+    /// which no test ran: the last run's failures stay. `images` exports the run's failure images.
+    private func applyVerification(_ run: TestRunResult, images: () async -> (images: [SnapshotFailureImages], directory: URL?)) async
+        -> (note: String, isError: Bool)? {
+        RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: run.host, repository: project.url, result: run))
+        if let why = run.nothingTested { return ("Could not verify: \(why).", true) }
+        guard !run.cancelled else { return nil }
+        let (images, directory) = await images()
+        applyPartialRun(run, images: images, attachmentsDirectory: directory)
+        return run.succeeded ? ("Verified: \(run.passed) passed.", false)
+                             : ("Verification still fails (\(run.failed)) — the test may be flaky; try Check Flakiness.", true)
     }
 
     /// Takes in a run of some tests (a re-record's verification): those tests have their new
@@ -1467,6 +1469,9 @@ final class ProjectModel {
         runRemote(.remoteRun, mode: .run, onlyTesting: nil)
     }
 
+    /// How remote runs reach the Mac they run on: `remoteHost`'s transport, or a stand-in in tests.
+    @ObservationIgnored var remoteTransport: (SnapshotConfig) throws -> any RemoteTransport = { try $0.remoteTransport() }
+
     func reRecordOnRemote() {
         guard !lastFailingSuites.isEmpty else {
             notify("No failing suites to re-record. Run the tests first.", isError: true)
@@ -1479,22 +1484,21 @@ final class ProjectModel {
         guard begin(op) else { return }
         guard let ctx = context else { finish(message: configError ?? "No configuration.", isError: true); return }
         let transport: RemoteTransport
-        do { transport = try ctx.config.remoteTransport() } catch { finish(message: error.localizedDescription, isError: true); return }
+        do { transport = try remoteTransport(ctx.config) } catch { finish(message: error.localizedDescription, isError: true); return }
         let runner = RemoteRunner(repository: ctx.repository, config: ctx.config, transport: transport)
         cancelAction = { runner.cancel() }
+        let verify = store.settings.verifyAfterRecord
         let onLine = onLine, onEvent = onEvent
+        let onStage: @Sendable (RemoteStage) -> Void = { stage in Task { @MainActor in self.stageLabel = "\(transport.label): \(stage.label)" } }
         Task {
             do {
-                let out = try await runner.run(
-                    mode: mode, onlyTesting: onlyTesting,
-                    onStage: { stage in Task { @MainActor in self.stageLabel = "\(transport.label): \(stage.label)" } },
-                    onLine: onLine, onEvent: onEvent)
+                let out = try await runner.run(mode: mode, onlyTesting: onlyTesting, onStage: onStage, onLine: onLine, onEvent: onEvent)
                 switch mode {
                 case .run:
                     completeRun(out.run, images: out.attachments, kind: .run, attachmentsDirectory: out.attachmentsDirectory)
                 case .flakeCheck(let n):
                     applyFlakeResult(out.run, iterations: n)
-                case .record:
+                case .record(let suites):
                     RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
                     if let why = out.run.nothingTested {
                         finish(message: "Nothing was recorded: \(why).", isError: true)
@@ -1502,7 +1506,25 @@ final class ProjectModel {
                         finish(message: "Cancelled.")
                     } else {
                         let start = operationTab, count = out.downloadedSnapshots.count
-                        finish(message: "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", action: .reviewChanges)
+                        var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false
+                        lastResult = out.run
+                        // Verified where it was recorded, as `snapkit rerecord --remote` does.
+                        if verify {
+                            do {
+                                let checked = try await runner.run(mode: .run, onlyTesting: suites.map(\.identifier),
+                                                                   onStage: onStage, onLine: onLine, onEvent: onEvent)
+                                lastResult = checked.run
+                                if let verified = await applyVerification(checked.run, images: { (checked.attachments, checked.attachmentsDirectory) }) {
+                                    message += " " + verified.note
+                                    isError = verified.isError
+                                }
+                            } catch is CancellationError {
+                            } catch {
+                                message += " Could not verify: \(error.localizedDescription)"
+                                isError = true
+                            }
+                        }
+                        finish(message: message, isError: isError, action: .reviewChanges)
                         moveOn(to: .changes, from: start)
                     }
                 }

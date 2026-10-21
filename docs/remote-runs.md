@@ -58,6 +58,9 @@ remote runs.
   are put back there after the run.
 - Every `__Snapshots__` file the run wrote is downloaded into your working tree at the same path (*Downloaded 3
   snapshots recorded on ci-mac.*).
+- Then the suites run again on the remote Mac, unpatched, to verify the new references there, as a local
+  re-record verifies them locally: *Recorded on ci-mac; downloaded 3 snapshots. Verified: 3 passed.* Settings ›
+  Verify after re-recording off (or `--no-verify`) skips it.
 - Review them on the Changes tab and commit, as with a local re-record.
 
 ## Checking flakiness remotely

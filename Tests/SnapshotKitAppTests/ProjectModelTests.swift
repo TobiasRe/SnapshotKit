@@ -1280,5 +1280,94 @@ extension AppUITests {
             #expect(image("payButton()") == AppFixtures.actual)
             #expect(image("badge()") == AppFixtures.badged)
         }
+
+        /// Re-recorded on the remote Mac, the suites are verified there too, as `snapkit rerecord
+        /// --remote` does, unless verifying is off.
+        @Test func aRemoteReRecordVerifiesOnTheRemoteMac() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let snapshot = "Tests/AppTests/__Snapshots__/CheckoutViewTests/payButton.1.png"
+            let mac = try FakeRemoteMac(xcodebuild: """
+                if grep -q 'record: .all' Tests/AppTests/CheckoutViewTests.swift; then
+                  mkdir -p "$(dirname \(snapshot))" && printf new > \(snapshot)
+                  cat > "$bundle/tests.json" <<'JSON'
+                \(Self.payButtonFailed)
+                JSON
+                  exit 65
+                fi
+                cat > "$bundle/tests.json" <<'JSON'
+                \(Self.payButtonFailed.replacingOccurrences(of: #""result": "Failed""#, with: #""result": "Passed""#))
+                JSON
+                """)
+            let store = AppFixtures.store()
+            for verify in [true, false] {
+                store.update { $0.verifyAfterRecord = verify }
+                let model = ProjectModel(project: Project(path: repo.path), store: store, autoload: false)
+                var f = ProjectFixture()
+                f.context = AppFixtures.context(at: repo, remoteHost: "fake-mac")
+                f.context?.resolved.config.remoteDirectory = mac.checkout.path
+                f.failingSuites = [AppFixtures.checkoutSuite]
+                f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures")).filter { $0.test.name == "payButton()" }
+                model.apply(f)
+                model.remoteTransport = { _ in mac }
+
+                model.reRecordOnRemote()
+                try await waitUntilFinished(model)
+                #expect(try String(contentsOf: repo.appendingPathComponent(snapshot), encoding: .utf8) == "new")
+                if verify {
+                    #expect(model.lastMessage == "Recorded on fake-mac; downloaded 1 snapshot. Verified: 1 passed.")
+                    #expect(model.failures.isEmpty)
+                    #expect(LastRun.load(repository: repo)?.failingSuites.isEmpty == true)
+                } else {
+                    #expect(model.lastMessage == "Recorded on fake-mac; downloaded 1 snapshot.")
+                    #expect(model.failures.count == 1)
+                }
+                try FileManager.default.removeItem(at: repo.appendingPathComponent(snapshot))
+            }
+        }
     }
+}
+
+/// A remote Mac that is a local folder, with stand-ins for its `xcodebuild` (the shell `script`, run
+/// in the checkout with `$bundle` set to the result bundle) and `xcrun`: Xcode 99.1, an Example
+/// Phone with iOS 99.0, result bundles read from their `tests.json` and without attachments.
+struct FakeRemoteMac: RemoteTransport {
+    let checkout: URL
+    let bin: URL
+
+    @MainActor init(xcodebuild script: String) throws {
+        checkout = AppFixtures.temporaryDirectory("remote-checkout")
+        bin = AppFixtures.temporaryDirectory("remote-bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try install("xcodebuild", """
+            while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
+            mkdir -p "$bundle"
+            \(script)
+            """)
+        try install("xcrun", """
+            case "$1 $2" in
+              "simctl list") echo '{"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "Example Phone", "udid": "SIM-1", "state": "Shutdown"}]}}' ;;
+              "xcresulttool get") while [ "$1" != --path ]; do shift; done; cat "$2/tests.json" ;;
+              "xcresulttool export") while [ "$1" != --output-path ]; do shift; done; mkdir -p "$2" && echo '[]' > "$2/manifest.json" ;;
+              *) exit 64 ;;
+            esac
+            """)
+    }
+
+    private func install(_ name: String, _ body: String) throws {
+        let url = bin.appendingPathComponent(name)
+        try ("#!/bin/bash\n" + body + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    }
+
+    var label: String { "fake-mac" }
+
+    func command(for script: String, interactive: Bool) -> (executable: String, arguments: [String]) {
+        if script.contains("xcode-select -p") {         // the check of its Xcodes
+            return ("/bin/echo", ["HOME=/Users/ci\nSELECTED=/Applications/Xcode.app/Contents/Developer\nXCODE=/Applications/Xcode.app|99.1|99A1"])
+        }
+        return ("/usr/bin/env", ["PATH=\(bin.path):/usr/bin:/bin", "/bin/bash", "-c", script])
+    }
+
+    func rsyncLocation(_ remotePath: String) -> String { remotePath }
+    var rsyncArguments: [String] { [] }
 }
