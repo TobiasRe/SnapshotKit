@@ -195,7 +195,8 @@ public enum RecordPatcher {
 
     /// The other attributes and modifiers a test function can have between `@Test` and `func`.
     private static let functionAfterAttribute = try! NSRegularExpression(
-        pattern: #"^(?:\s+|@[\w.]+(?:\([^()]*\))?|(?:public|internal|private|fileprivate|package|nonisolated)\b)*func\s+(\w+)\s*\("#
+        pattern: #"^(?:\s+|@[\w.]+(?:\([^()]*\))?|(?:public|internal|private|fileprivate|package|nonisolated)\b)*"#
+            + TestSourceLocator.functionDeclaration
     )
 
     /// `name(label:…)` for the function declared after `index`, if one is.

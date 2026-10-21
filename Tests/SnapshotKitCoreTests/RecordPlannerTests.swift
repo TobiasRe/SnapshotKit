@@ -129,6 +129,18 @@ import Testing
         #expect(try SuiteLocator.targets(for: tests.suites, in: repo.url).map(\.path) == ["Tests/AppTests/CardSnapshots.swift", "Tests/AppTests/RowSnapshots.swift"])
     }
 
+    /// A raw identifier, `` `pay button`() ``, whose snapshots are "pay-button", is a test like any
+    /// other: it, not the file's other tests, is recorded (by the identifier Xcode reports).
+    @Test func aTestOutsideATypeWithARawIdentifier() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/AppTests/CardSnapshots.swift", "import Testing\n\n@Test func compact() {}\n@Test func `pay button`() {}\n")
+        try repo.commitAll("tests")
+        #expect(RecordPatcher.topLevelTests(in: try repo.read("Tests/AppTests/CardSnapshots.swift")).map(\.identifier)
+                == ["compact()", "`pay button`()"])
+        let selection = try RecordPlanner.plan([file("CardSnapshots", "pay-button.1")], granularity: .tests, repository: repo.url)
+        #expect(selection.onlyTesting == ["AppTests/`pay button`()"])
+    }
+
     @Test func missingTestFileIsAnError() throws {
         let repo = try repo()
         #expect(throws: RecordPatchError.self) {

@@ -38,7 +38,10 @@ public enum TestSourceLocator {
         name == function || name.hasPrefix(function + "-")
     }
 
-    private static let functionName = try! NSRegularExpression(pattern: #"\bfunc\s+(`[^`]+`|\w+)\s*(?:<[^>\n]*>)?\s*\("#)
+    /// `func name(`, `` func `raw name`( `` or `func name<T>(`, the name captured.
+    static let functionDeclaration = #"func\s+(`[^`]+`|\w+)\s*(?:<[^>\n]*>)?\s*\("#
+
+    private static let functionName = try! NSRegularExpression(pattern: #"\b"# + functionDeclaration)
 
     /// swift-snapshot-testing's `sanitizePathComponent`.
     private static func sanitized(_ name: String) -> String {
