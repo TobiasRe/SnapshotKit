@@ -169,6 +169,34 @@ import Testing
         #expect(last.failureImages(ownImagesIn: exported).map { $0.failure?.deletingLastPathComponent().path } == [exported.path])
     }
 
+    /// Older versions saved a Swift Testing suite by its display name; it loads by its type, so a
+    /// re-record finds its source and its verification replaces its results.
+    @Test func olderFilesNameASuiteByItsType() throws {
+        let repo = try TempRepo()
+        let url = try LastRun.url(for: repo.url)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let suite = """
+            {"bundle": "AppTests", "path": ["Card views"], "failureFiles": [], "tests": [
+              {"name": "Shows card", "identifier": "CardTests/card()", "outcome": "failed", "failureMessages": [], "repetitions": ["failed"]}]}
+            """
+        try Data("""
+            {"date": "2026-01-02T03:04:05Z", "host": "local", "resultBundle": "/results/full.xcresult", "passed": 0, "failed": 1,
+             "failingSuites": [\(suite)], "suites": [\(suite)]}
+            """.utf8).write(to: url)
+        let loaded = try #require(LastRun.load(repository: repo.url))
+        #expect(loaded.failingSuites.map(\.path) == [["CardTests"]])
+        #expect(loaded.suites?.map(\.path) == [["CardTests"]])
+
+        let verified = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [
+            TestCaseResult(name: "Shows card", identifier: "CardTests/card()", outcome: .passed, failureMessages: [], repetitions: [.passed]),
+        ], failureFiles: [])
+        LastRun.update(with: Self.run([verified], bundle: "verify"), partial: true, repository: repo.url)
+        let last = try #require(LastRun.load(repository: repo.url))
+        #expect(last.failingSuites.isEmpty)
+        #expect(last.suites == [verified])
+        #expect((last.passed, last.failed) == (1, 0))
+    }
+
     /// A last-run.json written before images were kept per test (or one naming no folder at all, as
     /// older CLIs wrote) still loads, with the images next to its bundle.
     @Test func olderFilesFindTheirImages() throws {

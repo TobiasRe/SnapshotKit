@@ -56,7 +56,31 @@ public struct LastRun: Codable, Sendable {
         last.resultBundle = here(last.resultBundle)
         last.attachmentsDirectory = here(last.attachmentsDirectory)
         last.testAttachments = last.testAttachments?.mapValues { here($0) ?? $0 }
+        last.failingSuites = last.failingSuites.map(namedByType)
+        last.suites = last.suites?.map(namedByType)
         return last
+    }
+
+    /// `suite` at the path its tests' identifiers give (`CardTests/card()` is in `CardTests`). Older
+    /// versions saved a Swift Testing suite by its display name (`["Card views"]`), which later runs,
+    /// `-only-testing` and the sources don't know.
+    private static func namedByType(_ suite: SuiteResult) -> SuiteResult {
+        let paths = Set(suite.tests.map { Array(parts(of: $0.identifier).dropLast()) })
+        guard paths.count == 1, let path = paths.first, path != suite.path else { return suite }
+        var suite = suite
+        suite.path = path
+        return suite
+    }
+
+    /// The parts of a test identifier, split at the slashes outside raw identifiers (`` `a/b`() ``).
+    private static func parts(of identifier: String) -> [String] {
+        var parts = [""]
+        var raw = false
+        for character in identifier {
+            if character == "`" { raw.toggle() }
+            if character == "/", !raw { parts.append("") } else { parts[parts.count - 1].append(character) }
+        }
+        return parts
     }
 
     /// Takes in `run` as the repository's last run. A cancelled run changes nothing, nor does one in
