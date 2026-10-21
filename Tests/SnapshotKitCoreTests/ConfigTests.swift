@@ -210,6 +210,25 @@ import Testing
                 - cd App && pod install
                 - xcodebuild test -scheme App
             """) == "ios/App")
+        // Also one written on its key's line.
+        #expect(workingDirectory("""
+            default:
+              before_script: [cd ios, bundle install]
+            snapshots:
+              script:
+                - xcodebuild test -scheme App
+            """) == "ios")
+        #expect(workingDirectory("""
+            snapshots:
+              before_script: "cd ios && cd App"
+              script: xcodebuild test -scheme App
+            """) == "ios/App")
+        #expect(workingDirectory("""
+            snapshots:
+              before_script: &setup
+                - cd ios
+              script: xcodebuild test -scheme App
+            """) == "ios")
         // A job's own before_script replaces the default one.
         #expect(workingDirectory("""
             default:

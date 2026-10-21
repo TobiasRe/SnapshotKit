@@ -313,7 +313,9 @@ public struct CIConfigParser {
             let job = ancestors.first { $0 < script } ?? -1     // the next one out
             if let before = beforeScript(of: job, in: outline) {
                 let block = before.document.block(of: before.line)
-                folders += folderChanges(before: block.upperBound, in: block, of: before.document)
+                folders += block.isEmpty     // on its key's line: `before_script: [cd ios, …]`, `before_script: cd ios`
+                    ? before.document.values(before.line).flatMap { folderChanges(inLine: $0) }
+                    : folderChanges(before: block.upperBound, in: block, of: before.document)
             }
         }
         return folders + folderChanges(before: index, in: min(script + 1, index)..<outline.block(of: script).upperBound, of: outline)
