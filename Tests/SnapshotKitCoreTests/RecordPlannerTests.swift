@@ -50,6 +50,20 @@ import Testing
         #expect(plan.suites[0].failureFiles.first?.hasSuffix("Tests/AppTests/CardTests.swift") == true)
     }
 
+    /// A suite type named with a raw identifier is named with its backticks, as `-only-testing` takes it.
+    @Test func aSuiteWithARawIdentifier() throws {
+        let repo = try TempRepo()
+        let source = "import Testing\n\n@Suite struct `Card views` {\n    @Test func card() {}\n}\n"
+        try repo.write("Tests/AppTests/CardTests.swift", source)
+        try repo.commitAll("tests")
+        let plan = try RecordPlanner.plan([file("CardTests", "card.1")], granularity: .tests, repository: repo.url)
+        #expect(plan.onlyTesting == ["AppTests/`Card views`/card()"])
+        #expect(plan.suites.map(\.path) == [["`Card views`"]])
+        #expect(try SuiteLocator.targets(for: plan.suites, in: repo.url).map(\.path) == ["Tests/AppTests/CardTests.swift"])
+        #expect(try RecordPatcher.patch(source: source, suite: ["`Card views`"])
+                == "import Testing\n\n@Suite(.snapshots(record: .all)) struct `Card views` {\n    @Test func card() {}\n}\n")
+    }
+
     @Test func parameterizedTestsAndSuiteGranularityRunTheSuite() throws {
         let repo = try repo()
         let parameterized = try RecordPlanner.plan([file("CardTests", "sized-width.1"), file("CardTests", "compact.1")],

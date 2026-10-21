@@ -91,8 +91,10 @@ public enum RecordPatcher {
         let escaped = NSRegularExpression.escapedPattern(for: name)
         // Attributes may contain parentheses nested two levels deep: @Suite(.snapshots(record: .x)).
         let parens = #"\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)"#
+        // The name ends where a space, the inheritance clause, generics or the body starts: there is
+        // no word boundary after a raw identifier's closing backtick.
         let pattern = #"(?m)^([ \t]*)((?:@[\w.]+(?:"# + parens + #")?\s+|(?:public|internal|private|fileprivate|package|final|open|nonisolated)\s+)*)(struct|class|actor|enum)\s+"#
-            + escaped + #"\b([^{]*)\{"#
+            + escaped + #"(?=[\s:<{])([^{]*)\{"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = source as NSString
         return regex.matches(in: source, range: NSRange(scope, in: source)).compactMap { m in

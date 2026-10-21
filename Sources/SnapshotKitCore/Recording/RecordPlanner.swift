@@ -138,9 +138,9 @@ public enum RecordPlanner {
     }
 
     private static let typeDecl = try! NSRegularExpression(
-        pattern: #"^([ \t]*)(?:@[\w.]+(?:\([^\n]*\))?\s+)*(?:(?:public|internal|private|fileprivate|final|open|package|nonisolated)\s+)*(?:struct|class|actor|enum)\s+(\w+)"#
+        pattern: #"^([ \t]*)(?:@[\w.]+(?:\([^\n]*\))?\s+)*(?:(?:public|internal|private|fileprivate|final|open|package|nonisolated)\s+)*(?:struct|class|actor|enum)\s+(`[^`]+`|\w+)"#
     )
-    private static let extensionDecl = try! NSRegularExpression(pattern: #"^extension\s+(\w+)"#)
+    private static let extensionDecl = try! NSRegularExpression(pattern: #"^extension\s+(`[^`]+`|\w+)"#)
 
     /// Types declared in a file, with the type of the enclosing `extension` for indented ones.
     static func typeNames(in source: String) -> [(name: String, parent: String?)] {

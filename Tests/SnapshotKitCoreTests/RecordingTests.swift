@@ -102,6 +102,19 @@ import Testing
         }
     }
 
+    @Test func findsASuiteNamedWithARawIdentifier() throws {
+        let source = """
+            @Suite struct `Card views` {}
+            extension `Card views` {
+                @Suite struct `Dark mode`: Sendable {}
+            }
+            """
+        #expect(try RecordPatcher.patch(source: source, suite: ["`Card views`"])
+                == source.replacingOccurrences(of: "@Suite struct `Card views`", with: "@Suite(.snapshots(record: .all)) struct `Card views`"))
+        #expect(try RecordPatcher.patch(source: source, suite: ["`Card views`", "`Dark mode`"])
+                == source.replacingOccurrences(of: "@Suite struct `Dark mode`", with: "@Suite(.snapshots(record: .all)) struct `Dark mode`"))
+    }
+
     @Test func xctestOverridesInvokeTest() throws {
         let source = """
         import SnapshotTesting
