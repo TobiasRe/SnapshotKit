@@ -197,6 +197,47 @@ import Testing
             """) == nil)
     }
 
+    /// GitLab's documentation writes a list level with its key: `script:`, then `- cd ios` below it.
+    @Test func gitlabListsLevelWithTheirKey() {
+        func workingDirectory(_ text: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.workingDirectory
+        }
+        #expect(workingDirectory("""
+            snapshots:
+              script:
+              - cd ios
+              - xcodebuild test -scheme App
+            """) == "ios")
+        #expect(workingDirectory("""
+            default:
+              before_script:
+              - cd ios
+            snapshots:
+              before_script:
+              - cd App
+              script:
+              - xcodebuild test -scheme App
+            """) == "App")
+        #expect(workingDirectory("""
+            snapshots:
+              before_script:
+              - cd ios
+              script:
+              - |
+                cd App
+                xcodebuild test -scheme App
+            """) == "ios/App")
+        // Another job's list, level with it, isn't this job's.
+        #expect(workingDirectory("""
+            lint:
+              script:
+              - cd docs
+            snapshots:
+              script:
+              - xcodebuild test -scheme App
+            """) == nil)
+    }
+
     @Test func shellScriptWorkingDirectory() {
         let script = "#!/bin/bash\nset -euo pipefail\ncd ios\nif true; then\n  xcodebuild test -scheme App\nfi\n"
         #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: script)]).config.workingDirectory == "ios")

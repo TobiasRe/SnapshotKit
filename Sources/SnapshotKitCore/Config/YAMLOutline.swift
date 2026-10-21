@@ -39,24 +39,46 @@ struct YAMLOutline {
     /// The lines whose blocks hold line `i`, innermost first.
     func ancestors(of i: Int) -> [Int] {
         var result: [Int] = []
-        var threshold = indent(i)
-        var j = i - 1
-        while j >= 0, threshold > 0 {
-            if !isBlank(j), indent(j) < threshold {
-                result.append(j)
-                threshold = indent(j)
-            }
-            j -= 1
+        var line = i
+        while let parent = parent(of: line) {
+            result.append(parent)
+            line = parent
         }
         return result
     }
 
+    /// The line whose block holds line `i`: the nearest before it indented less, or for a list item,
+    /// the `key:` it is level with.
+    private func parent(of i: Int) -> Int? {
+        guard indent(i) > 0 || isListItem(i) else { return nil }
+        var j = i - 1
+        while j >= 0 {
+            if !isBlank(j) {
+                if indent(j) < indent(i) { return j }
+                if indent(j) == indent(i), isListItem(i), opensCompactList(j) { return j }
+            }
+            j -= 1
+        }
+        return nil
+    }
+
+    /// Whether line `i` is a `key:` whose list items are level with it, as GitLab's documentation
+    /// writes them (`script:`, then `- cd ios` at its indentation).
+    private func opensCompactList(_ i: Int) -> Bool {
+        guard !isListItem(i), key(i) != nil, value(i)?.isEmpty == true,
+              let next = lines.indices.dropFirst(i + 1).first(where: { !isBlank($0) }) else { return false }
+        return indent(next) == indent(i) && isListItem(next)
+    }
+
     /// The lines of the block that line `parent` opens (-1: the whole document): those after it
-    /// that are indented further.
+    /// that are indented further, and the list items level with a `key:` that opens a list.
     func block(of parent: Int) -> Range<Int> {
         guard parent >= 0 else { return 0..<lines.count }
+        let compact = opensCompactList(parent)
         var end = parent + 1
-        while end < lines.count, isBlank(end) || indent(end) > indent(parent) { end += 1 }
+        while end < lines.count, isBlank(end) || indent(end) > indent(parent) || compact && indent(end) == indent(parent) && isListItem(end) {
+            end += 1
+        }
         return (parent + 1)..<end
     }
 
