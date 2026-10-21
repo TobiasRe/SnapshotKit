@@ -146,7 +146,7 @@ extension AppUITests {
             for _ in 0..<500 where model.lastMessage == nil { try await Task.sleep(for: .milliseconds(20)) }
             #expect(try Data(contentsOf: repo.appendingPathComponent(noisy)) == AppFixtures.reference)
             #expect(try Data(contentsOf: repo.appendingPathComponent(png)) == AppFixtures.actual)
-            #expect(model.lastMessage?.hasPrefix("Discarded 1 re-recorded snapshot") == true)
+            #expect(model.lastMessage == "Discarded 1 re-recorded snapshot with no visible change.")
         }
 
         @Test func navigationFollowsTheListOrder() throws {
@@ -163,9 +163,11 @@ extension AppUITests {
             #expect(model.selectedChange?.testName == "legacyHeader")
 
             model.tab = .failures
+            #expect(model.displayedFailures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()",
+                                                          "AppSnapshotTests/ProfileViewTests/badge()"])
             model.selectedFailureID = nil
-            model.selectAdjacent(1)
-            #expect(model.selectedFailureID == model.displayedFailures.first?.id)
+            model.selectAdjacent(1)                         // nothing selected: the first row
+            #expect(model.selectedFailureID == "AppSnapshotTests/CheckoutViewTests/payButton()")
         }
 
         @Test func variantComparisonFollowsTheTestNotOtherSelections() {
@@ -183,15 +185,17 @@ extension AppUITests {
             #expect(model.comparison == nil)
         }
 
-        @Test func reRecordSelectionFollowsTheTab() {
+        @Test func reRecordSelectionFollowsTheTab() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
             model.tab = .snapshots
-            model.selectedSnapshotID = model.displayedSnapshots.first?.id
+            model.selectedSnapshotID = try #require(model.displayedSnapshots.first).id
             #expect(model.canReRecordSelection)
-            model.selectedSnapshotID = AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }?.0.id
+            model.selectedSnapshotID = try #require(AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }).0.id
+            #expect(model.selectedSnapshot?.testName == "oldAvatar")
             #expect(!model.canReRecordSelection)   // orphaned: its test is gone
             model.tab = .changes
-            model.selectedChangeID = AppFixtures.changes.first { $0.0.kind == .deleted }?.0.id
+            model.selectedChangeID = try #require(AppFixtures.changes.first { $0.0.kind == .deleted }).0.id
+            #expect(model.selectedChange?.testName == "legacyHeader")
             #expect(!model.canReRecordSelection)   // nothing to record for a deleted snapshot
             model.selectedChangeID = AppFixtures.changes[0].0.id
             #expect(model.canReRecordSelection)
@@ -222,7 +226,7 @@ extension AppUITests {
             let all = model.displayedSnapshots
             #expect(all.count == AppFixtures.libraryImages.count)
             model.libraryFilter = "payButton"
-            #expect(model.displayedSnapshots.allSatisfy { $0.testName == "payButton" })
+            #expect(model.displayedSnapshots.map(\.fileName) == ["payButton.dark.png", "payButton.light.png"])
             #expect(model.displayedTree.flatMap(\.suites).map(\.name) == ["CheckoutViewTests"])
             model.libraryFilter = ""
             model.libraryScope = .failing
@@ -248,15 +252,17 @@ extension AppUITests {
             for _ in 0..<200 where app.startupNotice == nil { try await Task.sleep(for: .milliseconds(50)) }
             #expect(app.store.settings.scanRoots == [root.path])
             #expect(app.projects.contains { $0.path == repo.path })
-            #expect(app.startupNotice?.hasPrefix("Found 1 project with snapshot tests in") == true)
+            #expect(app.startupNotice == "Found 1 project with snapshot tests in \(root.path.abbreviatingWithTildeInPath).")
         }
 
         @Test func scanSummaryExplainsAnEmptyOrUnreadableFolder() {
             let url = URL(fileURLWithPath: "/work")
             let none = AppModel.scanSummary([ProjectScanner.Report(root: url, projects: [], readable: true)])
-            #expect(none?.hasPrefix("No git repositories with snapshot tests in /work") == true)
+            #expect(none == "No git repositories with snapshot tests in /work (looked 6 folders deep). "
+                + "A repository counts when it has `__Snapshots__` images, a `.snapshotkit.yml` or depends on swift-snapshot-testing.")
             let blocked = AppModel.scanSummary([ProjectScanner.Report(root: url, projects: [], readable: false)])
-            #expect(blocked?.contains("Privacy & Security") == true)
+            #expect(blocked == "SnapshotKit can’t read /work. "
+                + "Allow it in System Settings › Privacy & Security › Files and Folders, then rescan.")
             #expect(AppModel.scanSummary([]) == nil)
         }
 
@@ -274,7 +280,7 @@ extension AppUITests {
         @Test func marksEveryShownChangeViewedAndBack() {
             let model = AppFixtures.project(.changes, store: AppFixtures.store())
             model.setAllViewed(true)
-            #expect(model.displayedChanges.allSatisfy { model.viewedChanges.contains($0.id) })
+            #expect(model.viewedChanges == Set(AppFixtures.changes.map(\.0.id)))
             model.setAllViewed(false)
             #expect(model.viewedChanges.isEmpty)
         }
@@ -300,7 +306,7 @@ extension AppUITests {
             #expect(ids("run") == ["command:Run Snapshot Tests"])
             #expect(ids("changes") == ["command:Show Changes"])
             #expect(ids("pay") == ["project:/work/payments-ui"])
-            #expect(ids("work").allSatisfy { $0.hasPrefix("project:") })   // path matches still find projects
+            #expect(ids("work") == ["project:/work/payments-ui", "project:/work/design-system"])   // path matches find projects
         }
 
         @Test func paletteOffersOnlyWhatCanBeDoneNow() {
@@ -353,7 +359,7 @@ extension AppUITests {
             #expect(model.recordableSnapshots.isEmpty)
             model.reRecordAll()
             #expect(model.lastMessageIsError)
-            #expect(model.lastMessage?.hasPrefix("No snapshot tests to re-record") == true)
+            #expect(model.lastMessage == "No snapshot tests to re-record yet. Run the tests to record the first ones.")
             #expect(!model.isRunning)
         }
 
@@ -410,13 +416,14 @@ extension AppUITests {
             let projects = app.projects.map(\.path)
             let missing = AppFixtures.temporaryDirectory("gone").appendingPathComponent("Shop")
             #expect(app.open(path: missing.path) == nil)
-            #expect(app.startupNotice?.contains("Shop") == true)
+            #expect(app.startupNotice == "Can’t open \(missing.path.abbreviatingWithTildeInPath): there is no such folder.")
             let plain = AppFixtures.temporaryDirectory("plain")
             try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
             #expect(app.open(path: plain.path) == nil)
+            #expect(app.startupNotice == "Can’t open \(plain.path.abbreviatingWithTildeInPath): it isn’t in a git repository.")
             #expect(app.projects.map(\.path) == projects)
             #expect(app.current == nil)
-            #expect(app.store.settings.recents.allSatisfy { $0 != missing.path && $0 != plain.path })
+            #expect(app.store.settings.recents == ["/work/SampleApp"])      // as AppFixtures.store() left them
         }
 
         /// Without git a repository can't be told from a plain folder: say git is missing, not that
@@ -572,6 +579,12 @@ extension AppUITests {
             LastRun(result: TestRunResult(commandLine: "xcodebuild test", exitStatus: 65, cancelled: false,
                                           resultBundle: repo.appendingPathComponent("run.xcresult"), summary: TestRunSummary(suites: suites),
                                           passed: 0, failed: failed, skipped: 0, buildErrors: [])).save(repository: repo)
+        }
+
+        /// The last run as saved on disk, byte for byte, to show an operation that has no results to
+        /// save left it alone.
+        func savedLastRun(in repo: URL) throws -> Data {
+            try Data(contentsOf: repo.appendingPathComponent(".git/snapshotkit/last-run.json"))
         }
 
         /// Discarding the selected change moves on to the next one, as a review goes, not back to the top.
@@ -757,7 +770,7 @@ extension AppUITests {
             model.reload()
             for _ in 0..<200 where model.configError == nil { try await Task.sleep(for: .milliseconds(20)) }
             #expect(model.context == nil)
-            #expect(model.configError?.contains("no folder") == true)
+            #expect(model.configError == "There is no folder at \(repo.path.abbreviatingWithTildeInPath) any more. Was it moved or deleted?")
         }
 
         /// Failures newer than the last run on disk (from an imported bundle) stay through a reload,
@@ -853,18 +866,25 @@ extension AppUITests {
             try #require(!model.isRunning)
         }
 
-        /// While one operation runs, another is refused; the first one carries on.
-        @Test func aSecondOperationWaitsForTheFirst() async throws {
+        /// While one operation runs, another is refused, not queued (the menus and ⌘K offer none then):
+        /// the run carries on with its progress shown, and nothing else starts once it ends.
+        @Test func aSecondOperationIsRefusedWhileOneRuns() async throws {
             let (repo, _) = try makeRepo()
-            let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\n" + Self.longRun, failures: true)
             model.runTests()
             try await waitUntilStarted(model)
             model.reRecordFailed()
+            model.reRecord(failures: model.failures)
             model.checkFlakiness()
             #expect(model.operation == .run)
             #expect(model.stageLabel == RunOperation.run.label)
+            #expect(model.lastMessage == nil)
             model.cancel()
             try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Cancelled.")
+            #expect(!model.isRunning)
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            #expect(try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n").count == 1)
         }
 
         @Test func cancellingBeforeXcodebuildStartsIsNoError() async throws {
@@ -880,6 +900,8 @@ extension AppUITests {
         /// A cancelled run has no results; the last run's failures stay, here and on disk.
         @Test func cancellingARunKeepsTheLastRunsFailures() async throws {
             let (repo, _) = try makeRepo()
+            saveLastRun(in: repo, suites: [AppFixtures.checkoutSuite, AppFixtures.profileSuite], failed: 2)
+            let saved = try savedLastRun(in: repo)
             let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
             let failures = model.failures.map(\.id)
             model.runTests()
@@ -888,8 +910,8 @@ extension AppUITests {
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Cancelled.")
             #expect(model.failures.map(\.id) == failures)
-            #expect(model.failingSuites.count == 2)
-            #expect(LastRun.load(repository: repo) == nil)
+            #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier, AppFixtures.profileSuite.identifier])
+            #expect(try savedLastRun(in: repo) == saved)
         }
 
         /// A re-record's progress is not measured against the last full run's test count.
@@ -962,6 +984,8 @@ extension AppUITests {
         /// Cancelling the verification after a re-record leaves the failures as they were.
         @Test func cancellingTheVerificationKeepsTheFailures() async throws {
             let repo = try makeRecordableRepo()
+            saveLastRun(in: repo, suites: [AppFixtures.checkoutSuite, AppFixtures.profileSuite], failed: 2)
+            let saved = try savedLastRun(in: repo)
             // Records at once; the second run, the verification, waits.
             let model = try runnableModel(repo, xcodebuild: "[ -e \"$0.ran\" ] || { touch \"$0.ran\"; exit 0; }\n" + Self.longRun,
                                           testResults: Self.cardPassed, failures: true)
@@ -972,7 +996,7 @@ extension AppUITests {
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Re-recorded CardTests.")
             #expect(model.failures.map(\.id) == failures)
-            #expect(LastRun.load(repository: repo) == nil)
+            #expect(try savedLastRun(in: repo) == saved)
         }
 
         /// When the tests don't build, nothing was re-recorded: say why, and keep the failures.
@@ -985,7 +1009,7 @@ extension AppUITests {
             let failures = model.failures.map(\.id)
             model.reRecordFailed(suites: [Self.cardSuite])
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasPrefix("Nothing was recorded: the build failed") == true)
+            #expect(model.lastMessage == "Nothing was recorded: the build failed (CardTests.swift:7:9: cannot find 'card' in scope).")
             #expect(model.lastMessageIsError)
             #expect(model.lastMessageAction == nil)
             #expect(model.failures.map(\.id) == failures)
@@ -1005,7 +1029,7 @@ extension AppUITests {
             let badge = try #require(model.failures.first { $0.test.name == "badge()" })
 
             model.reRecord(failures: [payButton])
-            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.operation == .rerecord)
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Re-recorded payButton(). Verified: 1 passed.")
             #expect(model.failures.map(\.id) == [badge.id])
@@ -1122,7 +1146,7 @@ extension AppUITests {
             let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed, failures: true)
             model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
+            #expect(model.lastMessage == "5× on local: 1 fails every time, 0 flaky, 0 pass.")
         }
 
         /// A test that fails every time on one simulator and passes on the other is not called flaky:
@@ -1141,7 +1165,7 @@ extension AppUITests {
                 """, failures: true)
             model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasSuffix(": 0 fail every time, 1 only on some devices, 0 flaky, 0 pass.") == true)
+            #expect(model.lastMessage == "5× on local: 0 fail every time, 1 only on some devices, 0 flaky, 0 pass.")
             let payButton = try #require(model.failures.first { $0.test.name == "payButton()" })
             #expect(payButton.verdict == .alwaysFails)
             #expect(payButton.verdictLabel == "Fails on iPhone SE")
@@ -1157,7 +1181,7 @@ extension AppUITests {
             let verdicts = model.failures.map(\.verdict)
             model.checkFlakiness()
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasPrefix("Nothing was checked: the build failed") == true)
+            #expect(model.lastMessage == "Nothing was checked: the build failed (CardTests.swift:7:9: cannot find 'card' in scope).")
             #expect(model.lastMessageIsError)
             #expect(model.failures.map(\.verdict) == verdicts)
         }
@@ -1170,10 +1194,12 @@ extension AppUITests {
                                           flakeResults: [earlier])
             model.checkFlakiness(tests: [AppFixtures.checkoutSuite.identifier + "/payButton()"])
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasSuffix(": 1 fails every time, 0 flaky, 0 pass.") == true)
+            #expect(model.lastMessage == "5× on local: 1 fails every time, 0 flaky, 0 pass.")
             #expect((model.passed, model.failed) == (0, 1))
-            // The earlier verdict stays.
-            #expect(model.flakeResults.map(\.id).contains(earlier.id))
+            // The earlier verdict stays, next to the new one.
+            #expect(model.flakeResults == [FlakeResult(suite: AppFixtures.checkoutSuite.identifier, test: "payButton()",
+                                                       passed: 0, failed: 1, verdict: .alwaysFails),
+                                           earlier])
         }
 
         /// A cancelled flakiness check says so and leaves the verdicts as they were, as a cancelled run does.
@@ -1193,6 +1219,8 @@ extension AppUITests {
         /// flaky, and leaves the failures as they were.
         @Test func aVerificationThatRanNoTestSaysSo() async throws {
             let repo = try makeRecordableRepo()
+            saveLastRun(in: repo, suites: [AppFixtures.checkoutSuite, AppFixtures.profileSuite], failed: 2)
+            let saved = try savedLastRun(in: repo)
             let model = try runnableModel(repo, xcodebuild: """
                 [ -e "$0.ran" ] || { touch "$0.ran"; exit 0; }
                 for arg; do [ "$p" = -resultBundlePath ] && rm -rf "$arg"; p=$arg; done
@@ -1200,12 +1228,12 @@ extension AppUITests {
                 """, testResults: Self.cardPassed, failures: true)
             let failures = model.failures.map(\.id)
             model.reRecordFailed(suites: [Self.cardSuite])
-            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.operation == .rerecord)
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Re-recorded CardTests. Could not verify: no test ran.")
             #expect(model.lastMessageIsError)
             #expect(model.failures.map(\.id) == failures)
-            #expect(LastRun.load(repository: repo) == nil)
+            #expect(try savedLastRun(in: repo) == saved)
         }
 
         /// The Dock badge counts the failing tests, not a flakiness check's failed repetitions.
@@ -1253,14 +1281,21 @@ extension AppUITests {
                 .write(to: repo.appendingPathComponent(profile), atomically: true, encoding: .utf8)
             try Shell.output(["git", "add", "--", profile], in: repo)
             try Shell.output(["git", "commit", "-qm", "suite", "--", profile], in: repo)
-            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: Self.payButtonFailed, failures: true)
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: """
+                {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Passed"}]},
+                  {"name": "ProfileViewTests", "nodeType": "Test Suite", "children": [
+                    {"name": "badge()", "nodeType": "Test Case", "nodeIdentifier": "ProfileViewTests/badge()", "result": "Passed"}]}]}]}
+                """, failures: true)
             model.tab = .failures
             model.selectFailures(Set(model.displayedFailures.map(\.id)))
             #expect(model.selectedFailures.map(\.suite.name) == ["CheckoutViewTests", "ProfileViewTests"])
             model.reRecordSelection()
-            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.operation == .rerecord)
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.hasPrefix("Re-recorded 2 tests.") == true)
+            #expect(model.lastMessage == "Re-recorded 2 tests. Verified: 2 passed.")
+            #expect(model.failures.isEmpty)
             let xcrun = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
             let runs = try String(contentsOfFile: xcrun, encoding: .utf8).split(separator: "\n")
             #expect(runs.count == 2)                        // the record and the verification
@@ -1279,9 +1314,9 @@ extension AppUITests {
             let payButton = try #require(model.failures.first { $0.test.name == "payButton()" })
 
             model.reRecord(failures: [payButton])
-            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.operation == .rerecord)
             try await waitUntilFinished(model)
-            #expect(model.lastMessage?.contains("Verification still fails") == true)
+            #expect(model.lastMessage == "Re-recorded payButton(). Verification still fails (1) — the test may be flaky; try Check Flakiness.")
             let images = try #require(model.failures.first { $0.id == payButton.id }?.images.first)
             #expect(images.failure.flatMap { try? Data(contentsOf: $0) } == AppFixtures.actual)
         }
@@ -1301,7 +1336,7 @@ extension AppUITests {
             let model = try runnableModel(repo, xcodebuild: Self.recordsThenFails, testResults: Self.payButtonFailed,
                                           attachments: try payButtonAttachments(), failures: true)
             model.reRecord(failures: [try #require(model.failures.first { $0.test.name == "payButton()" })])
-            for _ in 0..<200 where !model.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.operation == .rerecord)
             try await waitUntilFinished(model)
 
             let relaunched = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
