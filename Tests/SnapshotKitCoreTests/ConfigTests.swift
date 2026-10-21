@@ -316,6 +316,8 @@ import Testing
         #expect(workingDirectory("cd ios && pod install && " + test) == "ios")
         #expect(workingDirectory("cd ios && xcodebuild -version && " + test) == "ios")
         #expect(workingDirectory("cd ios || exit 1\n" + test) == "ios")
+        #expect(workingDirectory("if [ -d ios ]; then cd ios; fi\n" + test) == "ios")
+        #expect(workingDirectory("while ! cd ios; do sleep 1; done\n" + test) == "ios")
         #expect(workingDirectory("pushd ios\n" + test + "popd\n") == "ios")
         #expect(workingDirectory("pushd ios\npopd\n" + test) == nil)
         #expect(workingDirectory("(cd docs && make)\n" + test) == nil)
@@ -383,6 +385,7 @@ import Testing
         #expect(workingDirectory("run_tests() {\n  cd App\n  xcodebuild test -scheme App\n}\ncd ios\nrun_tests\ncd ..\n") == "ios/App")
         #expect(workingDirectory("build() { cd ios && xcodebuild test -scheme App; }\nbuild\n") == "ios")
         #expect(workingDirectory("build() { xcodebuild test -scheme App; }\ncd ios && build\n") == "ios")
+        #expect(workingDirectory("build() { xcodebuild test -scheme App; }\nif true; then cd ios && build; fi\n") == "ios")
         // Called from another function, called in its turn.
         #expect(workingDirectory("run_tests() {\n  xcodebuild test -scheme App\n}\nmain() {\n  cd App\n  run_tests\n}\ncd ios\nmain\n") == "ios/App")
         // In a GitHub `run:` block too.

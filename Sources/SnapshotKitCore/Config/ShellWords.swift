@@ -43,6 +43,13 @@ enum ShellWords {
         return words
     }
 
+    /// The words of a command, without the reserved words in front of it (`then cd ios`).
+    static func commandWords(_ command: String) -> ArraySlice<String> {
+        split(command).drop(while: leadingReservedWords.contains)
+    }
+
+    private static let leadingReservedWords: Set = ["if", "then", "elif", "else", "while", "until", "do", "!", "{"]
+
     /// The commands of a line that run in its shell, in order: split at unquoted `&&`, `||`, `;`,
     /// `|` and `&`, without those in a `( … )` subshell, whose `cd` doesn't move the shell.
     /// A `$( … )` stays part of the word it is in. With `enteringOpenSubshells`, for the start of a

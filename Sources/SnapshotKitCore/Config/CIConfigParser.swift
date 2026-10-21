@@ -339,7 +339,7 @@ public struct CIConfigParser {
             let called = called.union([function.name])
             for line in scope where !function.lines.contains(line) {
                 let commands = ShellWords.commands(expandingExpressions(Self.shellCommand(outline.lines[line])))
-                guard let call = commands.firstIndex(where: { ShellWords.split($0).first == function.name }) else { continue }
+                guard let call = commands.firstIndex(where: { ShellWords.commandWords($0).first == function.name }) else { continue }
                 return moves(before: line, outside: called) + commands[..<call].flatMap(folderChanges(inCommand:)) + body
             }
             return moves(before: function.lines.lowerBound, outside: called) + body     // not called in sight
@@ -411,9 +411,9 @@ public struct CIConfigParser {
     private static let bodyStart = #"^(?:(?:function\s+[\w.-]+(?:\s*\(\s*\))?|[\w.-]+\s*\(\s*\))\s*)?\{(?=\s|$)"#
 
     /// How one command moves the shell, if it does: `cd` and `pushd` (to the folder with its
-    /// variables expanded), and `popd`.
+    /// variables expanded), and `popd`; also after `then`, `do` and the like.
     private func folderChanges(inCommand command: String) -> [FolderChange] {
-        let words = ShellWords.split(command)
+        let words = ShellWords.commandWords(command)
         let folder = words.dropFirst().first { !$0.hasPrefix("-") }.map(expand) ?? "~"
         switch words.first {
         case "cd": return [.cd(folder)]
