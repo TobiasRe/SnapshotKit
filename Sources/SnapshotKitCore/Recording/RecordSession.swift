@@ -154,7 +154,7 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         ActiveSessions.shared.add(session)
         do {
             for file in files {
-                try file.patched.write(to: repository.appendingPathComponent(file.path), atomically: true, encoding: .utf8)
+                try file.patched.write(to: writableURL(of: file, in: repository), atomically: true, encoding: .utf8)
             }
         } catch {
             _ = session.restore()
@@ -178,7 +178,7 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
     static func restore(journal: PatchJournal, repository: URL, journalURL: URL) -> RestoreReport {
         var results: [(String, RestoreOutcome)] = []
         for file in journal.files {
-            let url = repository.appendingPathComponent(file.path)
+            let url = writableURL(of: file, in: repository)
             guard let current = try? text(of: url) else {
                 results.append((file.path, .missing))
                 continue
@@ -199,6 +199,12 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         try? FileManager.default.removeItem(at: journalURL)
         PatchRegistry.shared.unregister(repository)
         return RestoreReport(repository: repository, files: results)
+    }
+
+    /// Where to write a patched file: through a symlink, not over it, as an atomic write to the link
+    /// would replace it with a file of its own.
+    private static func writableURL(of file: PatchedFile, in repository: URL) -> URL {
+        repository.appendingPathComponent(file.path).resolvingSymlinksInPath()
     }
 
     /// A source file's text. Foundation drops a UTF-8 byte order mark when it decodes one; it's kept

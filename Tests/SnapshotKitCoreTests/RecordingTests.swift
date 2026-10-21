@@ -163,6 +163,28 @@ import Testing
         #expect(session.restore().files.map(\.outcome) == [.alreadyClean])
     }
 
+    /// A test file that is a symlink (shared between targets, say) stays one: the file it points to
+    /// is patched and restored.
+    @Test func patchesAndRestoresThroughASymlink() throws {
+        let repo = try TempRepo()
+        let shared = "Tests/Shared/CardTests.swift"
+        try repo.write(shared, Self.suiteSource)
+        try FileManager.default.createDirectory(at: repo.url.appendingPathComponent("Tests/AppTests"), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: repo.url.appendingPathComponent(target.path).path, withDestinationPath: "../Shared/CardTests.swift")
+        try repo.commitAll("init")
+        func isLink() throws -> Bool {
+            try FileManager.default.attributesOfItem(atPath: repo.url.appendingPathComponent(target.path).path)[.type] as? FileAttributeType == .typeSymbolicLink
+        }
+
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        #expect(try isLink())
+        #expect(try repo.read(shared).contains("record: .all"))
+        #expect(session.restore().files.map(\.outcome) == [.restored])
+        #expect(try isLink())
+        #expect(try repo.read(shared) == Self.suiteSource)
+        #expect(try repo.git.status(paths: ["Tests"]).isEmpty)
+    }
+
     @Test func refusesUncommittedChanges() throws {
         let repo = try makeRepo()
         try repo.write(target.path, Self.suiteSource + "\n// local edit\n")
