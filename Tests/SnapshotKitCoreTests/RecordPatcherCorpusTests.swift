@@ -269,7 +269,6 @@ import Testing
     func patchingTwiceIsPatchingOnce(_ c: Case) throws {
         let once = try RecordPatcher.patch(source: c.source, suite: c.suite)
         let twice = try RecordPatcher.patch(source: once, suite: c.suite)
-        #expect(twice.components(separatedBy: "record: .all").count == 2)
-        #expect(!twice.contains("@Suite(.snapshots(record: .all)) // snapshotkit:record\n@Suite"))
+        #expect(twice == once)
     }
 }

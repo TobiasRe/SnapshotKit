@@ -223,12 +223,15 @@ import Testing
         for _ in 0..<200 where (try? String(contentsOf: written, encoding: .utf8)) != "new" {
             try await Task.sleep(for: .milliseconds(50))
         }
+        // Cancelled once the run has written its reference, not before it got there.
+        try #require(try String(contentsOf: written, encoding: .utf8) == "new")
         runner.cancel()
 
         let result = try await run.value
         #expect(result.run.cancelled)
         #expect(result.downloadedSnapshots.isEmpty)
         #expect(try repo.read(snapshot) == "the old reference")
+        #expect(try String(contentsOf: written, encoding: .utf8) == "new")
         #expect(try String(contentsOf: mac.checkout.appendingPathComponent(source), encoding: .utf8) == RecordSessionTests.suiteSource)
     }
 

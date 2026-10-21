@@ -431,6 +431,19 @@ import Testing
         #expect(resolved.config.baseBranch == "main")
         #expect(resolved.config.source(of: .baseBranch) == "git (auto-detected)")
     }
+
+    /// The branch `origin/HEAD` names comes first: here a `trunk`, though `main` exists too.
+    @Test func baseBranchFromOriginHEAD() throws {
+        let repo = try TempRepo(branch: "main")
+        try repo.write("README", "x")
+        try repo.commitAll("init")
+        try repo.git.run(["branch", "trunk"])
+        for branch in ["main", "trunk"] { try repo.git.run(["update-ref", "refs/remotes/origin/\(branch)", "HEAD"]) }
+        try repo.git.run(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"])
+        let resolved = try ConfigResolver.resolve(repository: repo.url)
+        #expect(resolved.config.baseBranch == "trunk")
+        #expect(resolved.config.source(of: .baseBranch) == "git (auto-detected)")
+    }
 }
 
 @Suite(.isolated) struct EnvironmentValidatorTests {
