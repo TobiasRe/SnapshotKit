@@ -228,18 +228,44 @@ import Testing
                                                 + "\nResult: 1 passed, 0 failed, 0 skipped  [local]\nResult bundle: \(bundle)\n"))
     }
 
+    /// The arguments `xcodebuild` got in each test run, one line each, as the stand-in logs them.
+    func runs(in log: URL) throws -> [String] {
+        try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map(String.init)
+    }
+
+    func arguments(_ bundle: String, only: String, extra: String = "") -> String {
+        "test -scheme App -destination platform=iOS Simulator,id=SIM-1 -resultBundlePath \(bundle) -only-testing:\(only) -collect-test-diagnostics never"
+            + extra
+    }
+
     /// `--only` replaces CI's selection; with `--iterations` the run is a flakiness check, which
     /// doesn't replace the last run.
     @Test func runOnlySomeTestsSeveralTimes() throws {
         let (repo, env, log) = try setUp(fail: true)
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml") + "onlyTesting: [AppTests/CardTests]\n")
         try snapkit("run", "--repo", repo.url.path, environment: env)
         let last = try #require(LastRun.load(repository: repo.url)?.resultBundle)
         let result = try snapkit("run", "--repo", repo.url.path, "--only", "AppTests/CardTests/card()", "--iterations", "3", environment: env)
+        let check = try #require(snapkit.history(of: repo.url).load().last?.resultBundle)
         #expect(result.status == 1)
-        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").last?.hasSuffix(
-            " -only-testing:AppTests/CardTests/card() -collect-test-diagnostics never -test-iterations 3 -test-repetition-relaunch-enabled YES") == true)
+        #expect(try runs(in: log) == [arguments(last, only: "AppTests/CardTests"),
+                                      arguments(check, only: "AppTests/CardTests/card()", extra: iterations(3))])
         #expect(LastRun.load(repository: repo.url)?.resultBundle == last)
         #expect(snapkit.history(of: repo.url).load().map(\.kind) == [.run, .flakeCheck])
+    }
+
+    /// `--module` runs one test target instead of CI's selection, this once; `--only` narrows it further.
+    @Test func runOneModule() throws {
+        let (repo, env, log) = try setUp()
+        let result = try snapkit("run", "--repo", repo.url.path, "--module", "AppTests", environment: env)
+        let bundle = try #require(LastRun.load(repository: repo.url)?.resultBundle)
+        #expect(Outcome(result) == Outcome(status: 0, stdout: environmentLine + xcodebuild(bundle, only: "AppTests") + passed
+                                                + "\nResult: 1 passed, 0 failed, 0 skipped  [local]\nResult bundle: \(bundle)\n"))
+        try snapkit("run", "--repo", repo.url.path, "--module", "AppTests", "--only", "AppTests/CardTests/card()", environment: env)
+        let second = try #require(LastRun.load(repository: repo.url)?.resultBundle)
+        #expect(try runs(in: log) == [arguments(bundle, only: "AppTests"), arguments(second, only: "AppTests/CardTests/card()")])
+        // Not kept: the project's own selection is what CI runs.
+        #expect(snapkit.settings.settings(for: Project(path: repo.root)).module == nil)
     }
 
     @Test func recordPatchesRecordsRestoresAndVerifies() throws {

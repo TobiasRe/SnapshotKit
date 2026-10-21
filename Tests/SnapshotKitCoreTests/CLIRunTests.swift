@@ -59,6 +59,19 @@ private func lastRun(_ outcome: TestOutcome, host: String = "local", bundle: Str
         #expect(LastRun.load(repository: repo.url) == nil)
     }
 
+    /// `--remote HOST` runs on HOST rather than the project's remote host: here one ssh is never
+    /// given, and the error names it. Without a host anywhere, `--remote` says how to set one.
+    @Test func theRemoteHostToRunOn() throws {
+        let repo = try TempRepo()
+        try repo.write(".snapshotkit.yml", "scheme: App\nremoteHost: ci-mac\n")
+        try repo.commitAll("init")
+        #expect(Outcome(try snapkit("run", "--repo", repo.url.path, "--remote", "ci mac")) == failure(RemoteError.invalidHost("ci mac").errorDescription!))
+        let unset = try TempRepo()
+        #expect(Outcome(try snapkit("run", "--repo", unset.url.path, "--remote")) == failure(
+            "No remote machine configured. Set `remoteHost:` in `.snapshotkit.yml` or in the project’s settings."))
+        #expect(snapkit.history(of: repo.url).load().isEmpty)
+    }
+
     /// Not "no previous run recorded" and every test run again to find failures there aren't.
     @Test func rerecordWithNothingFailing() throws {
         let repo = try repoWithCardTests()
