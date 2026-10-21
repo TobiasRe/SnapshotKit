@@ -68,7 +68,9 @@ From the chosen command it takes `-scheme`, `-workspace`, `-project`, `-testPlan
 `working-directory` (the step’s, else `defaults.run` of the job or workflow), followed by every `cd`, `pushd`
 and `popd` before the command in the same shell (also in GitLab’s `before_script`; for a command in a `( … )`
 subshell, those before it in there too). For a command in a shell function, that is those before the function
-is first called, then those in its body before the command.
+is first called, then those in its body before the command. GitLab’s `before_script` is the job’s own — also one
+merged in from an anchor (`<<: *ios`) — else that of the jobs it `extends:` (in any file read; of several, the
+last that has one), else that of `default:`.
 
 Only `xcodebuild` is understood. Swift packages tested with `swift test` in CI: set `scheme:` (the
 `<Package>-Package` scheme) and `device:` in `.snapshotkit.yml`, or let SnapshotKit find the package scheme.

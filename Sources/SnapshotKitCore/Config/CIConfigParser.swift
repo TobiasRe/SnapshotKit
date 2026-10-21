@@ -53,9 +53,12 @@ public struct CIConfigParser {
     }
 
     var variables: [String: String] = [:]
+    /// The CI files read together: where GitLab finds the jobs a job `extends:`, and its `default:`.
+    var documents: [YAMLOutline] = []
 
-    init(variables: [String: String] = [:]) {
+    init(variables: [String: String] = [:], documents: [YAMLOutline] = []) {
         self.variables = variables
+        self.documents = documents
     }
 
     // MARK: - Variables
@@ -285,10 +288,9 @@ public struct CIConfigParser {
 
     /// The folders the shell moves to before line `index` runs, in order, as written: GitHub Actions'
     /// `working-directory` (the step's, else its job's or the workflow's `defaults.run`), then every
-    /// `cd` before it in the same shell (earlier in its `run:` block or `script:` list, after GitLab's
-    /// `before_script:` of the job, else of `default:`). In a shell script, every `cd` before it.
+    /// `cd` before it in the same shell (earlier in its `run:` block or `script:` list, after the
+    /// `before_script:` GitLab runs first). In a shell script, every `cd` before it.
     func folders(around index: Int, in outline: YAMLOutline) -> [FolderChange] {
-        func child(_ key: String, of scope: Int) -> Int? { outline.children(of: scope).first { outline.key($0) == key } }
         guard outline.children(of: -1).contains(where: { outline.key($0) != nil }) else {
             return folderChanges(before: index, in: outline.lines.indices, of: outline)        // a shell script
         }
@@ -309,14 +311,38 @@ public struct CIConfigParser {
         guard let script = ([index] + ancestors).first(where: { scriptKeys.contains(outline.key($0) ?? "") }) else { return folders }
         if outline.key(script) == "script" {
             let job = ancestors.first { $0 < script } ?? -1     // the next one out
-            let before = child("before_script", of: job) ?? child("default", of: -1).flatMap { child("before_script", of: $0) }
-                ?? child("before_script", of: -1)
-            if let before {
-                let block = outline.block(of: before)
-                folders += folderChanges(before: block.upperBound, in: block, of: outline)
+            if let before = beforeScript(of: job, in: outline) {
+                let block = before.document.block(of: before.line)
+                folders += folderChanges(before: block.upperBound, in: block, of: before.document)
             }
         }
         return folders + folderChanges(before: index, in: min(script + 1, index)..<outline.block(of: script).upperBound, of: outline)
+    }
+
+    /// The `before_script:` GitLab runs before the `script:` of `job` (a line of `document`), and the
+    /// document it is in: the job's own, also from a mapping merged into it (`<<: *ios`); else that of
+    /// the jobs it `extends:`, each found the same way in any document read, the last listed first as
+    /// later ones override earlier ones; else that of `default:`, else the top level's.
+    private func beforeScript(of job: Int, in document: YAMLOutline) -> (document: YAMLOutline, line: Int)? {
+        let documents = [document] + documents
+        func first(_ line: (YAMLOutline) -> Int?) -> (document: YAMLOutline, line: Int)? {
+            for document in documents { if let line = line(document) { return (document, line) } }
+            return nil
+        }
+        var extended: Set<String> = []      // a cycle of `extends:` ends
+        func inherited(by job: Int, in document: YAMLOutline) -> (document: YAMLOutline, line: Int)? {
+            if let own = document.line(of: "before_script", under: job) { return (document, own) }
+            guard job >= 0, let extends = document.line(of: "extends", under: job) else { return nil }
+            for name in document.values(extends).reversed() where extended.insert(name).inserted {
+                if let template = first({ $0.line(of: name, under: -1) }), let found = inherited(by: template.line, in: template.document) {
+                    return found
+                }
+            }
+            return nil
+        }
+        return inherited(by: job, in: document)
+            ?? first { d in d.line(of: "default", under: -1).flatMap { d.line(of: "before_script", under: $0) } }
+            ?? first { $0.line(of: "before_script", under: -1) }
     }
 
     /// A shell function: its name, and its lines from its header to its closing brace.
@@ -556,7 +582,7 @@ public struct CIConfigParser {
     public static func extract(from documents: [Document]) -> Extraction {
         var variables: [String: String] = [:]
         for doc in documents { collectVariables(doc.text, into: &variables) }
-        let parser = CIConfigParser(variables: variables)
+        let parser = CIConfigParser(variables: variables, documents: documents.map { YAMLOutline($0.text) })
         var out = Extraction()
 
         var best: (Invocation, String)?

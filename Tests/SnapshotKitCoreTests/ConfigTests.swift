@@ -223,6 +223,95 @@ import Testing
             """) == nil)
     }
 
+    /// A job without a `before_script` of its own runs that of the jobs it `extends:`, the later ones
+    /// overriding the earlier, before `default:`'s; one merged into it from an anchor is its own.
+    @Test func gitlabInheritedBeforeScripts() {
+        func workingDirectory(_ text: String, including included: String? = nil) -> String? {
+            let documents: [CIConfigParser.Document] = [.init(name: ".gitlab-ci.yml", text: text)]
+                + (included.map { [.init(name: "ci/ios.yml", text: $0)] } ?? [])
+            return CIConfigParser.extract(from: documents).config.workingDirectory
+        }
+        let job = """
+            snapshots:
+              extends: .ios
+              script:
+                - xcodebuild test -workspace Shop.xcworkspace -scheme Shop
+            """
+        let template = """
+            .ios:
+              before_script:
+                - cd App
+                - bundle install
+
+            """
+        #expect(workingDirectory(template + job) == "App")
+        #expect(workingDirectory(job, including: template) == "App")
+        #expect(workingDirectory("default:\n  before_script:\n    - cd ios\n" + template + job) == "App")
+        #expect(workingDirectory("""
+            .base:
+              before_script:
+                - cd ios
+            .ios:
+              extends: .base
+            .lint:
+              tags: [macos]
+            snapshots:
+              extends:
+                - .ios
+                - .lint
+              script: xcodebuild test -scheme Shop
+            """) == "ios")
+        #expect(workingDirectory("""
+            .app:
+              before_script:
+                - cd App
+            .ios:
+              before_script:
+                - cd ios
+            snapshots:
+              extends: [.ios, .app]
+              script: xcodebuild test -scheme Shop
+            """) == "App")
+        // The job's own `before_script:` overrides them, even one that doesn't move.
+        #expect(workingDirectory(template + job.replacingOccurrences(of: "  script:", with: "  before_script: [echo hi]\n  script:")) == nil)
+        // A cycle of `extends:` ends.
+        #expect(workingDirectory("""
+            .a:
+              extends: .b
+            .b:
+              extends: .a
+            snapshots:
+              extends: .a
+              script: xcodebuild test -scheme Shop
+            """) == nil)
+        #expect(workingDirectory("""
+            .ios: &ios
+              before_script:
+                - cd App
+            .ci: &ci
+              before_script:
+                - cd ios
+            snapshots:
+              <<: [*ios, *ci]
+              script:
+                - xcodebuild test -scheme Shop
+            """) == "App")
+        #expect(workingDirectory("""
+            default:
+              before_script:
+                - cd ios
+            .ios: &ios
+              extends: .app
+            .app:
+              before_script:
+                - cd App
+            snapshots:
+              <<: *ios
+              script:
+                - xcodebuild test -scheme Shop
+            """) == "App")
+    }
+
     /// GitLab's documentation writes a list level with its key: `script:`, then `- cd ios` below it.
     @Test func gitlabListsLevelWithTheirKey() {
         func workingDirectory(_ text: String) -> String? {

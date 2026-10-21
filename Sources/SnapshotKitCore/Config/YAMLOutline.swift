@@ -95,4 +95,42 @@ struct YAMLOutline {
         guard let name = path.first, let child = children(of: parent).first(where: { key($0) == name }) else { return nil }
         return path.count == 1 ? value(child) : value(at: Array(path.dropFirst()), under: child)
     }
+
+    /// The scalars line `i` holds after its key: its value, the items of an inline list (`[a, b]`),
+    /// or those of the block list under it.
+    func values(_ i: Int) -> [String] {
+        guard let value = value(i) else { return [] }
+        if value.isEmpty { return children(of: i).filter(isListItem).map { MiniYAML.unquote(content($0)) } }
+        if value.hasPrefix("["), value.hasSuffix("]") { return MiniYAML.splitInlineList(String(value.dropFirst().dropLast())) }
+        return [value]
+    }
+
+    // MARK: - Anchors
+
+    /// The line of `key` in the mapping under `parent` (-1: the top level): its own, else that of a
+    /// mapping merged into it (`<<: *ios`; of `<<: [*a, *b]`, the first that has it, as YAML merges).
+    func line(of key: String, under parent: Int) -> Int? {
+        var merged: Set<Int> = []       // an anchor merged into itself ends
+        func find(under mapping: Int) -> Int? {
+            let children = children(of: mapping)
+            if let own = children.first(where: { self.key($0) == key }) { return own }
+            for anchor in children.flatMap(mergedAnchors(at:)) where merged.insert(anchor).inserted {
+                if let found = find(under: anchor) { return found }
+            }
+            return nil
+        }
+        return find(under: parent)
+    }
+
+    /// The anchored lines (`.ios: &ios`) that line `i` merges if it is `<<: *ios` or `<<: [*a, *b]`.
+    private func mergedAnchors(at i: Int) -> [Int] {
+        let text = content(i)
+        guard text.hasPrefix("<<:") else { return [] }
+        var aliases = text.dropFirst(3).trimmingCharacters(in: .whitespaces)
+        if aliases.hasPrefix("["), aliases.hasSuffix("]") { aliases = String(aliases.dropFirst().dropLast()) }
+        return MiniYAML.splitInlineList(aliases).compactMap { alias in
+            // An alias refers to the latest anchor of its name before it.
+            alias.hasPrefix("*") ? (0..<i).last { value($0) == "&" + alias.dropFirst() } : nil
+        }
+    }
 }
