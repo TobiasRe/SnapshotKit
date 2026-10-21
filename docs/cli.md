@@ -238,8 +238,8 @@ snapkit rerecord [--repo PATH] [--suite ID]… [--no-verify] [--remote [HOST]] [
 Re-records **whole failing suites**, then verifies them.
 
 - Without `--suite`: the failing suites of the last run (*snapkit: using failing suites from the last run
-  (local, 10:42)*). If there’s no last run, it runs the tests first to find them; when that build fails:
-  *Could not find the failing suites: the build failed (…).* (exit 1).
+  (local, 10:42)*). If there’s no last run, it runs the tests first to find them (with `--remote`, there);
+  when that build fails: *Could not find the failing suites: the build failed (…).* (exit 1).
 - `--suite ID` (repeatable): these suites (`Bundle/Suite`); a bare suite name works when the last run had it.
 - `--remote [HOST]`: record on the remote Mac; your files aren’t patched, the new PNGs are downloaded, then
   verified on the remote Mac (unless `--no-verify`). See [Remote runs](remote-runs.md).
@@ -287,7 +287,8 @@ snapkit failures [--repo PATH] [--xcresult PATH] [--out DIR]
 
 Lists the failing tests of the last run, or of an `.xcresult` (for example a CI artifact), with their images and
 a diagnosis. The last run is the one `rerecord` and the app show: a re-record’s verification since then has
-replaced the results, and images, of the tests it ran.
+replaced the results, and images, of the tests it ran. For a run on a remote Mac, the images are those
+downloaded from there (its bundle stays there, so `--out` needs `--xcresult`).
 
 ```
 ShopTests/ProductCardTests

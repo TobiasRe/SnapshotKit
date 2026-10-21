@@ -403,9 +403,10 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
         let repo = try TempRepo()
         let none = failure("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).")
         #expect(Outcome(try snapkit("failures", "--repo", repo.url.path)) == none)
-        // The last run was remote: its bundle never was here.
+        // The last run was remote: its bundle never was here, but its failures are.
         LastRun.update(with: lastRun(.failed, host: "ci-mac", bundle: "/Users/ci/results/run.xcresult"), repository: repo.url)
-        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path)) == none)
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path))
+                == Outcome(status: 0, stdout: "AppTests/CardTests\n  ✘ card()  (1/1 repetitions failed)\n"))
         LastRun.update(with: lastRun(.failed, bundle: "/gone/run.xcresult"), repository: repo.url)
         #expect(Outcome(try snapkit("failures", "--repo", repo.url.path))
                 == failure("The last run’s results are gone (/gone/run.xcresult). Run the tests again (`snapkit run`), or pass --xcresult PATH."))

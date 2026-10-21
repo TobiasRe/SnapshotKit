@@ -9,6 +9,10 @@ import Testing
 @Suite(.isolated) struct CLIFakeXcodeTests {
     let snapkit = Snapkit()
     let snapshot = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
+    /// A home folder whose Applications hold the stand-in Xcode, for a remote run's preflight
+    /// (see `setUpRemote`).
+    let home = testTemp("home")
+    var xcode: URL { home.appendingPathComponent("Applications/Xcode-99.app") }
 
     static let passingTest = #"""
         {"testNodes": [{"name": "App", "nodeType": "Test Plan", "result": "Passed", "children": [
@@ -40,7 +44,6 @@ import Testing
     /// A failing `card()` (`fail`) has a failure image; a run of `NoSuchTests` runs no test.
     /// `verifyBuildError`: only the runs after recording (the verification) fail to build.
     func setUp(fail: Bool = false, buildError: Bool = false, verifyBuildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
-        let xcode = testTemp("Xcode").appendingPathExtension("app")
         try FileManager.default.createDirectory(at: xcode.appendingPathComponent("Contents/Developer"), withIntermediateDirectories: true)
         try PropertyListSerialization.data(fromPropertyList: ["CFBundleShortVersionString": "99.0", "ProductBuildVersion": "99A1"], format: .xml, options: 0)
             .write(to: xcode.appendingPathComponent("Contents/version.plist"))
@@ -160,9 +163,7 @@ import Testing
     /// it isn't the version pinned.
     @Test func configShowsEveryValueAndTheXcodeUsed() throws {
         let (repo, env, _) = try setUp()
-        let base = try repo.read(".snapshotkit.yml")
-        let xcode = try #require(base.components(separatedBy: "developerDir: ").last?.trimmingCharacters(in: .newlines))
-        try repo.write(".snapshotkit.yml", base + """
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml") + """
             xcode: "99.1"
             platform: iOS Simulator
             skipTesting: [AppTests/SlowTests]
@@ -175,7 +176,7 @@ import Testing
             CI files:   none
             Override:   .snapshotkit.yml
               xcode          99.1  (.snapshotkit.yml)
-              developerDir   \(xcode)  (.snapshotkit.yml)
+              developerDir   \(xcode.path)  (.snapshotkit.yml)
               platform       iOS Simulator  (.snapshotkit.yml)
               device         Example Phone  (.snapshotkit.yml)
               os             —
@@ -192,9 +193,9 @@ import Testing
               remoteDir      ~/work/app  (.snapshotkit.yml)
               modules        AppTests
             note: No .gitlab-ci.yml or .github/workflows found; using .snapshotkit.yml only.
-            \(environmentLine)Xcode used: \(xcode)
+            \(environmentLine)Xcode used: \(xcode.path)
 
-            """, stderr: "note: Using Xcode 99.0 at `\(xcode)` (`developerDir`, from .snapshotkit.yml), not Xcode 99.1 as pinned by "
+            """, stderr: "note: Using Xcode 99.0 at `\(xcode.path)` (`developerDir`, from .snapshotkit.yml), not Xcode 99.1 as pinned by "
                 + ".snapshotkit.yml: snapshots may differ from CI’s.\n"))
     }
 
@@ -473,6 +474,130 @@ import Testing
         #expect(Outcome(none) == failure("Nothing was checked: no test ran.",
             stdout: "snapkit: running AppTests/NoSuchTests 3×\n" + environmentLine + xcodebuild(empty, only: "AppTests/NoSuchTests", extra: iterations(3))
                 + passed + "\nResult: 0 passed, 0 failed, 0 skipped  [local]\nResult bundle: \(empty)\n"))
+    }
+
+    // MARK: - On this Mac as the remote one
+
+    /// `setUp`, for runs with `--remote local`: this Mac is the remote one, its checkout
+    /// `remoteCheckout`, and `HOME` is `home`, where its preflight finds the Xcode. The project's
+    /// own remote host is one that doesn't exist: `--remote local` replaces it.
+    func setUpRemote(fail: Bool = false) throws -> (TempRepo, [String: String]) {
+        let (repo, env, _) = try setUp(fail: fail)
+        try repo.write(".snapshotkit.yml", try repo.read(".snapshotkit.yml") + "remoteHost: ci-mac.invalid\nremoteDirectory: \(remoteCheckout.path)\n")
+        try repo.commitAll("remote")
+        return (repo, env.merging(["HOME": home.path]) { $1 })
+    }
+
+    let remoteCheckout = testTemp("remote-checkout")
+
+    /// What a run on this Mac as the remote one prints, around what `xcodebuild` printed.
+    func remoteRun(_ bundle: String, only: String? = nil, extra: String = "", recording: Bool = false, output: String) -> String {
+        "▸ Checking remote Xcode and simulator\nsnapkit: localhost: Xcode 99.0, Example Phone (iOS 99.0)\n▸ Syncing working tree\n"
+            + "snapkit: synced working tree to localhost:\(remoteCheckout.path)\n" + (recording ? "▸ Enabling record mode on remote copy\n" : "")
+            + "▸ Running tests remotely\n" + xcodebuild(bundle, only: only, extra: extra).replacingOccurrences(of: "$ xcodebuild", with: "$ [localhost] xcodebuild")
+            + output + "▸ Collecting results\n" + (recording ? "snapkit: downloaded \(snapshot)\n" : "") + "▸ Done\n"
+    }
+
+    /// `run --remote`: the run is the last run, with the failure image downloaded, which
+    /// `snapkit failures` lists though the result bundle stayed on the remote Mac.
+    @Test func aRemoteRunAndItsFailures() throws {
+        let (repo, env) = try setUpRemote(fail: true)
+        let result = try snapkit("run", "--repo", repo.url.path, "--remote", "local", environment: env)
+        let last = try #require(LastRun.load(repository: repo.url))
+        let (bundle, images) = (try #require(last.resultBundle), try #require(last.attachmentsDirectory))
+        #expect(bundle.hasPrefix(remoteCheckout.path + "/.snapshotkit/results/"))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: remoteRun(bundle, output: failed) + """
+
+            Result: 0 passed, 1 failed, 0 skipped  [localhost]
+            FAILING SUITE: AppTests/CardTests (1/1 tests)
+              ✘ card()
+            Result bundle: \(bundle)
+            Failure images: 1 (see `snapkit failures`)
+
+            """))
+        #expect(last.host == "localhost")
+
+        // As on another Mac, the bundle isn't here.
+        try FileManager.default.removeItem(at: remoteCheckout.appendingPathComponent(".snapshotkit/results"))
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, environment: env)) == Outcome(status: 0, stdout: """
+            AppTests/CardTests
+              ✘ card()  (1/1 repetitions failed)
+                failure:    \(images)/F.png
+                difference: —
+
+            """))
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--out", testTemp("out").path, environment: env)) == failure(
+            "--out exports a result bundle, and the last run’s stayed on localhost. Leave out --out to list the images downloaded from there, "
+                + "or pass --xcresult PATH."))
+    }
+
+    /// `rerecord --remote`: recorded there and the new reference downloaded, then verified there;
+    /// the local test source is never patched.
+    @Test func aRemoteRerecordDownloadsAndVerifies() throws {
+        let (repo, env) = try setUpRemote()
+        let time = try lastRunWithCardFailing(in: repo)
+        let result = try snapkit("rerecord", "--repo", repo.url.path, "--remote", "local", environment: env)
+        let history = snapkit.history(of: repo.url).load()
+        #expect(history.map(\.kind) == [.record, .verify])
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 0, stdout: "snapkit: using failing suites from the last run (local, \(time))\n"
+            + "snapkit: re-recording AppTests/CardTests\n" + remoteRun(recorded, only: "AppTests/CardTests", recording: true, output: failed)
+            + "\nRecorded suites: AppTests/CardTests\nDownloaded 1 snapshot recorded on localhost.\n"
+            + remoteRun(verified, only: "AppTests/CardTests", output: passed) + "Verified: 1 passed with the new references.\n"))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == RecordSessionTests.suiteSource)
+        #expect(LastRun.load(repository: repo.url)?.failingSuites.isEmpty == true)
+    }
+
+    @Test func aRemoteRerecordWithoutVerifying() throws {
+        let (repo, env) = try setUpRemote()
+        let time = try lastRunWithCardFailing(in: repo)
+        let result = try snapkit("rerecord", "--repo", repo.url.path, "--remote", "local", "--no-verify", environment: env)
+        let recorded = try #require(snapkit.history(of: repo.url).load().first?.resultBundle)
+        #expect(Outcome(result) == Outcome(status: 0, stdout: "snapkit: using failing suites from the last run (local, \(time))\n"
+            + "snapkit: re-recording AppTests/CardTests\n" + remoteRun(recorded, only: "AppTests/CardTests", recording: true, output: failed)
+            + "\nRecorded suites: AppTests/CardTests\nDownloaded 1 snapshot recorded on localhost.\n"))
+        #expect(snapkit.history(of: repo.url).load().map(\.kind) == [.record])
+        #expect(try repo.read(snapshot) == "new")
+    }
+
+    /// Ctrl-C during the remote verification: what was recorded and downloaded stays.
+    @Test func ctrlCDuringARemoteVerification() throws {
+        let (repo, env) = try setUpRemote()
+        let time = try lastRunWithCardFailing(in: repo)
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("rerecord", "--repo", repo.url.path, "--remote", "local", at: marker,
+                                             environment: interrupting(env, at: "verify", marker: marker))
+        let history = snapkit.history(of: repo.url).load()
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: "snapkit: using failing suites from the last run (local, \(time))\n"
+            + "snapkit: re-recording AppTests/CardTests\n" + remoteRun(recorded, only: "AppTests/CardTests", recording: true, output: failed)
+            + "\nRecorded suites: AppTests/CardTests\nDownloaded 1 snapshot recorded on localhost.\n"
+            + remoteRun(verified, only: "AppTests/CardTests", output: "▸ Testing\n▸ Finished\n") + "Recorded; the verification was cancelled.\n",
+            stderr: interrupted))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(LastRun.load(repository: repo.url)?.resultBundle == "/results/earlier.xcresult")
+    }
+
+    /// `flaky --remote` without a last run finds the failing suites with a run there too, not here.
+    @Test func aRemoteFlakinessCheckWithoutALastRun() throws {
+        let (repo, env) = try setUpRemote(fail: true)
+        let result = try snapkit("flaky", "--repo", repo.url.path, "--remote", "local", "--iterations", "3", environment: env)
+        let history = snapkit.history(of: repo.url).load()
+        #expect(history.map(\.kind) == [.run, .flakeCheck])
+        let (run, check) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: "snapkit: no previous run recorded; running tests to find failing suites\n"
+            + remoteRun(run, output: failed) + """
+
+            Result: 0 passed, 1 failed, 0 skipped  [localhost]
+            FAILING SUITE: AppTests/CardTests (1/1 tests)
+              ✘ card()
+            Result bundle: \(run)
+            snapkit: running AppTests/CardTests 3×
+
+            """ + remoteRun(check, only: "AppTests/CardTests", extra: iterations(3), output: failed)
+            + "\nFlaky              2✔ 1✘  AppTests/CardTests/card()\n"))
+        #expect(LastRun.load(repository: repo.url)?.host == "localhost")
     }
 
     /// The environment that has `xcodebuild` wait for a Ctrl-C at `point` (see `setUp`).

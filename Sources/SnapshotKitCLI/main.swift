@@ -295,7 +295,8 @@ func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, itera
     } catch { fail(running: error) }
 }
 
-/// The suites `--suite` names, else the failing suites of the last run, else those of a new run.
+/// The suites `--suite` names, else the failing suites of the last run, else those of a new run,
+/// where the command runs (with `--remote`, on the remote Mac).
 @MainActor
 func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer) async -> [SuiteResult] {
     let last = LastRun.load(repository: ctx.repository)
@@ -318,7 +319,7 @@ func failingSuites(_ ctx: ProjectContext, o: CommandArguments, printer: Printer)
         return last.failingSuites
     }
     say("snapkit: no previous run recorded; running tests to find failing suites")
-    let (result, _, dir) = await runTests(ctx, remote: false, onlyTesting: nil, iterations: nil, printer: printer)
+    let (result, _, dir) = await runTests(ctx, remote: o.has("--remote"), onlyTesting: nil, iterations: nil, printer: printer)
     record(result, kind: .run, repo: ctx.repository, attachments: dir)
     printSummary(result)
     // The summary says "Cancelled." or shows the build errors; the run found out nothing to go on with.
@@ -602,7 +603,16 @@ func main() async {
                 failingSuites = last.failingSuites
                 if let out { _ = try FailureAttachments.export(resultBundle: bundle, to: out, developerDir: nil) }
                 images = last.failureImages(ownImagesIn: out)
-            } else if let last, last.host == "local", let path = last.resultBundle {
+            } else if let last, last.host != "local" {
+                // A remote run's bundle stayed on its Mac; its failures and their images came back.
+                guard out == nil else {
+                    fail("--out exports a result bundle, and the last run’s stayed on \(last.host). Leave out --out to list the images "
+                         + "downloaded from there, or pass --xcresult PATH.")
+                }
+                bundle = URL(fileURLWithPath: last.resultBundle ?? last.host)
+                failingSuites = last.failingSuites
+                images = last.failureImages()
+            } else if let last, let path = last.resultBundle {
                 fail("The last run’s results are gone (\(path)). Run the tests again (`snapkit run`), or pass --xcresult PATH.")
             } else {
                 fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).")
