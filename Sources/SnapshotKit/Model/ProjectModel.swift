@@ -544,6 +544,9 @@ final class ProjectModel {
         }
     }
 
+    /// How a file goes to the Trash: the Finder's, or a stand-in in tests, which must not fill the user's.
+    @ObservationIgnored var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+
     /// Moves snapshots to the Trash (recoverable there, and git still has committed ones).
     func moveToTrash(_ files: [SnapshotFile]) {
         var moved = 0
@@ -551,7 +554,7 @@ final class ProjectModel {
         var reason: String?
         for file in files {
             do {
-                try FileManager.default.trashItem(at: project.url.appendingPathComponent(file.path), resultingItemURL: nil)
+                try trash(project.url.appendingPathComponent(file.path))
                 moved += 1
             } catch {
                 failed.append(file.fileName)

@@ -678,7 +678,7 @@ extension AppUITests {
                      "children": [{"name": "\(message)", "nodeType": "Failure Message", "result": "Failed"}]}]},
                   {"name": "ProfileViewTests", "nodeType": "Test Suite", "children": [
                     {"name": "badge()", "nodeType": "Test Case", "nodeIdentifier": "ProfileViewTests/badge()", "result": "Passed"}]}]}]}
-                """, failures: true, library: true)
+                """, failures: true, library: AppFixtures.libraryImages.map(\.0))
             model.libraryScope = .failing
             #expect(model.selectedSnapshot?.testName == "badge")
             model.runTests()
@@ -874,7 +874,7 @@ extension AppUITests {
 
         /// A model of `repo` that can run, with `script` as xcodebuild.
         func runnableModel(_ repo: URL, xcodebuild script: String, testResults: String? = nil, attachments: URL? = nil,
-                           failures: Bool = false, flakeResults: [FlakeResult] = [], library: Bool = false) throws -> ProjectModel {
+                           failures: Bool = false, flakeResults: [FlakeResult] = [], library: [SnapshotFile] = []) throws -> ProjectModel {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
@@ -886,7 +886,7 @@ extension AppUITests {
                 f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("failures"))
             }
             f.flakeResults = flakeResults
-            if library { f.library = SnapshotLibrary(files: AppFixtures.libraryImages.map(\.0)) }
+            if !library.isEmpty { f.library = SnapshotLibrary(files: library) }
             model.apply(f)
             return model
         }
@@ -1196,6 +1196,73 @@ extension AppUITests {
             #expect(LastRun.load(repository: repo)?.failed == 2)
         }
 
+        /// A run with failing tests says how many, in how many suites, offers to show them, shows
+        /// them with their images and saves them as the last run. The verdicts of earlier flakiness
+        /// checks go: they were of other runs.
+        @Test func aFailingRunShowsItsFailures() async throws {
+            let (repo, _) = try makeRepo()
+            let earlier = FlakeResult(suite: AppFixtures.profileSuite.identifier, test: "badge()", passed: 5, failed: 0, verdict: .passes)
+            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: Self.payButtonFailed,
+                                          attachments: try payButtonAttachments(), failures: true, flakeResults: [earlier])
+            model.runTests()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "1 failing test in 1 suite")
+            #expect(model.lastMessageIsError)
+            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.flakeResults.isEmpty)
+            #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
+            let failure = try #require(model.failures.first?.images.first?.failure)
+            #expect(try Data(contentsOf: failure) == AppFixtures.actual)
+            let source = try #require(model.failureSource)
+            #expect(source == FailureSource(label: "Local run", date: source.date, host: "local", resultBundle: model.lastResult?.resultBundle))
+            let last = try #require(LastRun.load(repository: repo))
+            #expect((last.passed, last.failed) == (0, 1))
+            #expect(last.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier])
+        }
+
+        /// Re-recording a snapshot records just its test, then verifies it. One whose test isn't in
+        /// the repository says so, and nothing runs.
+        @Test func reRecordingASnapshotRecordsItsTest() async throws {
+            let repo = try makeRecordableRepo()
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: Self.cardPassed)
+            model.reRecord([SnapshotFile(path: "Tests/AppTests/__Snapshots__/CardTests/card.1.png", byteSize: 0)], granularity: .tests)
+            try await waitUntil(model.isRunning, "the re-record never started")
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded card. Verified: 1 passed.")
+            #expect(model.lastMessageAction == .reviewChanges)
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let runs = try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n")
+            #expect(runs.count == 2)                        // the record and the verification
+            for run in runs { #expect(run.contains("-only-testing:AppTests/CardTests/card()")) }
+
+            let said = model.messageID
+            model.reRecord([SnapshotFile(path: "Tests/AppTests/__Snapshots__/GoneTests/old.1.png", byteSize: 0)], granularity: .tests)
+            try await waitUntil(model.messageID != said, "the re-record never said why it can't")
+            #expect(model.lastMessage == "Can’t re-record: Could not find the source file for suite “AppTests/GoneTests”.")
+            #expect(model.lastMessageIsError)
+            #expect(!model.isRunning)
+            #expect(try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n").count == 2)
+        }
+
+        /// Re-record All records every test that has a snapshot (one each, however many it has), then verifies.
+        @Test func reRecordAllRecordsEveryTest() async throws {
+            let repo = try makeRecordableRepo()
+            let snapshots = ["card.1.png", "card.2.png"].map { SnapshotFile(path: "Tests/AppTests/__Snapshots__/CardTests/" + $0, byteSize: 0) }
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: Self.cardPassed,
+                                          library: snapshots)
+            model.reRecordAll()
+            try await waitUntil(model.isRunning, "the re-record never started")
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded card. Verified: 1 passed.")
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let runs = try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n")
+            #expect(runs.count == 2)
+            for run in runs {
+                #expect(run.contains("-only-testing:AppTests/CardTests/card()"))
+                #expect(run.components(separatedBy: "-only-testing:").count == 2, "only card(), once: \(run)")
+            }
+        }
+
         /// A flakiness check's summary reads right for one test.
         @Test func aFlakinessCheckOfOneTestReadsRight() async throws {
             let (repo, _) = try makeRepo()
@@ -1360,10 +1427,90 @@ extension AppUITests {
         /// Moving snapshots to the Trash that all stay says so, without claiming any moved.
         @Test func aTrashThatMovesNothingSaysSo() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())   // its files aren't on disk
+            model.trash = Self.trash(into: AppFixtures.temporaryDirectory("Trash"))
             let file = try #require(model.displayedSnapshots.first)
             model.moveToTrash([file])
             #expect(model.lastMessageIsError)
-            #expect(model.lastMessage?.hasPrefix("Could not move \(file.fileName) to the Trash") == true)
+            #expect(model.lastMessage == "Could not move payButton.dark.png to the Trash: payButton.dark.png isn’t there.")
+        }
+
+        /// Trashing the selected snapshot moves on to the next one; a trash of which only some moved
+        /// says which stayed, and why.
+        @Test func trashingTheSelectionSelectsTheNextOne() async throws {
+            let (repo, png) = try makeRepo()
+            let names = ["a", "b", "c"].map { png.replacingOccurrences(of: "card", with: $0) }
+            for name in names { try AppFixtures.badged.write(to: repo.appendingPathComponent(name)) }
+            let bin = AppFixtures.temporaryDirectory("Trash")
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.trash = Self.trash(into: bin)
+            try await waitUntil(model.library?.files.count == 4, "the library never loaded")
+            let b = try #require(model.library?.files.first { $0.path == names[1] })
+            model.selectedSnapshotID = b.id
+
+            model.moveToTrash([b])
+            #expect(model.lastMessage == "Moved 1 snapshot to the Trash.")
+            #expect(!model.lastMessageIsError)
+            #expect(try Data(contentsOf: bin.appendingPathComponent("b.1.png")) == AppFixtures.badged)
+            try await waitUntil(model.library?.files.count == 3 && !model.isLoadingLibrary, "the library never lost b.1.png")
+            #expect(model.selectedSnapshotID == names[2])
+
+            let a = try #require(model.library?.files.first { $0.path == names[0] })
+            let gone = SnapshotFile(path: png.replacingOccurrences(of: "card", with: "gone"), byteSize: 0)
+            model.moveToTrash([a, gone])
+            #expect(model.lastMessage == "Moved 1 snapshot to the Trash. Could not move gone.1.png to the Trash: gone.1.png isn’t there.")
+            #expect(model.lastMessageIsError)
+        }
+
+        /// A Trash of a test's own: moves files into `bin`, and refuses one that isn't there, as the Finder's does.
+        static func trash(into bin: URL) -> (URL) throws -> Void {
+            struct NotThere: LocalizedError {
+                var file: String
+                var errorDescription: String? { "\(file) isn’t there." }
+            }
+            return { url in
+                guard FileManager.default.fileExists(atPath: url.path) else { throw NotThere(file: url.lastPathComponent) }
+                try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: url, to: bin.appendingPathComponent(url.lastPathComponent))
+            }
+        }
+
+        /// Discarding a new snapshot git doesn't track yet deletes it; one that can't be deleted says
+        /// why, in the system's words, and stays.
+        @Test func discardingANewSnapshotDeletesIt() async throws {
+            let (repo, png) = try makeRepo()
+            let new = png.replacingOccurrences(of: "card", with: "new")
+            let file = repo.appendingPathComponent(new)
+            try AppFixtures.badged.write(to: file)
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            model.updateSettings { $0.baseBranch = "develop" }
+            try await waitForChanges(model)
+            let change = try #require(model.changeSet?.changes.first { $0.path == new })
+            #expect(change.kind == .new)
+            #expect(model.canDiscard(change))
+
+            // Its folder read-only: the file can't be deleted. What deleting it says is the reason.
+            let folder = file.deletingLastPathComponent()
+            try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+            defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+            let reason: String
+            do {
+                try FileManager.default.removeItem(at: file)
+                Issue.record("a read-only folder let its file be deleted")
+                return
+            } catch {
+                reason = error.localizedDescription
+            }
+            model.discard(change)
+            #expect(model.lastMessage == "Could not discard new.1.png: \(reason)")
+            #expect(model.lastMessageIsError)
+            #expect(FileManager.default.fileExists(atPath: file.path))
+
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+            model.discard(change)
+            #expect(model.lastMessage == "Discarded the working-tree change to new.1.png.")
+            #expect(!model.lastMessageIsError)
+            #expect(!FileManager.default.fileExists(atPath: file.path))
+            #expect(try Data(contentsOf: repo.appendingPathComponent(png)) == AppFixtures.actual)   // the other change stays
         }
 
         /// Failures selected together from two suites re-record just those tests, in both suites.
