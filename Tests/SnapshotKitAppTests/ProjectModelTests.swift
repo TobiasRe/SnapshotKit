@@ -70,6 +70,32 @@ extension AppUITests {
             #expect(!model.lastMessageIsError)
         }
 
+        /// A snapshot deleted on this branch and recorded again is an uncommitted change with no
+        /// version in HEAD to restore: discarding removes it, staged or not.
+        @Test func discardRemovesASnapshotRecordedAgainAfterItsDeletion() async throws {
+            for staged in [false, true] {
+                let (repo, png) = try makeRepo()
+                try Shell.output(["git", "rm", "-qf", "--", png], in: repo)
+                try Shell.output(["git", "commit", "-qm", "delete"], in: repo)
+                let file = repo.appendingPathComponent(png)
+                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try AppFixtures.actual.write(to: file)
+                if staged { try Shell.output(["git", "add", "--", png], in: repo) }
+                let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+                model.updateSettings { $0.baseBranch = "develop" }
+                await waitForChanges(model)
+                let change = try #require(model.changeSet?.changes.first)
+                #expect(change.kind == .uncommitted)
+                #expect(change.isUntracked == !staged)
+                #expect(model.canDiscard(change))
+
+                model.discard(change)
+                #expect(model.lastMessage == "Discarded the working-tree change to card.1.png.")
+                #expect(!FileManager.default.fileExists(atPath: repo.appendingPathComponent(png).path))
+                #expect(try Shell.output(["git", "status", "--porcelain"], in: repo).isEmpty)
+            }
+        }
+
         @Test func viewingMovesOnAndIsRemembered() async throws {
             let (repo, png) = try makeRepo()
             let second = png.replacingOccurrences(of: "card.1.png", with: "list.1.png")

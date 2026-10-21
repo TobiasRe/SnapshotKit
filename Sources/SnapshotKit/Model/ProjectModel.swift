@@ -813,6 +813,11 @@ final class ProjectModel {
         let git = Git(root: project.url)
         do {
             switch change.kind {
+            case .uncommitted where git.tryRun(["cat-file", "-e", "HEAD:" + change.path]) == nil:
+                // Deleted on this branch and recorded again: there is no version in HEAD to go back
+                // to, so the file goes, as an untracked new one does.
+                if !change.isUntracked { try git.run(["rm", "--cached", "--quiet", "--", change.path]) }
+                try FileManager.default.removeItem(at: fileURL(for: change))
             case .uncommitted:
                 try git.run(["restore", "--source=HEAD", "--staged", "--worktree", "--", change.path])
             case .new where git.tryRun(["ls-files", "--error-unmatch", "--", change.path]) == nil:
