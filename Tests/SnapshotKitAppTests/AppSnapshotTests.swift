@@ -21,10 +21,14 @@ extension AppUITests {
         /// antialiased edge.
         static let strategy = Snapshotting<NSView, NSImage>.image(precision: 0.9999, perceptualPrecision: 0.99)
 
-        init() {
+        init() throws {
             DS.solidSurfaces = true
             AppSnapshotTests.launchOnce()
             AppFixtures.resetDefaults()
+            // On a 1x display every image would differ from its reference in size, which says nothing
+            // about what changed.
+            let scale = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true).backingScaleFactor
+            try #require(scale == 2, "The references are drawn at 2x: run the snapshot tests on a Retina display (this one draws at \(scale)x).")
         }
 
         /// A launched (accessory, never activated) NSApplication renders split views, sidebars and
@@ -33,8 +37,22 @@ extension AppUITests {
         static func launchOnce() {
             guard !launched else { return }
             launched = true
+            pinSystemSettings()
             NSApplication.shared.setActivationPolicy(.accessory)
             NSApplication.shared.finishLaunching()
+        }
+
+        /// The references were drawn with System Settings' defaults: the Multicolor accent, which an app
+        /// without an accent colour of its own draws in blue, and scroll bars shown only while scrolling
+        /// (what Automatic is with a trackpad). Another accent would recolour the prominent buttons, the
+        /// log's commands and focused selections; "Always" would add scroll bars. Pinned for this process
+        /// only, in its argument domain, as `-AppleAccentColor 4` on its command line would, before
+        /// AppKit reads them.
+        private static func pinSystemSettings() {
+            var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+            arguments["AppleAccentColor"] = 4
+            arguments["AppleShowScrollBars"] = "WhenScrolling"
+            UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
         }
 
         // MARK: Project pane (everything below the toolbar)
