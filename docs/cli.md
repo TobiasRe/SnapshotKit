@@ -412,7 +412,8 @@ snapkit projects [list]
 ```
 
 `scan` adds the folders as scan folders (in the app’s settings), rescans every scan folder and lists the
-projects found: *5 project(s) with snapshot tests (looked 6 folders deep).* Folders macOS doesn’t allow it to
+projects found: *5 project(s) with snapshot tests (looked 6 folders deep).* Projects removed from the app’s
+list stay off it and aren’t counted (*Left out 1 removed from the list: …*). Folders macOS doesn’t allow it to
 read are named; a folder that doesn’t exist is an error (*no such folder: …*, exit 1) and isn’t added. `list` prints the app’s projects: pinned (📌) first, then recent, then the rest. See
 [Projects and scanning](projects.md).
 

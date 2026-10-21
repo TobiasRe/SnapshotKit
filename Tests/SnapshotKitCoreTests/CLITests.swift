@@ -459,6 +459,18 @@ import Testing
         #expect(Outcome(try snapkit("projects", "list")) == Outcome(status: 0, stdout: "📌 \(project)\n   /no/such/recent\n"))
     }
 
+    /// A project removed from the list isn't found again, as the app's rescan doesn't bring it back.
+    @Test func scanLeavesOutRemovedProjects() throws {
+        let (root, project) = try makeFolder()
+        snapkit.settings.remove(Project(path: project))
+        #expect(Outcome(try snapkit("projects", "scan", root.path)) == Outcome(status: 0, stdout: """
+            0 project(s) with snapshot tests (looked \(ProjectScanner.defaultDepth) folders deep).
+            Left out 1 removed from the list: opening one in SnapshotKit adds it back.
+
+            """))
+        #expect(Outcome(try snapkit("projects")) == Outcome(status: 0, stdout: ""))
+    }
+
     /// The app reads the settings from its own working directory: a relative folder must not be kept.
     @Test func aRelativeFolderIsKeptAsAnAbsolutePath() throws {
         let (root, project) = try makeFolder()

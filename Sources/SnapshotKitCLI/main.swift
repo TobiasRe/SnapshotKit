@@ -734,9 +734,14 @@ func main() async {
             for report in reports where !report.readable {
                 say("Can’t read \(report.root.path): allow access in System Settings › Privacy & Security › Files and Folders.")
             }
+            // A project removed from the list stays off it, as in the app.
             let found = reports.flatMap(\.projects)
-            for p in found { say(p.path) }
-            say("\(found.count) project(s) with snapshot tests (looked \(ProjectScanner.defaultDepth) folders deep).")
+            let listed = found.filter { !store.settings.removed.contains($0.path) }
+            for p in listed { say(p.path) }
+            say("\(listed.count) project(s) with snapshot tests (looked \(ProjectScanner.defaultDepth) folders deep).")
+            if listed.count < found.count {
+                say("Left out \(found.count - listed.count) removed from the list: opening one in SnapshotKit adds it back.")
+            }
         case nil, "list":
             guard o.positional.count <= 1 else { usageError("usage: snapkit projects scan ROOT... | list") }
             for p in store.allProjects { say((store.isPinned(p) ? "📌 " : "   ") + p.path) }
