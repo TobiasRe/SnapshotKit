@@ -113,7 +113,9 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Discarding a snapshot that was deleted on the branch and recorded again works; reverting a snapshot renamed
   only in case no longer deletes it; a staged new snapshot reads as New.
 - A suite nested in another type is found along its path (`DarkTests.Large`, not the first `Large` in the
-  file), and a suite named with a raw identifier can be re-recorded.
+  file), also when recording from the library, and a suite named with a raw identifier can be re-recorded. A
+  suite declared in each branch of an `#if` is patched in each, and an `@Suite` mentioned in a comment above
+  it is left alone.
 - The library’s **Re-record N Shown** leaves out orphaned snapshots, and **Re-record All…** always asks first.
 
 **Configuration**
@@ -124,6 +126,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   lists written level with their key), quoted script items, `${{ … }}` in the folder, and shell functions.
 - `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ), and may
   start with `~/`. A last run saved by 0.2.0 is read with its suites named by type.
+- Quoted YAML values are read as YAML means them (`"-scheme \"My App\""`, `'It''s'`), and a test command run
+  in a subshell, `(cd ios && xcodebuild …)`, or after `then` / `do` keeps its working directory.
 - A `.snapshotkit.yml` that starts with `---` can be read.
 - Without an OS, or with `latest`, runs use the newest simulator runtime, as CI does, not an older booted one.
 
