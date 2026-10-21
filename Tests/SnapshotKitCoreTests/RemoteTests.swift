@@ -292,6 +292,21 @@ import Testing
         #expect(FileManager.default.contents(atPath: images.path + "/F.png") == Data("png".utf8))
     }
 
+    /// Each run has a bundle of its own, also one right after another (a record and its
+    /// verification): xcodebuild won't write over a bundle, and the history keeps a bundle once.
+    /// They were named after the second they started in.
+    @Test func runsRightAfterEachOtherHaveTheirOwnBundles() async throws {
+        let repo = try TempRepo()
+        try repo.write("README", "x")
+        try repo.commitAll("init")
+        let mac = try FakeMac(xcodebuild: "mkdir -p \"$bundle\" && echo '\(CLIFakeXcodeTests.passingTest)' > \"$bundle/tests.json\"")
+        let runner = runner(repo, mac)
+        let (first, second) = (try await runner.run(mode: .run), try await runner.run(mode: .run))
+        #expect(first.run.resultBundle != second.run.resultBundle)
+        #expect(first.run.resultBundle.lastPathComponent.range(of: #"^\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ-[0-9A-F]{8}\.xcresult$"#,
+                                                                options: .regularExpression) != nil)
+    }
+
     /// A flakiness check runs the tests the given number of times there, and reads each repetition.
     @Test func aFlakinessCheckRepeatsTheTests() async throws {
         let repo = try TempRepo()

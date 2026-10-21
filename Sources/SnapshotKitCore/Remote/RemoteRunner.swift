@@ -232,8 +232,10 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         }
 
         let scheme = try await offCooperativePool { try self.remoteScheme(environment: environment, dir: dir) }
-        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let bundle = "\(stateDir)/results/\(stamp).xcresult"
+        // Named as a local run's, which a run started within the same second can't have: xcodebuild
+        // won't write over a bundle, and the history counts one bundle once. Its images here share it.
+        let local = TestRunner.newResultBundleURL(for: repository)
+        let bundle = "\(stateDir)/results/\(local.lastPathComponent)"
         let args = TestRunner.arguments(config: config, scheme: scheme, destination: environment.destination,
                                         resultBundlePath: bundle, onlyTesting: onlyTesting, additional: additional)
         let workDir = config.workingDirectory.map { dir + "/" + $0 } ?? dir
@@ -262,7 +264,7 @@ public final class RemoteRunner: @unchecked Sendable { // `process` and `cancell
         onStage(.collecting)
         let summary = try? await offCooperativePool { try self.collectSummary(bundle: bundle, environment: environment, remoteDir: dir) }
         // Kept with the repository's local runs; the bundle itself stays on the remote machine.
-        let attachmentsDir = TestRunner.newResultBundleURL(for: repository).deletingPathExtension().appendingPathExtension("attachments")
+        let attachmentsDir = local.deletingPathExtension().appendingPathExtension("attachments")
         let attachments = (try? await offCooperativePool {
             try self.collectAttachments(bundle: bundle, environment: environment, stateDir: stateDir, into: attachmentsDir)
         }) ?? []
