@@ -538,7 +538,6 @@ extension AppUITests {
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store(), autoload: false)
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
-            f.context?.resolved.config.xcodeVersion = nil      // the developer folder alone picks the Xcode
             f.context?.resolved.config.developerDir = slow.path
             model.apply(f)
             let first = model.validateEnvironment()
@@ -1263,6 +1262,38 @@ extension AppUITests {
             }
         }
 
+        /// A test with a display name (`@Test("Shows card")`) shows by it, and is addressed by its
+        /// identifier: its flakiness verdict lands on it, and re-recording it runs `CardTests/card()`.
+        /// The display name is what real result bundles put in a test's name.
+        @Test func aTestWithADisplayNameIsRunByItsIdentifier() async throws {
+            let repo = try makeRecordableRepo()
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 65", testResults: """
+                {"testNodes": [{"name": "AppTests", "nodeType": "Unit test bundle", "children": [
+                  {"name": "Card views", "nodeType": "Test Suite", "nodeIdentifierURL": "test://com.apple.xcode/App/AppTests/CardTests", "children": [
+                    {"name": "Shows card", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Failed",
+                     "children": [{"name": "Snapshot does not match reference.", "nodeType": "Failure Message", "result": "Failed"}]}]}]}]}
+                """)
+            model.runTests()
+            try await waitUntilFinished(model)
+            let card = try #require(model.failures.first)
+            #expect(model.failures.map(\.id) == ["AppTests/CardTests/card()"])
+            #expect(card.test.name == "Shows card")
+
+            model.checkFlakiness(tests: [card.id])
+            try await waitUntilFinished(model)
+            #expect(model.failures.first?.verdict == .alwaysFails)
+
+            model.reRecord(failures: model.failures)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded Shows card. Verification still fails (1) — the test may be flaky; try Check Flakiness.")
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let runs = try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n")
+            #expect(runs.count == 4)                        // the run, the check, the record and the verification
+            for run in runs {
+                #expect(run.contains("-only-testing:AppTests/CardTests/card()") == (run != runs[0]), "\(run)")
+                #expect(!run.contains("Shows card"))
+            }
+        }
         /// A flakiness check's summary reads right for one test.
         @Test func aFlakinessCheckOfOneTestReadsRight() async throws {
             let (repo, _) = try makeRepo()
@@ -1321,6 +1352,7 @@ extension AppUITests {
             #expect((model.passed, model.failed) == (0, 1))
             // The earlier verdict stays, next to the new one.
             #expect(model.flakeResults == [FlakeResult(suite: AppFixtures.checkoutSuite.identifier, test: "payButton()",
+                                                       identifier: "AppSnapshotTests/CheckoutViewTests/payButton()",
                                                        passed: 0, failed: 1, verdict: .alwaysFails),
                                            earlier])
         }

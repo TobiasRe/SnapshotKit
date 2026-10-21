@@ -86,7 +86,8 @@ struct FailureItem: Identifiable, Hashable {
     var timeline: [HistoryPoint] = []
     /// The devices it fails on every time while passing on the others, per the flakiness check.
     var failingDevices: [String]?
-    var id: String { suite.identifier + "/" + test.name }
+    /// `Bundle/Suite/test()`, as `-only-testing:`, the history and the verdicts name it (not by its display name).
+    var id: String { suite.onlyTestingIdentifier(of: test) }
     /// What the flakiness check found: "Fails on iPhone SE" when only some devices fail it.
     var verdictLabel: String? { verdict?.label(failingDevices: failingDevices) }
     /// The test had no reference yet: one was just recorded, and the next run checks it.
@@ -1035,15 +1036,16 @@ final class ProjectModel {
         let verdicts = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         failures = suites.flatMap { suite in
             suite.tests.filter { $0.outcome == .failed }.map { test in
-                FailureItem(
+                let id = suite.onlyTestingIdentifier(of: test)
+                return FailureItem(
                     suite: suite,
                     test: test,
                     images: images.filter { $0.belong(to: test, in: suite) },
                     referencePaths: test.failureMessages.flatMap { FailureAttachments.referencePaths(in: $0, repository: project.url) },
-                    verdict: verdicts[suite.identifier + "/" + test.name]?.verdict,
-                    historyFlaky: flaky[suite.identifier + "/" + test.name],
-                    timeline: RunHistory.timeline(for: suite.identifier + "/" + test.name, in: history),
-                    failingDevices: verdicts[suite.identifier + "/" + test.name]?.failingDevices
+                    verdict: verdicts[id]?.verdict,
+                    historyFlaky: flaky[id],
+                    timeline: RunHistory.timeline(for: id, in: history),
+                    failingDevices: verdicts[id]?.failingDevices
                 )
             }
         }
@@ -1422,7 +1424,7 @@ final class ProjectModel {
     private func applyPartialRun(_ run: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?) {
         saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
         let ran = run.summary?.suites ?? []
-        let rerun = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
+        let rerun = Set(ran.flatMap { suite in suite.tests.map(suite.onlyTestingIdentifier) })
         lastFailingSuites = SuiteResult.merging(ran, into: lastFailingSuites).filter(\.isFailing)
         setFailures(suites: lastFailingSuites, images: failures.filter { !rerun.contains($0.id) }.flatMap(\.images) + images,
                     source: failureSource ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
