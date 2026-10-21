@@ -77,7 +77,7 @@ public struct LastRun: Codable, Sendable {
     /// the run that last ran it.
     mutating func merge(_ run: TestRunResult, attachmentsDirectory newImages: URL?) {
         let ran = run.summary?.suites ?? []
-        let ranTests = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
+        let ranTests = Set(ran.flatMap { suite in suite.tests.map(suite.onlyTestingIdentifier) })
         let earlier = self
         date = Date()
         failingSuites = SuiteResult.merging(ran, into: failingSuites).filter(\.isFailing)
@@ -102,7 +102,7 @@ public struct LastRun: Codable, Sendable {
     }
 
     private static func failingTests(in suites: [SuiteResult]) -> [String] {
-        suites.flatMap { suite in suite.tests.filter { $0.outcome == .failed }.map { suite.identifier + "/" + $0.name } }
+        suites.flatMap { suite in suite.tests.filter { $0.outcome == .failed }.map(suite.onlyTestingIdentifier) }
     }
 
     /// Its result bundle and every folder of images it takes failures' images from: an earlier
@@ -135,7 +135,7 @@ public struct LastRun: Codable, Sendable {
         var tests: [URL: [(test: TestCaseResult, suite: SuiteResult)]] = [:]
         for suite in failingSuites {
             for test in suite.tests where test.outcome == .failed {
-                if let folder = attachmentsDirectory(for: suite.identifier + "/" + test.name, ownImages: ownImages) {
+                if let folder = attachmentsDirectory(for: suite.onlyTestingIdentifier(of: test), ownImages: ownImages) {
                     tests[folder, default: []].append((test, suite))
                 }
             }

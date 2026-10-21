@@ -37,7 +37,7 @@ public struct RunRecord: Codable, Identifiable, Sendable, Equatable {
         self.resultBundle = resultBundle
         var outcomes: [String: [TestOutcome]] = [:]
         for suite in summary?.suites ?? [] {
-            for test in suite.tests { outcomes[suite.identifier + "/" + test.name] = test.repetitions }
+            for test in suite.tests { outcomes[suite.onlyTestingIdentifier(of: test)] = test.repetitions }
         }
         self.outcomes = outcomes
     }

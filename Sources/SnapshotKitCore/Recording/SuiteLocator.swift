@@ -13,11 +13,11 @@ public enum SuiteLocator {
     }
 
     /// The files with the tests of a suite without a path: `@Test` functions outside any type. Those
-    /// that reported its failures, else every tracked Swift file that declares one of its tests.
-    /// Paths relative to the repository.
+    /// that reported its failures, else every tracked Swift file that declares one of the tests to
+    /// record (its failing ones, if any failed). Paths relative to the repository.
     static func locateTopLevelTests(_ suite: SuiteResult, in repository: URL) throws -> [String] {
         let root = URL.canonicalPath(repository.path)
-        let names = Set(suite.tests.map(\.name))
+        let names = Set(suite.testsToRecord.map(\.identifier))
         func declaresTests(_ path: String) -> Bool {
             guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return false }
             let declared = RecordPatcher.topLevelTests(in: text).map(\.identifier)

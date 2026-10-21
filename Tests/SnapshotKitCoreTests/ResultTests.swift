@@ -14,6 +14,56 @@ import Testing
         #expect(suite.tests.first?.identifier == "GreetingViewTests/greeting()")
     }
 
+    /// From a real Xcode 27 bundle: a Swift Testing suite's and test's `name` is its display name
+    /// (`@Suite("Card views")`, `@Test("Pay button")`). They are shown; the type and the function
+    /// are what runs a test, and what the history and the last run go by.
+    @Test func displayNamesAreShownButNeverRunATest() throws {
+        let summary = try XCResultParser.parse(fixture("xcresult-tests-display-names.json"))
+        #expect(summary.suites.map(\.identifier) == ["LibTests", "LibTests/CardTests"])
+        let (free, card) = (summary.suites[0], summary.suites[1])
+        #expect(free.tests.map(\.name) == ["freeCard()", "Pay button", "raw name test", "row()"])
+        #expect(card.name == "CardTests")
+        #expect(card.tests.map(\.name) == ["freeCard()", "Shows card"])
+        #expect(card.tests.map(card.onlyTestingIdentifier) == ["LibTests/CardTests/freeCard()", "LibTests/CardTests/card()"])
+        #expect(card.onlyTestingIdentifiers == ["LibTests/CardTests"])
+        // One by one outside a type, and only those that failed: row() passed.
+        #expect(free.onlyTestingIdentifiers == ["LibTests/freeCard()", "LibTests/payButton()", "LibTests/`raw name test`()"])
+        #expect(Flakiness.classify(summary).map(\.id) == (free.tests.map(free.onlyTestingIdentifier) + card.tests.map(card.onlyTestingIdentifier)))
+        let record = RunRecord(kind: .run, host: "local", commit: nil, branch: nil, dirty: false, summary: summary,
+                               passed: summary.passed, failed: summary.failed, skipped: 0, resultBundle: nil)
+        #expect(record.outcomes["LibTests/payButton()"] == [.failed])
+        #expect(record.outcomes["LibTests/CardTests/card()"] == [.failed])
+    }
+
+    /// Re-recording the suites of that run finds their sources by type and function.
+    @Test func displayNamedSuitesAreFoundInTheirSources() throws {
+        let repo = try TempRepo()
+        try repo.write("Tests/LibTests/LibTests.swift", """
+            import Testing
+
+            @Test func freeCard() {}
+            @Test("Pay button") func payButton() {}
+            @Test func `raw name test`() {}
+
+            @Suite("Card views") struct CardTests {
+                @Test("Shows card") func card() {}
+                @Test func freeCard() {}
+            }
+            """)
+        // row() passed: its file isn't patched.
+        try repo.write("Tests/LibTests/RowTests.swift", "import Testing\n\n@Test func row() {}\n")
+        try repo.commitAll("tests")
+        let json = String(decoding: try fixture("xcresult-tests-display-names.json"), as: UTF8.self)
+        let summary = try XCResultParser.parse(Data(json.replacingOccurrences(of: "/path/to/repo", with: repo.root).utf8))
+        let targets = try SuiteLocator.targets(for: summary.failingSuites, in: repo.url)
+        #expect(targets.map(\.suite) == [nil, "CardTests"])
+        #expect(targets.map(\.path) == ["Tests/LibTests/LibTests.swift", "Tests/LibTests/LibTests.swift"])
+        // Without failure locations, the files that declare the failing tests.
+        var unlocated = summary.failingSuites[0]
+        unlocated.failureFiles = []
+        #expect(try SuiteLocator.targets(for: [unlocated], in: repo.url).map(\.path) == ["Tests/LibTests/LibTests.swift"])
+    }
+
     @Test func passedRun() throws {
         let summary = try XCResultParser.parse(fixture("xcresult-tests-passed.json"))
         #expect(summary.passed == 1)

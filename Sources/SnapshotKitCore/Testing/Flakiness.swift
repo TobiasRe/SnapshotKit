@@ -27,19 +27,25 @@ public enum FlakeVerdict: String, Codable, Sendable {
 
 public struct FlakeResult: Hashable, Codable, Sendable, Identifiable {
     public var suite: String
+    /// The test as it is shown (a display name, if it has one).
     public var test: String
+    /// `Bundle/Suite/test()`, as `SuiteResult.onlyTestingIdentifier(of:)` names it; nil in results
+    /// saved by older versions.
+    public var identifier: String?
     public var passed: Int
     public var failed: Int
     public var verdict: FlakeVerdict
     /// The devices a test failed on every time, when it passed every time on the others; nil
     /// unless it ran on several and they disagreed so.
     public var failingDevices: [String]?
-    public var id: String { suite + "/" + test }
+    public var id: String { identifier ?? suite + "/" + test }
     public var label: String { verdict.label(failingDevices: failingDevices) }
 
-    public init(suite: String, test: String, passed: Int, failed: Int, verdict: FlakeVerdict, failingDevices: [String]? = nil) {
+    public init(suite: String, test: String, identifier: String? = nil, passed: Int, failed: Int, verdict: FlakeVerdict,
+                failingDevices: [String]? = nil) {
         self.suite = suite
         self.test = test
+        self.identifier = identifier
         self.passed = passed
         self.failed = failed
         self.verdict = verdict
@@ -64,8 +70,8 @@ public enum Flakiness {
                 let passed = test.passedRepetitions, failed = test.failedRepetitions
                 let devices = failingDevices(test)
                 let verdict: FlakeVerdict = failed == 0 ? .passes : (passed == 0 || devices != nil ? .alwaysFails : .flaky)
-                return FlakeResult(suite: suite.identifier, test: test.name, passed: passed, failed: failed, verdict: verdict,
-                                   failingDevices: devices)
+                return FlakeResult(suite: suite.identifier, test: test.name, identifier: suite.onlyTestingIdentifier(of: test),
+                                   passed: passed, failed: failed, verdict: verdict, failingDevices: devices)
             }
         }
     }

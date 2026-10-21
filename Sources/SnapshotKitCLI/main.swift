@@ -603,7 +603,7 @@ func main() async {
                             say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
                         }
                     }
-                    let timeline = RunHistory.timeline(for: suite.identifier + "/" + test.name, in: RunHistory(repository: ctx.repository).load())
+                    let timeline = RunHistory.timeline(for: suite.onlyTestingIdentifier(of: test), in: RunHistory(repository: ctx.repository).load())
                     if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
                 }
             }

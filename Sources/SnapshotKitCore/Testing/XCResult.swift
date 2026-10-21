@@ -43,6 +43,8 @@ public enum TestOutcome: String, Codable, Sendable {
 }
 
 public struct TestCaseResult: Hashable, Codable, Sendable {
+    /// What the test is shown as: a Swift Testing display name (`@Test("Pay button")`), else the
+    /// function's name. Never use it to address the test; `identifier` does.
     public var name: String
     /// Identifier relative to the bundle, e.g. `GreetingViewTests/greeting()`.
     public var identifier: String
@@ -87,14 +89,28 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
         self.failureFiles = failureFiles
     }
 
+    /// The suite's type (`path` holds type names, never a Swift Testing display name), or the bundle.
     public var name: String { path.last ?? bundle }
     public var identifier: String { ([bundle] + path).joined(separator: "/") }
     public var id: String { identifier }
 
+    /// What `-only-testing:` takes to run one of the suite's tests, `Bundle/Suite/test()`: also
+    /// how the history, the last run and flakiness verdicts name the test.
+    public func onlyTestingIdentifier(of test: TestCaseResult) -> String {
+        bundle + "/" + test.identifier
+    }
+
     /// What `-only-testing:` takes to run the suite. The tests outside any type (`path` empty) are
-    /// named one by one: the bundle alone would run every test in it.
+    /// named one by one, the failing ones when any failed: the bundle alone would run every test
+    /// in it, and those that pass don't need recording.
     public var onlyTestingIdentifiers: [String] {
-        path.isEmpty ? tests.map { bundle + "/" + $0.name } : [identifier]
+        path.isEmpty ? testsToRecord.map(onlyTestingIdentifier) : [identifier]
+    }
+
+    /// The failing tests, or every test when none failed (a suite named on the command line).
+    var testsToRecord: [TestCaseResult] {
+        let failing = tests.filter { $0.outcome == .failed }
+        return failing.isEmpty ? tests : failing
     }
 
     /// `suites` with the tests that `newer` has results for replaced by those results.
@@ -105,8 +121,8 @@ public struct SuiteResult: Hashable, Codable, Sendable, Identifiable {
                 merged.append(suite)
                 continue
             }
-            let ran = Set(suite.tests.map(\.name))
-            merged[i].tests = merged[i].tests.filter { !ran.contains($0.name) } + suite.tests
+            let ran = Set(suite.tests.map(\.identifier))
+            merged[i].tests = merged[i].tests.filter { !ran.contains($0.identifier) } + suite.tests
             merged[i].failureFiles += suite.failureFiles.filter { !merged[i].failureFiles.contains($0) }
         }
         return merged
@@ -148,7 +164,7 @@ public enum XCResultParser {
             case "Unit test bundle", "UI test bundle":
                 for child in node.children ?? [] { visit(child, bundle: node.name, suitePath: []) }
             case "Test Suite":
-                for child in node.children ?? [] { visit(child, bundle: bundle, suitePath: suitePath + [node.name]) }
+                for child in node.children ?? [] { visit(child, bundle: bundle, suitePath: suitePath + [typeName(of: node)]) }
             case "Test Case":
                 let bundleName = bundle ?? "Tests"
                 let key = ([bundleName] + suitePath).joined(separator: "/")
@@ -171,7 +187,7 @@ public enum XCResultParser {
                 }
                 // Multiple configurations/devices report the same test more than once;
                 // merge their repetitions, and a failure in any of them counts.
-                if let index = suites[key]!.tests.firstIndex(where: { $0.name == test.name }) {
+                if let index = suites[key]!.tests.firstIndex(where: { $0.identifier == test.identifier }) {
                     var existing = suites[key]!.tests[index]
                     existing.repetitionDevices = existing.repetitionDevices.flatMap { devices in test.repetitionDevices.map { devices + $0 } }
                     existing.repetitions += test.repetitions
@@ -190,6 +206,16 @@ public enum XCResultParser {
         }
         for node in tests.testNodes { visit(node, bundle: nil, suitePath: []) }
         return TestRunSummary(suites: order.compactMap { suites[$0] })
+    }
+
+    /// The type a Test Suite node stands for: the end of its `nodeIdentifierURL`
+    /// (`test://com.apple.xcode/App/AppTests/CardTests`). Its `name` is a Swift Testing suite's
+    /// display name (`@Suite("Card views")`), which `-only-testing:` and the sources don't know.
+    static func typeName(of suite: XCResultTests.Node) -> String {
+        guard let url = suite.nodeIdentifierURL, let path = url.split(separator: "?").first,
+              let last = path.split(separator: "/").last.flatMap({ String($0).removingPercentEncoding }), !last.isEmpty
+        else { return suite.name }
+        return last
     }
 
     /// One outcome per run of a test case: per repetition, on each device and test plan

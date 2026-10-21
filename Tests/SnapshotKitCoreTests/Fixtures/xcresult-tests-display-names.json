@@ -1,0 +1,126 @@
+{
+  "devices": [
+    {
+      "deviceId": "MAC-1",
+      "deviceName": "My Mac",
+      "platform": "macOS"
+    }
+  ],
+  "testNodes": [
+    {
+      "name": "Lib-Package",
+      "nodeType": "Test Plan",
+      "result": "Failed",
+      "children": [
+        {
+          "name": "LibTests",
+          "nodeType": "Unit test bundle",
+          "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests",
+          "result": "Failed",
+          "children": [
+            {
+              "name": "freeCard()",
+              "nodeType": "Test Case",
+              "nodeIdentifier": "freeCard()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/freeCard()",
+              "result": "Failed",
+              "children": [
+                {
+                  "name": "Expectation failed: Bool(false)\nfalse → ()",
+                  "nodeType": "Failure Message",
+                  "sourceLocation": {
+                    "filePath": "/path/to/repo/Tests/LibTests/LibTests.swift",
+                    "lineNumber": 6
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Pay button",
+              "nodeType": "Test Case",
+              "nodeIdentifier": "payButton()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/payButton()",
+              "result": "Failed",
+              "children": [
+                {
+                  "name": "Expectation failed: Bool(false)\nfalse → ()",
+                  "nodeType": "Failure Message",
+                  "sourceLocation": {
+                    "filePath": "/path/to/repo/Tests/LibTests/LibTests.swift",
+                    "lineNumber": 11
+                  }
+                }
+              ]
+            },
+            {
+              "name": "raw name test",
+              "nodeType": "Test Case",
+              "nodeIdentifier": "`raw name test`()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/%60raw%20name%20test%60()",
+              "result": "Failed",
+              "children": [
+                {
+                  "name": "Expectation failed: Bool(false)\nfalse → ()",
+                  "nodeType": "Failure Message",
+                  "sourceLocation": {
+                    "filePath": "/path/to/repo/Tests/LibTests/LibTests.swift",
+                    "lineNumber": 19
+                  }
+                }
+              ]
+            },
+            {
+              "name": "row()",
+              "nodeType": "Test Case",
+              "nodeIdentifier": "row()",
+              "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/row()",
+              "result": "Passed"
+            },
+            {
+              "name": "Card views",
+              "nodeType": "Test Suite",
+              "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/CardTests",
+              "result": "Failed",
+              "children": [
+                {
+                  "name": "freeCard()",
+                  "nodeType": "Test Case",
+                  "nodeIdentifier": "CardTests/freeCard()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/CardTests/freeCard()",
+                  "result": "Failed",
+                  "children": [
+                    {
+                      "name": "Expectation failed: Bool(false)\nfalse → ()",
+                      "nodeType": "Failure Message",
+                      "sourceLocation": {
+                        "filePath": "/path/to/repo/Tests/LibTests/LibTests.swift",
+                        "lineNumber": 23
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Shows card",
+                  "nodeType": "Test Case",
+                  "nodeIdentifier": "CardTests/card()",
+                  "nodeIdentifierURL": "test://com.apple.xcode/Lib/LibTests/CardTests/card()",
+                  "result": "Failed",
+                  "children": [
+                    {
+                      "name": "Expectation failed: Bool(false)\nfalse → ()",
+                      "nodeType": "Failure Message",
+                      "sourceLocation": {
+                        "filePath": "/path/to/repo/Tests/LibTests/LibTests.swift",
+                        "lineNumber": 22
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
