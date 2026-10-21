@@ -107,7 +107,7 @@ Otherwise a `DEVELOPER_DIR=` or `xcode-select -s` path is used as the Xcode to r
 When the test job comes from a template SnapshotKit can’t read (GitLab `project:`, `remote:`, `template:` or
 `component:` includes), it takes what it can from your variables and says so: *The test job comes from …,
 which SnapshotKit can’t read. Settings were taken from CI variables; set anything missing in
-.snapshotkit.yml.*
+`.snapshotkit.yml`.*
 
 ## `.snapshotkit.yml`
 
@@ -153,8 +153,8 @@ but empty (`onlyTesting:`) clears what CI set.
 ### Format
 
 `.snapshotkit.yml` is a flat file: `key: value` lines, inline lists (`[a, b]`), block lists (`- a`) and `#`
-comments. Nested mappings aren’t supported. Mistakes are reported with the line: *.snapshotkit.yml could not
-be read (line 4: nested mappings are not supported).* Unknown keys are ignored with a note naming them, so a
+comments. Nested mappings aren’t supported. Mistakes are reported with the line: *`.snapshotkit.yml` could
+not be read (line 4: nested mappings are not supported).* Unknown keys are ignored with a note naming them, so a
 typo shows up in `snapkit config`.
 
 ## The base branch
@@ -188,9 +188,9 @@ Every command runs with `DEVELOPER_DIR` set to it, so your global `xcode-select`
 ## The simulator
 
 The device and OS come from CI’s `-destination`, CI variables or `.snapshotkit.yml`. SnapshotKit lists the
-simulators the chosen Xcode knows (`xcrun simctl list devices available`) and picks the one with that name and
-runtime (any runtime with `os: latest` or no `os`), preferring one that’s already booted. It passes it to
-`xcodebuild` by id. It never creates, boots or erases simulators itself.
+simulators the chosen Xcode knows (`xcrun simctl list devices available`) and picks the one with that name on
+that runtime — with `os: latest` or no `os`, on the newest runtime that has a simulator of that name, as
+`xcodebuild` would — preferring one that’s already booted. It passes it to `xcodebuild` by id. It never creates, boots or erases simulators itself.
 
 If none matches, the error says what exists and how to get what’s needed — install the runtime
 (`xcodebuild -downloadPlatform iOS -buildVersion 18.2`) or create the device (`xcrun simctl create …`) — or

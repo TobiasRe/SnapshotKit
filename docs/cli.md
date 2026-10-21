@@ -64,7 +64,7 @@ failures, errors, the summary); `--verbose` prints everything `xcodebuild` print
 
 **Leftover record patches.** Every command first restores record patches left behind by a run that was killed
 or crashed — in any registered project, not only this one — and says so: *snapkit: restored leftover record
-patch in … :*. See [Re-recording](re-recording.md#always-restored).
+patch in …:*. See [Re-recording](re-recording.md#always-restored).
 
 Example outputs on this page are shortened; the `record`, `rerecord` and `flaky` ones are illustrative.
 
@@ -114,7 +114,7 @@ your working tree, grouped by folder, each with its kind: **Committed** (on this
 
 ```
 $ snapkit changes
-Snapshots changed vs develop (Merge-base 0ad108e8): 22
+Snapshots changed vs origin/develop (Merge-base 0ad108e8): 22
 BubbleTests
   Uncommitted  Tests/ChatTests/__Snapshots__/BubbleTests/emoji.dark.png
   …
