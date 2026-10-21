@@ -35,10 +35,11 @@ jobs:
         run: swift build
       - name: Core tests
         run: swift test --filter SnapshotKitCoreTests
-      # App tests that don't compare pixels. AppSnapshotTests run locally: their references are rendered on
-      # the recording machine's macOS (27), and CI's macOS 26 draws controls differently.
+      # Every app test but the pixel comparisons. AppSnapshotTests run locally: their references are rendered
+      # on the recording machine's macOS (27) and Retina display, and CI's macOS 26 draws controls differently.
+      # AccessibilityTests skip themselves here: the runner's test process isn't a trusted AX client.
       - name: App tests
-        run: swift test --filter 'ProjectModelTests|ListSelectionTests'
+        run: swift test --filter SnapshotKitAppTests --skip AppSnapshotTests
       # SwiftUI and AppKit report problems such as "Publishing changes from within view updates"
       # only at run time, to the system log; tests can't see them. Show every screen and fail on any.
       - name: No runtime warnings
