@@ -45,7 +45,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Uncommitted, flaky”), test results offer **Show Failure** as an action, pane titles are headings, the end of a
   run is announced, and the ⌘K palette reads the highlighted row and keeps Tab inside.
 - Faster with thousands of snapshots: the library loads in less than half the time, and a re-record starts
-  seconds sooner.
+  seconds sooner; in a test file of thousands of lines, planning a re-record takes a fraction of a second
+  instead of up to half a minute.
 
 ### Fixed
 
@@ -123,8 +124,9 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - CI files: block-list matrices, `KEY=value xcodebuild …`, folded (`>`) commands, unquoted `${{ … }}`, several
   `xcodebuild` calls on one line and commented-out lines are read correctly.
 - The working directory follows GitHub Actions’ `working-directory` and every `cd` before the command:
-  command chains (`cd ios && pod install && cd ..`), `pushd` and `popd`, GitLab’s `before_script` (also in
-  lists written level with their key), quoted script items, `${{ … }}` in the folder, and shell functions.
+  command chains (`cd ios && pod install && cd ..`), `pushd` and `popd`, GitLab’s `before_script` (also
+  inline, in lists written level with their key, and inherited through `extends:` or a YAML anchor, before
+  `default:`), quoted script items, `${{ … }}` in the folder, and shell functions.
 - `developerDir` always picks the Xcode, also when CI pins a version (a note says when they differ), and may
   start with `~/`. A last run saved by 0.2.0 is read with its suites named by type.
 - Quoted YAML values are read as YAML means them (`"-scheme \"My App\""`, `'It''s'`), and a test command run
