@@ -43,6 +43,51 @@ enum ShellWords {
         return words
     }
 
+    /// The commands of a line that run in its shell, in order: split at unquoted `&&`, `||`, `;`,
+    /// `|` and `&`, without those in a `( … )` subshell, whose `cd` doesn't move the shell.
+    /// A `$( … )` stays part of the word it is in.
+    static func commands(_ line: String) -> [String] {
+        var commands: [String] = []
+        var current = ""
+        var quote: Character?
+        var depth = 0               // parentheses open: a subshell's, or a `$(`'s
+        var subshell = false        // the current command is a `( … )`
+        var previous: Character = " "
+        func finish() {
+            let command = current.trimmingCharacters(in: .whitespaces)
+            if !subshell, !command.isEmpty { commands.append(command) }
+            current = ""
+            subshell = false
+        }
+        for ch in line {
+            defer { previous = ch }
+            if let q = quote {
+                if ch == q && previous != "\\" { quote = nil }
+                current.append(ch)
+                continue
+            }
+            switch ch {
+            case "'", "\"":
+                quote = ch
+            case "(":
+                if depth == 0, previous != "$", current.allSatisfy(\.isWhitespace) { subshell = true }
+                depth += 1
+            case ")":
+                depth = max(depth - 1, 0)
+            case "&", "|", ";":
+                if depth == 0 {
+                    finish()
+                    continue
+                }
+            default:
+                break
+            }
+            current.append(ch)
+        }
+        finish()
+        return commands
+    }
+
     /// Cuts a command line at the first unquoted shell control operator
     /// (`|`, `&&`, `;`, `>` …) so piping into a formatter does not leak arguments.
     static func firstCommand(_ line: String) -> String {

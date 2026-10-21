@@ -202,15 +202,52 @@ import Testing
         #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: script)]).config.workingDirectory == "ios")
     }
 
+    /// Every `cd` of a line's chain of commands counts, in order, on the call's line and those
+    /// before it; not a subshell's, nor one in a shell function's body away from the call.
+    @Test func workingDirectoriesOfCommandChains() {
+        func workingDirectory(_ script: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: "#!/bin/bash\n" + script)]).config.workingDirectory
+        }
+        let test = "xcodebuild test -scheme App\n"
+        #expect(workingDirectory("cd ios && pod install && cd ..\n" + test) == nil)
+        #expect(workingDirectory("cd ios; " + test) == "ios")
+        #expect(workingDirectory("cd ios && pod install && " + test) == "ios")
+        #expect(workingDirectory("cd ios && xcodebuild -version && " + test) == "ios")
+        #expect(workingDirectory("cd ios || exit 1\n" + test) == "ios")
+        #expect(workingDirectory("pushd ios\n" + test + "popd\n") == "ios")
+        #expect(workingDirectory("pushd ios\npopd\n" + test) == nil)
+        #expect(workingDirectory("(cd docs && make)\n" + test) == nil)
+        #expect(workingDirectory("echo \"$(cd docs && pwd)\"\n" + test) == nil)
+        // A function's `cd` runs where it is called; one in the function that makes the call counts.
+        #expect(workingDirectory("build_docs() {\n  cd docs\n  make\n}\ncd ios\n" + test) == "ios")
+        #expect(workingDirectory("function build_docs\n{\n  cd docs\n}\n" + test) == nil)
+        #expect(workingDirectory("main() {\n  cd ios\n  " + test + "}\nmain\n") == "ios")
+        // A folder found out only when it runs leads back to the root, where a later `cd` goes on.
+        #expect(workingDirectory("cd \"$(dirname \"$0\")/..\"\ncd ios\n" + test) == "ios")
+    }
+
+    /// GitLab's `script:` can be the command itself, after a `before_script:` that moves.
+    @Test func aGitLabScriptThatIsOneCommand() {
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: """
+            default:
+              before_script:
+                - cd ios
+            snapshots:
+              script: cd App && xcodebuild test -scheme App
+            """)]).config.workingDirectory == "ios/App")
+    }
+
     @Test func workingDirectoriesFollowEachOther() {
         #expect(CIConfigParser.path(following: ["ios", "./App"]) == "ios/App")
         #expect(CIConfigParser.path(following: ["ios", ".."]) == nil)
         #expect(CIConfigParser.path(following: ["ios", "../Modules"]) == "Modules")
         #expect(CIConfigParser.path(following: ["ios", "$CI_PROJECT_DIR/Modules"]) == "Modules")
-        // Out of the repository, or out of sight.
+        // Out of the repository, or out of sight: back at the root, as far as can be told.
         #expect(CIConfigParser.path(following: [".."]) == nil)
         #expect(CIConfigParser.path(following: ["/Users/ci/build"]) == nil)
         #expect(CIConfigParser.path(following: ["$BUILD_DIR"]) == nil)
+        #expect(CIConfigParser.path(following: ["$BUILD_DIR", "ios"]) == "ios")
+        #expect(CIConfigParser.path(following: ["ios", "-"]) == nil)
     }
 
     @Test func xcodeSelectionVariants() {

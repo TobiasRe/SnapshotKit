@@ -199,12 +199,10 @@ public struct CIConfigParser {
                 words.removeFirst()
                 var invocation = parseArguments(words.map(expand))
 
-                // What runs before it, less the folder it is called from (`/usr/bin/`).
-                var folders = Self.folders(around: index, in: outline)
+                // What runs before it on its line (`cd ios && pod install && `), less the folder it
+                // is called from (`/usr/bin/`).
                 let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
-                if let cd = prefix.range(of: #"cd\s+([^\s;&]+)\s*&&\s*$"#, options: .regularExpression) {
-                    folders.append(String(prefix[cd]).replacingOccurrences(of: #"^cd\s+|\s*&&\s*$"#, with: "", options: .regularExpression))
-                }
+                let folders = Self.folders(around: index, in: outline) + Self.folderChanges(in: Self.shellCommand(prefix))
                 invocation.workingDirectory = Self.path(following: folders.map { expand(MiniYAML.unquote($0)) })
 
                 // Score: prefer `test`, and anything that mentions snapshots nearby.
@@ -296,22 +294,68 @@ public struct CIConfigParser {
                 break
             }
         }
-        guard let script = ancestors.first(where: { ["run", "script", "before_script"].contains(outline.key($0)) }) else { return folders }
+        // The script's key line, which may be the command itself (`script: xcodebuild test …`).
+        let scriptKeys = ["run", "script", "before_script"]
+        guard let script = ([index] + ancestors).first(where: { scriptKeys.contains(outline.key($0) ?? "") }) else { return folders }
         if outline.key(script) == "script" {
             let job = ancestors.first { $0 < script } ?? -1     // the next one out
             let before = child("before_script", of: job) ?? child("default", of: -1).flatMap { child("before_script", of: $0) }
                 ?? child("before_script", of: -1)
             if let before { folders += cdTargets(in: outline.block(of: before), of: outline) }
         }
-        return folders + cdTargets(in: (script + 1)..<index, of: outline)
+        return folders + cdTargets(in: min(script + 1, index)..<index, of: outline)
     }
 
-    /// The folders of the `cd` commands that start lines in `range`.
+    /// The folders the commands on the lines in `range` move to, in order. A shell function's body
+    /// runs where the function is called, not where it is written: its lines count only when the
+    /// range ends in it (the call to look at is in the function).
     private static func cdTargets(in range: Range<Int>, of outline: YAMLOutline) -> [String] {
-        range.compactMap { i in
-            let command = outline.content(i)
-            guard let cd = command.range(of: #"^cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)"#, options: .regularExpression) else { return nil }
-            return String(command[cd].dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        var folders: [String] = []
+        var inBody: [String] = []   // of the function whose body is open
+        var body = 0                // braces open in that body
+        var bodyFollows = false     // a `name()` line without its `{`
+        for i in range {
+            let command = shellCommand(outline.content(i))
+            let braces = command.count(where: { $0 == "{" }) - command.count(where: { $0 == "}" })
+            if bodyFollows {
+                bodyFollows = false
+                if command.hasPrefix("{") {
+                    body = max(braces, 0)
+                    continue
+                }
+            }
+            if body > 0 {
+                inBody += folderChanges(in: command)
+                body = max(body + braces, 0)
+                if body == 0 { inBody = [] }
+            } else if command.range(of: functionHeader, options: .regularExpression) != nil {
+                if command.contains("{") { body = max(braces, 0) } else { bodyFollows = true }
+            } else {
+                folders += folderChanges(in: command)
+            }
+        }
+        return folders + inBody
+    }
+
+    /// `name() {`, `function name {`: a shell function starts.
+    private static let functionHeader = #"^(?:function\s+[\w.-]+|[\w.-]+\s*\(\s*\))"#
+
+    /// A line of a CI file as the shell gets it: without a `run:` or `script:` key in front.
+    static func shellCommand(_ line: String) -> String {
+        line.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: #"^(?:-\s+)?(?:(?:run|script|before_script):\s+)?"#, with: "", options: .regularExpression)
+    }
+
+    /// The folders the commands of `line` move the shell to, in order: each `cd` and `pushd`, and
+    /// `popd` (as `-`, back where it was). Not those of a `( … )` subshell.
+    static func folderChanges(in line: String) -> [String] {
+        ShellWords.commands(line).compactMap { command in
+            let words = ShellWords.split(command)
+            switch words.first {
+            case "cd", "pushd": return words.dropFirst().first { !$0.hasPrefix("-") } ?? "~"
+            case "popd": return "-"
+            default: return nil
+            }
         }
     }
 
@@ -320,8 +364,9 @@ public struct CIConfigParser {
                                           "${{ github.workspace }}", "${{github.workspace}}"]
 
     /// Where following `folders` one after the other from the repository's root leads, relative to
-    /// it, as `cd` goes; nil for the root itself, or when a folder is outside the repository or
-    /// unknown (a variable that isn't defined in sight).
+    /// it, as `cd` goes; nil for the root itself. A folder outside the repository or unknown (a
+    /// variable not defined in sight, `$(dirname "$0")/..`, `cd -`) is taken to lead back to the
+    /// root: scripts go there that way, and a later `cd ios` still counts.
     static func path(following folders: [String]) -> String? {
         var components: [String] = []
         for folder in folders {
@@ -330,9 +375,16 @@ public struct CIConfigParser {
                 folder = "." + folder.dropFirst(root.count)
                 components = []
             }
-            guard isResolved(folder), !folder.hasPrefix("/"), !folder.hasPrefix("~"), folder != "-" else { return nil }
+            guard isResolved(folder), !folder.hasPrefix("/"), !folder.hasPrefix("~"), folder != "-" else {
+                components = []
+                continue
+            }
             for component in folder.split(separator: "/") where component != "." {
-                if component != ".." { components.append(String(component)) } else if components.popLast() == nil { return nil }
+                if component != ".." {
+                    components.append(String(component))
+                } else if components.popLast() == nil {
+                    break
+                }
             }
         }
         return components.isEmpty ? nil : components.joined(separator: "/")
