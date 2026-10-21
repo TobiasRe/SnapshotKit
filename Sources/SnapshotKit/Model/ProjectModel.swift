@@ -326,7 +326,8 @@ final class ProjectModel {
                     branches: ProjectModel.branchList(git),
                     context: context,
                     modules: (try? context.get())?.modules() ?? [],
-                    history: RunHistory(repository: url).load()
+                    history: RunHistory(repository: url).load(),
+                    lastRunSaved: LastRun.savedDate(repository: url)
                 )
             }
             // A newer reload (e.g. a quick second settings change) wins.
@@ -347,8 +348,32 @@ final class ProjectModel {
                 detectedBaseBranch = nil
             }
             validateEnvironment()
+            lastRunSaved = loaded.lastRunSaved
             loadLastRun()
             refreshChanges()
+        }
+    }
+
+    /// When the last run on disk was saved, as of the last look at it.
+    @ObservationIgnored private var lastRunSaved: Date?
+
+    /// Brings the project up to date when the app comes back to the front: commits, checkouts and
+    /// snapshots may have changed meanwhile, and so may the last run and the history, when the tests
+    /// ran in `snapkit`. Those are read again only if the last run was saved since.
+    func refreshAfterActivation() {
+        guard !isRunning else { return }
+        refreshChanges()
+        guard fixtureImages == nil else { return }
+        let url = project.url, known = lastRunSaved
+        Task {
+            let changed = await offCooperativePool { () -> (saved: Date?, history: [RunRecord])? in
+                let saved = LastRun.savedDate(repository: url)
+                return saved == known ? nil : (saved, RunHistory(repository: url).load())
+            }
+            guard let (saved, history) = changed, !isRunning else { return }
+            lastRunSaved = saved
+            setHistory(history)
+            loadLastRun()
         }
     }
 
@@ -389,6 +414,10 @@ final class ProjectModel {
     /// imported bundle, which a reload (another base branch) must not replace.
     private func loadLastRun() {
         guard let last = LastRun.load(repository: project.url), failureSource.map({ last.date > $0.date }) ?? true else { return }
+        // Newer than what is shown, so the tests ran elsewhere since (in `snapkit`): the Run tab's
+        // results and the verdicts of earlier flakiness checks aren't this run's.
+        lastResult = nil
+        flakeResults = []
         lastFailingSuites = last.failingSuites
         restoredSuites = last.suites ?? []
         fullRunTotal = last.suites.map { $0.reduce(0) { $0 + $1.tests.count } }

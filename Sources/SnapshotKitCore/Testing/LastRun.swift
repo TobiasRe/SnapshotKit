@@ -33,6 +33,13 @@ public struct LastRun: Codable, Sendable {
         try Git(root: repository).gitDirectory().appendingPathComponent("snapshotkit/last-run.json")
     }
 
+    /// When the repository's last run was last saved, by any process (the app, `snapkit`); nil
+    /// before the first. Cheaper than loading it, to tell whether it changed.
+    public static func savedDate(repository: URL) -> Date? {
+        guard let url = try? url(for: repository) else { return nil }
+        return try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
     public static func load(repository: URL) -> LastRun? {
         guard let url = try? url(for: repository), let data = FileManager.default.contents(atPath: url.path) else { return nil }
         let decoder = JSONDecoder()

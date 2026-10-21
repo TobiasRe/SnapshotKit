@@ -757,6 +757,23 @@ extension AppUITests {
             #expect(model.failureSource?.host == "imported")
         }
 
+        /// Coming back to the app after running the tests in `snapkit` shows that run.
+        @Test func aRunInSnapkitShowsWhenTheAppIsActiveAgain() async throws {
+            let (repo, _) = try makeRepo()
+            var earlier = LastRun(result: AppFixtures.lastResult)
+            earlier.date = Date().addingTimeInterval(-60)     // saved to the second
+            earlier.save(repository: repo)
+            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
+            for _ in 0..<200 where model.failures.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
+            try #require(model.failingSuites.count == 2)
+
+            saveLastRun(in: repo, suites: [AppFixtures.profileSuite], failed: 1)
+            model.refreshAfterActivation()
+            for _ in 0..<200 where model.failingSuites.count != 1 { try await Task.sleep(for: .milliseconds(50)) }
+            #expect(model.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
+            #expect(model.failures.map(\.suite.identifier) == [AppFixtures.profileSuite.identifier])
+        }
+
         /// A project added while the counts are being read gets its count too.
         @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
             let solid = DS.solidSurfaces

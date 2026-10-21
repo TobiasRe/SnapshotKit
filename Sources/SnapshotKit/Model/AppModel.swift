@@ -60,6 +60,10 @@ final class AppModel {
                     self?.refreshFailingCounts()
                 }
             },
+            // The tests may have run in `snapkit` meanwhile.
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshFailingCounts() }
+            },
         ]
         restoreLeftoverPatches()
         refreshProjects()
