@@ -154,7 +154,10 @@ extension View {
                 .background(shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.94)))
                 .overlay(shape.stroke(Color(nsColor: .separatorColor), lineWidth: 0.5))
         } else if #available(macOS 26.0, *) {
-            self.glassEffect(.regular, in: shape)
+            // Tinted with the window's background: these bars float over snapshots, which can be
+            // pure white or black. Plain glass took on that color and its secondary labels faded
+            // into it (dark mode over a white screen, light mode over a black one).
+            self.glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.75)), in: shape)
         } else {
             self
                 .background(.regularMaterial, in: shape)

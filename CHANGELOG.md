@@ -54,6 +54,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 ### Fixed
 
 **App**
+- The compare bar, image captions and ⌘K kept their glass but lost their labels over a snapshot as bright or
+  dark as can be: secondary text faded into a white screen in dark mode and a black one in light mode.
 - The sidebar stayed blank, and ⌘K showed only its backdrop, whenever no project was open at launch
   (including the first launch).
 - Re-recording a snapshot that was already changed shows the new image on the Changes tab and in the library,
