@@ -155,6 +155,20 @@ import Testing
         #expect(last.testAttachments == nil)
     }
 
+    /// A partial run that ran every failure but exported no images is the last run as a whole:
+    /// its images are where its bundle is exported again (`snapkit failures --out`).
+    @Test func aPartialRunThatTookOverFindsItsImagesWhereItsBundleIsExported() throws {
+        let repo = try TempRepo()
+        LastRun.update(with: Self.run([Self.suite("CardTests", ["a()": .failed])], bundle: "full"),
+                       attachmentsDirectory: try Self.attachments(["CardTests/a()"]), repository: repo.url)
+        LastRun.update(with: Self.run([Self.suite("CardTests", ["a()": .failed])], bundle: "verify"), partial: true, repository: repo.url)
+        let last = try #require(LastRun.load(repository: repo.url))
+        #expect(last.resultBundle == "/results/verify.xcresult")
+        #expect(last.testAttachments == nil)
+        let exported = try Self.attachments(["CardTests/a()"])
+        #expect(last.failureImages(ownImagesIn: exported).map { $0.failure?.deletingLastPathComponent().path } == [exported.path])
+    }
+
     /// A last-run.json written before images were kept per test (or one naming no folder at all, as
     /// older CLIs wrote) still loads, with the images next to its bundle.
     @Test func olderFilesFindTheirImages() throws {

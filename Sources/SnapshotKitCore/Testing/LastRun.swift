@@ -87,14 +87,20 @@ public struct LastRun: Codable, Sendable {
             passed = all.reduce(0) { $0 + $1.passedCount }
         }
         let failing = Self.failingTests(in: failingSuites)
-        if failing.allSatisfy(ranTests.contains) {
+        let tookOver = failing.allSatisfy(ranTests.contains)
+        if tookOver {
             host = run.host
             resultBundle = run.resultBundle.path
             attachmentsDirectory = newImages?.path
         }
         var folders: [String: String] = [:]
         for test in failing {
-            folders[test] = ranTests.contains(test) ? newImages?.path ?? "" : earlier.imagesPath(for: test) ?? ""
+            if !ranTests.contains(test) {
+                folders[test] = earlier.imagesPath(for: test) ?? ""
+            } else if !tookOver {
+                folders[test] = newImages?.path ?? ""
+            }
+            // Else the run's own, as for a full run: also those of its bundle exported again.
         }
         let own = runImagesPath ?? ""
         let elsewhere = folders.filter { $0.value != own }
