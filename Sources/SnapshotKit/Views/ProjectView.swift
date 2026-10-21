@@ -523,7 +523,8 @@ struct RunStatusHeader: View {
             return "Took \(Self.elapsed(duration))"
         }
         if let source = project.failureSource {
-            return "\(source.label) on \(source.host), \(source.date.formatted(DS.Dates.moment.localized(locale, timeZone)))"
+            // As the Failures header says it: label, then where and when.
+            return "\(source.label) · \(source.host) · \(source.date.formatted(DS.Dates.moment.localized(locale, timeZone)))"
         }
         return "Runs the snapshot tests exactly like CI."
     }

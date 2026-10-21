@@ -18,6 +18,9 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   only failing tests marked on the right, and the detail’s chip uses the same word. The toolbar’s re-record
   button (the same as each detail header’s) is gone, and the Run tab lists Xcode and the simulator once.
 - One main window: no New Window or window tabs; the Dock icon or the menu bar item brings it back.
+- Calmer chrome: the sidebar lists each project once (Recent appears only once the list is long); the Changes
+  header drops the kind chip the selected row already shows, and the footer its empty “viewed” bar; the Run tab
+  names the last run as the Failures tab does (“Last run · local · …”).
 - The same names everywhere: **Re-record Failing Suites** (Failures, Run tab, menus, ⌘K), **Check Flakiness of
   Failing Tests** (just *Check Flakiness* in the Failures bar, above the failures it checks), and **Zoom to
   Fit** for ⌘0. **Re-record All…** only ever means every snapshot.

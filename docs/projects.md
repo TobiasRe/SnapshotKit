@@ -56,9 +56,9 @@ projects it finds.
 The sidebar has up to three sections:
 
 - **Pinned** — projects you pinned (right-click › Pin). Always at the top.
-- **Recent** — the projects you opened most recently, newest first (up to ten).
-- **Projects** — every project, alphabetically. A project stays in its place here when you open it; Pinned
-  and Recent are shortcuts to the same projects.
+- **Recent** — once you have more than eight projects: the ones you opened most recently, newest first (up to
+  ten), as shortcuts into the long list below.
+- **Projects** — every other project, alphabetically. A project stays in its place here when you open it.
 
 Each row shows the project’s initials, its name and, after a run with failures, a red dot with the number of
 failing tests. Hover a row for its full path. Right-click for **Pin**/**Unpin**, **Reveal in Finder** and

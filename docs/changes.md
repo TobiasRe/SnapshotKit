@@ -56,7 +56,7 @@ to SnapshotKit from another app.
 Select a change to see it in the [compare view](comparing.md): the base branch on the left (or under the
 slider), this branch or the working tree on the right.
 
-The detail header shows the test name and variant, its breadcrumb, its kind, and:
+The detail header shows the test name and variant and its breadcrumb (the selected row says its kind), and:
 
 - **Viewed** — mark it reviewed, or unmark it: V in the list and ⌥⌘V anywhere toggle the mark. Marking a
   change as viewed also moves to the next unviewed change, so you can go through a branch with one shortcut.

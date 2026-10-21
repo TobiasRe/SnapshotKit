@@ -5,19 +5,24 @@ struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
     private var pinned: [Project] { model.projects.filter { model.isPinned($0) } }
+    /// Recent is a shortcut into a long list; in a short one every project is in view already, and
+    /// listing some twice only doubled the rows.
+    static let recentsAbove = 8
     private var recents: [Project] {
+        guard all.count > Self.recentsAbove else { return [] }
         let recent = Set(model.store.settings.recents)
         return model.projects.filter { recent.contains($0.path) && !model.isPinned($0) }
     }
-    /// Every project, alphabetically, in a fixed place: opening one adds it to Recent but doesn't
-    /// take it out of here.
+    /// The projects not pinned, alphabetically, in a fixed place: opening one adds it to Recent but
+    /// doesn't take it out of here.
     private var all: [Project] {
-        model.projects.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.projects.filter { !model.isPinned($0) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
-    /// Pinned and recent projects appear twice, so their shortcut rows get their own tags: a click
-    /// there highlights that row, not both.
-    private static let shortcutTags = ["pinned:", "recent:"]
+    /// In a long list recent projects appear twice, so their shortcut rows get their own tags: a
+    /// click there highlights that row, not both.
+    private static let shortcutTags = ["recent:"]
     @State private var clickedTag: String?
 
     private static func path(of tag: String) -> String {
@@ -40,18 +45,21 @@ struct SidebarView: View {
     var body: some View {
         List(selection: selection) {
             if !pinned.isEmpty {
-                Section("Pinned") { rows(pinned, tagPrefix: "pinned:") }
+                Section("Pinned") { rows(pinned) }
             }
             if !recents.isEmpty {
                 Section("Recent") { rows(recents, tagPrefix: "recent:") }
             }
-            Section(model.isScanning ? "Projects (scanning…)" : "Projects") {
-                if all.isEmpty {
-                    Text("Drop a repository here, or use + below.")
-                        .font(DS.Font.caption)
-                        .foregroundStyle(.secondary)
+            // Not when every project is pinned: a heading over nothing.
+            if !all.isEmpty || model.projects.isEmpty || model.isScanning {
+                Section(model.isScanning ? "Projects (scanning…)" : "Projects") {
+                    if model.projects.isEmpty {
+                        Text("Drop a repository here, or use + below.")
+                            .font(DS.Font.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    rows(all)
                 }
-                rows(all)
             }
         }
         .listStyle(.sidebar)

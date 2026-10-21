@@ -36,8 +36,9 @@ struct ChangesTab: View {
                                      path: change.path,
                                      position: shown.firstIndex(of: change.id).map { ($0 + 1, shown.count) },
                                      step: { project.selectAdjacent($0) }) {
+                            // No kind chip: the selected row beside it says the kind already, and the
+                            // chips in a detail header lead somewhere (the library's go to Failures).
                             HStack(spacing: DS.Space.s) {
-                                Chip(text: change.kind.label, color: DS.Status.color(for: change.kind))
                                 let viewed = project.viewedChanges.contains(change.id)
                                 Button { project.setViewed(!viewed, for: change) } label: {
                                     Label("Viewed", systemImage: viewed ? "checkmark.circle.fill" : "circle")
@@ -248,11 +249,14 @@ struct ChangesTab: View {
                 Spacer(minLength: DS.Space.s)
                 if !set.changes.isEmpty {
                     let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
-                    Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
-                        .gaugeStyle(.accessoryLinearCapacity)
-                        .tint(DS.Status.passed)
-                        .frame(width: 44)
-                        .accessibilityHidden(true)
+                    // An empty bar beside "0 of 18 viewed" says nothing more.
+                    if viewed > 0 {
+                        Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
+                            .gaugeStyle(.accessoryLinearCapacity)
+                            .tint(DS.Status.passed)
+                            .frame(width: 44)
+                            .accessibilityHidden(true)
+                    }
                     Text("\(viewed) of \(set.changes.count) viewed").monospacedDigit().fixedSize()
                 }
             }
