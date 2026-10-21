@@ -48,6 +48,17 @@ private func lastRun(_ outcome: TestOutcome, host: String = "local", bundle: Str
         #expect(Outcome(try snapkit("record", "--repo", repo.url.path, "gone")) == failure("No snapshot path contains “gone”."))
     }
 
+    /// The remote Mac (here a local folder) lacking the Xcode asked for exits 2, as this Mac does.
+    @Test func runWithoutTheXcodeOnTheRemoteMac() throws {
+        let repo = try TempRepo()
+        try repo.write(".snapshotkit.yml", "scheme: App\ndevice: Example Phone\nxcode: \"1.0\"\nremoteHost: local\n")
+        try repo.commitAll("init")
+        let result = try snapkit("run", "--repo", repo.url.path, "--remote", environment: ["HOME": testTemp("home").path])
+        #expect(result.status == 2)
+        #expect(result.stderr.hasPrefix("error: On localhost: "))
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
     /// Not "no previous run recorded" and every test run again to find failures there aren't.
     @Test func rerecordWithNothingFailing() throws {
         let repo = try repoWithCardTests()

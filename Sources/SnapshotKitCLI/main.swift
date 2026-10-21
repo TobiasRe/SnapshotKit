@@ -94,10 +94,11 @@ func fail(_ text: String, code: Int32 = 1) -> Never {
 }
 
 /// Ends a command whose tests could not run. A Ctrl-C before `xcodebuild` started (while the scheme
-/// was looked up, say) throws `CancellationError`: a cancel like any other, not an error.
+/// was looked up, say) throws `CancellationError`: a cancel like any other, not an error. The remote
+/// Mac lacking the Xcode or simulator exits 2, as this one does.
 func fail(running error: any Error) -> Never {
     if error is CancellationError { exitCancelled() }
-    fail(error.localizedDescription)
+    fail(error.localizedDescription, code: error is RemoteEnvironmentError ? 2 : 1)
 }
 
 /// Says so and exits 1, as every command that runs tests does when cancelled.
