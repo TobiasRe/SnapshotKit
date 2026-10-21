@@ -19,17 +19,10 @@ final class AppModel {
     var showQuickSwitcher = false
     private(set) var isScanning = false
     private(set) var startupNotice: String?
-    /// Shared zoom/pan state for whichever compare view is visible (driven by ⌘= / ⌘− / ⌘0).
-    var viewport = Viewport()
-    /// Bumped by View ▸ Zoom to Change; the visible compare view frames the changed pixels.
-    var zoomToChangeRequest = 0
-    /// A key the list beside the visible compare view passes on to it: Space flips the images in
-    /// Toggle mode, ← and → move the slider, so they work without focusing the image.
-    private(set) var compareKey = CompareKeyRequest(key: .flip, count: 0)
-
-    func passToCompare(_ key: CompareKeyRequest.Key) {
-        compareKey = CompareKeyRequest(key: key, count: compareKey.count + 1)
-    }
+    /// The main window's zoom, pan and passed-on keys.
+    let compare = CompareState()
+    /// What the View menu's zoom commands act on: the key window's compare.
+    var activeCompare: CompareState { CompareWindows.state(of: NSApp.keyWindow) ?? compare }
     /// Failing test count per project path, from each repository's last run.
     var failingCounts: [String: Int] = [:]
 
@@ -93,6 +86,10 @@ final class AppModel {
         refreshFailingCounts()
     }
 
+    /// Off in the snapshot tests: their sidebar shows the fixture's counts, not ones read from the
+    /// test repositories meanwhile.
+    nonisolated(unsafe) static var readsFailingCounts = true
+
     /// Reads every project's last-run summary in the background (cheap: one small JSON per repo).
     func refreshFailingCounts() {
         countsGeneration += 1
@@ -106,7 +103,7 @@ final class AppModel {
                 return counts
             }.value
             // A newer refresh (a run finished, a project added meanwhile) has the newer counts.
-            if generation == countsGeneration, !DS.solidSurfaces { failingCounts = counts }
+            if generation == countsGeneration, Self.readsFailingCounts { failingCounts = counts }
         }
     }
 
@@ -229,7 +226,7 @@ final class AppModel {
             models[path] = model
             current = model
         }
-        viewport.reset()
+        compare.viewport.reset()
         refreshProjects()
     }
 
@@ -326,9 +323,3 @@ final class MenuBarSetting {
     }
 }
 
-/// See `AppModel.passToCompare(_:)`; `count` makes the same key pressed twice a new request.
-struct CompareKeyRequest: Equatable {
-    enum Key { case flip, left, right }
-    var key: Key
-    var count: Int
-}

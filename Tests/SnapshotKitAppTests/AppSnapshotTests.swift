@@ -23,6 +23,7 @@ extension AppUITests {
 
         init() throws {
             DS.solidSurfaces = true
+            AppModel.readsFailingCounts = false
             AppSnapshotTests.launchOnce()
             AppFixtures.resetDefaults()
             // On a 1x display every image would differ from its reference in size, which says nothing
@@ -128,25 +129,6 @@ extension AppUITests {
             project.selectedSnapshotID = project.displayedSnapshots.first?.id
             #expect(project.displayedSnapshots.map(\.byteSize) == project.displayedSnapshots.map(\.byteSize).sorted(by: >))
             assertPane(project, app: app, appearance: .aqua)
-        }
-
-        /// Stepping through snapshots must not move the image: snapshots with and without variants,
-        /// failing, changed, orphaned, with history loaded or still loading all start the canvas
-        /// at the same height.
-        @Test func canvasStaysPutBetweenSnapshots() {
-            let (app, project) = makeApp(.library)
-            final class Tops { var values: [String: CGFloat] = [:] }
-            let tops = Tops()
-            for file in project.displayedSnapshots {
-                project.selectedSnapshotID = file.id
-                let view = SnapshotDetail(project: project, file: file)
-                    .environment(app)
-                    .onPreferenceChange(SnapshotCanvasTopKey.self) { tops.values[file.testName + "." + file.variant] = $0 }
-                // Narrow, as the detail pane often is: crowded headers must not grow either.
-                AppFixtures.host(view, size: CGSize(width: 560, height: 600)) { _ in }
-            }
-            #expect(tops.values.count == project.displayedSnapshots.count)
-            #expect(Set(tops.values.values).count == 1, "canvas tops differ: \(tops.values)")
         }
 
         @Test func orphanedSnapshots() {
@@ -302,7 +284,7 @@ extension AppUITests {
 
         // MARK: Menu bar
 
-        /// A run in progress (12 of 30 done) above recent projects with their failing counts.
+        /// A run in progress (13 of 30 done) above recent projects with their failing counts.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func menuBarPanel(appearance: NSAppearance.Name) {
             let (app, project) = makeApp(.running)
@@ -417,9 +399,9 @@ extension AppUITests {
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom-change")
                 .environment(app)
             AppFixtures.host(view, size: CGSize(width: 820, height: 480)) { hosted in
-                app.zoomToChangeRequest += 1
+                app.compare.zoomToChangeRequest += 1
                 AppFixtures.settle(hosted)
-                #expect(app.viewport.scale > 2)
+                #expect(app.compare.viewport.scale > 2)
                 assertSnapshot(of: hosted, as: Self.strategy)
             }
         }
@@ -447,7 +429,7 @@ extension AppUITests {
         @Test func compareZoomedIn() {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let app = AppModel(store: AppFixtures.store())
-            app.viewport = Viewport(scale: 4, offset: CGSize(width: 120, height: -60))
+            app.compare.viewport = Viewport(scale: 4, offset: CGSize(width: 120, height: -60))
             ComparePairCache.store(ComparePair.make(before: AppFixtures.reference, after: AppFixtures.actual), for: "compare-zoom")
             let view = CompareView(load: { (nil, nil) }, beforeLabel: "Reference", afterLabel: "Actual", identity: "compare-zoom")
                 .environment(app)

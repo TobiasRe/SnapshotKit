@@ -201,7 +201,9 @@ with the `perceptualPrecision`, `precision` or both that would pass. See
 ## Development
 
 ```bash
-swift test                              # core unit tests + the app's own snapshot tests
+swift test                              # everything: core, CLI, app model, layout and the app's own snapshot
+                                        #   tests (those need a Retina display and the macOS they were recorded on)
+swift test --skip AppSnapshotTests      # all but the pixel comparisons, as CI runs them
 scripts/e2e.sh [--keep]                 # end to end against a real simulator (sample package, ~10 min;
                                         #   E2E_SIMULATOR="<name>" picks the simulator)
 scripts/capture-ui.sh <repo> [out-dir]  # headless full-window screenshots of every view

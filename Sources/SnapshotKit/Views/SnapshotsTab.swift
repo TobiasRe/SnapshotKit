@@ -147,7 +147,10 @@ struct SnapshotsTab: View {
                         .help("Their tests no longer exist. Committed files stay recoverable through git, all of them from the Trash.")
                 } else if !recordable.isEmpty {
                     Button(shownTitle(recordable)) {
-                        if testCount(recordable) > Self.confirmAbove { confirmRecordShown = true } else { project.reRecord(recordable, granularity: .tests) }
+                        // Every snapshot asks first, as Re-record All Snapshot Tests… does everywhere else.
+                        if recordable.count == project.recordableSnapshots.count { project.confirmReRecordAll = true }
+                        else if testCount(recordable) > Self.confirmAbove { confirmRecordShown = true }
+                        else { project.reRecord(recordable, granularity: .tests) }
                     }
                     .quietControl()
                     .disabled(project.isRunning || project.environment == nil)
@@ -189,11 +192,10 @@ struct SnapshotsTab: View {
 
     private func testCount(_ files: [SnapshotFile]) -> Int { ProjectModel.testCount(files) }
 
-    /// "…" only when a confirmation follows (more than `confirmAbove` tests); a few run at once.
+    /// "…" when a confirmation follows: always for all of them, else above `confirmAbove` tests.
     private func shownTitle(_ files: [SnapshotFile]) -> String {
-        let all = files.count == project.recordableSnapshots.count
-        let ellipsis = testCount(files) > Self.confirmAbove ? "…" : ""
-        return (all ? "Re-record All" : "Re-record \(testCount(files)) Shown") + ellipsis
+        if files.count == project.recordableSnapshots.count { return "Re-record All…" }
+        return "Re-record \(testCount(files)) Shown" + (testCount(files) > Self.confirmAbove ? "…" : "")
     }
 
     @ViewBuilder
@@ -228,8 +230,8 @@ struct SnapshotsTab: View {
             }
             .onKeyPress(.space) {
                 // While comparing in Toggle mode Space flips the images; otherwise it's Quick Look.
-                if project.comparison != nil, compareMode == CompareMode.toggle.rawValue {
-                    app.passToCompare(.flip)
+                if project.isComparingSnapshot, compareMode == CompareMode.toggle.rawValue {
+                    app.compare.pass(.flip)
                     return .handled
                 }
                 guard let file = project.selectedSnapshot else { return .ignored }
@@ -237,8 +239,8 @@ struct SnapshotsTab: View {
                 return .handled
             }
             .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
-                guard project.comparison != nil, compareMode == CompareMode.slider.rawValue else { return .ignored }
-                app.passToCompare(press.key == .leftArrow ? .left : .right)
+                guard project.isComparingSnapshot, compareMode == CompareMode.slider.rawValue else { return .ignored }
+                app.compare.pass(press.key == .leftArrow ? .left : .right)
                 return .handled
             }
             .quickLookPreview($quickLookURL)
@@ -657,6 +659,8 @@ struct SnapshotDetail: View {
 /// A single image with the compare view's zoom, pan and pixel readout.
 struct SnapshotViewer: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.compareState) private var windowCompare
+    private var compare: CompareState { windowCompare ?? app.compare }
     var load: @Sendable () -> Data?
     var identity: String
     var fileSize: Int
@@ -679,8 +683,8 @@ struct SnapshotViewer: View {
         ZStack(alignment: .bottom) {
             Group {
                 if nsImage != nil {
-                    ZoomableImage(image: nsImage, pixelSize: size, viewport: app.viewport)
-                        .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, size: size) }))
+                    ZoomableImage(image: nsImage, pixelSize: size, viewport: compare.viewport)
+                        .overlay(ZoomPanSurface(viewport: Bindable(compare).viewport, onHover: { hover($0, size: size) }, onKey: surfaceKey))
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -726,6 +730,18 @@ struct SnapshotViewer: View {
         }
     }
 
+    /// Zoomed in, the arrows look around; at fit, ↑ ↓ step through the list beside it.
+    private func surfaceKey(_ key: KeyEquivalent) -> Bool {
+        var viewport = compare.viewport
+        if viewport.pan(arrow: key) {
+            withAnimation(DS.motion) { compare.viewport = viewport }
+            return true
+        }
+        guard key == .upArrow || key == .downArrow, let project = app.current else { return false }
+        project.selectAdjacent(key == .upArrow ? -1 : 1)
+        return true
+    }
+
     private func bar(size: CGSize) -> some View {
         GlassGroup {
             HStack(spacing: DS.Space.m) {
@@ -749,7 +765,7 @@ struct SnapshotViewer: View {
 
     private func hover(_ location: (point: CGPoint, canvas: CGSize)?, size: CGSize) {
         guard let location, size.width > 0,
-              let p = app.viewport.pixel(at: location.point, imageSize: size, canvas: location.canvas) else {
+              let p = compare.viewport.pixel(at: location.point, imageSize: size, canvas: location.canvas) else {
             if probe != nil { probe = nil }
             return
         }
@@ -797,6 +813,10 @@ struct SnapshotGrid: View {
     /// Tiles per row, for ↑ and ↓.
     @State private var perRow = 1
     @FocusState private var focused: Bool
+    @Environment(\.controlActiveState) private var controlState
+    /// The tile just clicked: already where the pointer is, so it isn't scrolled to. (Scrolling it
+    /// put another tile under the second click of a double-click, which then opened that one.)
+    @State private var clicked: String?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -841,8 +861,9 @@ struct SnapshotGrid: View {
                           let item = NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) else { return [] }
                     return [item]
                 }
-                .onChange(of: project.selectedSnapshotID) { _, id in
-                    guard let id else { return }
+                // Also when the grid appears with a selection (switching from the list).
+                .onChange(of: project.selectedSnapshotID, initial: true) { _, id in
+                    guard let id, id != clicked else { return }
                     // Centered: scrolled just into view, a tile moved up sat under the pinned header.
                     withAnimation(DS.motion) { proxy.scrollTo(id, anchor: .center) }
                 }
@@ -925,12 +946,14 @@ struct SnapshotGrid: View {
         .frame(width: Self.tile.width, alignment: .leading)
         // Selected like a list row: a quiet fill behind the whole tile, not an accent frame.
         .padding(DS.Space.s)
-        .selectableTile(selected, emphasized: focused)
+        // The accent only while the grid takes keys in the key window, as a list's selection.
+        .selectableTile(selected, emphasized: focused && controlState == .key)
         .contentShape(Rectangle())
         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
         // One gesture for both clicks: a double-tap gesture beside it made every single click wait
         // out the double-click interval before it selected.
         .onTapGesture {
+            clicked = file.id
             project.selectedSnapshotID = file.id
             focused = true
             if NSApp.currentEvent?.clickCount == 2 { open(file) }

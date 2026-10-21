@@ -70,6 +70,8 @@ struct FailuresTab: View {
                         Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
                     }
                 }
+                // A run ending would replace what was imported meanwhile.
+                .disabled(project.isRunning)
             }
             FilterBar {
                 // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
@@ -125,7 +127,7 @@ struct FailuresTab: View {
         .onKeyPress(.space) {
             guard let item = project.selectedFailure else { return .ignored }
             if compareMode == CompareMode.toggle.rawValue {
-                app.passToCompare(.flip)
+                app.compare.pass(.flip)
                 return .handled
             }
             guard let url = shownImage(of: item)?.failure else { return .ignored }
@@ -134,7 +136,7 @@ struct FailuresTab: View {
         }
         .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
             guard compareMode == CompareMode.slider.rawValue, project.selectedFailure != nil else { return .ignored }
-            app.passToCompare(press.key == .leftArrow ? .left : .right)
+            app.compare.pass(press.key == .leftArrow ? .left : .right)
             return .handled
         }
         .quickLookPreview($quickLookURL)

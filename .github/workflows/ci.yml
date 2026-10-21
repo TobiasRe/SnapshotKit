@@ -37,7 +37,7 @@ jobs:
         run: swift test --filter SnapshotKitCoreTests
       # Every app test but the pixel comparisons. AppSnapshotTests run locally: their references are rendered
       # on the recording machine's macOS (27) and Retina display, and CI's macOS 26 draws controls differently.
-      # AccessibilityTests skip themselves here: the runner's test process isn't a trusted AX client.
+      # AccessibilityTests run here too (the runner is a trusted AX client); they skip themselves where not.
       - name: App tests
         run: swift test --filter SnapshotKitAppTests --skip AppSnapshotTests
       # SwiftUI and AppKit report problems such as "Publishing changes from within view updates"

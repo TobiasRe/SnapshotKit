@@ -87,13 +87,22 @@ struct CompareWindow: View {
 @MainActor
 enum CompareWindows {
     private static var windows: [CompareRequest: NSWindow] = [:]
+    /// Each window's own zoom and keys (see `CompareState`).
+    private static var states: [ObjectIdentifier: CompareState] = [:]
+
+    /// The compare state of `window`, if it is a compare window.
+    static func state(of window: NSWindow?) -> CompareState? {
+        window.flatMap { states[ObjectIdentifier($0)] }
+    }
 
     static func show(_ request: CompareRequest) {
         // Closed windows stay alive (`isReleasedWhenClosed` is off) until they're let go of here.
         windows = windows.filter { $0.value.isVisible || $0.value.isMiniaturized }
+        let open = Set(windows.values.map(ObjectIdentifier.init))
+        states = states.filter { open.contains($0.key) }
         if let window = windows[request] {
             // Built again: the test may have run since, and the files have new images.
-            window.contentView = content(request)
+            window.contentView = content(request, in: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -111,7 +120,7 @@ enum CompareWindows {
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 640, height: 420)
-        window.contentView = content(request)
+        window.contentView = content(request, in: window)
         window.center()
         window.setFrameAutosaveName("CompareWindow")
         windows[request] = window
@@ -119,8 +128,10 @@ enum CompareWindows {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private static func content(_ request: CompareRequest) -> NSView {
+    private static func content(_ request: CompareRequest, in window: NSWindow) -> NSView {
+        let state = CompareState()   // fit, for the pair as it is now
+        states[ObjectIdentifier(window)] = state
         let view = CompareWindow(request: request, location: request.location, leadingInset: 72)
-        return NSHostingView(rootView: view.environment(AppModel.shared).defaultAppStorage(.app))
+        return NSHostingView(rootView: view.environment(AppModel.shared).environment(\.compareState, state).defaultAppStorage(.app))
     }
 }

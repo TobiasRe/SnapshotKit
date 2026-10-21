@@ -80,6 +80,8 @@ enum ImageDecoding {
 
 struct CompareView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.compareState) private var windowCompare
+    private var compare: CompareState { windowCompare ?? app.compare }
     /// Produces the (before, after) image bytes; called off the main thread.
     var load: @Sendable () -> (Data?, Data?)
     var beforeLabel: String
@@ -143,8 +145,8 @@ struct CompareView: View {
             showingAfter.toggle()
             return .handled
         }
-        .onChange(of: app.zoomToChangeRequest) { zoomToChange() }
-        .onChange(of: app.compareKey) { _, request in
+        .onChange(of: compare.zoomToChangeRequest) { zoomToChange() }
+        .onChange(of: compare.key) { _, request in
             switch request.key {
             case .flip: if mode == .toggle { showingAfter.toggle() }
             case .left: _ = nudgeSplit(-1)
@@ -246,7 +248,7 @@ struct CompareView: View {
 
     private func hover(_ location: (point: CGPoint, canvas: CGSize)?, pixelSize: CGSize) {
         guard let location, pixelSize.width > 0,
-              let p = app.viewport.pixel(at: location.point, imageSize: pixelSize, canvas: location.canvas) else {
+              let p = compare.viewport.pixel(at: location.point, imageSize: pixelSize, canvas: location.canvas) else {
             if probe != nil { probe = nil }
             return
         }
@@ -260,16 +262,16 @@ struct CompareView: View {
         // Side by side shows each image in half the width.
         let pane = mode == .sideBySide ? CGSize(width: (canvasSize.width - 1) / 2, height: canvasSize.height) : canvasSize
         withAnimation(DS.motion) {
-            app.viewport = .focusing(on: bounds, imageSize: pair.pixelSize, canvas: pane)
+            compare.viewport = .focusing(on: bounds, imageSize: pair.pixelSize, canvas: pane)
         }
     }
 
     /// In Slider mode ← → move the divider; zoomed in, the arrows look around the image.
     private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
         if mode == .slider, key == .leftArrow || key == .rightArrow { return nudgeSplit(key == .leftArrow ? -1 : 1) }
-        var viewport = app.viewport
+        var viewport = compare.viewport
         guard viewport.pan(arrow: key) else { return .ignored }
-        withAnimation(DS.motion) { app.viewport = viewport }
+        withAnimation(DS.motion) { compare.viewport = viewport }
         return .handled
     }
 
@@ -280,7 +282,12 @@ struct CompareView: View {
             showingAfter.toggle()
             return true
         }
-        return arrow(key) == .handled
+        if arrow(key) == .handled { return true }
+        // Not zoomed in: ↑ ↓ step through the list beside it, as they would with the list focused.
+        // (Not in a compare window, which has no list.)
+        guard windowCompare == nil, key == .upArrow || key == .downArrow, let project = app.current else { return false }
+        project.selectAdjacent(key == .upArrow ? -1 : 1)
+        return true
     }
 
     private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
@@ -305,10 +312,10 @@ struct CompareView: View {
             GeometryReader { geo in
                 let x = geo.size.width * split
                 ZStack(alignment: .topLeading) {
-                    ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: app.viewport)
-                    ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: app.viewport)
+                    ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: compare.viewport)
+                    ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: compare.viewport)
                         .mask(alignment: .leading) { Rectangle().frame(width: x) }
-                    ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: pair.pixelSize) }, onKey: surfaceKey)
+                    ZoomPanSurface(viewport: Bindable(compare).viewport, onHover: { hover($0, pixelSize: pair.pixelSize) }, onKey: surfaceKey)
                     Rectangle()
                         .fill(Color.white.opacity(0.9))
                         .frame(width: 1)
@@ -368,7 +375,7 @@ struct CompareView: View {
     }
 
     private func pane(_ image: NSImage?, label: String, missing: String, size: CGSize) -> some View {
-        ZoomableImage(image: image, pixelSize: size, viewport: app.viewport)
+        ZoomableImage(image: image, pixelSize: size, viewport: compare.viewport)
             // A canvas says nothing to VoiceOver on its own; the caption becomes its name.
             .accessibilityElement()
             .accessibilityLabel("\(label) image")
@@ -380,7 +387,7 @@ struct CompareView: View {
                     ContentUnavailableView("No Image", systemImage: "photo", description: Text(missing))
                 }
             }
-            .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }, onKey: surfaceKey))
+            .overlay(ZoomPanSurface(viewport: Bindable(compare).viewport, onHover: { hover($0, pixelSize: size) }, onKey: surfaceKey))
             .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m).accessibilityHidden(image != nil) }
     }
 
@@ -459,25 +466,27 @@ struct PixelSwatch: View {
 /// a pill. The level is a menu of fixed steps.
 struct ZoomControls: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.compareState) private var windowCompare
+    private var compare: CompareState { windowCompare ?? app.compare }
 
     private var label: String {
-        let s = app.viewport.scale
+        let s = compare.viewport.scale
         if abs(s - 1) < 0.01 { return "Fit" }
         return s >= 10 ? String(format: "%.0f×", s) : String(format: "%.1f×", s)
     }
 
     var body: some View {
         HStack(spacing: DS.Space.xs) {
-            Button { withAnimation(DS.motion) { app.viewport.zoomOut() } } label: { Image(systemName: "minus") }
+            Button { withAnimation(DS.motion) { compare.viewport.zoomOut() } } label: { Image(systemName: "minus") }
                 .help("Zoom out (⌘−)")
                 .accessibilityLabel("Zoom Out")
             Menu {
-                Button("Fit") { withAnimation(DS.motion) { app.viewport.reset() } }
+                Button("Fit") { withAnimation(DS.motion) { compare.viewport.reset() } }
                 Divider()
                 ForEach([2, 4, 8, 16], id: \.self) { factor in
                     Button("\(factor)×") {
                         // Keep the area being looked at centered while changing level.
-                        withAnimation(DS.motion) { app.viewport.zoom(by: CGFloat(factor) / app.viewport.scale) }
+                        withAnimation(DS.motion) { compare.viewport.zoom(by: CGFloat(factor) / compare.viewport.scale) }
                     }
                 }
             } label: {
@@ -489,7 +498,7 @@ struct ZoomControls: View {
             .help("Zoom relative to fit. ⌘0 or double-click fits.")
             .accessibilityLabel("Zoom Level")
             .accessibilityValue(label)
-            Button { withAnimation(DS.motion) { app.viewport.zoomIn() } } label: { Image(systemName: "plus") }
+            Button { withAnimation(DS.motion) { compare.viewport.zoomIn() } } label: { Image(systemName: "plus") }
                 .help("Zoom in (⌘=)")
                 .accessibilityLabel("Zoom In")
         }

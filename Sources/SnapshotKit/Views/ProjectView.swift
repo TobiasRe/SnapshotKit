@@ -487,6 +487,8 @@ struct RunStatusHeader: View {
             Image(systemName: "doc.badge.gearshape").foregroundStyle(DS.Status.failed)
         } else if project.environmentError != nil {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(DS.Status.flaky)
+        } else if project.lastMessageIsCancellation {
+            Image(systemName: "stop.circle").foregroundStyle(.secondary)
         } else if project.lastMessageIsError || (project.lastMessage == nil && project.failed > 0) {
             // The same marks as a test's row: failed and passed are circles everywhere.
             Image(systemName: "xmark.circle.fill").foregroundStyle(DS.Status.failed)

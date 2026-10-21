@@ -168,6 +168,15 @@ final class ProjectModel {
     }
     /// What is shown next to the selected snapshot: an earlier version or another variant.
     var comparison: SnapshotComparison?
+    /// Whether the detail shows two images: a version, or another variant than the one selected
+    /// (choosing the compared variant itself shows it alone).
+    var isComparingSnapshot: Bool {
+        switch comparison {
+        case .version: true
+        case .variant(let other): other.id != selectedSnapshotID
+        case nil: false
+        }
+    }
 
     // Running
     private(set) var operation: RunOperation?
@@ -1062,6 +1071,11 @@ final class ProjectModel {
     /// notice says how it went.
     @discardableResult
     func importResultBundle(_ url: URL) -> Task<Void, Never> {
+        // The run would replace it as it ends; its notice is hidden while the run goes on, too.
+        guard !isRunning else {
+            notify("Import the result bundle once the run has finished.", isError: true)
+            return Task {}
+        }
         notify("Reading \(url.lastPathComponent)…")
         let repo = project.url, start = tab
         let dir = scratchDirectory.appendingPathComponent("imported/\(UUID().uuidString)", isDirectory: true)
@@ -1122,8 +1136,18 @@ final class ProjectModel {
         return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
+    /// The notice after a cancel, which the Run tab marks as neither passed nor failed.
+    static let cancelled = "Cancelled."
+    var lastMessageIsCancellation: Bool { lastMessage == Self.cancelled }
+
     private func finish(message: String?, isError: Bool = false, action: NoticeAction? = nil) {
         lineBuffer.flushNow()
+        if message == Self.cancelled {
+            // The counts went to zero when the operation began; show the last run's again.
+            passed = lastResult?.passed ?? 0
+            failed = lastResult?.failed ?? 0
+            skipped = lastResult?.skipped ?? 0
+        }
         lastDuration = startedAt.map { Date().timeIntervalSince($0) }
         startedAt = nil
         operation = nil
@@ -1140,7 +1164,7 @@ final class ProjectModel {
     /// Ends an operation that threw. A cancel before xcodebuild started throws `CancellationError`,
     /// which is no failure.
     private func finish(throwing error: Error) {
-        if error is CancellationError { finish(message: "Cancelled.") } else { finish(message: error.localizedDescription, isError: true) }
+        if error is CancellationError { finish(message: Self.cancelled) } else { finish(message: error.localizedDescription, isError: true) }
     }
 
     /// Shows `message` in the notice (nil hides it), with `action` as its next step. Always sets
@@ -1243,12 +1267,16 @@ final class ProjectModel {
     }
 
     private func completeRun(_ result: TestRunResult, images: [SnapshotFailureImages], kind: RunKind, attachmentsDirectory: URL? = nil) {
-        lastResult = result
-        passed = result.passed
-        failed = result.failed
-        skipped = result.skipped
-        RunHistory(repository: project.url).append(RunRecord.make(kind: kind, host: result.host, repository: project.url, result: result))
-        setHistory(RunHistory(repository: project.url).load())
+        // A cancelled run's few results would stand in the Run tab beside the last run's failures
+        // everywhere else; it keeps showing the last run (`finish` puts its counts back).
+        if !result.cancelled {
+            lastResult = result
+            passed = result.passed
+            failed = result.failed
+            skipped = result.skipped
+            RunHistory(repository: project.url).append(RunRecord.make(kind: kind, host: result.host, repository: project.url, result: result))
+            setHistory(RunHistory(repository: project.url).load())
+        }
         // A cancelled run has no results to speak of, nor one in which no test ran (the build failed):
         // the last run's failures stay.
         if kind == .run, !result.cancelled, result.nothingTested == nil {
@@ -1261,7 +1289,7 @@ final class ProjectModel {
                                               resultBundle: result.host == "local" ? result.resultBundle : nil))
         }
         let message: String
-        if result.cancelled { message = "Cancelled." }
+        if result.cancelled { message = Self.cancelled }
         else if !result.buildErrors.isEmpty && result.summary == nil { message = "Build failed: \(result.buildErrors.first ?? "")" }
         else if result.failed > 0 { message = Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) }
         else if result.nothingTested != nil { message = "No test ran." }
@@ -1385,9 +1413,11 @@ final class ProjectModel {
                     suites: targets, onlyTesting: onlyTesting, verify: verify,
                     onStage: { stage in Task { @MainActor in self.stageLabel = stage.label } },
                     onLine: onLine, onEvent: onEvent)
-                RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: outcome.recordRun))
                 let record = outcome.recordRun
-                var message = record.cancelled ? "Cancelled." : record.nothingTested.map { "Nothing was recorded: \($0)." } ?? "Re-recorded \(what)."
+                if !record.cancelled {
+                    RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: "local", repository: project.url, result: record))
+                }
+                var message = record.cancelled ? Self.cancelled : record.nothingTested.map { "Nothing was recorded: \($0)." } ?? "Re-recorded \(what)."
                 var isError = record.nothingTested != nil
                 if !outcome.restore.conflicts.isEmpty {
                     message += " WARNING: could not restore " + outcome.restore.conflicts.map { "\($0.path) (original at \($0.backup))" }.joined(separator: ", ")
@@ -1433,6 +1463,15 @@ final class ProjectModel {
     }
 
     /// Reruns the failing suites — or just `tests` (`Bundle/Suite/test()`) — N times.
+    /// The last run's failing tests, as `-only-testing` names them: a flakiness check repeats just
+    /// those, not the passing tests beside them. (A suite whose tests aren't known stands for them.)
+    var failingTestIdentifiers: [String] {
+        lastFailingSuites.flatMap { suite in
+            let failed = suite.tests.filter { $0.outcome == .failed }
+            return failed.isEmpty ? suite.onlyTestingIdentifiers : failed.map { suite.onlyTestingIdentifier(of: $0) }
+        }
+    }
+
     func checkFlakiness(remote: Bool = false, tests: [String]? = nil) {
         let targets = lastFailingSuites
         guard !targets.isEmpty || tests != nil else {
@@ -1441,7 +1480,7 @@ final class ProjectModel {
         }
         let iterations = store.settings.flakeIterations
         if remote {
-            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: tests ?? targets.flatMap(\.onlyTestingIdentifiers))
+            runRemote(.remoteFlakeCheck, mode: .flakeCheck(iterations: iterations), onlyTesting: tests ?? failingTestIdentifiers)
             return
         }
         guard begin(.flakeCheck), let (ctx, env) = requireEnvironment() else { return }
@@ -1450,7 +1489,7 @@ final class ProjectModel {
         let onLine = onLine, onEvent = onEvent
         Task {
             do {
-                let result = try await runner.run(onlyTesting: tests ?? targets.flatMap(\.onlyTestingIdentifiers),
+                let result = try await runner.run(onlyTesting: tests ?? failingTestIdentifiers,
                                                   additionalArguments: Flakiness.arguments(iterations: iterations),
                                                   onLine: onLine, onEvent: onEvent)
                 applyFlakeResult(result, iterations: iterations)
@@ -1465,7 +1504,7 @@ final class ProjectModel {
         setHistory(RunHistory(repository: project.url).load())
         // A cancelled check has repeated some tests only partly (its bundle has what ran): no verdicts.
         guard !result.cancelled else {
-            finish(message: "Cancelled.")
+            finish(message: Self.cancelled)
             return
         }
         // Tests that don't build were not checked, nor were they when no test ran: no verdicts either.
@@ -1543,7 +1582,7 @@ final class ProjectModel {
                     if let why = out.run.nothingTested {
                         finish(message: "Nothing was recorded: \(why).", isError: true)
                     } else if out.run.cancelled {
-                        finish(message: "Cancelled.")
+                        finish(message: Self.cancelled)
                     } else {
                         let start = operationTab, count = out.downloadedSnapshots.count
                         var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false

@@ -92,7 +92,6 @@ extension PaletteCommand {
             .init(title: "Show Changes", symbol: "arrow.triangle.branch", shortcut: "⌥⌘2") { project.tab = .changes },
             .init(title: "Show Failures", symbol: "xmark.circle", shortcut: "⌥⌘3") { project.tab = .failures },
             .init(title: "Show Run", symbol: "terminal", shortcut: "⌥⌘4") { project.tab = .run },
-            .init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() },
             .init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() },
         ]
         if project.displayedChanges.contains(where: { !project.viewedChanges.contains($0.id) }) {
@@ -101,6 +100,9 @@ extension PaletteCommand {
                 project.tab = .changes
                 project.setAllViewed(true)
             })
+        }
+        if idle {
+            commands.append(.init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() })
         }
         // The sidebar's context menu, for the keyboard.
         let current = project.project

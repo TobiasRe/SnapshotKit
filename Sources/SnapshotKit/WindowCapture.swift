@@ -69,7 +69,6 @@ enum WindowCapture {
         let deadline = Date().addingTimeInterval(o.timeout)
         func log(_ s: String) { FileHandle.standardError.write(Data("capture: \(s)\n".utf8)) }
 
-        DS.solidSurfaces = true
         if let appearance = o.appearance {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
@@ -122,8 +121,8 @@ enum WindowCapture {
                 }
             }
         }
-        if let zoom = o.zoom { model.viewport = Viewport(scale: zoom, offset: o.pan ?? .zero) }
-        else if let pan = o.pan { model.viewport.pan(by: pan) }
+        if let zoom = o.zoom { model.compare.viewport = Viewport(scale: zoom, offset: o.pan ?? .zero) }
+        else if let pan = o.pan { model.compare.viewport.pan(by: pan) }
         if let query = o.quickSwitcher {
             if !query.isEmpty { QuickSwitcherQuery.preset = query }
             model.showQuickSwitcher = true
@@ -135,7 +134,7 @@ enum WindowCapture {
         _ = await waitFor(deadline: Date().addingTimeInterval(30)) { ImageDecoding.pending == 0 ? true : nil }
         try? await Task.sleep(for: .seconds(1))
         if o.zoomToChange {
-            model.zoomToChangeRequest += 1
+            model.compare.zoomToChangeRequest += 1
             try? await Task.sleep(for: .seconds(1))
         }
         // A view that asks for more height than the window has (text fixed to its ideal height in an

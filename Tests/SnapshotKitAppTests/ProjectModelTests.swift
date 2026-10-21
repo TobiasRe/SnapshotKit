@@ -755,8 +755,7 @@ extension AppUITests {
             #expect(model.currentBranch == "feature")
             try Shell.output(["git", "checkout", "-q", "-b", "release"], in: repo)
             model.refreshChanges()
-            for _ in 0..<200 where model.currentBranch != "release" { try await Task.sleep(for: .milliseconds(20)) }
-            #expect(model.currentBranch == "release")
+            try await waitUntil(model.currentBranch == "release", "the refresh didn't read the new branch")
             #expect(model.branches.contains("release"))
         }
 
@@ -764,10 +763,10 @@ extension AppUITests {
         @Test func aDeletedRepositorySaysSo() async throws {
             let (repo, _) = try makeRepo()
             let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
-            for _ in 0..<200 where model.context == nil { try await Task.sleep(for: .milliseconds(20)) }
+            try await waitUntil(model.context != nil, "the repository never opened")
             try FileManager.default.removeItem(at: repo)
             model.reload()
-            for _ in 0..<200 where model.configError == nil { try await Task.sleep(for: .milliseconds(20)) }
+            try await waitUntil(model.configError != nil, "the reload didn't notice the folder is gone")
             #expect(model.context == nil)
             #expect(model.configError == "There is no folder at \(repo.path.abbreviatingWithTildeInPath) any more. Was it moved or deleted?")
         }
@@ -858,9 +857,9 @@ extension AppUITests {
 
         /// A project added while the counts are being read gets its count too.
         @Test func failingCountsCoverAProjectAddedWhileCounting() async throws {
-            let solid = DS.solidSurfaces
-            DS.solidSurfaces = false        // snapshot tests leave the counts out
-            defer { DS.solidSurfaces = solid }
+            let reads = AppModel.readsFailingCounts
+            AppModel.readsFailingCounts = true        // snapshot tests leave the counts out
+            defer { AppModel.readsFailingCounts = reads }
             let (repo, _) = try makeRepo()
             saveLastRun(in: repo, suites: [], failed: 2)
             let app = AppModel(store: AppFixtures.store())     // starts counting the projects it knows
@@ -962,12 +961,19 @@ extension AppUITests {
             let saved = try savedLastRun(in: repo)
             let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
             let failures = model.failures.map(\.id)
+            let last = try #require(model.lastResult)
+            let runs = RunHistory(repository: repo).load().count
             model.runTests()
             try await waitUntilStarted(model)
             model.cancel()
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Cancelled.")
+            #expect(model.lastMessageIsCancellation)                 // neither passed nor failed
             #expect(model.failures.map(\.id) == failures)
+            // The Run tab shows the last run as before, not the cancelled run's few results.
+            #expect(model.lastResult?.resultBundle == last.resultBundle)
+            #expect((model.passed, model.failed, model.skipped) == (last.passed, last.failed, last.skipped))
+            #expect(RunHistory(repository: repo).load().count == runs)
             #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier, AppFixtures.profileSuite.identifier])
             #expect(try savedLastRun(in: repo) == saved)
         }
@@ -1161,8 +1167,7 @@ extension AppUITests {
             #expect(app.projectModel(path: model.project.path) === model)
             model.cancel()
             try await waitUntilFinished(model)
-            for _ in 0..<100 where app.projectModel(path: model.project.path) != nil { try await Task.sleep(for: .milliseconds(20)) }
-            #expect(app.projectModel(path: model.project.path) == nil)
+            try await waitUntil(app.projectModel(path: model.project.path) == nil, "the project was kept after its run")
             #expect(app.runningPaths.isEmpty)
         }
 
@@ -1717,7 +1722,9 @@ extension AppUITests {
             let runs = try String(contentsOf: arguments, encoding: .utf8).split(separator: "\n")
             try #require(runs.count == 2)
             #expect(!runs[0].contains("-only-testing:"))                  // the run: every test
-            #expect(runs[1].contains("-only-testing:AppSnapshotTests/CheckoutViewTests"))
+            // Just the failing test, not the passing ones in its suite.
+            #expect(runs[1].split(separator: " ").filter { $0.hasPrefix("-only-testing:") }
+                    == ["-only-testing:AppSnapshotTests/CheckoutViewTests/payButton()"])
             #expect(runs[1].contains("-test-iterations 5"))
         }
 
@@ -1725,7 +1732,11 @@ extension AppUITests {
         /// neither brings back a snapshot or changes the failures.
         @Test func aRemoteReRecordThatRecordsNothingSaysSo() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            // Each writes a snapshot on the remote Mac first, so "brings nothing back" can fail.
+            let snapshot = "Tests/AppTests/__Snapshots__/CheckoutViewTests/payButton.1.png"
+            let write = #"mkdir -p "$(dirname \#(snapshot))" && printf new > \#(snapshot)"#
             let broken = try FakeRemoteMac(xcodebuild: """
+                \(write)
                 echo "$PWD/Tests/AppTests/CheckoutViewTests.swift:7:9: error: cannot find 'card' in scope"
                 exit 65
                 """)
@@ -1737,7 +1748,7 @@ extension AppUITests {
             #expect(model.lastMessageIsError)
             #expect(model.failures.map(\.id) == failures)
 
-            let slow = try FakeRemoteMac(xcodebuild: Self.longRun)
+            let slow = try FakeRemoteMac(xcodebuild: write + "\n" + Self.longRun)
             let cancelled = remoteModel(repo, on: slow)
             cancelled.reRecordOnRemote()
             try await waitUntilStarted(cancelled)

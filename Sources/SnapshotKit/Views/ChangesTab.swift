@@ -75,7 +75,8 @@ struct ChangesTab: View {
             }
             .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .confirmationDialog("Discard \(project.invisibleUncommitted.count) re-recorded snapshots with no visible change?",
+        .confirmationDialog(project.invisibleUncommitted.count == 1 ? "Discard the re-recorded snapshot with no visible change?"
+                            : "Discard \(project.invisibleUncommitted.count) re-recorded snapshots with no visible change?",
                             isPresented: $confirmDiscardInvisible) {
             Button("Discard", role: .destructive) { project.discardInvisibleChanges() }
         } message: {
@@ -88,7 +89,9 @@ struct ChangesTab: View {
         ) { change in
             Button("Discard", role: .destructive) { project.discard(change) }
         } message: { change in
-            Text(change.kind == .new
+            // Untracked also when it was deleted on this branch and recorded again: there is no
+            // committed version to restore.
+            Text(change.kind == .new || change.isUntracked
                  ? "The new, untracked file is deleted."
                  : "The snapshot is restored to the committed version. Uncommitted edits to it are lost.")
         }
@@ -119,6 +122,7 @@ struct ChangesTab: View {
             Button("Show in Library") { project.showInLibrary(path: change.path) }
                 .disabled(!project.isInLibrary(change.path))
             Button("Open Test in Xcode") { project.openTestInXcode(change.file) }
+                .disabled(project.orphanIDs.contains(change.id))   // its test is gone
             Divider()
             Button("Open in Default App") { NSWorkspace.shared.open(project.fileURL(for: change)) }
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.fileURL(for: change)]) }
@@ -335,7 +339,7 @@ struct ChangesTab: View {
             .onKeyPress(.space) {
                 // In Toggle mode Space flips the images beside the list; otherwise it's Quick Look.
                 if compareMode == CompareMode.toggle.rawValue, project.selectedChange != nil {
-                    app.passToCompare(.flip)
+                    app.compare.pass(.flip)
                     return .handled
                 }
                 guard let change = project.selectedChange, change.kind != .deleted else { return .ignored }
@@ -344,7 +348,7 @@ struct ChangesTab: View {
             }
             .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
                 guard compareMode == CompareMode.slider.rawValue, project.selectedChange != nil else { return .ignored }
-                app.passToCompare(press.key == .leftArrow ? .left : .right)
+                app.compare.pass(press.key == .leftArrow ? .left : .right)
                 return .handled
             }
             .quickLookPreview($quickLookURL)

@@ -118,8 +118,11 @@ enum DS {
     }
 
     /// Off-screen renders (headless captures, snapshot tests) can't show Liquid Glass, which the
-    /// window server composites; they get an opaque stand-in so controls stay legible.
+    /// window server composites; they get an opaque stand-in so controls stay legible. A capture
+    /// decides it at launch, before any view exists: views already drawn with glass aren't drawn
+    /// again when it changes, and some header controls came out bare.
     nonisolated(unsafe) static var solidSurfaces = ProcessInfo.processInfo.environment["SNAPSHOTKIT_SOLID_SURFACES"] == "1"
+        || CaptureOptions.parse(CommandLine.arguments) != nil
 
     static var hasLiquidGlass: Bool {
         if #available(macOS 26.0, *) { true } else { false }

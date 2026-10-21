@@ -113,7 +113,7 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("o")
             Button("Import Result Bundle…") { model.importResultBundleFromPanel() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
-                .disabled(model.current == nil)
+                .disabled(model.current == nil || model.current?.isRunning == true)
             Divider()
             Button("Go to Project or Command…") { model.showQuickSwitcher.toggle() }
                 .keyboardShortcut("k")
@@ -186,13 +186,13 @@ struct SnapshotKitCommands: Commands {
             }
             .pickerStyle(.inline)
             Divider()
-            Button("Zoom In") { model.viewport.zoomIn() }
+            Button("Zoom In") { model.activeCompare.viewport.zoomIn() }
                 .keyboardShortcut("=")
-            Button("Zoom Out") { model.viewport.zoomOut() }
+            Button("Zoom Out") { model.activeCompare.viewport.zoomOut() }
                 .keyboardShortcut("-")
-            Button("Zoom to Fit") { model.viewport.reset() }
+            Button("Zoom to Fit") { model.activeCompare.viewport.reset() }
                 .keyboardShortcut("0")
-            Button("Zoom to Change") { model.zoomToChangeRequest += 1 }
+            Button("Zoom to Change") { model.activeCompare.zoomToChangeRequest += 1 }
                 .keyboardShortcut("0", modifiers: [.command, .shift])
             Divider()
         }
