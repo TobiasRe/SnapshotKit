@@ -267,8 +267,8 @@ import Testing
         #expect(ProjectStore(url: store.url).settings.lastProject == nil)
     }
 
-    /// A rescan replaces what was discovered, but a pinned or recent project stays listed even
-    /// when no scan folder holds it.
+    /// A rescan only adds to what was discovered: a project no scan folder holds stays listed,
+    /// pinned, recent or neither.
     @Test func rescanKeepsPinnedAndRecentProjects() throws {
         let store = makeStore()
         let root = testTemp("scan")
@@ -280,7 +280,7 @@ import Testing
         store.addScanRoot(root.path)
         #expect(store.rescan().isEmpty)
         let reloaded = ProjectStore(url: store.url).settings
-        #expect(reloaded.discovered == ["/repos/pinned", "/repos/recent"])
+        #expect(reloaded.discovered == ["/repos/pinned", "/repos/recent", "/repos/stale"])
         #expect(reloaded.scanRoots == [root.path])
         store.removeScanRoot(root.path)
         #expect(ProjectStore(url: store.url).settings.scanRoots.isEmpty)

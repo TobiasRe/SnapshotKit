@@ -40,6 +40,31 @@ import Testing
         #expect(!reloaded.isPinned(c))
     }
 
+    /// A project added by hand and opened before the last ten, and one an earlier scan found that
+    /// this one doesn't (its folder unreadable now, say), stay listed until removed.
+    @Test func aRescanKeepsEveryProjectItDoesNotFind() throws {
+        let store = makeStore()
+        let root = testTemp("scan")
+        let scanned = root.appendingPathComponent("app")
+        try FileManager.default.createDirectory(at: scanned.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        try Data().write(to: scanned.appendingPathComponent(SnapshotConfig.overrideFileName))
+        let added = Project(path: "/repos/added"), gone = Project(path: "/repos/found-before")
+        store.markOpened(added)
+        for i in 0..<ProjectStore.maxRecents { store.markOpened(Project(path: "/repos/opened-\(i)")) }
+        store.update { $0.discovered.append(gone.path) }
+        store.addScanRoot(root.path)
+
+        store.rescan()
+        let listed = store.allProjects.map(\.path)
+        #expect(listed.contains(Project(path: scanned.path).path))
+        #expect(listed.contains(added.path))
+        #expect(listed.contains(gone.path))
+
+        store.remove(added)
+        store.rescan()
+        #expect(!store.allProjects.map(\.path).contains(added.path))
+    }
+
     @Test func twoStoresOnOneFileKeepEachOthersChanges() {
         let app = makeStore()
         let cli = ProjectStore(url: app.url)

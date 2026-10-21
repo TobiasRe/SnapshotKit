@@ -173,7 +173,9 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
         update { s in s.scanRoots.removeAll { $0 == path } }
     }
 
-    /// Scans all roots and replaces the discovered list (pins and recents are kept).
+    /// Scans all roots and adds what they hold to the discovered list. Nothing leaves it but by
+    /// `remove`: not a project added by hand, nor one a scan found before and doesn't now (the folder
+    /// may be one macOS no longer lets SnapshotKit read).
     @discardableResult
     public func rescan() -> [Project] {
         rescanReports().flatMap(\.projects)
@@ -184,7 +186,7 @@ public final class ProjectStore: @unchecked Sendable { // `cached` is guarded by
     public func rescanReports() -> [ProjectScanner.Report] {
         let reports = settings.scanRoots.map { ProjectScanner.scanReport(root: URL(fileURLWithPath: $0)) }
         let found = reports.flatMap(\.projects)
-        update { s in s.discovered = Array(Set(found.map(\.path) + s.recents + s.pinned)).sorted() }
+        update { s in s.discovered = Array(Set(s.discovered + found.map(\.path) + s.recents + s.pinned)).sorted() }
         return reports
     }
 

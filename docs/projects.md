@@ -48,8 +48,8 @@ what makes a repository count), or that macOS denied access. If access was denie
 System Settings › Privacy & Security › Files and Folders (or Full Disk Access) and choose **Rescan Folders**.
 
 Scan folders are listed in **Settings › Scan Folders**, where you can add, remove and rescan them. Projects
-found by a scan stay listed until you remove them; a rescan replaces the discovered list but keeps pinned
-and recent projects.
+found by a scan stay listed until you remove them, as do projects you added yourself: a rescan only adds the
+projects it finds.
 
 ## The sidebar
 
