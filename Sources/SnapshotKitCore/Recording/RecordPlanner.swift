@@ -127,36 +127,14 @@ public enum RecordPlanner {
         return inside
     }
 
-    /// The suite's path for `-only-testing`: the type named like the file if there is one, else the
-    /// first test type in it; prefixed with the type an `extension` nests it in.
+    /// The suite's path for `-only-testing`, through the types and extensions it is nested in
+    /// (`["AllSnapshots", "CardTests"]`): the type named like the file if there is one (the outermost
+    /// of them), else the first test type in it, else the first type.
     static func suitePath(in source: String, preferring name: String) -> [String]? {
-        let declared = typeNames(in: source)
-        guard let suite = declared.first(where: { $0.name == name })
-            ?? declared.first(where: { $0.name.hasSuffix("Tests") || $0.name.hasSuffix("Test") })
-            ?? declared.first else { return nil }
-        return suite.parent.map { [$0, suite.name] } ?? [suite.name]
-    }
-
-    private static let typeDecl = try! NSRegularExpression(
-        pattern: #"^([ \t]*)(?:@[\w.]+(?:\([^\n]*\))?\s+)*(?:(?:public|internal|private|fileprivate|final|open|package|nonisolated)\s+)*(?:struct|class|actor|enum)\s+(`[^`]+`|\w+)"#
-    )
-    private static let extensionDecl = try! NSRegularExpression(pattern: #"^extension\s+(`[^`]+`|\w+)"#)
-
-    /// Types declared in a file, with the type of the enclosing `extension` for indented ones.
-    static func typeNames(in source: String) -> [(name: String, parent: String?)] {
-        var result: [(String, String?)] = []
-        var currentExtension: String?
-        for line in source.components(separatedBy: "\n") {
-            let ns = line as NSString, range = NSRange(location: 0, length: ns.length)
-            if let m = extensionDecl.firstMatch(in: line, range: range) {
-                currentExtension = ns.substring(with: m.range(at: 1))
-            } else if let m = typeDecl.firstMatch(in: line, range: range) {
-                let indented = m.range(at: 1).length > 0
-                result.append((ns.substring(with: m.range(at: 2)), indented ? currentExtension : nil))
-            } else if line.hasPrefix("}") {
-                currentExtension = nil
-            }
-        }
-        return result
+        let declared = RecordPatcher.typePaths(in: source)
+        func isTestType(_ path: [String]) -> Bool { path.last.map { $0.hasSuffix("Tests") || $0.hasSuffix("Test") } ?? false }
+        return declared.filter { $0.last == name }.min { $0.count < $1.count }
+            ?? declared.first(where: isTestType)
+            ?? declared.first
     }
 }

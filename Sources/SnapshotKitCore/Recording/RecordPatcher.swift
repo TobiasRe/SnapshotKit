@@ -58,6 +58,7 @@ public enum RecordPatcher {
     }
 
     struct Declaration {
+        var name: String
         /// Offset of the first modifier/keyword of the declaration line (after indentation).
         var lineStart: String.Index
         var keywordStart: String.Index
@@ -90,29 +91,50 @@ public enum RecordPatcher {
         }
     }
 
-    /// The types named `name` declared directly in `scope`, in order.
-    private static func declarations(named name: String, in source: String, scope: Range<String.Index>) -> [Declaration] {
-        let escaped = NSRegularExpression.escapedPattern(for: name)
+    /// The path of every type `findDeclaration` finds, in the order they are declared: the types at
+    /// the top of the file, in the body of one of them, or in an extension's
+    /// (`["AllSnapshots", "Rows", "RowTests"]` in `extension AllSnapshots.Rows`).
+    static func typePaths(in source: String) -> [[String]] {
+        func paths(in scope: Range<String.Index>, of parent: [String]) -> [(path: [String], start: String.Index)] {
+            declarations(named: nil, in: source, scope: scope).flatMap { decl in
+                let path = parent + [decl.name]
+                let nested = matchingBrace(in: source, open: decl.bodyOpen).map { paths(in: source.index(after: decl.bodyOpen)..<$0, of: path) }
+                return [(path, decl.lineStart)] + (nested ?? [])
+            }
+        }
+        let found = paths(in: source.startIndex..<source.endIndex, of: []) + extensions(in: source).flatMap { paths(in: $0.body, of: $0.type) }
+        return found.sorted { $0.start < $1.start }.map(\.path)
+    }
+
+    /// The types named `name`, or for nil of any name, declared directly in `scope`, in order.
+    private static func declarations(named name: String?, in source: String, scope: Range<String.Index>) -> [Declaration] {
+        let identifier = name.map(NSRegularExpression.escapedPattern(for:)) ?? #"`[^`]+`|\w+"#
         // Attributes may contain parentheses nested two levels deep: @Suite(.snapshots(record: .x)).
         let parens = #"\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)"#
         // The name ends where a space, the inheritance clause, generics or the body starts: there is
         // no word boundary after a raw identifier's closing backtick.
-        let pattern = #"(?m)^([ \t]*)((?:@[\w.]+(?:"# + parens + #")?\s+|(?:public|internal|private|fileprivate|package|final|open|nonisolated)\s+)*)(struct|class|actor|enum)\s+"#
-            + escaped + #"(?=[\s:<{])([^{]*)\{"#
+        let pattern = #"(?m)^([ \t]*)((?:@[\w.]+(?:"# + parens + #")?\s+|(?:public|internal|private|fileprivate|package|final|open|nonisolated)\s+)*)(struct|class|actor|enum)\s+("#
+            + identifier + #")(?=[\s:<{])([^{]*)\{"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = source as NSString
         return regex.matches(in: source, range: NSRange(scope, in: source)).compactMap { m in
             let lineStart = Range(m.range(at: 2), in: source)!.lowerBound
-            guard isDirectly(in: scope, lineStart, of: source) else { return nil }
+            let name = ns.substring(with: m.range(at: 4))
+            // `class func`, `class var`: a class member, not a type.
+            guard !memberKeywords.contains(name), isDirectly(in: scope, lineStart, of: source) else { return nil }
             let keyword = ns.substring(with: m.range(at: 3))
-            let inheritance = ns.substring(with: m.range(at: 4))
+            let inheritance = ns.substring(with: m.range(at: 5))
             let isXCTest = keyword == "class" && inheritance.contains(":") && imports("XCTest", in: source)
                 && (!imports("Testing", in: source) || inheritance.contains("XCTestCase"))
-            return Declaration(lineStart: lineStart, keywordStart: Range(m.range(at: 3), in: source)!.lowerBound,
+            return Declaration(name: name, lineStart: lineStart, keywordStart: Range(m.range(at: 3), in: source)!.lowerBound,
                                bodyOpen: source.index(before: Range(m.range, in: source)!.upperBound),
                                indent: ns.substring(with: m.range(at: 1)), isXCTest: isXCTest)
         }
     }
+
+    private static let memberKeywords: Set = ["func", "var", "let", "subscript", "init", "deinit", "override", "final", "static",
+                                              "required", "convenience", "dynamic", "lazy", "nonisolated", "public", "package",
+                                              "internal", "fileprivate", "private", "open"]
 
     private static let extensionDeclaration = try! NSRegularExpression(
         pattern: #"(?m)^[ \t]*((?:@[\w.]+\s+|(?:public|internal|private|fileprivate|package|nonisolated)\s+)*)extension\s+((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))*)[^{]*\{"#

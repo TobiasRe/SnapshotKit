@@ -31,8 +31,8 @@ The Run tab and the notice follow each stage:
 
 1. **Finding suite sources** — the test file of each snapshot: `<suite folder>.swift`, preferring the one
    next to the `__Snapshots__` folder, then the test type in it (named like the file, else the first type ending
-   in `Tests` or `Test`, else the first type). Re-recording failing suites finds the file by the type the test
-   result names.
+   in `Tests` or `Test`, else the first type), by its path through the types and extensions it is nested in
+   (`AllSnapshots/CardTests`). Re-recording failing suites finds the file by the type the test result names.
 2. **Enabling record mode** — the test type is patched (below). SnapshotKit refuses if one of those files has
    uncommitted changes: *Refusing to re-record: these files have uncommitted changes. Commit or stash them
    first:* followed by the files. That way your own edits can never get mixed up with the patch.

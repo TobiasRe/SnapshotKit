@@ -64,6 +64,51 @@ import Testing
                 == "import Testing\n\n@Suite(.snapshots(record: .all)) struct `Card views` {\n    @Test func card() {}\n}\n")
     }
 
+    /// A suite nested in another type, or in an extension of a nested type, goes by its whole path,
+    /// as `-only-testing` names it and the patch finds it.
+    @Test func aSuiteNestedInATypeOrAnExtensionOfOne() throws {
+        let repo = try TempRepo()
+        let cards = "import Testing\n\n@Suite struct AllSnapshots {\n    @Suite struct CardTests {\n        @Test func card() {}\n    }\n}\n"
+        try repo.write("Tests/AppTests/CardTests.swift", cards)
+        try repo.write("Tests/AppTests/RowTests.swift", """
+            import Testing
+
+            extension AllSnapshots.Rows {
+                @Suite struct RowTests {
+                    @Test func row() {}
+                }
+            }
+            """)
+        try repo.commitAll("tests")
+        let plan = try RecordPlanner.plan([file("CardTests", "card.1"), file("RowTests", "row.1")], granularity: .tests, repository: repo.url)
+        #expect(plan.onlyTesting == ["AppTests/AllSnapshots/CardTests/card()", "AppTests/AllSnapshots/Rows/RowTests/row()"])
+        #expect(plan.suites.map(\.path) == [["AllSnapshots", "CardTests"], ["AllSnapshots", "Rows", "RowTests"]])
+        #expect(try SuiteLocator.targets(for: plan.suites, in: repo.url).map(\.path) == ["Tests/AppTests/CardTests.swift", "Tests/AppTests/RowTests.swift"])
+        #expect(try RecordPatcher.patch(source: cards, suite: plan.suites[0].path)
+                == cards.replacingOccurrences(of: "    @Suite struct CardTests", with: "    @Suite(.snapshots(record: .all)) struct CardTests"))
+    }
+
+    /// The types a suite can be: not one in a comment, a string or a function, nor a class's
+    /// `class func`; of two named like the file, the outermost.
+    @Test func theSuiteIsATypeTheTestsCanBeIn() {
+        #expect(RecordPatcher.typePaths(in: #"""
+            // struct CommentedTests {}
+            let fixture = """
+            struct FixtureTests {}
+            """
+            final class CardTests: XCTestCase {
+                class func make() -> CardTests { CardTests() }
+                func testCard() {
+                    struct LocalTests {}
+                }
+                enum Size { case small }
+            }
+            """#) == [["CardTests"], ["CardTests", "Size"]])
+        let twoNamedAlike = "@Suite struct Outer {\n    @Suite struct Inner {}\n}\n\n@Suite struct Inner {}\n"
+        #expect(RecordPlanner.suitePath(in: twoNamedAlike, preferring: "Inner") == ["Inner"])
+        #expect(RecordPlanner.suitePath(in: twoNamedAlike, preferring: "Other") == ["Outer"])
+    }
+
     @Test func parameterizedTestsAndSuiteGranularityRunTheSuite() throws {
         let repo = try repo()
         let parameterized = try RecordPlanner.plan([file("CardTests", "sized-width.1"), file("CardTests", "compact.1")],
