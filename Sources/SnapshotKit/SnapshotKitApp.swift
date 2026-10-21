@@ -121,12 +121,12 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("r")
                 .disabled(cantRun)
             Divider()
-            Button("Re-record Selected Test") { project?.reRecordSelection() }
+            Button(project?.reRecordSelectionTitle ?? "Re-record Selected Test") { project?.reRecordSelection() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(!(project?.canReRecordSelection ?? false))
-            Button("Open Test in Xcode") { if let file = project?.selectedSnapshotFile { project?.openTestInXcode(file) } }
+            Button("Open Test in Xcode") { if let file = project?.testToOpen { project?.openTestInXcode(file) } }
                 .keyboardShortcut("o", modifiers: [.command, .option])
-                .disabled(project?.selectedSnapshotFile == nil)
+                .disabled(project?.testToOpen == nil)
             Button("Re-record Failing Suites") { project?.reRecordFailed() }
                 .keyboardShortcut("r", modifiers: [.command, .shift, .option])
                 .disabled(cantRun || (project?.failingSuites.isEmpty ?? true))

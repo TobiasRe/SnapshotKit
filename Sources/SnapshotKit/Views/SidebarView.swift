@@ -204,7 +204,7 @@ struct QuickSwitcherView: View {
                 .onTapGesture { close() }
             VStack(spacing: 0) {
                 HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField("Go to a project or run a command…", text: $query)
                         .textFieldStyle(.plain)
                         .font(.title3)
@@ -252,6 +252,8 @@ struct QuickSwitcherView: View {
                 }
             }
             .frame(width: 520)
+            // VoiceOver stays in the palette, as Tab does, until it closes.
+            .accessibilityAddTraits(.isModal)
             // Floats over content, so it's glass (see docs/design.md).
             .floatingGlass(in: RoundedRectangle(cornerRadius: DS.Radius.large, style: .continuous))
             .padding(.top, 80)

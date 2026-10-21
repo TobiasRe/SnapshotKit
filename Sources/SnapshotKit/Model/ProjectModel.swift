@@ -360,6 +360,14 @@ final class ProjectModel {
     /// Brings the project up to date when the app comes back to the front: commits, checkouts and
     /// snapshots may have changed meanwhile, and so may the last run and the history, when the tests
     /// ran in `snapkit`. Those are read again only if the last run was saved since.
+    /// Saves the last run and notes when: coming back to the app reloads only a last run saved
+    /// elsewhere (by `snapkit`). Taken for an outside run, the app's own save cleared the flakiness
+    /// verdicts and the Run tab's result on the next activation.
+    private func saveLastRun(_ save: (URL) -> Void) {
+        save(project.url)
+        lastRunSaved = LastRun.savedDate(repository: project.url)
+    }
+
     func refreshAfterActivation() {
         guard !isRunning else { return }
         refreshChanges()
@@ -839,6 +847,8 @@ final class ProjectModel {
 
     /// Throws away a working-tree change to a snapshot (e.g. an unwanted re-record).
     func discard(_ change: SnapshotChange) {
+        // Not while a run writes snapshots: its verification would check images thrown away meanwhile.
+        guard !isRunning else { return }
         let git = Git(root: project.url)
         do {
             switch change.kind {
@@ -890,6 +900,7 @@ final class ProjectModel {
 
     /// Restores every uncommitted snapshot that looks the same as its committed version.
     func discardInvisibleChanges() {
+        guard !isRunning else { return }
         let repo = project.url, changes = changeSet?.changes ?? []
         Task {
             let result = await offCooperativePool { () -> Result<Int, Error> in
@@ -1133,11 +1144,12 @@ final class ProjectModel {
     /// failed repetitions).
     var dockBadge: String? { failures.isEmpty ? nil : "\(failures.count)" }
 
-    /// Dock badge, and a bounce when the run ends while you're elsewhere; VoiceOver reads the outcome
-    /// where a sighted user sees the notice appear.
+    /// Dock badge (the open project's; the window keeps it in step as you switch, this also with the
+    /// window closed), and a bounce when the run ends while you're elsewhere; VoiceOver reads the
+    /// outcome where a sighted user sees the notice appear.
     private func announce(isError: Bool) {
         guard NSApp != nil, !DS.solidSurfaces else { return }
-        NSApp.dockTile.badgeLabel = dockBadge
+        if isShown { NSApp.dockTile.badgeLabel = dockBadge }
         if !NSApp.isActive { NSApp.requestUserAttention(isError ? .criticalRequest : .informationalRequest) }
         if let lastMessage, isShown {
             NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
@@ -1223,7 +1235,7 @@ final class ProjectModel {
         // the last run's failures stay.
         if kind == .run, !result.cancelled, result.nothingTested == nil {
             fullRunTotal = result.summary?.total
-            LastRun.update(with: result, attachmentsDirectory: attachmentsDirectory, repository: project.url)
+            saveLastRun { LastRun.update(with: result, attachmentsDirectory: attachmentsDirectory, repository: $0) }
             lastFailingSuites = result.failingSuites
             flakeResults = []
             setFailures(suites: result.failingSuites, images: images,
@@ -1282,6 +1294,16 @@ final class ProjectModel {
         case .failures: selectedFailure?.referencePaths.first.map { SnapshotFile(path: $0, byteSize: 0) }
         case .run: nil
         }
+    }
+
+    /// Names what ⇧⌘R will record: several failures can be selected at once.
+    var reRecordSelectionTitle: String {
+        tab == .failures && selectedFailures.count > 1 ? "Re-record \(selectedFailures.count) Selected Tests" : "Re-record Selected Test"
+    }
+
+    /// The selected snapshot's test exists to open (an orphan's is gone).
+    var testToOpen: SnapshotFile? {
+        selectedSnapshotFile.flatMap { orphanIDs.contains($0.id) ? nil : $0 }
     }
 
     var canReRecordSelection: Bool {
@@ -1384,7 +1406,7 @@ final class ProjectModel {
     /// Takes in a run of some tests (a re-record's verification): those tests have their new
     /// results and images; the others keep the last run's, here and on disk.
     private func applyPartialRun(_ run: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?) {
-        LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: project.url)
+        saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
         let ran = run.summary?.suites ?? []
         let rerun = Set(ran.flatMap { suite in suite.tests.map { suite.identifier + "/" + $0.name } })
         lastFailingSuites = SuiteResult.merging(ran, into: lastFailingSuites).filter(\.isFailing)

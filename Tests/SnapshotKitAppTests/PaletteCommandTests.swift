@@ -39,8 +39,12 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             app.show(AppFixtures.project(.missingXcode, store: app.store))
             let titles = PaletteCommand.available(app: app).map(\.title)
+            #expect(titles.contains("Reveal Project in Finder"))                 // the palette is there
             #expect(!titles.contains("Run Snapshot Tests"))
             #expect(!titles.contains("Re-record All Snapshot Tests…"))
+            // There is something failing to re-record or check, but nothing to run it with.
+            #expect(!titles.contains("Re-record Failing Suites"))
+            #expect(!titles.contains("Check Flakiness of Failing Tests"))
         }
     }
 }

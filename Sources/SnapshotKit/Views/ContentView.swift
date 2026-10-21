@@ -44,6 +44,17 @@ struct ContentView: View {
                     .padding()
             }
         }
+        // The Dock icon counts the open project's failing tests: from launch, and as you switch.
+        .onChange(of: model.current?.dockBadge, initial: true) { _, badge in
+            guard !DS.solidSurfaces else { return }
+            NSApp.dockTile.badgeLabel = badge
+        }
+        // A scan's result is read out like a run's.
+        .onChange(of: model.startupNotice) { _, notice in
+            guard let notice else { return }
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                                 userInfo: [.announcement: notice.replacingOccurrences(of: "`", with: "")])
+        }
     }
 }
 

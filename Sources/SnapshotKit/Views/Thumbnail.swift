@@ -40,9 +40,11 @@ struct Thumbnail: View {
                 image = cached
                 return
             }
+            image = nil   // a reused row must not show the previous one's picture meanwhile
             let load = load, maxPixel = ThumbnailCache.maxPixel(for: size)
             let decoded = await Task.detached { ThumbnailCache.decode(load(), maxPixel: maxPixel) }.value
             if let decoded { ThumbnailCache.shared.setObject(decoded, forKey: id as NSString) }
+            guard !Task.isCancelled else { return }   // the row shows another snapshot by now
             image = decoded
         }
     }

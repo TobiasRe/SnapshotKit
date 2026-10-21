@@ -69,9 +69,13 @@ enum ComparePairCache {
     static func store(_ pair: ComparePair, for identity: String) {
         shared.setObject(Box(pair), forKey: identity as NSString, cost: pair.byteCost)
     }
+}
 
-    /// Pairs being decoded and diffed now; `--capture` waits for none, so it never shoots a spinner.
-    @MainActor static var loading = 0
+/// Large images being decoded (and pairs diffed) for display now; `--capture` waits for none, so
+/// it never shoots a spinner.
+@MainActor
+enum ImageDecoding {
+    static var pending = 0
 }
 
 struct CompareView: View {
@@ -153,14 +157,17 @@ struct CompareView: View {
                 return
             }
             pair = nil
-            ComparePairCache.loading += 1
-            defer { ComparePairCache.loading -= 1 }
+            ImageDecoding.pending += 1
+            defer { ImageDecoding.pending -= 1 }
             let load = load, identity = identity
             let computed = await Task.detached {
                 let (before, after) = load()
                 return ComparePair.make(before: before, after: after)
             }.value
             ComparePairCache.store(computed, for: identity)
+            // The decode doesn't stop when the selection moves on; its result must not land on the
+            // snapshot selected since.
+            guard !Task.isCancelled else { return }
             pair = computed
         }
     }
@@ -257,20 +264,23 @@ struct CompareView: View {
         }
     }
 
-    /// ← / → move the slider divider by 5% in slider mode.
     /// In Slider mode ← → move the divider; zoomed in, the arrows look around the image.
     private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
         if mode == .slider, key == .leftArrow || key == .rightArrow { return nudgeSplit(key == .leftArrow ? -1 : 1) }
-        guard app.viewport.scale > 1.01 else { return .ignored }
-        let step: CGFloat = 80
-        let delta = switch key {
-        case .leftArrow: CGSize(width: step, height: 0)
-        case .rightArrow: CGSize(width: -step, height: 0)
-        case .upArrow: CGSize(width: 0, height: step)
-        default: CGSize(width: 0, height: -step)
-        }
-        withAnimation(DS.motion) { app.viewport.pan(by: delta) }
+        var viewport = app.viewport
+        guard viewport.pan(arrow: key) else { return .ignored }
+        withAnimation(DS.motion) { app.viewport = viewport }
         return .handled
+    }
+
+    /// Keys that reach the image itself (see `ZoomPanSurface.onKey`): the same as on the canvas.
+    private func surfaceKey(_ key: KeyEquivalent) -> Bool {
+        if key == .space {
+            guard mode == .toggle else { return false }
+            showingAfter.toggle()
+            return true
+        }
+        return arrow(key) == .handled
     }
 
     private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
@@ -298,7 +308,7 @@ struct CompareView: View {
                     ZoomableImage(image: pair.after, pixelSize: pair.pixelSize, viewport: app.viewport)
                     ZoomableImage(image: pair.before, pixelSize: pair.pixelSize, viewport: app.viewport)
                         .mask(alignment: .leading) { Rectangle().frame(width: x) }
-                    ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: pair.pixelSize) })
+                    ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: pair.pixelSize) }, onKey: surfaceKey)
                     Rectangle()
                         .fill(Color.white.opacity(0.9))
                         .frame(width: 1)
@@ -370,7 +380,7 @@ struct CompareView: View {
                     ContentUnavailableView("No Image", systemImage: "photo", description: Text(missing))
                 }
             }
-            .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }))
+            .overlay(ZoomPanSurface(viewport: Bindable(app).viewport, onHover: { hover($0, pixelSize: size) }, onKey: surfaceKey))
             .overlay(alignment: .topLeading) { caption(label).padding(DS.Space.m).accessibilityHidden(image != nil) }
     }
 
@@ -569,10 +579,30 @@ struct ZoomableImage: View {
 /// Transparent AppKit layer that turns trackpad and mouse input into viewport changes:
 /// pinch to zoom (around the cursor), two-finger scroll or mouse drag to pan,
 /// ⌘-scroll to zoom with a mouse wheel, double-click to reset.
+extension Viewport {
+    /// Zoomed in, the arrow keys look around the image, a step at a time; false otherwise (at fit
+    /// there is nothing to look around, and the keys stay free for the list).
+    mutating func pan(arrow key: KeyEquivalent) -> Bool {
+        guard scale > 1.01 else { return false }
+        let step: CGFloat = 80
+        switch key {
+        case .leftArrow: pan(by: CGSize(width: step, height: 0))
+        case .rightArrow: pan(by: CGSize(width: -step, height: 0))
+        case .upArrow: pan(by: CGSize(width: 0, height: step))
+        case .downArrow: pan(by: CGSize(width: 0, height: -step))
+        default: return false
+        }
+        return true
+    }
+}
+
 struct ZoomPanSurface: NSViewRepresentable {
     @Binding var viewport: Viewport
     /// Pointer position and surface size while the pointer is over the surface; nil when it leaves.
     var onHover: ((point: CGPoint, canvas: CGSize)?) -> Void = { _ in }
+    /// The arrow keys and Space, which reach the surface once a click on the image made it first
+    /// responder; true when handled. By default the arrows look around a zoomed-in image.
+    var onKey: ((KeyEquivalent) -> Bool)?
 
     func makeNSView(context: Context) -> SurfaceView {
         let view = SurfaceView()
@@ -588,12 +618,34 @@ struct ZoomPanSurface: NSViewRepresentable {
             binding.wrappedValue = v
         }
         view.onHover = onHover
+        view.onKey = onKey ?? { key in
+            var v = binding.wrappedValue
+            guard v.pan(arrow: key) else { return false }
+            withAnimation(DS.motion) { binding.wrappedValue = v }
+            return true
+        }
     }
 
     final class SurfaceView: NSView {
         var onChange: ((inout Viewport) -> Void) -> Void = { _ in }
         var onHover: ((point: CGPoint, canvas: CGSize)?) -> Void = { _ in }
+        var onKey: (KeyEquivalent) -> Bool = { _ in false }
         private var tracking: NSTrackingArea?
+
+        override func keyDown(with event: NSEvent) {
+            let key: KeyEquivalent? = switch event.keyCode {
+            case 123: .leftArrow
+            case 124: .rightArrow
+            case 125: .downArrow
+            case 126: .upArrow
+            case 49: .space
+            default: nil
+            }
+            // With a modifier it's a shortcut (⌥⌘↓ is Next Item), not a look around.
+            let plain = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+            if plain, let key, onKey(key) { return }
+            super.keyDown(with: event)
+        }
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()

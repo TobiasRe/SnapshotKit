@@ -117,6 +117,7 @@ struct FailuresTab: View {
                 }
             }
         }
+        .scrollsToSelection(project.selectedFailureID)
         // The same keys as the other lists: in Toggle mode Space flips the images beside the list,
         // otherwise it Quick Looks the actual image; ← → move the slider.
         .onKeyPress(.space) {

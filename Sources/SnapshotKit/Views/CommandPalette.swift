@@ -70,12 +70,12 @@ extension PaletteCommand {
             commands.append(.init(title: "Run on Remote Machine", symbol: "network", shortcut: "⌃⌘R") { project.runRemote() })
         }
         if project.canReRecordSelection {
-            commands.append(.init(title: "Re-record Selected Test", symbol: "camera", shortcut: "⇧⌘R") { project.reRecordSelection() })
+            commands.append(.init(title: project.reRecordSelectionTitle, symbol: "camera", shortcut: "⇧⌘R") { project.reRecordSelection() })
         }
-        if let file = project.selectedSnapshotFile {
+        if let file = project.testToOpen {
             commands.append(.init(title: "Open Test in Xcode", symbol: "hammer", shortcut: "⌥⌘O") { project.openTestInXcode(file) })
         }
-        if idle && !project.failingSuites.isEmpty {
+        if idle && project.environment != nil && !project.failingSuites.isEmpty {
             commands.append(.init(title: "Re-record Failing Suites", symbol: "camera.badge.ellipsis", shortcut: "⌥⇧⌘R") { project.reRecordFailed() })
             commands.append(.init(title: "Check Flakiness of Failing Tests", symbol: "waveform.path.ecg", shortcut: "⌥⌘R") { project.checkFlakiness() })
         }

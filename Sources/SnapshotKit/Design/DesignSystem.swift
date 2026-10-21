@@ -343,8 +343,9 @@ extension View {
 
     /// Selection and hover fills for something that isn't a list row (a grid tile), which has no
     /// system highlight of its own.
-    func selectableTile(_ selected: Bool) -> some View {
-        modifier(SelectableTile(selected: selected))
+    /// `emphasized`: the grid has keyboard focus, so the selection takes the accent, as a list's does.
+    func selectableTile(_ selected: Bool, emphasized: Bool = false) -> some View {
+        modifier(SelectableTile(selected: selected, emphasized: emphasized))
     }
 
     /// A control drawn without a bezel in a glass capsule: the look of every text control in the
@@ -431,14 +432,34 @@ private struct SelectableRow: ViewModifier {
     }
 }
 
+/// Keeps a list's selection in view when something other than a click moves it: ⌥⌘↓ with the
+/// image focused, the detail's chevrons, Show in Library, Show Failure.
+private struct ScrollsToSelection: ViewModifier {
+    var id: String?
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onChange(of: id) { _, id in
+                if let id { proxy.scrollTo(id) }   // no anchor: a row already in view stays put
+            }
+        }
+    }
+}
+
+extension View {
+    func scrollsToSelection(_ id: String?) -> some View { modifier(ScrollsToSelection(id: id)) }
+}
+
 private struct SelectableTile: ViewModifier {
     var selected: Bool
+    var emphasized: Bool
     @State private var hovering = false
 
     func body(content: Content) -> some View {
         content
             .background(RoundedRectangle(cornerRadius: DS.Radius.medium, style: .continuous)
-                .fill(selected ? DS.Surface.selection : hovering ? DS.Surface.hover : .clear))
+                .fill(selected ? (emphasized ? Color.accentColor.opacity(0.18) : DS.Surface.selection)
+                      : hovering ? DS.Surface.hover : .clear))
             .onHover { hovering = $0 }
     }
 }

@@ -249,6 +249,7 @@ struct SnapshotsTab: View {
                 return [item]
             }
             .overlay { if tree.isEmpty { LibraryEmptyState(project: project) } }
+            .scrollsToSelection(project.selectedSnapshotID)
         }
     }
 
@@ -322,7 +323,16 @@ struct SnapshotRow: View {
         .padding(.vertical, DS.Space.xxs)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(SnapshotStatusLine.spoken(file, status))
+        .accessibilityLabel(SnapshotStatusLine.spoken(file, status) + spokenDetail)
+    }
+
+    /// The size or date a sorted list shows at the trailing edge.
+    private var spokenDetail: String {
+        switch detail {
+        case .size: ", " + SnapshotLibrary.formatSize(file.byteSize)
+        case .modified: file.modified.map { ", changed " + $0.formatted(DS.Dates.moment) } ?? ""
+        case .none: ""
+        }
     }
 }
 
@@ -519,7 +529,9 @@ struct SnapshotDetail: View {
         // Again when it's re-recorded or committed: both add to or change its history.
         .task(id: file.cacheKey + "#\(file.state)") {
             versions = nil
-            versions = await project.history(of: file)
+            let history = await project.history(of: file)
+            guard !Task.isCancelled else { return }   // another snapshot is selected by now
+            versions = history
         }
     }
 
@@ -696,9 +708,16 @@ struct SnapshotViewer: View {
                 nsImage = cached.image
                 return
             }
+            image = nil
+            nsImage = nil
+            ImageDecoding.pending += 1
+            defer { ImageDecoding.pending -= 1 }
             let load = load
             let decoded = await Task.detached { SnapshotImageCache.Entry(data: load()) }.value
             if let decoded { SnapshotImageCache.store(decoded, for: identity) }
+            // The decode doesn't stop when the selection moves on; its result must not land on the
+            // snapshot selected since.
+            guard !Task.isCancelled else { return }
             image = decoded?.pixels
             nsImage = decoded?.image
         }
@@ -792,8 +811,14 @@ struct SnapshotGrid: View {
                     switch press.key {
                     case .leftArrow: project.selectAdjacent(-1)
                     case .rightArrow: project.selectAdjacent(1)
-                    case .upArrow: project.selectAdjacent(-perRow)
-                    default: project.selectAdjacent(perRow)
+                    default:
+                        let rows = Self.rows(sections, perRow: perRow)
+                        if let id = project.selectedSnapshotID,
+                           let next = Self.vertical(from: id, by: press.key == .upArrow ? -1 : 1, in: rows) {
+                            project.selectedSnapshotID = next
+                        } else {
+                            project.selectAdjacent(0)   // nothing selected: the first tile
+                        }
                     }
                     return .handled
                 }
@@ -815,9 +840,30 @@ struct SnapshotGrid: View {
                 }
                 .onChange(of: project.selectedSnapshotID) { _, id in
                     guard let id else { return }
-                    withAnimation(DS.motion) { proxy.scrollTo(id) }
+                    // Centered: scrolled just into view, a tile moved up sat under the pinned header.
+                    withAnimation(DS.motion) { proxy.scrollTo(id, anchor: .center) }
                 }
         }
+    }
+
+    /// The tiles as the grid shows them: one section per suite (or one for a sorted grid).
+    private var sections: [[String]] {
+        guard project.librarySort == .name else { return [project.displayedSnapshots.map(\.id)] }
+        return project.displayedTree.flatMap { module in module.suites.map { $0.tests.flatMap(\.files).map(\.id) } }
+    }
+
+    /// Sections broken into rows of `perRow`: each section starts a row of its own.
+    nonisolated static func rows(_ sections: [[String]], perRow: Int) -> [[String]] {
+        sections.flatMap { ids in stride(from: 0, to: ids.count, by: perRow).map { Array(ids[$0..<min($0 + perRow, ids.count)]) } }
+    }
+
+    /// The tile above (`step` -1) or below (+1) `id`: same column, or the row's last tile when that
+    /// row is shorter. Nil at the top or bottom edge.
+    nonisolated static func vertical(from id: String, by step: Int, in rows: [[String]]) -> String? {
+        guard let row = rows.firstIndex(where: { $0.contains(id) }), let column = rows[row].firstIndex(of: id),
+              rows.indices.contains(row + step) else { return nil }
+        let target = rows[row + step]
+        return target[min(column, target.count - 1)]
     }
 
     private var grid: some View {
@@ -876,13 +922,15 @@ struct SnapshotGrid: View {
         .frame(width: Self.tile.width, alignment: .leading)
         // Selected like a list row: a quiet fill behind the whole tile, not an accent frame.
         .padding(DS.Space.s)
-        .selectableTile(selected)
+        .selectableTile(selected, emphasized: focused)
         .contentShape(Rectangle())
         .onDrag { NSItemProvider(contentsOf: project.project.url.appendingPathComponent(file.path)) ?? NSItemProvider() }
-        .onTapGesture(count: 2) { open(file) }
+        // One gesture for both clicks: a double-tap gesture beside it made every single click wait
+        // out the double-click interval before it selected.
         .onTapGesture {
             project.selectedSnapshotID = file.id
             focused = true
+            if NSApp.currentEvent?.clickCount == 2 { open(file) }
         }
         .contextMenu {
             Button("Show Large") { open(file) }
@@ -892,6 +940,8 @@ struct SnapshotGrid: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(SnapshotStatusLine.spoken(file, status))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { open(file) }
+        // Like a click: select it; opening it large is a second action, as a double-click is.
+        .accessibilityAction { project.selectedSnapshotID = file.id }
+        .accessibilityAction(named: "Show Large") { open(file) }
     }
 }

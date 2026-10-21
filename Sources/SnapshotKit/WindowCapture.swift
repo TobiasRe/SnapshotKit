@@ -132,7 +132,7 @@ enum WindowCapture {
         // Let SwiftUI lay out and start its tasks, then wait for the images to be decoded and diffed
         // (seconds for full-screen pairs in a debug build), and for the result to be drawn.
         try? await Task.sleep(for: .seconds(1))
-        _ = await waitFor(deadline: Date().addingTimeInterval(30)) { ComparePairCache.loading == 0 ? true : nil }
+        _ = await waitFor(deadline: Date().addingTimeInterval(30)) { ImageDecoding.pending == 0 ? true : nil }
         try? await Task.sleep(for: .seconds(1))
         if o.zoomToChange {
             model.zoomToChangeRequest += 1

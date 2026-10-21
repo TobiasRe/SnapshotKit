@@ -45,7 +45,8 @@ struct ProjectView: View {
                     .task(id: id) {
                         // Information fades; an error stays until it is closed.
                         guard !project.lastMessageIsError, !DS.solidSurfaces else { return }
-                        try? await Task.sleep(for: .seconds(8))
+                        // Not when the notice was replaced meanwhile (the sleep throws on cancel).
+                        guard (try? await Task.sleep(for: .seconds(8))) != nil else { return }
                         withAnimation(DS.motion) { dismissedMessage = id }
                     }
             }
@@ -240,6 +241,12 @@ struct RunInspector: View {
         }
         // Saved like any Mac field: on Return, and also when you click or tab away or leave the tab.
         .onChange(of: focused) { saveFields() }
+        // A host also once you stop typing, so the ··· menu's remote section works without leaving the
+        // field. (Not the base branch: a half-typed one would flash "not found" on the Changes tab.)
+        .task(id: remoteHost) {
+            guard (try? await Task.sleep(for: .seconds(1))) != nil else { return }
+            saveFields()
+        }
         .onDisappear(perform: saveFields)
     }
 

@@ -137,6 +137,7 @@ struct ChangesTab: View {
         Divider()
         if project.canDiscard(change) {
             Button("Discard Change…", role: .destructive) { pendingDiscard = change }
+                .disabled(project.isRunning)
         }
         Button("Revert to \(baseName)…", role: .destructive) { pendingRevert = [change] }
             .disabled(project.isRunning)
@@ -281,6 +282,7 @@ struct ChangesTab: View {
                 Button("Discard…") { confirmDiscardInvisible = true }
                     .controlSize(.small)
                     .quietControl()
+                    .disabled(project.isRunning)
                     .help("Restore them to the committed version, so only real changes get committed")
             }
             .padding(.horizontal, DS.Space.l)
@@ -317,6 +319,12 @@ struct ChangesTab: View {
                                       diagnosis: project.changeDiagnoses[change.id], load: project.imageLoader(for: change))
                                 .tag(change.id)
                                 .selectableRow(project.selectedChangeID == change.id)
+                                // Drag it out as it is now (a deleted one as the base had it), as in the
+                                // library: the list's own drag, so a click still selects the row.
+                                .itemProvider {
+                                    change.kind == .deleted ? project.exportBaseImage(for: change).flatMap(NSItemProvider.init(contentsOf:))
+                                        : NSItemProvider(contentsOf: project.fileURL(for: change))
+                                }
                                 .contextMenu { actions(for: change) }
                         }
                     } header: {
@@ -347,6 +355,7 @@ struct ChangesTab: View {
                 guard let data = project.imageLoader(for: change)().0 else { return [] }
                 return [NSItemProvider(item: data as NSData, typeIdentifier: "public.png")]
             }
+            .scrollsToSelection(project.selectedChangeID)
             .onKeyPress("v") {
                 guard let change = project.selectedChange else { return .ignored }
                 project.setViewed(!project.viewedChanges.contains(change.id), for: change)
@@ -393,7 +402,9 @@ struct ChangeOrigin: View {
             last = nil
             // A deletion may not be committed yet, so its last commit could predate it.
             guard change.kind == .committed else { return }
-            last = await project.history(of: change.file).first
+            let history = await project.history(of: change.file)
+            guard !Task.isCancelled else { return }   // another change is selected by now
+            last = history.first
         }
     }
 

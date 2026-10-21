@@ -68,7 +68,7 @@ struct SettingsView: View {
 
             Section {
                 LabeledContent("Settings file") {
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.store.url]) }
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.store.url]) }
                         .help(model.store.url.path)
                 }
             }

@@ -442,7 +442,7 @@ enum AppFixtures {
             f.environmentError = EnvironmentError.xcodeNotInstalled(
                 required: "99.2", source: ".gitlab-ci.yml",
                 installed: [XcodeInstall(path: "/Applications/Xcode.app", version: "99.1")]).errorDescription
-            f.failingSuites = []
+            // Failing suites from an earlier run stay: only running them needs Xcode.
             f.failures = []
             f.failureSource = nil
         case .brokenConfig:
