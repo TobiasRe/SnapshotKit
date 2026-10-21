@@ -120,7 +120,8 @@ final class AppModel {
             else if let root = Git.repository(containing: url)?.root { repositories.append(root) }
             else if values?.isDirectory == true, values?.isPackage != true { folders.append(url) }
         }
-        if let bundle = bundles.last, let current, !current.isRunning, repositories.isEmpty {
+        // During a run the import says why it waits, rather than the drop bouncing back without a word.
+        if let bundle = bundles.last, let current, repositories.isEmpty {
             current.importResultBundle(bundle)
             return true
         }

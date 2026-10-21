@@ -1371,11 +1371,15 @@ extension AppUITests {
                 exit 65
                 """, failures: true)
             let verdicts = model.failures.map(\.verdict)
+            let shown = (model.passed, model.failed, model.skipped, model.lastDuration, model.resultSuites)
             model.checkFlakiness()
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Nothing was checked: the build failed (CardTests.swift:7:9: cannot find 'card' in scope).")
             #expect(model.lastMessageIsError)
             #expect(model.failures.map(\.verdict) == verdicts)
+            // Nothing new to show: the Run tab's counts and results stay those of the last run.
+            #expect((model.passed, model.failed, model.skipped, model.lastDuration) == (shown.0, shown.1, shown.2, shown.3))
+            #expect(model.resultSuites == shown.4)
         }
 
         /// Checking one test again says what that check found, not what earlier checks of other tests did.

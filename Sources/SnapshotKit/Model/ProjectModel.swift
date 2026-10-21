@@ -231,7 +231,8 @@ final class ProjectModel {
     /// All suites of the last run, read back from disk at launch (before any run in this session).
     private(set) var restoredSuites: [SuiteResult] = []
     /// The suites the Run tab's results list shows.
-    var resultSuites: [SuiteResult] { lastResult?.summary?.suites ?? restoredSuites }
+    /// This session's run, if there is one (also when it has no summary); else the one read from disk.
+    var resultSuites: [SuiteResult] { lastResult.map { $0.summary?.suites ?? [] } ?? restoredSuites }
     /// Output while running, results once there are some.
     var runPane = RunPane.results
     private(set) var history: [RunRecord] = []
@@ -451,6 +452,7 @@ final class ProjectModel {
         fullRunTotal = last.suites.map { $0.reduce(0) { $0 + $1.tests.count } }
         passed = last.passed
         failed = last.failed
+        skipped = (last.suites ?? []).reduce(0) { $0 + $1.tests.filter { $0.outcome == .skipped }.count }
         setFailures(suites: last.failingSuites, images: last.failureImages(),
                     source: FailureSource(label: "Last run", date: last.date, host: last.host,
                                           resultBundle: last.resultBundle.map { URL(fileURLWithPath: $0) }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }))
@@ -1124,7 +1126,7 @@ final class ProjectModel {
         stageLabel = op.label
         runPane = .output
         phase = .preparing
-        shownBeforeOperation = (passed, failed, skipped, lastDuration)
+        shownBeforeOperation = (passed, failed, skipped, lastDuration, lastResult?.resultBundle)
         passed = 0; failed = 0; skipped = 0
         expectedTotal = nil
         currentTest = nil
@@ -1142,7 +1144,7 @@ final class ProjectModel {
     }
 
     /// The Run tab's counts and duration when an operation began, put back if it's cancelled.
-    @ObservationIgnored private var shownBeforeOperation: (passed: Int, failed: Int, skipped: Int, duration: TimeInterval?)?
+    @ObservationIgnored private var shownBeforeOperation: (passed: Int, failed: Int, skipped: Int, duration: TimeInterval?, result: URL?)?
 
     /// The notice after a cancel, which the Run tab marks as neither passed nor failed.
     static let cancelled = "Cancelled."
@@ -1150,10 +1152,11 @@ final class ProjectModel {
 
     private func finish(message: String?, isError: Bool = false, action: NoticeAction? = nil) {
         lineBuffer.flushNow()
-        if message == Self.cancelled, let shown = shownBeforeOperation {
-            // The counts went to zero when the operation began: show again what was shown then, the
-            // last run's (also one only read from disk, which has no `lastResult`), and how long it took.
-            (passed, failed, skipped, lastDuration) = shown
+        if let shown = shownBeforeOperation, lastResult?.resultBundle == shown.result {
+            // Nothing new to show (canceled, failed to start, didn't build, couldn't verify): the counts
+            // went to zero when the operation began, so show again what was shown then, the last run's
+            // (also one only read from disk, which has no `lastResult`), and how long it took.
+            (passed, failed, skipped, lastDuration) = (shown.passed, shown.failed, shown.skipped, shown.duration)
         } else {
             lastDuration = startedAt.map { Date().timeIntervalSince($0) }
         }
@@ -1599,19 +1602,24 @@ final class ProjectModel {
                     } else {
                         let start = operationTab, count = out.downloadedSnapshots.count
                         var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false
-                        lastResult = out.run
+                        // The Run tab shows the verification, as for a local re-record; the record run
+                        // when there is none to show (not asked for, or it couldn't run).
+                        if !verify { lastResult = out.run }
                         // Verified where it was recorded, as `snapkit rerecord --remote` does.
                         if verify {
                             do {
                                 let checked = try await runner.run(mode: .run, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers),
                                                                    onStage: onStage, onLine: onLine, onEvent: onEvent)
-                                if !checked.run.cancelled { lastResult = checked.run }
+                                if checked.run.cancelled { message += " The verification was cancelled." }
+                                else { lastResult = checked.run }
                                 if let verified = await applyVerification(checked.run, images: { (checked.attachments, checked.attachmentsDirectory) }) {
                                     message += " " + verified.note
                                     isError = verified.isError
                                 }
                             } catch is CancellationError {
+                                message += " The verification was cancelled."
                             } catch {
+                                lastResult = out.run
                                 message += " Could not verify: \(error.localizedDescription)"
                                 isError = true
                             }
