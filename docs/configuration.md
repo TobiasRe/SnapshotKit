@@ -154,7 +154,8 @@ but empty (`onlyTesting:`) clears what CI set.
 ### Format
 
 `.snapshotkit.yml` is a flat file: `key: value` lines, inline lists (`[a, b]`), block lists (`- a`) and `#`
-comments. Nested mappings aren’t supported. Mistakes are reported with the line: *`.snapshotkit.yml` could
+comments. Quoted values are read as in YAML: `"My \"App\""` is *My "App"*, `'Tobias''s Phone'` is *Tobias's
+Phone*. Nested mappings aren’t supported. Mistakes are reported with the line: *`.snapshotkit.yml` could
 not be read (line 4: nested mappings are not supported).* Unknown keys are ignored with a note naming them, so a
 typo shows up in `snapkit config`.
 

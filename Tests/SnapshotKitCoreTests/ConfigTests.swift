@@ -19,6 +19,23 @@ import Testing
         #expect(values["skipTesting"] == .list(["Slow", "Flaky # not a comment"]))
     }
 
+    /// A quoted scalar's escapes are its quotes and backslashes; a `\"` doesn't end it, nor start a comment.
+    @Test func quotedScalarsDecodeTheirEscapes() throws {
+        let values = try MiniYAML.parse(#"""
+        scheme: "My \"App\" # 2"
+        device: 'Tobias''s Phone'
+        path: "C:\\Apps\u00E9\t."
+        onlyTesting: ["A\", B", 'C''s']
+        """#)
+        #expect(values["scheme"] == .scalar(#"My "App" # 2"#))
+        #expect(values["device"] == .scalar("Tobias's Phone"))
+        #expect(values["path"] == .scalar("C:\\Appsé\t."))
+        #expect(values["onlyTesting"] == .list([#"A", B"#, "C's"]))
+        // Not one quoted scalar: as written.
+        #expect(MiniYAML.unquote(#""a" "b""#) == #""a" "b""#)
+        #expect(MiniYAML.unquote(#""open"#) == #""open"#)
+    }
+
     /// Many editors and linters start a YAML file with `---`.
     @Test func documentMarkersAreNotSettings() throws {
         #expect(try MiniYAML.parse("---\nscheme: App\n...\n") == ["scheme": .scalar("App")])
@@ -254,6 +271,20 @@ import Testing
             """)
         #expect(chained.config.workingDirectory == "ios")
         #expect(chained.config.scheme == "My App")
+        // The shell gets the scalar's value: its escaped quotes are the command's own.
+        let doubleQuoted = extract(#"""
+                - "xcodebuild test -scheme \"My App\" -destination \"platform=iOS Simulator,name=iPhone 17,OS=26.0\""
+            """#)
+        #expect(doubleQuoted.invocation?.arguments == ["test", "-scheme", "My App", "-destination", "platform=iOS Simulator,name=iPhone 17,OS=26.0"])
+        let singleQuoted = extract("""
+                - 'xcodebuild test -scheme ''My App'' -destination ''platform=iOS Simulator,name=iPhone 17'''
+            """)
+        #expect(singleQuoted.invocation?.arguments == ["test", "-scheme", "My App", "-destination", "platform=iOS Simulator,name=iPhone 17"])
+        let escapedFolder = extract(#"""
+                - "cd \"ios app\" && xcodebuild test -scheme App"
+            """#)
+        #expect(escapedFolder.config.workingDirectory == "ios app")
+        #expect(escapedFolder.config.scheme == "App")
         // A shell script's own quotes stay.
         #expect(CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: "#!/bin/bash\n\"cd\" 'ios'\nxcodebuild test -scheme App\n")])
                 .config.workingDirectory == "ios")

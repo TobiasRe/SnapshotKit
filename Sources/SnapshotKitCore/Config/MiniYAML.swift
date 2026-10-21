@@ -73,15 +73,9 @@ enum MiniYAML {
     static func splitInlineList(_ body: String) -> [String] {
         var items: [String] = []
         var current = ""
-        var quote: Character?
+        var quoting = Quoting()
         for ch in body {
-            if let q = quote {
-                if ch == q { quote = nil }
-                current.append(ch)
-            } else if ch == "'" || ch == "\"" {
-                quote = ch
-                current.append(ch)
-            } else if ch == "," {
+            if !quoting.isQuoted(ch), ch == "," {
                 items.append(current)
                 current = ""
             } else {
@@ -92,27 +86,78 @@ enum MiniYAML {
         return items.map { unquote($0.trimmingCharacters(in: .whitespaces)) }.filter { !$0.isEmpty }
     }
 
+    /// The value of a scalar: a quoted one without its quotes and with its escapes decoded (`\"`
+    /// and `\\` in double quotes, `''` in single quotes), any other as it is written.
     static func unquote(_ s: String) -> String {
-        if s.count >= 2, let f = s.first, let l = s.last, f == l, f == "\"" || f == "'" {
-            return String(s.dropFirst().dropLast())
+        guard let quote = s.first, quote == "\"" || quote == "'" else { return s }
+        var value = ""
+        var rest = s.dropFirst()
+        while let ch = rest.popFirst() {
+            if ch == quote {
+                if quote == "'", rest.first == "'" {
+                    value.append(rest.removeFirst())
+                    continue
+                }
+                // Closed before the end: not one quoted scalar.
+                return rest.isEmpty ? value : s
+            }
+            if quote == "\"", ch == "\\" {
+                guard let escaped = rest.popFirst(), let decoded = decode(escape: escaped, in: &rest) else { return s }
+                value += decoded
+                continue
+            }
+            value.append(ch)
         }
-        return s
+        return s    // never closed
     }
+
+    /// The text of the escape sequence `\` `escaped` in a double-quoted scalar, taking a code
+    /// point's digits (`\u00E9`) from `rest`; nil for an invalid one.
+    private static func decode(escape escaped: Character, in rest: inout Substring) -> String? {
+        guard let digits = ["x": 2, "u": 4, "U": 8][escaped] else { return escapes[escaped].map(String.init) }
+        let hex = rest.prefix(digits)
+        guard hex.count == digits, let code = UInt32(hex, radix: 16), let scalar = Unicode.Scalar(code) else { return nil }
+        rest.removeFirst(digits)
+        return String(scalar)
+    }
+
+    private static let escapes: [Character: Character] = [
+        "0": "\0", "a": "\u{07}", "b": "\u{08}", "t": "\t", "\t": "\t", "n": "\n", "v": "\u{0B}", "f": "\u{0C}", "r": "\r",
+        "e": "\u{1B}", " ": " ", "\"": "\"", "/": "/", "\\": "\\", "N": "\u{85}", "_": "\u{A0}", "L": "\u{2028}", "P": "\u{2029}",
+    ]
 
     /// Removes a `#` comment that is not inside quotes.
     static func stripComment(_ line: String) -> String {
-        var quote: Character?
+        var quoting = Quoting()
         var previous: Character = " "
         for (i, ch) in zip(line.indices, line) {
-            if let q = quote {
-                if ch == q { quote = nil }
-            } else if ch == "'" || ch == "\"" {
-                quote = ch
-            } else if ch == "#", previous == " " || previous == "\t" || i == line.startIndex {
+            if !quoting.isQuoted(ch), ch == "#", previous == " " || previous == "\t" || i == line.startIndex {
                 return String(line[..<i])
             }
             previous = ch
         }
         return line
+    }
+
+    /// Whether a line read character by character is in quotes: a `\"` doesn't end double quotes.
+    private struct Quoting {
+        private var quote: Character?
+        private var escaping = false
+
+        /// Takes the next character: whether it is quoted, or one of the quotes.
+        mutating func isQuoted(_ ch: Character) -> Bool {
+            guard let quote else {
+                if ch == "'" || ch == "\"" { self.quote = ch }
+                return self.quote != nil
+            }
+            if escaping {
+                escaping = false
+            } else if quote == "\"", ch == "\\" {
+                escaping = true
+            } else if ch == quote {
+                self.quote = nil
+            }
+            return true
+        }
     }
 }
