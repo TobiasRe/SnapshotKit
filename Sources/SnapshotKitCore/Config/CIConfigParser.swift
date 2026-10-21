@@ -203,8 +203,7 @@ public struct CIConfigParser {
                 // What runs before it on its line (`cd ios && pod install && `), less the folder it
                 // is called from (`/usr/bin/`).
                 let prefix = String(line[..<start]).replacingOccurrences(of: #"[^\s;&|(`"']*$"#, with: "", options: .regularExpression)
-                let folders = folders(around: index, in: outline) + folderChanges(inLine: prefix)
-                invocation.workingDirectory = Self.path(following: folders.map { expand(MiniYAML.unquote($0)) })
+                invocation.workingDirectory = Self.path(following: folders(around: index, in: outline) + folderChanges(inLine: prefix))
 
                 // Score: prefer `test`, and anything that mentions snapshots nearby.
                 if invocation.actions.contains("test") || invocation.actions.contains("test-without-building") { invocation.score += 4 }
@@ -274,24 +273,32 @@ public struct CIConfigParser {
 
     // MARK: - Working directory
 
+    /// How a command moves the shell: to a folder (`cd`, or a `working-directory`), to one keeping
+    /// where it was (`pushd`), or back there (`popd`).
+    enum FolderChange: Equatable {
+        case cd(String)
+        case pushd(String)
+        case popd
+    }
+
     /// The folders the shell moves to before line `index` runs, in order, as written: GitHub Actions'
     /// `working-directory` (the step's, else its job's or the workflow's `defaults.run`), then every
     /// `cd` before it in the same shell (earlier in its `run:` block or `script:` list, after GitLab's
     /// `before_script:` of the job, else of `default:`). In a shell script, every `cd` before it.
-    func folders(around index: Int, in outline: YAMLOutline) -> [String] {
+    func folders(around index: Int, in outline: YAMLOutline) -> [FolderChange] {
         func child(_ key: String, of scope: Int) -> Int? { outline.children(of: scope).first { outline.key($0) == key } }
         guard outline.children(of: -1).contains(where: { outline.key($0) != nil }) else {
-            return cdTargets(in: 0..<index, of: outline)        // a shell script
+            return folderChanges(before: index, in: outline.lines.indices, of: outline)        // a shell script
         }
         let ancestors = outline.ancestors(of: index)
-        var folders: [String] = []
+        var folders: [FolderChange] = []
         for scope in (outline.isListItem(index) ? [index] : []) + ancestors + [-1] {
             if scope >= 0, outline.isListItem(scope), let step = outline.value(at: ["working-directory"], under: scope) {
-                folders.append(step)
+                folders.append(.cd(expand(step)))
                 break
             }
             if let defaults = outline.value(at: ["defaults", "run", "working-directory"], under: scope) {
-                folders.append(defaults)
+                folders.append(.cd(expand(defaults)))
                 break
             }
         }
@@ -302,44 +309,82 @@ public struct CIConfigParser {
             let job = ancestors.first { $0 < script } ?? -1     // the next one out
             let before = child("before_script", of: job) ?? child("default", of: -1).flatMap { child("before_script", of: $0) }
                 ?? child("before_script", of: -1)
-            if let before { folders += cdTargets(in: outline.block(of: before), of: outline) }
+            if let before {
+                let block = outline.block(of: before)
+                folders += folderChanges(before: block.upperBound, in: block, of: outline)
+            }
         }
-        return folders + cdTargets(in: min(script + 1, index)..<index, of: outline)
+        return folders + folderChanges(before: index, in: min(script + 1, index)..<outline.block(of: script).upperBound, of: outline)
     }
 
-    /// The folders the commands on the lines in `range` move to, in order. A shell function's body
-    /// runs where the function is called, not where it is written: its lines count only when the
-    /// range ends in it (the call to look at is in the function).
-    private func cdTargets(in range: Range<Int>, of outline: YAMLOutline) -> [String] {
-        var folders: [String] = []
-        var inBody: [String] = []   // of the function whose body is open
-        var body = 0                // braces open in that body
-        var bodyFollows = false     // a `name()` line without its `{`
-        for i in range {
-            let command = Self.shellCommand(outline.lines[i])
-            let braces = command.count(where: { $0 == "{" }) - command.count(where: { $0 == "}" })
-            if bodyFollows {
-                bodyFollows = false
-                if command.hasPrefix("{") {
-                    body = max(braces, 0)
-                    continue
-                }
+    /// A shell function: its name, and its lines from its header to its closing brace.
+    private struct ShellFunction {
+        var name: String
+        var lines: ClosedRange<Int>
+    }
+
+    /// The moves of the shell running the lines in `scope` before it gets to line `index`, in order.
+    /// A shell function's body runs where the function is called, not where it is written: for a
+    /// line in one, the moves before the function's first call, then those of its body before the line.
+    private func folderChanges(before index: Int, in scope: Range<Int>, of outline: YAMLOutline) -> [FolderChange] {
+        let functions = Self.functions(in: scope, of: outline)
+        func moves(before index: Int, outside called: Set<String>) -> [FolderChange] {
+            guard let function = functions.last(where: { $0.lines.contains(index) }), !called.contains(function.name) else {
+                return (scope.lowerBound..<index).filter { i in !functions.contains { $0.lines.contains(i) } }
+                    .flatMap { folderChanges(inLine: outline.lines[$0]) }
             }
-            if body > 0 {
-                inBody += folderChanges(inLine: command)
-                body = max(body + braces, 0)
-                if body == 0 { inBody = [] }
-            } else if command.range(of: Self.functionHeader, options: .regularExpression) != nil {
-                if command.contains("{") { body = max(braces, 0) } else { bodyFollows = true }
+            let body = (function.lines.lowerBound..<index).flatMap { folderChanges(inLine: outline.lines[$0]) }
+            let called = called.union([function.name])
+            for line in scope where !function.lines.contains(line) {
+                let commands = ShellWords.commands(expandingExpressions(Self.shellCommand(outline.lines[line])))
+                guard let call = commands.firstIndex(where: { ShellWords.split($0).first == function.name }) else { continue }
+                return moves(before: line, outside: called) + commands[..<call].flatMap(folderChanges(inCommand:)) + body
+            }
+            return moves(before: function.lines.lowerBound, outside: called) + body     // not called in sight
+        }
+        return moves(before: index, outside: [])
+    }
+
+    /// The shell functions declared on the lines in `scope`.
+    private static func functions(in scope: Range<Int>, of outline: YAMLOutline) -> [ShellFunction] {
+        var functions: [ShellFunction] = []
+        var open: (name: String, start: Int)?
+        var braces = 0              // open in its body
+        var bodyFollows = false     // a `name()` line without its `{`
+        for i in scope {
+            let command = shellCommand(outline.lines[i])
+            let change = command.count(where: { $0 == "{" }) - command.count(where: { $0 == "}" })
+            if open != nil {
+                if bodyFollows {
+                    bodyFollows = false
+                    guard command.hasPrefix("{") else {
+                        open = nil
+                        continue
+                    }
+                }
+                braces = max(braces + change, 0)
+            } else if let header = functionHeader.firstMatch(in: command, range: NSRange(command.startIndex..., in: command)) {
+                let name = header.range(at: 1).location == NSNotFound ? header.range(at: 2) : header.range(at: 1)
+                open = ((command as NSString).substring(with: name), i)
+                braces = max(change, 0)
+                bodyFollows = !command.contains("{")
+                if bodyFollows { continue }
             } else {
-                folders += folderChanges(inLine: command)
+                continue
+            }
+            if braces == 0, let function = open {
+                functions.append(ShellFunction(name: function.name, lines: function.start...i))
+                open = nil
             }
         }
-        return folders + inBody
+        if let function = open, !bodyFollows, !scope.isEmpty {
+            functions.append(ShellFunction(name: function.name, lines: function.start...(scope.upperBound - 1)))
+        }
+        return functions
     }
 
     /// `name() {`, `function name {`: a shell function starts.
-    private static let functionHeader = #"^(?:function\s+[\w.-]+|[\w.-]+\s*\(\s*\))"#
+    private static let functionHeader = try! NSRegularExpression(pattern: #"^(?:function\s+([\w.-]+)|([\w.-]+)\s*\(\s*\))"#)
 
     /// A line of a CI file as the shell gets it: without a list marker or a `run:` or `script:` key
     /// in front, nor the quotes of the YAML scalar after them (`- 'cd ios'`).
@@ -350,22 +395,27 @@ public struct CIConfigParser {
         return command == text ? command : MiniYAML.unquote(command)
     }
 
-    /// The folders the commands of a line of a CI file move the shell to, in order. GitHub replaces
-    /// `${{ … }}` before the shell splits the line, so `cd ${{ env.APP_DIR }}` is one `cd`.
-    private func folderChanges(inLine line: String) -> [String] {
-        Self.folderChanges(in: expandingExpressions(Self.shellCommand(line)))
+    /// The moves of the commands of a line of a CI file, in order. GitHub replaces `${{ … }}` before
+    /// the shell splits the line, so `cd ${{ env.APP_DIR }}` is one `cd`. A function's header in
+    /// front (`build() { cd ios && …`) isn't a command: what follows it is the function's body.
+    private func folderChanges(inLine line: String) -> [FolderChange] {
+        let command = Self.shellCommand(line).replacingOccurrences(of: Self.bodyStart, with: "", options: .regularExpression)
+        return ShellWords.commands(expandingExpressions(command)).flatMap(folderChanges(inCommand:))
     }
 
-    /// The folders the commands of `line` move the shell to, in order: each `cd` and `pushd`, and
-    /// `popd` (as `-`, back where it was). Not those of a `( … )` subshell.
-    static func folderChanges(in line: String) -> [String] {
-        ShellWords.commands(line).compactMap { command in
-            let words = ShellWords.split(command)
-            switch words.first {
-            case "cd", "pushd": return words.dropFirst().first { !$0.hasPrefix("-") } ?? "~"
-            case "popd": return "-"
-            default: return nil
-            }
+    /// `name() {`, `function name {` or the `{` of a group in front of a line's commands.
+    private static let bodyStart = #"^(?:(?:function\s+[\w.-]+(?:\s*\(\s*\))?|[\w.-]+\s*\(\s*\))\s*)?\{(?=\s|$)"#
+
+    /// How one command moves the shell, if it does: `cd` and `pushd` (to the folder with its
+    /// variables expanded), and `popd`.
+    private func folderChanges(inCommand command: String) -> [FolderChange] {
+        let words = ShellWords.split(command)
+        let folder = words.dropFirst().first { !$0.hasPrefix("-") }.map(expand) ?? "~"
+        switch words.first {
+        case "cd": return [.cd(folder)]
+        case "pushd": return [.pushd(folder)]
+        case "popd": return [.popd]
+        default: return []
         }
     }
 
@@ -373,31 +423,44 @@ public struct CIConfigParser {
     private static let checkoutFolders = ["$CI_PROJECT_DIR", "${CI_PROJECT_DIR}", "$GITHUB_WORKSPACE", "${GITHUB_WORKSPACE}",
                                           "${{ github.workspace }}", "${{github.workspace}}"]
 
-    /// Where following `folders` one after the other from the repository's root leads, relative to
-    /// it, as `cd` goes; nil for the root itself. A folder outside the repository or unknown (a
-    /// variable not defined in sight, `$(dirname "$0")/..`, `cd -`) is taken to lead back to the
-    /// root: scripts go there that way, and a later `cd ios` still counts.
-    static func path(following folders: [String]) -> String? {
+    /// Where following `changes` one after the other from the repository's root leads, relative to
+    /// it, as the shell goes; nil for the root itself. A folder outside the repository or unknown (a
+    /// variable not defined in sight, `$(dirname "$0")/..`, `cd -`, a `popd` without its `pushd`)
+    /// is taken to lead back to the root: scripts go there that way, and a later `cd ios` still counts.
+    static func path(following changes: [FolderChange]) -> String? {
         var components: [String] = []
-        for folder in folders {
-            var folder = folder
-            if let root = checkoutFolders.first(where: { folder == $0 || folder.hasPrefix($0 + "/") }) {
-                folder = "." + folder.dropFirst(root.count)
-                components = []
-            }
-            guard isResolved(folder), !folder.hasPrefix("/"), !folder.hasPrefix("~"), folder != "-" else {
-                components = []
-                continue
-            }
-            for component in folder.split(separator: "/") where component != "." {
-                if component != ".." {
-                    components.append(String(component))
-                } else if components.popLast() == nil {
-                    break
-                }
+        var stack: [[String]] = []      // where each `pushd` left
+        for change in changes {
+            switch change {
+            case .cd(let folder):
+                components = path(following: folder, from: components)
+            case .pushd(let folder):
+                stack.append(components)
+                components = path(following: folder, from: components)
+            case .popd:
+                components = stack.popLast() ?? []
             }
         }
         return components.isEmpty ? nil : components.joined(separator: "/")
+    }
+
+    /// Where a `cd` to `folder` from `components` leads.
+    private static func path(following folder: String, from components: [String]) -> [String] {
+        var folder = folder
+        var components = components
+        if let root = checkoutFolders.first(where: { folder == $0 || folder.hasPrefix($0 + "/") }) {
+            folder = "." + folder.dropFirst(root.count)
+            components = []
+        }
+        guard isResolved(folder), !folder.hasPrefix("/"), !folder.hasPrefix("~"), folder != "-" else { return [] }
+        for component in folder.split(separator: "/") where component != "." {
+            if component != ".." {
+                components.append(String(component))
+            } else if components.popLast() == nil {
+                break
+            }
+        }
+        return components
     }
 
     // MARK: - Xcode version

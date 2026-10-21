@@ -300,16 +300,48 @@ import Testing
     }
 
     @Test func workingDirectoriesFollowEachOther() {
-        #expect(CIConfigParser.path(following: ["ios", "./App"]) == "ios/App")
-        #expect(CIConfigParser.path(following: ["ios", ".."]) == nil)
-        #expect(CIConfigParser.path(following: ["ios", "../Modules"]) == "Modules")
-        #expect(CIConfigParser.path(following: ["ios", "$CI_PROJECT_DIR/Modules"]) == "Modules")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .cd("./App")]) == "ios/App")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .cd("..")]) == nil)
+        #expect(CIConfigParser.path(following: [.cd("ios"), .cd("../Modules")]) == "Modules")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .cd("$CI_PROJECT_DIR/Modules")]) == "Modules")
         // Out of the repository, or out of sight: back at the root, as far as can be told.
-        #expect(CIConfigParser.path(following: [".."]) == nil)
-        #expect(CIConfigParser.path(following: ["/Users/ci/build"]) == nil)
-        #expect(CIConfigParser.path(following: ["$BUILD_DIR"]) == nil)
-        #expect(CIConfigParser.path(following: ["$BUILD_DIR", "ios"]) == "ios")
-        #expect(CIConfigParser.path(following: ["ios", "-"]) == nil)
+        #expect(CIConfigParser.path(following: [.cd("..")]) == nil)
+        #expect(CIConfigParser.path(following: [.cd("/Users/ci/build")]) == nil)
+        #expect(CIConfigParser.path(following: [.cd("$BUILD_DIR")]) == nil)
+        #expect(CIConfigParser.path(following: [.cd("$BUILD_DIR"), .cd("ios")]) == "ios")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .cd("-")]) == nil)
+        // `popd` goes back to where its `pushd` was.
+        #expect(CIConfigParser.path(following: [.pushd("ios"), .pushd("App"), .popd]) == "ios")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .pushd("App"), .cd("Sources"), .popd]) == "ios")
+        #expect(CIConfigParser.path(following: [.cd("ios"), .popd]) == nil)
+    }
+
+    /// A function's body runs where the function is called: the `cd`s before its first call count,
+    /// then those of the body before the line.
+    @Test func workingDirectoriesInShellFunctions() {
+        func workingDirectory(_ script: String) -> String? {
+            CIConfigParser.extract(from: [.init(name: "scripts/test.sh", text: "#!/bin/bash\n" + script)]).config.workingDirectory
+        }
+        #expect(workingDirectory("run_tests() {\n  xcodebuild test -scheme App\n}\ncd ios\nrun_tests\n") == "ios")
+        #expect(workingDirectory("run_tests() {\n  cd App\n  xcodebuild test -scheme App\n}\ncd ios\nrun_tests\ncd ..\n") == "ios/App")
+        #expect(workingDirectory("build() { cd ios && xcodebuild test -scheme App; }\nbuild\n") == "ios")
+        #expect(workingDirectory("build() { xcodebuild test -scheme App; }\ncd ios && build\n") == "ios")
+        // Called from another function, called in its turn.
+        #expect(workingDirectory("run_tests() {\n  xcodebuild test -scheme App\n}\nmain() {\n  cd App\n  run_tests\n}\ncd ios\nmain\n") == "ios/App")
+        // In a GitHub `run:` block too.
+        #expect(CIConfigParser.extract(from: [.init(name: ".github/workflows/snapshots.yml", text: """
+            jobs:
+              snapshots:
+                steps:
+                  - run: |
+                      run_tests() {
+                        xcodebuild test -scheme App
+                      }
+                      pushd ios
+                      pushd App
+                      popd
+                      run_tests
+            """)]).config.workingDirectory == "ios")
     }
 
     @Test func xcodeSelectionVariants() {

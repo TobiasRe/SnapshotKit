@@ -65,8 +65,9 @@ likely to run snapshot tests:
 
 From the chosen command it takes `-scheme`, `-workspace`, `-project`, `-testPlan`, `-destination` (`name=`,
 `OS=`, `platform=`), every `-only-testing` and `-skip-testing`, and the working directory: GitHub Actions’
-`working-directory` (the step’s, else `defaults.run` of the job or workflow), followed by every `cd` before the
-command in the same shell (also in GitLab’s `before_script`).
+`working-directory` (the step’s, else `defaults.run` of the job or workflow), followed by every `cd`, `pushd`
+and `popd` before the command in the same shell (also in GitLab’s `before_script`). For a command in a shell
+function, that is those before the function is first called, then those in its body before the command.
 
 Only `xcodebuild` is understood. Swift packages tested with `swift test` in CI: set `scheme:` (the
 `<Package>-Package` scheme) and `device:` in `.snapshotkit.yml`, or let SnapshotKit find the package scheme.
