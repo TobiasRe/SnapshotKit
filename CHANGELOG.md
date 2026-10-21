@@ -90,8 +90,9 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   device’s and case’s images; a flakiness check on two simulators no longer calls a flaky test “Fails every
   time”. Run progress names a parameterized test once, by its name.
 - A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts, stays
-  out of the history, and leaves the Run tab showing the last run, with “Cancelled.” rather than a result. A
-  settings change or Check Again after a re-record no longer clears the flakiness verdicts.
+  out of the history, and leaves the Run tab showing the last run, with “Cancelled.” rather than a result; so
+  does anything that ends without a new result (no connection, tests that don’t build). A settings change or
+  Check Again after a re-record no longer clears the flakiness verdicts.
 - A run whose tests don’t build keeps the last run’s failures, and says so.
 - A run that records a new reference no longer makes the test look flaky; **Check Flakiness of Failing Tests**
   repeats just the failing tests, not the passing ones beside them.
