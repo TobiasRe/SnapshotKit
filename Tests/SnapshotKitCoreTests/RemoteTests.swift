@@ -246,7 +246,9 @@ import Testing
 }
 
 /// A remote Mac in a local folder: scripts run with bash, with stand-ins for `xcodebuild` and
-/// `xcrun` (simctl and xcresulttool) first on the PATH; the preflight reports one Xcode.
+/// `xcrun` (simctl and xcresulttool) first on the PATH; the preflight reports one Xcode. A result
+/// bundle's tests are its `tests.json`, and its attachments the folder `attachments` in it (with
+/// its `manifest.json`), as `xcresulttool export` writes them.
 struct FakeMac: RemoteTransport {
     let checkout: URL
     let bin: URL
@@ -265,7 +267,9 @@ struct FakeMac: RemoteTransport {
             case "$1 $2" in
               "simctl list") echo '{"devices": {"com.apple.CoreSimulator.SimRuntime.iOS-99-0": [{"name": "Example Phone", "udid": "SIM-1", "state": "Shutdown"}]}}' ;;
               "xcresulttool get") while [ "$1" != --path ]; do shift; done; cat "$2/tests.json" ;;
-              "xcresulttool export") while [ "$1" != --output-path ]; do shift; done; mkdir -p "$2" && echo '[]' > "$2/manifest.json" ;;
+              "xcresulttool export") while [ "$1" != --path ]; do shift; done; bundle=$2
+                while [ "$1" != --output-path ]; do shift; done; mkdir -p "$2"
+                if [ -d "$bundle/attachments" ]; then cp -R "$bundle/attachments/." "$2/"; else echo '[]' > "$2/manifest.json"; fi ;;
               *) echo "unexpected: xcrun $*" >&2; exit 64 ;;
             esac
             """, in: bin)

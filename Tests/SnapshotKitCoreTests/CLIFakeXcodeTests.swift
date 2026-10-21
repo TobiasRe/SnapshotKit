@@ -17,6 +17,9 @@ import Testing
               {"name": "card()", "nodeType": "Test Case", "nodeIdentifier": "CardTests/card()", "result": "Passed"}]}]}]}]}
         """#
 
+    /// The manifest of a failing `card()`'s one image, `F.png`.
+    static let failureImage = #"[{"testIdentifier": "CardTests/card()", "attachments": [{"exportedFileName": "F.png", "suggestedHumanReadableName": "failure_0_A.png", "repetitionNumber": 1}]}]"#
+
     static let flakyTest = #"""
         {"testNodes": [{"name": "App", "nodeType": "Test Plan", "result": "Failed", "children": [
           {"name": "AppTests", "nodeType": "Unit test bundle", "result": "Failed", "children": [
@@ -30,10 +33,11 @@ import Testing
     /// A repository with a Swift Testing suite and its reference, and the environment `snapkit`
     /// runs with: the stand-ins on the PATH and a log of the arguments `xcodebuild` got.
     ///
-    /// With `FAKE_INTERRUPT_AT` set to `list` (the configuration names no scheme) or `test`,
-    /// `xcodebuild` creates `FAKE_INTERRUPT_MARKER` there and waits for the Ctrl-C, having written
-    /// `FAKE_RESULTS` as the results of a test run, if set; `-list` logs that it was interrupted.
-    /// `FAKE_SCHEMES` replaces what `-list` reports.
+    /// With `FAKE_INTERRUPT_AT` set to `list` (the configuration names no scheme), `test`, or
+    /// `verify` (a run without record mode), `xcodebuild` creates `FAKE_INTERRUPT_MARKER` there and
+    /// waits for the Ctrl-C, having written `FAKE_RESULTS` as the results of a test run, if set;
+    /// `-list` logs that it was interrupted. `FAKE_SCHEMES` replaces what `-list` reports.
+    /// A failing `card()` (`fail`) has a failure image; a run of `NoSuchTests` runs no test.
     /// `verifyBuildError`: only the runs after recording (the verification) fail to build.
     func setUp(fail: Bool = false, buildError: Bool = false, verifyBuildError: Bool = false) throws -> (TempRepo, [String: String], log: URL) {
         let xcode = testTemp("Xcode").appendingPathExtension("app")
@@ -65,7 +69,7 @@ import Testing
             while [ $# -gt 0 ]; do [ "$1" = -resultBundlePath ] && bundle=$2; shift; done
             mkdir -p "$bundle"
             echo '◇ Test run started.'
-            if [ "$FAKE_INTERRUPT_AT" = test ]; then
+            if [ "$FAKE_INTERRUPT_AT" = test ] || { [ "$FAKE_INTERRUPT_AT" = verify ] && ! grep -q 'record: .all' Tests/AppTests/CardTests.swift; }; then
               [ -n "$FAKE_RESULTS" ] && echo "$FAKE_RESULTS" > "$bundle/tests.json"
               trap 'kill $!; exit 130' INT
               sleep 30 >/dev/null 2>&1 &
@@ -77,6 +81,10 @@ import Testing
             if grep -q 'record: .all' Tests/AppTests/CardTests.swift; then
               printf new > \(snapshot)
               echo '\(FakeMac.oneFailingTest)' > "$bundle/tests.json"
+            elif [[ "$args" == *NoSuchTests* ]]; then
+              echo '{"testNodes": []}' > "$bundle/tests.json"
+              echo '** TEST SUCCEEDED **'
+              exit 0
             elif [[ "$args" == *-test-iterations* ]]; then
               echo '\(Self.flakyTest)' > "$bundle/tests.json"
             elif [ -z "\(fail ? "fail" : "")" ]; then
@@ -86,6 +94,8 @@ import Testing
               exit 0
             else
               echo '\(FakeMac.oneFailingTest)' > "$bundle/tests.json"
+              mkdir -p "$bundle/attachments" && printf png > "$bundle/attachments/F.png"
+              echo '\(Self.failureImage)' > "$bundle/attachments/manifest.json"
             fi
             echo '✘ Test card() failed after 0.1 seconds with 1 issue.'
             echo '** TEST FAILED **'
@@ -113,6 +123,36 @@ import Testing
             """
     }
     let restored = "▸ Restoring test sources\nsnapkit: restored Tests/AppTests/CardTests.swift\n"
+
+    /// What `rerecord` prints until its record run starts, re-recording the last run's failing `CardTests`.
+    func rerecordingCard(_ time: String) -> String {
+        "snapkit: using failing suites from the last run (local, \(time))\nsnapkit: re-recording AppTests/CardTests\n" + environmentLine + """
+            ▸ Finding suite sources
+            ▸ Enabling record mode
+            snapkit: record mode enabled in Tests/AppTests/CardTests.swift (CardTests)
+            ▸ Recording snapshots
+
+            """
+    }
+
+    /// A last run (`/results/earlier.xcresult`) in which `card()` failed; the time `rerecord` says it is from.
+    func lastRunWithCardFailing(in repo: TempRepo) throws -> String {
+        LastRun.update(with: LastRunTests.run([SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [
+            TestCaseResult(name: "card()", identifier: "CardTests/card()", outcome: .failed, failureMessages: [], repetitions: [.failed]),
+        ], failureFiles: [])], bundle: "earlier"), repository: repo.url)
+        return try #require(LastRun.load(repository: repo.url)).date.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// What a run whose build fails prints: the compiler names the file by its physical path.
+    func buildFailed(in repo: TempRepo) throws -> String {
+        let root = try #require(try repo.url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath)
+        return "▸ Testing\n\(root)/Tests/AppTests/CardTests.swift:6:9: error: cannot find 'draw' in scope\n** TEST FAILED **\n▸ Finished\n"
+    }
+
+    func iterations(_ n: Int) -> String { " -test-iterations \(n) -test-repetition-relaunch-enabled YES" }
+
+    /// Where a run's failure images are exported: next to its bundle.
+    func imagesFolder(of bundle: String) -> String { (bundle as NSString).deletingPathExtension + ".attachments" }
     let failed = "▸ Testing\n✘ Test card() failed after 0.1 seconds with 1 issue.\n** TEST FAILED **\n▸ Finished\n"
     let passed = "▸ Testing\n** TEST SUCCEEDED **\n▸ Finished\n"
 
@@ -129,9 +169,11 @@ import Testing
             FAILING SUITE: AppTests/CardTests (1/1 tests)
               ✘ card()
             Result bundle: \(bundle)
+            Failure images: 1 (see `snapkit failures`)
 
             """))
         #expect(last.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
+        #expect(last.failureImages().map(\.failure?.path) == [imagesFolder(of: bundle) + "/F.png"])
         #expect(snapkit.history(of: repo.url).load().map(\.kind) == [.run])
     }
 
@@ -271,6 +313,124 @@ import Testing
         #expect(!result.stdout.contains("still failing"))
         #expect(try repo.read(snapshot) == "new")                                       // recorded all the same
         #expect(LastRun.load(repository: repo.url)?.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
+    }
+
+    /// The verification still fails: exit 1, and the last run is the verification's, with the
+    /// image of what still fails (it had none, so `snapkit failures` showed no image).
+    @Test func aRecordWhoseVerificationStillFails() throws {
+        let (repo, env, _) = try setUp(fail: true)
+        let result = try snapkit("record", "--repo", repo.url.path, "card", environment: env)
+        let history = snapkit.history(of: repo.url).load()
+        #expect(history.map(\.kind) == [.record, .verify])
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: recordingCard + xcodebuild(recorded, only: "AppTests/CardTests/card()") + failed
+            + restored + "▸ Verifying new references\n" + xcodebuild(verified, only: "AppTests/CardTests/card()") + failed
+            + "▸ Done\nRecorded, but verification failed: 1 still failing (flaky?).\n"))
+        #expect(try repo.read(snapshot) == "new")
+        let last = try #require(LastRun.load(repository: repo.url))
+        #expect(last.resultBundle == verified)
+        #expect(last.failureImages().map(\.failure?.path) == [imagesFolder(of: verified) + "/F.png"])
+    }
+
+    /// `rerecord`'s verification still fails: it says so, suggests `snapkit flaky`, and the last
+    /// run's failure has the verification's image.
+    @Test func aRerecordWhoseVerificationStillFails() throws {
+        let (repo, env, _) = try setUp(fail: true)
+        let time = try lastRunWithCardFailing(in: repo)
+        let result = try snapkit("rerecord", "--repo", repo.url.path, environment: env)
+        let history = snapkit.history(of: repo.url).load()
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: rerecordingCard(time) + xcodebuild(recorded, only: "AppTests/CardTests") + failed
+            + restored + "▸ Verifying new references\n" + xcodebuild(verified, only: "AppTests/CardTests") + failed + """
+            ▸ Done
+
+            Recorded suites: AppTests/CardTests
+            Patched and restored: Tests/AppTests/CardTests.swift
+            Verification failed: 1 still failing (flaky?). Try `snapkit flaky`.
+
+            """))
+        let last = try #require(LastRun.load(repository: repo.url))
+        #expect(last.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
+        #expect(last.failureImages().map(\.failure?.path) == [imagesFolder(of: verified) + "/F.png"])
+    }
+
+    /// `record`'s verification that didn't build found out nothing: not "0 still failing".
+    @Test func aRecordWhoseVerificationDoesNotBuild() throws {
+        let (repo, env, _) = try setUp(verifyBuildError: true)
+        let result = try snapkit("record", "--repo", repo.url.path, "card", environment: env)
+        let history = snapkit.history(of: repo.url).load()
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == failure("Recorded, but could not verify: the build failed (CardTests.swift:6:9: cannot find 'draw' in scope).",
+            stdout: recordingCard + xcodebuild(recorded, only: "AppTests/CardTests/card()") + failed + restored + "▸ Verifying new references\n"
+                + xcodebuild(verified, only: "AppTests/CardTests/card()") + (try buildFailed(in: repo)) + "▸ Done\n"))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
+    /// Ctrl-C during `record`'s verification: what was recorded stays, and the verification found
+    /// out nothing.
+    @Test func ctrlCDuringARecordsVerification() throws {
+        let (repo, env, _) = try setUp()
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("record", "--repo", repo.url.path, "card", at: marker,
+                                             environment: interrupting(env, at: "verify", marker: marker))
+        let history = snapkit.history(of: repo.url).load()
+        #expect(history.map(\.kind) == [.record, .verify])
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: recordingCard + xcodebuild(recorded, only: "AppTests/CardTests/card()") + failed
+            + restored + "▸ Verifying new references\n" + xcodebuild(verified, only: "AppTests/CardTests/card()")
+            + "▸ Testing\n▸ Finished\n▸ Done\nRecorded; the verification was cancelled.\n", stderr: interrupted))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == RecordSessionTests.suiteSource)
+        #expect(LastRun.load(repository: repo.url) == nil)
+    }
+
+    /// Ctrl-C during `rerecord`'s verification: the last run's failures stay as they were.
+    @Test func ctrlCDuringARerecordsVerification() throws {
+        let (repo, env, _) = try setUp()
+        let time = try lastRunWithCardFailing(in: repo)
+        let marker = testTemp("interrupt")
+        let result = try snapkit.interrupted("rerecord", "--repo", repo.url.path, at: marker,
+                                             environment: interrupting(env, at: "verify", marker: marker))
+        let history = snapkit.history(of: repo.url).load()
+        let (recorded, verified) = (try #require(history.first?.resultBundle), try #require(history.last?.resultBundle))
+        #expect(Outcome(result) == Outcome(status: 1, stdout: rerecordingCard(time) + xcodebuild(recorded, only: "AppTests/CardTests") + failed
+            + restored + "▸ Verifying new references\n" + xcodebuild(verified, only: "AppTests/CardTests") + """
+            ▸ Testing
+            ▸ Finished
+            ▸ Done
+
+            Recorded suites: AppTests/CardTests
+            Patched and restored: Tests/AppTests/CardTests.swift
+            Recorded; the verification was cancelled.
+
+            """, stderr: interrupted))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(LastRun.load(repository: repo.url)?.resultBundle == "/results/earlier.xcresult")
+    }
+
+    /// A check whose build failed, or that ran no test, has no verdicts: not "every test passes".
+    @Test func aFlakinessCheckThatChecksNothing() throws {
+        let (repo, env, _) = try setUp(buildError: true)
+        let built = try snapkit("flaky", "--repo", repo.url.path, "--suite", "AppTests/CardTests", "--iterations", "3", environment: env)
+        let bundle = try #require(snapkit.history(of: repo.url).load().last?.resultBundle)
+        #expect(Outcome(built) == failure("Nothing was checked: the build failed (CardTests.swift:6:9: cannot find 'draw' in scope).",
+            stdout: "snapkit: running AppTests/CardTests 3×\n" + environmentLine + xcodebuild(bundle, only: "AppTests/CardTests", extra: iterations(3))
+                + (try buildFailed(in: repo)) + """
+
+                Result: 0 passed, 0 failed, 0 skipped  [local]
+                Build errors:
+                  CardTests.swift:6:9: cannot find 'draw' in scope
+                Result bundle: \(bundle)
+
+                """))
+
+        let (other, otherEnv, _) = try setUp()
+        let none = try snapkit("flaky", "--repo", other.url.path, "--suite", "AppTests/NoSuchTests", "--iterations", "3", environment: otherEnv)
+        let empty = try #require(snapkit.history(of: other.url).load().last?.resultBundle)
+        #expect(Outcome(none) == failure("Nothing was checked: no test ran.",
+            stdout: "snapkit: running AppTests/NoSuchTests 3×\n" + environmentLine + xcodebuild(empty, only: "AppTests/NoSuchTests", extra: iterations(3))
+                + passed + "\nResult: 0 passed, 0 failed, 0 skipped  [local]\nResult bundle: \(empty)\n"))
     }
 
     /// The environment that has `xcodebuild` wait for a Ctrl-C at `point` (see `setUp`).

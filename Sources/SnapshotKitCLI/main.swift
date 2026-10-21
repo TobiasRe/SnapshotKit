@@ -256,6 +256,14 @@ func exitIfCancelled(verification run: TestRunResult?, requested: Bool = true) {
     exit(1)
 }
 
+/// Exports a local run's failure images next to its bundle: them, and their folder when there are any.
+func exportAttachments(of result: TestRunResult, environment: TestEnvironment) -> ([SnapshotFailureImages], URL?) {
+    let dir = result.resultBundle.deletingPathExtension().appendingPathExtension("attachments")
+    let attachments = (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir,
+                                                      developerDir: environment.xcode.developerDir)) ?? []
+    return (attachments, attachments.isEmpty ? nil : dir)
+}
+
 func warnAboutConflicts(_ report: RestoreReport) {
     for conflict in report.conflicts {
         warn("WARNING: \(conflict.path) could not be restored; original at \(conflict.backup)", color: "31")
@@ -281,10 +289,8 @@ func runTests(_ ctx: ProjectContext, remote: Bool, onlyTesting: [String]?, itera
         let result = try await runner.run(onlyTesting: onlyTesting,
                                           additionalArguments: iterations.map(Flakiness.arguments) ?? [],
                                           onLine: { printer.line($0) }, onEvent: { printer.event($0, $1) })
-        let dir = result.resultBundle.deletingPathExtension().appendingPathExtension("attachments")
-        let attachments = (try? FailureAttachments.export(resultBundle: result.resultBundle, to: dir,
-                                                          developerDir: runner.environment.xcode.developerDir)) ?? []
-        return (result, attachments, attachments.isEmpty ? nil : dir)
+        let (attachments, dir) = exportAttachments(of: result, environment: runner.environment)
+        return (result, attachments, dir)
     } catch { fail(running: error) }
 }
 
@@ -467,7 +473,10 @@ func main() async {
             record(outcome.recordRun, kind: .record, repo: ctx.repository)
             warnAboutConflicts(outcome.restore)
             exitUnlessRecorded(outcome.recordRun)
-            if let verify = outcome.verifyRun { record(verify, kind: .verify, repo: ctx.repository) }
+            if let verify = outcome.verifyRun {
+                // The images of what still fails: the verification's results replace the last run's.
+                record(verify, kind: .verify, repo: ctx.repository, attachments: exportAttachments(of: verify, environment: recorder.runner.environment).1)
+            }
             exitIfCancelled(verification: outcome.verifyRun, requested: !o.has("--no-verify"))
             if let verify = outcome.verifyRun {
                 // A verification whose tests didn't build found out nothing, which isn't "0 still failing".
@@ -523,7 +532,9 @@ func main() async {
             exitUnlessRecorded(outcome.recordRun)
             say("\nRecorded suites: \(suites.map(\.identifier).joined(separator: ", "))")
             say("Patched and restored: \(outcome.patchedFiles.joined(separator: ", "))")
-            if let verify = outcome.verifyRun { finishVerification(verify, repo: ctx.repository) }
+            if let verify = outcome.verifyRun {
+                finishVerification(verify, repo: ctx.repository, attachments: exportAttachments(of: verify, environment: runner.environment).1)
+            }
             exitIfCancelled(verification: nil, requested: !o.has("--no-verify"))
             exit(0)
         } catch {
@@ -542,6 +553,11 @@ func main() async {
         record(result, kind: .flakeCheck, repo: ctx.repository)
         // A cancelled check repeated its tests only partly (its bundle has what ran): no verdicts.
         if result.cancelled { exitCancelled() }
+        // No verdicts, which isn't every test passing.
+        if let why = result.nothingTested {
+            printSummary(result)
+            fail("Nothing was checked: \(why).")
+        }
         guard let summary = result.summary else { printSummary(result); exit(1) }
         say("")
         let verdicts = Flakiness.classify(summary)
