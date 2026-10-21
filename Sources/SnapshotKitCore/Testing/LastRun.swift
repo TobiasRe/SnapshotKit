@@ -98,6 +98,12 @@ public struct LastRun: Codable, Sendable {
         suites.flatMap { suite in suite.tests.filter { $0.outcome == .failed }.map { suite.identifier + "/" + $0.name } }
     }
 
+    /// Its result bundle and every folder of images it takes failures' images from: an earlier
+    /// run's, for a failing test that a re-record's verification since didn't run.
+    var referencedPaths: [String] {
+        ([resultBundle, attachmentsDirectory].compactMap { $0 } + (testAttachments.map { Array($0.values) } ?? [])).filter { !$0.isEmpty }
+    }
+
     /// The run's own images: the exported folder, else the one next to its bundle (older files name none).
     private var runImagesPath: String? {
         attachmentsDirectory ?? resultBundle.map { ($0 as NSString).deletingPathExtension + ".attachments" }

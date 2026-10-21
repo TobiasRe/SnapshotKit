@@ -326,6 +326,27 @@ import Testing
         #expect(kept.filter { $0.hasSuffix(".xcresult") }.count == TestRunner.keptResults + 1)
     }
 
+    /// A re-record's verification ran one of two failing tests, which still fails: the last run
+    /// shows its images from the verification, and the other's from the full run. Both stay however
+    /// many runs follow.
+    @Test func keepsTheImagesOfFailuresAVerificationDidNotRun() throws {
+        let repo = try TempRepo()
+        let full = try newBundle(in: repo)
+        let images = full.deletingPathExtension().appendingPathExtension("attachments")
+        try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
+        LastRun.update(with: LastRunTests.run([LastRunTests.suite("CardTests", .failed), LastRunTests.suite("ListTests", .failed)], bundle: "full"),
+                       attachmentsDirectory: images, repository: repo.url)
+        let verify = try newBundle(in: repo)
+        let verifyImages = verify.deletingPathExtension().appendingPathExtension("attachments")
+        try FileManager.default.createDirectory(at: verifyImages, withIntermediateDirectories: true)
+        LastRun.update(with: LastRunTests.run([LastRunTests.suite("CardTests", .failed)], bundle: "verify"), partial: true,
+                       attachmentsDirectory: verifyImages, repository: repo.url)
+        for _ in 0...TestRunner.keptResults { _ = try newBundle(in: repo) }
+
+        #expect(FileManager.default.fileExists(atPath: images.path))
+        #expect(FileManager.default.fileExists(atPath: verifyImages.path))
+    }
+
     @Test func theLastRunFindsItsResultsInACopyOfTheRepository() throws {
         let original = try TempRepo()
         let bundle = try newBundle(in: original)

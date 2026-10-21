@@ -131,12 +131,12 @@ public final class TestRunner: @unchecked Sendable { // `process` and `cancelReq
     }
 
     /// A path for the next run's result bundle, after making room for it: the newest runs stay,
-    /// and always the last run's, whose failures the app and `snapkit failures` show.
+    /// and always those the last run refers to, whose failures the app and `snapkit failures` show.
     public static func newResultBundleURL(for repository: URL) -> URL {
         let dir = resultsDirectory(for: repository)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let last = LastRun.load(repository: repository)
-        pruneResults(in: dir, keeping: Set([last?.resultBundle, last?.attachmentsDirectory].compactMap { $0.map(runName) }))
+        pruneResults(in: dir, keeping: Set((last?.referencedPaths ?? []).map(runName)))
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         return dir.appendingPathComponent("\(stamp)-\(UUID().uuidString.prefix(8)).xcresult")
     }
