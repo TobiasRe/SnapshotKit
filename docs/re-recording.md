@@ -28,11 +28,12 @@ their own `@Test` attribute and run one by one.
 The Run tab and the notice follow each stage:
 
 1. **Finding suite sources** — the test file of each snapshot: `<suite folder>.swift`, preferring the one
-   next to the `__Snapshots__` folder, then the test type in it (named like the file, or the first type ending
-   in `Tests`).
+   next to the `__Snapshots__` folder, then the test type in it (named like the file, else the first type ending
+   in `Tests` or `Test`, else the first type). Re-recording failing suites finds the file by the type the test
+   result names.
 2. **Enabling record mode** — the test type is patched (below). SnapshotKit refuses if one of those files has
    uncommitted changes: *Refusing to re-record: these files have uncommitted changes. Commit or stash them
-   first.* That way your own edits can never get mixed up with the patch.
+   first:* followed by the files. That way your own edits can never get mixed up with the patch.
 3. **Recording snapshots** — `xcodebuild test` runs, limited with `-only-testing` to the chosen tests. Every
    snapshot those tests take is written to disk.
 4. **Restoring test sources** — the patch is removed.
@@ -108,9 +109,9 @@ folder). Restoring compares each file with the journal:
 - still the patched text → the original is written back,
 - already the original → nothing to do,
 - you edited the file during the run → only the patch lines are swapped back and **your edits are kept**,
-- changed so much the patch can’t be found → the original is saved to
-  `.git/snapshotkit/backups/<path>.orig` and you’re told: *could NOT restore … automatically; original saved
-  at …*.
+- changed so much the patch can’t be found → the original is saved to `.git/snapshotkit/backups/`, named
+  after its path with `__` for each `/` (`Tests__AppTests__CardTests.swift.orig`), and you’re told: *could NOT
+  restore … automatically; original saved at …*.
 
 A patch owned by a SnapshotKit or `snapkit` process that’s still running is left alone, so two runs can’t
 undo each other. `snapkit restore` restores a project by hand; `--force` overrides that check.

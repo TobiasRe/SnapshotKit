@@ -24,8 +24,8 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
   rendering noise.
 - **Update**: re-record any test, suite or filtered set of snapshots (not just failing ones), with the source
   patch always restored and the result verified.
-- **Manage**: find orphaned snapshots whose test is gone, the largest images, what’s new or modified; copy or
-  drag snapshots and side-by-side comparisons into a review.
+- **Manage**: find orphaned snapshots whose test is gone, the largest images, what’s new or modified; drag
+  snapshots and changes into a review, or copy them or a side-by-side comparison.
 - **Failing and flaky tests** are part of the same picture: reference vs. actual vs. difference (also for an
   `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
   `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs.
@@ -105,13 +105,13 @@ last run.
 In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
 snapshots; sort by size or recency; switch between list and grid. A snapshot’s detail lists its variants
 and committed versions to compare against, and links to its change or failure. The footer’s
-**Re-record All…** (or **Re-record N Shown…** when filtered) records everything the list shows (say, every
-`dark` variant). The arrow beside the toolbar’s Run button re-records the failing suites or every snapshot test
-in one step.
+**Re-record All** (or **Re-record N Shown** when filtered) records everything the list shows (say, every
+`dark` variant), asking first above ten tests. The arrow beside the toolbar’s Run button re-records the failing
+suites, or every snapshot test after asking.
 
 Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
 comparison, open or reveal it, or jump to it in another view. The Changes tab picks the base branch from a
-menu and can revert any change to it. The Dock icon shows the failing count, and bounces when a run finishes
+menu and can revert any change to it. The Dock icon shows the open project’s failing count, and bounces when a run finishes
 in the background.
 
 **Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie

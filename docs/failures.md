@@ -15,8 +15,9 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Failures header): choose an `.xcresult` downloaded from CI. |
 
-The header says which one you’re looking at: *Last run* over *local · Oct 16, 2026 at 7:48 PM*, or the
-bundle’s name (*ci.xcresult*) over *imported · …*. Its arrow menu also offers **Open Result Bundle in Xcode**
+The header says which one you’re looking at: *Local run*, *Remote run* or *Verification run* over
+*local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened), or the bundle’s name
+(*ci.xcresult*) over *imported · …*. Its arrow menu also offers **Open Result Bundle in Xcode**
 and **Reveal Result Bundle in Finder**.
 
 SnapshotKit reads the result bundle with `xcresulttool`, exports the failure attachments (reference, failure

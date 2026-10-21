@@ -65,7 +65,7 @@ remote runs.
 
 ## Checking flakiness remotely
 
-**Run tab › ··· › On *host* › Check Flakiness** (or `snapkit flaky --remote`) repeats the failing tests on the
+**Run tab › ··· › On *host* › Check Flakiness of Failing Tests** (or `snapkit flaky --remote`) repeats the failing tests on the
 remote Mac. A test that fails on CI but passes on your Mac often shows its true colors there.
 
 ## A local “remote”

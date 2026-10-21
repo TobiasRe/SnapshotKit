@@ -19,8 +19,8 @@ swift-snapshot-testing stores each reference as
 | Test name | `payButton` | the row title |
 | Variant | `dark` | on the line under the title, in code type: the `named:` argument or the counter (`1`, `2`…) |
 
-Variants of one test (`payButton.dark`, `payButton.light`) sit next to each other, light before dark and
-small devices before large ones.
+Variants of one test (`payButton.dark`, `payButton.light`) sit next to each other, in the order Finder sorts
+their names (`dark` before `light`, `2` before `10`).
 
 ## Finding snapshots
 
@@ -63,7 +63,8 @@ colored dot:
 A snapshot with nothing notable shows just its variant. Only failing gets a mark of its own, at the trailing
 edge (on a tile, its top corner): a red ✕ when its test failed in the last run, an orange ⚠ when it is flaky.
 
-A test’s variants are listed under one title; the variant is left out when a test has only one.
+A test’s variants are listed under one title. A counter variant (`1`) is left out when it is a test’s only
+image; a named one (`dark`) always shows.
 
 ## The detail
 
@@ -100,7 +101,7 @@ the pixel under the pointer.
 | Copy the image | ⌘C (in the list), or ··· › Copy Image |
 | Put snapshots in a document, a ticket or a chat | drag rows or tiles out of the list |
 | Open the test that records it | ⌥⌘O, or ··· › Open Test in Xcode. Xcode opens the test file at the test function. |
-| Re-record what the list shows | the footer’s **Re-record All…** (or **Re-record N Shown…** when filtered). Filter first to narrow it down, e.g. every `dark` variant. More than ten tests asks first. |
+| Re-record what the list shows | the footer’s **Re-record All** (or **Re-record N Shown** when filtered; with “…” when it asks first). Filter first to narrow it down, e.g. every `dark` variant. More than ten tests asks first. |
 | Clean up orphans | Show › Orphaned, then the footer’s **Move N to Trash…**. Committed files stay recoverable through git, all of them from the Trash; commit the deletion to remove them from the repository. |
 
 The footer counts what the library holds: snapshots, tests, modules and total size.

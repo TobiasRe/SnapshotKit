@@ -113,10 +113,10 @@ the divider to change it.
 
 ## Notices
 
-When something finishes — a run, a re-record, a scan — a notice floats at the bottom right of the window
-with the outcome and, where there is one, the next step (*Show Failures* after a failing run, *Review Changes*
-after a re-record). It fades after a few seconds unless it reports a problem. Notices never push the panes
-around.
+When something finishes — a run, a re-record — a notice floats at the bottom right of the window with the
+outcome and, where there is one, the next step (*Show Failures* after a failing run, *Review Changes* after a
+re-record). It fades after a few seconds unless it reports a problem. A scan’s result floats at the bottom
+center until you close it. VoiceOver reads both out. Notices never push the panes around.
 
 ## Live updates
 
