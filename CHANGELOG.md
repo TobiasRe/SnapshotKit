@@ -72,7 +72,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Without Xcode, running, re-recording and checking flakiness are disabled in the menus, ⌘K and the Failures
   tab, as on the Run tab; importing a result bundle is off during a run, which would replace it.
 - Opening a folder that doesn’t exist or isn’t a git repository says so instead of adding it as a project; a
-  project opened through a symbolic link shares its settings and history with the real path.
+  project opened through a symbolic link shares its settings and history with the real path. A result bundle
+  dropped on the window is imported, not added as a scan folder.
 - Opening the base version of two snapshots of the same test, or of a branch like `release/1.0`, opens the
   right image.
 - The ⌘K palette no longer lists projects whose path merely contains the typed letters somewhere.
@@ -88,8 +89,9 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - A test that ran on several simulators, or a parameterized test, counts a run per device and keeps every
   device’s and case’s images; a flakiness check on two simulators no longer calls a flaky test “Fails every
   time”. Run progress names a parameterized test once, by its name.
-- A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts, and
-  the Run tab keeps showing the last run, with “Cancelled.” rather than a result.
+- A canceled run, re-record, verification or flakiness check keeps the last run’s failures and verdicts, stays
+  out of the history, and leaves the Run tab showing the last run, with “Cancelled.” rather than a result. A
+  settings change or Check Again after a re-record no longer clears the flakiness verdicts.
 - A run whose tests don’t build keeps the last run’s failures, and says so.
 - A run that records a new reference no longer makes the test look flaky; **Check Flakiness of Failing Tests**
   repeats just the failing tests, not the passing ones beside them.

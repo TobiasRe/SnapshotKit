@@ -108,13 +108,21 @@ final class AppModel {
     }
 
     /// Adds dropped folders: a repository (or a folder inside one) opens as a project; any other
-    /// folder becomes a scan folder, so dropping ~/Developer finds the projects in it.
+    /// folder becomes a scan folder, so dropping ~/Developer finds the projects in it. A result
+    /// bundle (`.xcresult`) is imported into the open project.
     @discardableResult
     func addDroppedFolders(_ urls: [URL]) -> Bool {
-        var repositories: [URL] = [], folders: [URL] = []
+        var repositories: [URL] = [], folders: [URL] = [], bundles: [URL] = []
         for url in urls {
-            if let root = Git.repository(containing: url)?.root { repositories.append(root) }
-            else if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { folders.append(url) }
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+            // A result bundle is a folder too, but one to import, never a project or scan folder.
+            if url.pathExtension == "xcresult" { bundles.append(url) }
+            else if let root = Git.repository(containing: url)?.root { repositories.append(root) }
+            else if values?.isDirectory == true, values?.isPackage != true { folders.append(url) }
+        }
+        if let bundle = bundles.last, let current, !current.isRunning, repositories.isEmpty {
+            current.importResultBundle(bundle)
+            return true
         }
         guard !repositories.isEmpty || !folders.isEmpty else { return false }
         for root in repositories { store.markOpened(Project(path: root.path)) }

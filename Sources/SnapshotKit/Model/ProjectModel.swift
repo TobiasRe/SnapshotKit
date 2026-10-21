@@ -325,11 +325,12 @@ final class ProjectModel {
 
     /// Re-reads configuration, branches and history off the main thread (git and file I/O
     /// can take a while in large repositories), then refreshes everything that depends on them.
-    func reload() {
+    @discardableResult
+    func reload() -> Task<Void, Never> {
         reloadGeneration += 1
         let generation = reloadGeneration
         let url = project.url, settings = settings
-        Task {
+        return Task {
             let loaded = await offCooperativePool {
                 let git = Git(root: url)
                 let context = Result { try ProjectModel.loadContext(url, settings: settings) }
@@ -360,8 +361,11 @@ final class ProjectModel {
                 detectedBaseBranch = nil
             }
             validateEnvironment()
+            // Only a last run saved elsewhere since (or the first look): the app's own saves are what it
+            // shows already, and taking them for an outside run cleared the session's verdicts.
+            let savedElsewhere = loaded.lastRunSaved != lastRunSaved || failureSource == nil
             lastRunSaved = loaded.lastRunSaved
-            loadLastRun()
+            if savedElsewhere { loadLastRun() }
             refreshChanges()
         }
     }
@@ -1120,6 +1124,7 @@ final class ProjectModel {
         stageLabel = op.label
         runPane = .output
         phase = .preparing
+        shownBeforeOperation = (passed, failed, skipped, lastDuration)
         passed = 0; failed = 0; skipped = 0
         expectedTotal = nil
         currentTest = nil
@@ -1136,19 +1141,22 @@ final class ProjectModel {
         return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
+    /// The Run tab's counts and duration when an operation began, put back if it's cancelled.
+    @ObservationIgnored private var shownBeforeOperation: (passed: Int, failed: Int, skipped: Int, duration: TimeInterval?)?
+
     /// The notice after a cancel, which the Run tab marks as neither passed nor failed.
     static let cancelled = "Cancelled."
     var lastMessageIsCancellation: Bool { lastMessage == Self.cancelled }
 
     private func finish(message: String?, isError: Bool = false, action: NoticeAction? = nil) {
         lineBuffer.flushNow()
-        if message == Self.cancelled {
-            // The counts went to zero when the operation began; show the last run's again.
-            passed = lastResult?.passed ?? 0
-            failed = lastResult?.failed ?? 0
-            skipped = lastResult?.skipped ?? 0
+        if message == Self.cancelled, let shown = shownBeforeOperation {
+            // The counts went to zero when the operation began: show again what was shown then, the
+            // last run's (also one only read from disk, which has no `lastResult`), and how long it took.
+            (passed, failed, skipped, lastDuration) = shown
+        } else {
+            lastDuration = startedAt.map { Date().timeIntervalSince($0) }
         }
-        lastDuration = startedAt.map { Date().timeIntervalSince($0) }
         startedAt = nil
         operation = nil
         cancelAction = nil
@@ -1428,7 +1436,9 @@ final class ProjectModel {
                     message += " " + verified.note
                     isError = isError || verified.isError
                 }
-                lastResult = outcome.verifyRun ?? outcome.recordRun
+                if outcome.verifyRun?.cancelled == true { message += " The verification was cancelled." }
+                // A cancelled run's few results don't replace what the Run tab shows (see `completeRun`).
+                if !record.cancelled, outcome.verifyRun?.cancelled != true { lastResult = outcome.verifyRun ?? record }
                 // New references are working-tree changes: the next step is to look at them.
                 finish(message: message, isError: isError, action: record.nothingTested == nil ? .reviewChanges : nil)
             } catch {
@@ -1442,9 +1452,9 @@ final class ProjectModel {
     /// which no test ran: the last run's failures stay. `images` exports the run's failure images.
     private func applyVerification(_ run: TestRunResult, images: () async -> (images: [SnapshotFailureImages], directory: URL?)) async
         -> (note: String, isError: Bool)? {
+        guard !run.cancelled else { return nil }   // nor in the history: it ran some tests only
         RunHistory(repository: project.url).append(RunRecord.make(kind: .verify, host: run.host, repository: project.url, result: run))
         if let why = run.nothingTested { return ("Could not verify: \(why).", true) }
-        guard !run.cancelled else { return nil }
         let (images, directory) = await images()
         applyPartialRun(run, images: images, attachmentsDirectory: directory)
         return run.succeeded ? ("Verified: \(run.passed) passed.", false)
@@ -1500,13 +1510,14 @@ final class ProjectModel {
     }
 
     private func applyFlakeResult(_ result: TestRunResult, iterations: Int) {
-        RunHistory(repository: project.url).append(RunRecord.make(kind: .flakeCheck, host: result.host, repository: project.url, result: result))
-        setHistory(RunHistory(repository: project.url).load())
-        // A cancelled check has repeated some tests only partly (its bundle has what ran): no verdicts.
+        // A cancelled check has repeated some tests only partly (its bundle has what ran): no verdicts,
+        // and no place in the history.
         guard !result.cancelled else {
             finish(message: Self.cancelled)
             return
         }
+        RunHistory(repository: project.url).append(RunRecord.make(kind: .flakeCheck, host: result.host, repository: project.url, result: result))
+        setHistory(RunHistory(repository: project.url).load())
         // Tests that don't build were not checked, nor were they when no test ran: no verdicts either.
         if let why = result.nothingTested {
             finish(message: "Nothing was checked: \(why).", isError: true)
@@ -1578,7 +1589,9 @@ final class ProjectModel {
                 case .flakeCheck(let n):
                     applyFlakeResult(out.run, iterations: n)
                 case .record(let suites):
-                    RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
+                    if !out.run.cancelled {
+                        RunHistory(repository: project.url).append(RunRecord.make(kind: .record, host: out.host, repository: project.url, result: out.run))
+                    }
                     if let why = out.run.nothingTested {
                         finish(message: "Nothing was recorded: \(why).", isError: true)
                     } else if out.run.cancelled {
@@ -1592,7 +1605,7 @@ final class ProjectModel {
                             do {
                                 let checked = try await runner.run(mode: .run, onlyTesting: suites.flatMap(\.onlyTestingIdentifiers),
                                                                    onStage: onStage, onLine: onLine, onEvent: onEvent)
-                                lastResult = checked.run
+                                if !checked.run.cancelled { lastResult = checked.run }
                                 if let verified = await applyVerification(checked.run, images: { (checked.attachments, checked.attachmentsDirectory) }) {
                                     message += " " + verified.note
                                     isError = verified.isError

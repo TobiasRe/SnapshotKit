@@ -437,14 +437,17 @@ private struct SelectableRow: ViewModifier {
 }
 
 /// Keeps a list's selection in view when something other than a click moves it: ⌥⌘↓ with the
-/// image focused, the detail's chevrons, Show in Library, Show Failure.
+/// image focused, the detail's chevrons; and when the list appears with one already chosen, as Show
+/// in Library and Show Failure open it.
 private struct ScrollsToSelection: ViewModifier {
     var id: String?
 
     func body(content: Content) -> some View {
         ScrollViewReader { proxy in
-            content.onChange(of: id) { _, id in
-                if let id { proxy.scrollTo(id) }   // no anchor: a row already in view stays put
+            content.onChange(of: id, initial: true) { _, id in
+                guard let id else { return }
+                // On the next turn: a list that has just appeared hasn't laid out its rows yet.
+                Task { @MainActor in proxy.scrollTo(id) }   // no anchor: a row in view stays put
             }
         }
     }

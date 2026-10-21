@@ -408,6 +408,12 @@ extension AppUITests {
             let file = AppFixtures.temporaryDirectory("loose").appendingPathExtension("txt")
             try Data("x".utf8).write(to: file)
             #expect(!app.addDroppedFolders([file]))
+            // A result bundle is a folder, but one to import into the open project, not to scan.
+            let bundle = AppFixtures.temporaryDirectory("dropped").appendingPathExtension("xcresult")
+            try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+            #expect(app.addDroppedFolders([bundle]))
+            #expect(app.store.settings.scanRoots.isEmpty)
+            #expect(app.current?.lastMessage == "Reading \(bundle.lastPathComponent)…")
         }
 
         /// A folder that is gone (or never was a repository) is not added as a project, and the window says why.
@@ -843,6 +849,10 @@ extension AppUITests {
             #expect(model.flakeResults == verdicts)
             #expect(model.lastResult?.resultBundle == verification.resultBundle)
             #expect(model.failures.map(\.id) == [payButton, badge])
+            // Nor does a reload (a settings change, Check Again) take the app's own save for an outside run.
+            await model.reload().value
+            #expect(model.flakeResults == verdicts)
+            #expect(model.lastResult?.resultBundle == verification.resultBundle)
 
             LastRun.update(with: TestRunResult(commandLine: "xcodebuild test", exitStatus: 65, cancelled: false,
                                                resultBundle: repo.appendingPathComponent("snapkit.xcresult"),
@@ -962,6 +972,7 @@ extension AppUITests {
             let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
             let failures = model.failures.map(\.id)
             let last = try #require(model.lastResult)
+            let counts = (model.passed, model.failed, model.skipped)
             let runs = RunHistory(repository: repo).load().count
             model.runTests()
             try await waitUntilStarted(model)
@@ -972,7 +983,7 @@ extension AppUITests {
             #expect(model.failures.map(\.id) == failures)
             // The Run tab shows the last run as before, not the cancelled run's few results.
             #expect(model.lastResult?.resultBundle == last.resultBundle)
-            #expect((model.passed, model.failed, model.skipped) == (last.passed, last.failed, last.skipped))
+            #expect((model.passed, model.failed, model.skipped) == counts)
             #expect(RunHistory(repository: repo).load().count == runs)
             #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier, AppFixtures.profileSuite.identifier])
             #expect(try savedLastRun(in: repo) == saved)
@@ -1036,12 +1047,16 @@ extension AppUITests {
 
         @Test func cancellingAReRecordSaysSo() async throws {
             let repo = try makeRecordableRepo()
-            let model = try runnableModel(repo, xcodebuild: Self.longRun)
+            let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
+            let shown = (model.lastResult?.resultBundle, model.passed, model.failed, model.lastDuration)
             model.reRecordFailed(suites: [Self.cardSuite])
             try await waitUntilStarted(model)
             model.cancel()
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Cancelled.")
+            // The Run tab shows what it did before: not the cancelled record run, nor its duration.
+            #expect(model.lastResult?.resultBundle == shown.0)
+            #expect((model.passed, model.failed, model.lastDuration) == (shown.1, shown.2, shown.3))
             #expect(try Shell.output(["git", "status", "--porcelain", "--", "Tests/AppTests/CardTests.swift"], in: repo).isEmpty)
         }
 
@@ -1054,12 +1069,14 @@ extension AppUITests {
             let model = try runnableModel(repo, xcodebuild: "[ -e \"$0.ran\" ] || { touch \"$0.ran\"; exit 0; }\n" + Self.longRun,
                                           testResults: Self.cardPassed, failures: true)
             let failures = model.failures.map(\.id)
+            let shown = model.lastResult?.resultBundle
             model.reRecordFailed(suites: [Self.cardSuite])
             try await waitUntilStarted(model)
             model.cancel()
             try await waitUntilFinished(model)
-            #expect(model.lastMessage == "Re-recorded CardTests.")
+            #expect(model.lastMessage == "Re-recorded CardTests. The verification was cancelled.")
             #expect(model.failures.map(\.id) == failures)
+            #expect(model.lastResult?.resultBundle == shown)               // not the cancelled verification
             #expect(try savedLastRun(in: repo) == saved)
         }
 

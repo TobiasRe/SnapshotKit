@@ -863,9 +863,14 @@ struct SnapshotGrid: View {
                 }
                 // Also when the grid appears with a selection (switching from the list).
                 .onChange(of: project.selectedSnapshotID, initial: true) { _, id in
-                    guard let id, id != clicked else { return }
+                    guard let id else { return }
+                    if id == clicked {   // just clicked, so in view; a later move to it scrolls again
+                        clicked = nil
+                        return
+                    }
                     // Centered: scrolled just into view, a tile moved up sat under the pinned header.
-                    withAnimation(DS.motion) { proxy.scrollTo(id, anchor: .center) }
+                    // On the next turn, for a grid that has just appeared.
+                    Task { @MainActor in withAnimation(DS.motion) { proxy.scrollTo(id, anchor: .center) } }
                 }
         }
     }
