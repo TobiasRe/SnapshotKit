@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct SnapshotChangesTests {
+@Suite(.isolated) struct SnapshotChangesTests {
     let red = png(width: 4, height: 4, rgba: (255, 0, 0, 255))
     let blue = png(width: 4, height: 4, rgba: (0, 0, 255, 255))
 
@@ -248,7 +248,7 @@ import Testing
     }
 }
 
-@Suite struct ImageDiffTests {
+@Suite(.isolated) struct ImageDiffTests {
     @Test func identicalAndChanged() throws {
         let a = PixelImage(data: png(width: 3, height: 2, rgba: (10, 20, 30, 255)))!
         #expect(ImageDiff.compare(a, a).isIdentical)
@@ -272,7 +272,7 @@ import Testing
     }
 }
 
-@Suite struct ViewportTests {
+@Suite(.isolated) struct ViewportTests {
     @Test func zoomAroundAnchorKeepsPointFixed() {
         var v = Viewport()
         let anchor = CGPoint(x: 100, y: -50)
@@ -308,7 +308,7 @@ func png(width: Int, height: Int, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Data {
     return PixelImage(width: width, height: height, pixels: pixels).pngData()!
 }
 
-@Suite struct ReviewMarksTests {
+@Suite(.isolated) struct ReviewMarksTests {
     @Test func marksSurviveUntilTheSnapshotChangesAgain() throws {
         let repo = try TempRepo()
         let path = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
@@ -362,7 +362,7 @@ func png(width: Int, height: Int, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Data {
     }
 }
 
-@Suite struct InvisibleChangesTests {
+@Suite(.isolated) struct InvisibleChangesTests {
     @Test func findsReRecordsThatOnlyPickedUpNoise() throws {
         let repo = try TempRepo()
         let dir = "Tests/AppTests/__Snapshots__/CardTests"

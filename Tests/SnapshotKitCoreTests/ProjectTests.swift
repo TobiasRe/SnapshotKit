@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct FuzzyMatcherTests {
+@Suite(.isolated) struct FuzzyMatcherTests {
     @Test func ranksWordStartsAndRejectsNonMatches() {
         let names = ["payments-ios", "SnapshotKit", "snap-old", "Settings"]
         #expect(FuzzyMatcher.rank(names, query: "snk", key: { $0 }) == ["SnapshotKit"])
@@ -15,7 +15,7 @@ import Testing
     }
 }
 
-@Suite struct ProjectStoreTests {
+@Suite(.isolated) struct ProjectStoreTests {
     func makeStore() -> ProjectStore {
         ProjectStore(url: testTemp("settings").appendingPathExtension("json"))
     }
@@ -96,13 +96,15 @@ import Testing
 
     @Test func privateVarAliasesAreOneProject() throws {
         let url = testTemp("settings").appendingPathExtension("json")
-        let name = "snapkit-alias-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: "/private/var/tmp/\(name)", withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(atPath: "/private/var/tmp/\(name)") }
-        try Data(#"{"discovered": ["/private/var/tmp/\#(name)", "/var/tmp/\#(name)"], "recents": ["/private/var/tmp/\#(name)"]}"#.utf8).write(to: url)
+        // The temporary folder is in /var/folders, which is /private/var/folders.
+        let folder = testTemp("alias")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let path = folder.path, privatePath = "/private" + path
+        try #require(path.hasPrefix("/var/") && FileManager.default.fileExists(atPath: privatePath))
+        try JSONSerialization.data(withJSONObject: ["discovered": [privatePath, path], "recents": [privatePath]]).write(to: url)
         let store = ProjectStore(url: url)
-        #expect(store.allProjects.map(\.path) == ["/var/tmp/\(name)"])
-        #expect(store.settings.recents == ["/var/tmp/\(name)"])
+        #expect(store.allProjects.map(\.path) == [path])
+        #expect(store.settings.recents == [path])
     }
 
     /// A repository opened through a symlink (`~/code` → `/Volumes/Work/code`) is the one `git` and
@@ -182,7 +184,7 @@ import Testing
     }
 }
 
-@Suite struct MenuBarSettingTests {
+@Suite(.isolated) struct MenuBarSettingTests {
     @Test func offUnlessChosenAndKeptWhenSaved() throws {
         let decoder = JSONDecoder()
         #expect(try decoder.decode(AppSettings.self, from: Data("{}".utf8)).showMenuBarItem == false)

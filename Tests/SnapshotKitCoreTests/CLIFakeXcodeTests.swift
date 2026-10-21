@@ -6,7 +6,7 @@ import Testing
 /// version.plist and stand-ins for `xcodebuild` and `xcrun` first on the PATH (the remote tests'
 /// `FakeMac`). The stand-in `xcodebuild` records when record mode is on in the test source,
 /// reports repetitions for `-test-iterations`, and passes otherwise, unless told to fail.
-@Suite struct CLIFakeXcodeTests {
+@Suite(.isolated) struct CLIFakeXcodeTests {
     let snapkit = Snapkit()
     let snapshot = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
 

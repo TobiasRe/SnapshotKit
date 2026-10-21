@@ -1,7 +1,7 @@
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct CommandArgumentsTests {
+@Suite(.isolated) struct CommandArgumentsTests {
     let options: [String: CommandArguments.Option] = ["--repo": .value, "--suite": .value, "--verbose": .flag, "--remote": .optionalValue]
 
     @Test func valuesFlagsAndRepeatedOptions() throws {

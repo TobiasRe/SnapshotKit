@@ -4,7 +4,7 @@ import Testing
 
 /// `snapkit` as docs/cli.md describes it: the built executable against temporary repositories,
 /// output and exit status compared in full. Nothing here needs Xcode or a simulator.
-@Suite struct CLIUsageTests {
+@Suite(.isolated) struct CLIUsageTests {
     let snapkit = Snapkit()
 
     @Test(arguments: [[], ["help"], ["-h"], ["--help"]])
@@ -69,7 +69,7 @@ import Testing
     }
 }
 
-@Suite struct CLIRepositoryTests {
+@Suite(.isolated) struct CLIRepositoryTests {
     let snapkit = Snapkit()
 
     @Test func aFolderThatDoesNotExist() throws {
@@ -103,7 +103,7 @@ import Testing
     }
 }
 
-@Suite struct CLISnapshotsTests {
+@Suite(.isolated) struct CLISnapshotsTests {
     let snapkit = Snapkit()
     let dir = "Tests/AppTests/__Snapshots__/CardTests"
 
@@ -183,7 +183,7 @@ import Testing
     }
 }
 
-@Suite struct CLIChangesTests {
+@Suite(.isolated) struct CLIChangesTests {
     let snapkit = Snapkit()
     let red = png(width: 2, height: 2, rgba: (255, 0, 0, 255))
     let blue = png(width: 2, height: 2, rgba: (0, 0, 255, 255))
@@ -265,7 +265,7 @@ import Testing
     }
 }
 
-@Suite struct CLIConfigTests {
+@Suite(.isolated) struct CLIConfigTests {
     let snapkit = Snapkit()
 
     func rows(baseBranch: String = "develop  (git (auto-detected))") -> String {
@@ -334,7 +334,7 @@ import Testing
     }
 }
 
-@Suite struct CLIImageTests {
+@Suite(.isolated) struct CLIImageTests {
     let snapkit = Snapkit()
 
     /// 10×10 white, with the first `painted` pixels in `color`.
@@ -426,7 +426,7 @@ import Testing
     }
 }
 
-@Suite struct CLIProjectsTests {
+@Suite(.isolated) struct CLIProjectsTests {
     let snapkit = Snapkit()
 
     /// A folder with one repository with snapshots and one without.

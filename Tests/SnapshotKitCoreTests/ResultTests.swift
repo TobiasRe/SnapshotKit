@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct XCResultParserTests {
+@Suite(.isolated) struct XCResultParserTests {
     @Test func failedRun() throws {
         let summary = try XCResultParser.parse(fixture("xcresult-tests-failed.json"))
         #expect(summary.total == 1)
@@ -86,7 +86,7 @@ import Testing
     }
 }
 
-@Suite struct TestOutputParserTests {
+@Suite(.isolated) struct TestOutputParserTests {
     func lines(_ name: String) throws -> [String] {
         String(decoding: try fixture(name), as: UTF8.self).components(separatedBy: "\n")
     }
@@ -145,7 +145,7 @@ import Testing
     }
 }
 
-@Suite struct FailureAttachmentTests {
+@Suite(.isolated) struct FailureAttachmentTests {
     @Test func groupsReferenceFailureAndDifferencePerRepetition() throws {
         let images = try FailureAttachments.parse(manifest: fixture("attachments-manifest.json"), directory: URL(fileURLWithPath: "/att"))
         #expect(images.count == 3)
@@ -257,7 +257,7 @@ import Testing
     }
 }
 
-@Suite struct TestRunnerArgumentTests {
+@Suite(.isolated) struct TestRunnerArgumentTests {
     @Test func buildsCIEquivalentCommand() {
         var config = SnapshotConfig()
         config.workspace = "App.xcworkspace"
@@ -292,7 +292,7 @@ import Testing
     }
 }
 
-@Suite struct ResultStorageTests {
+@Suite(.isolated) struct ResultStorageTests {
     /// What xcodebuild does with the path it is given.
     func newBundle(in repo: TempRepo) throws -> URL {
         let bundle = TestRunner.newResultBundleURL(for: repo.url)
@@ -365,7 +365,7 @@ import Testing
     }
 }
 
-@Suite struct RunHistoryTests {
+@Suite(.isolated) struct RunHistoryTests {
     func record(_ commit: String, _ outcome: TestOutcome, host: String = "local", dirty: Bool = false) -> RunRecord {
         var r = RunRecord(kind: .run, host: host, commit: commit, branch: "b", dirty: dirty, summary: nil,
                           passed: 0, failed: 0, skipped: 0, resultBundle: nil)

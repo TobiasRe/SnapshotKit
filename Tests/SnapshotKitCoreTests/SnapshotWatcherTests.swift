@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct SnapshotWatcherTests {
+@Suite(.isolated) struct SnapshotWatcherTests {
     /// No `__Snapshots__` folder exists before the watcher starts: the stream can still report
     /// changes made just before it started, and those would count as snapshot writes.
     @Test func reportsSnapshotWritesAndIgnoresOtherFiles() async throws {

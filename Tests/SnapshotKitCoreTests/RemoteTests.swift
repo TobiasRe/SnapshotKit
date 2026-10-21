@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct RemoteRunnerTests {
+@Suite(.isolated) struct RemoteRunnerTests {
     @Test func parsesPreflight() {
         let info = RemoteRunner.parsePreflight("""
         HOME=/Users/ci
@@ -154,7 +154,7 @@ import Testing
 }
 
 /// The record path end to end, without ssh or Xcode: a `FakeMac` stands in for both.
-@Suite struct RemoteRecordTests {
+@Suite(.isolated) struct RemoteRecordTests {
     let suite = SuiteResult(bundle: "AppTests", path: ["CardTests"], tests: [], failureFiles: [])
     let source = "Tests/AppTests/CardTests.swift"
     let snapshot = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"

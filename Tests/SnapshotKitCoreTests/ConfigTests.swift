@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct MiniYAMLTests {
+@Suite(.isolated) struct MiniYAMLTests {
     @Test func scalarsListsAndComments() throws {
         let values = try MiniYAML.parse("""
         # comment
@@ -29,7 +29,7 @@ import Testing
     }
 }
 
-@Suite struct ShellWordsTests {
+@Suite(.isolated) struct ShellWordsTests {
     @Test func splitsQuotes() {
         #expect(ShellWords.split(#"xcodebuild -destination 'platform=iOS Simulator,name=Example Phone' -scheme "My App""#)
                 == ["xcodebuild", "-destination", "platform=iOS Simulator,name=Example Phone", "-scheme", "My App"])
@@ -42,7 +42,7 @@ import Testing
     }
 }
 
-@Suite struct CIConfigParserTests {
+@Suite(.isolated) struct CIConfigParserTests {
     static let gitlab = """
     variables:
       XCODE_VERSION: "99.1"
@@ -373,7 +373,7 @@ import Testing
     }
 }
 
-@Suite struct ConfigResolverTests {
+@Suite(.isolated) struct ConfigResolverTests {
     @Test func overrideFileWinsAndScriptsAreFollowed() throws {
         let repo = try TempRepo()
         try repo.write(".gitlab-ci.yml", """
@@ -433,7 +433,7 @@ import Testing
     }
 }
 
-@Suite struct EnvironmentValidatorTests {
+@Suite(.isolated) struct EnvironmentValidatorTests {
     let installs = [
         XcodeInstall(path: "/Apps/Xcode-99.2.app", version: "99.2"),
         XcodeInstall(path: "/Apps/Xcode-99.1.app", version: "99.1"),

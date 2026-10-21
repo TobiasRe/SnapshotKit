@@ -4,7 +4,7 @@ import Testing
 
 /// Test files as projects write them, each with the source the patch must produce, and the
 /// round trip a record session relies on: the patch undone exactly, also with edits around it.
-@Suite struct RecordPatcherCorpusTests {
+@Suite(.isolated) struct RecordPatcherCorpusTests {
     struct Case: Sendable, CustomTestStringConvertible {
         var name: String
         var suite = "CardTests"

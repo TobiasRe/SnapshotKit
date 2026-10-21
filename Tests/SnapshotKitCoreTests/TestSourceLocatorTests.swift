@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct TestSourceLocatorTests {
+@Suite(.isolated) struct TestSourceLocatorTests {
     @Test func findsTheFileAndTheTestFunction() throws {
         let repo = try TempRepo()
         try repo.write("Tests/AppTests/CardTests.swift", Data("""

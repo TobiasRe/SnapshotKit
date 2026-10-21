@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 /// Images at the edges: one pixel, transparency, sizes that differ both ways, other PNG pixel
 /// formats, and the largest snapshots in practice.
-@Suite struct ImageEdgeTests {
+@Suite(.isolated) struct ImageEdgeTests {
     func solid(_ width: Int, _ height: Int, _ rgba: (UInt8, UInt8, UInt8, UInt8)) -> PixelImage {
         var pattern = [rgba.0, rgba.1, rgba.2, rgba.3]
         let pixels = [UInt8](unsafeUninitializedCapacity: width * height * 4) { buffer, count in

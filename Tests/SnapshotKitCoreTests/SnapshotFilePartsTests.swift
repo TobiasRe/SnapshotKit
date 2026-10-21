@@ -4,7 +4,7 @@ import Testing
 
 /// The library groups and sorts thousands of files on every change, so a file's parts are parsed
 /// once from its path (measured: 80 ms → 25 ms for 6,000 snapshots in a debug build).
-@Suite struct SnapshotFilePartsTests {
+@Suite(.isolated) struct SnapshotFilePartsTests {
     @Test func partsComeFromThePathAndFollowIt() {
         var file = SnapshotFile(path: "Tests/FeatureTests/__Snapshots__/CheckoutViewTests/payButton.dark.png", byteSize: 1)
         #expect([file.module, file.suite, file.testName, file.variant, file.fileName]

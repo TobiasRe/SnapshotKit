@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct RecordPatcherTests {
+@Suite(.isolated) struct RecordPatcherTests {
     @Test func replacesExistingRecordValue() throws {
         let source = """
         @MainActor
@@ -178,7 +178,7 @@ import Testing
     }
 }
 
-@Suite(.serialized) struct RecordSessionTests {
+@Suite(.serialized, .isolated) struct RecordSessionTests {
     static let suiteSource = """
     import SnapshotTesting
     import Testing

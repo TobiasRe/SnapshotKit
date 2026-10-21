@@ -27,7 +27,7 @@ private func lastRun(_ outcome: TestOutcome, host: String = "local", bundle: Str
     return result
 }
 
-@Suite struct CLIRecordTests {
+@Suite(.isolated) struct CLIRecordTests {
     let snapkit = Snapkit()
 
     @Test func recordNamesWhatItWillRecordBeforeCheckingXcode() throws {
@@ -116,7 +116,7 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
     try encoder.encode(journal).write(to: url)
 }
 
-@Suite struct CLIRestoreTests {
+@Suite(.isolated) struct CLIRestoreTests {
     let snapkit = Snapkit()
 
     @Test func restoreUndoesALeftoverPatch() throws {
@@ -160,7 +160,7 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
     }
 }
 
-@Suite struct CLIHistoryTests {
+@Suite(.isolated) struct CLIHistoryTests {
     let snapkit = Snapkit()
     let commit = "0123456789abcdef0123456789abcdef01234567"
 
@@ -221,7 +221,7 @@ private func leaveRecordPatch(in repo: TempRepo, owner: Int32 = 999_999) throws 
 
 /// `failures` reads result bundles with `xcrun xcresulttool`; a stand-in on the PATH serves a
 /// bundle's `tests.json` and copies its `attachments` folder as the export.
-@Suite struct CLIFailuresTests {
+@Suite(.isolated) struct CLIFailuresTests {
     let snapkit = Snapkit()
     let reference = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
 

@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 @testable import SnapshotKitCore
 
 /// A throwaway git repository for tests.
@@ -48,6 +49,7 @@ enum TestTemp {
     /// Also isolates the test process, once: settings, history and the patch registry go to a
     /// temporary home instead of the user's, and git ignores the user's and the system's
     /// configuration (hooks, signing or `core.quotePath` would change what the tests see).
+    /// The `.isolated` trait every suite has sets this up before its first test starts.
     static let root: URL = {
         let runs = FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-test-runs")
         for old in (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [] {
@@ -61,4 +63,20 @@ enum TestTemp {
         setenv("GIT_CONFIG_NOSYSTEM", "1", 1)
         return root
     }()
+}
+
+/// Isolates the test process (see `TestTemp.root`) before a suite's first test starts. Every suite
+/// has it: set up lazily by whichever test first asked for a temporary folder, the environment
+/// changed while other tests were already running (`setenv` races with every process they
+/// start), and a test that asked for none could run git with the user's configuration, or read
+/// and write the user's settings.
+struct Isolated: SuiteTrait, TestScoping {
+    func provideScope(for test: Test, testCase: Test.Case?, performing function: @Sendable () async throws -> Void) async throws {
+        _ = TestTemp.root
+        try await function()
+    }
+}
+
+extension Trait where Self == Isolated {
+    static var isolated: Self { Self() }
 }

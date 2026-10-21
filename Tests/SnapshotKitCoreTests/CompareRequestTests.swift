@@ -3,7 +3,7 @@ import Testing
 @testable import SnapshotKitCore
 
 /// `snapkit open` (swift-snapshot-testing's diff tool) hands the pair to the app as a URL.
-@Suite struct CompareRequestTests {
+@Suite(.isolated) struct CompareRequestTests {
     @Test func survivesTheURLWithAwkwardPaths() throws {
         let request = CompareRequest(reference: URL(fileURLWithPath: "/work/My App/Tests/__Snapshots__/A Tests/price+tax.dark mode.png"),
                                      actual: URL(fileURLWithPath: "/tmp/run #3/a&b=ü.png"))

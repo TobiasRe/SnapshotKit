@@ -4,7 +4,7 @@ import Testing
 
 /// CI files, then `.snapshotkit.yml`, then the app's per-project settings, from the files in a
 /// repository to the `xcodebuild` command line, with where each value came from.
-@Suite struct ConfigPrecedenceTests {
+@Suite(.isolated) struct ConfigPrecedenceTests {
     func makeRepo() throws -> TempRepo {
         let repo = try TempRepo()
         try repo.write(".gitlab-ci.yml", """

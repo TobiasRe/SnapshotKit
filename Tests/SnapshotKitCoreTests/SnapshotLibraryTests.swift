@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct SnapshotLibraryTests {
+@Suite(.isolated) struct SnapshotLibraryTests {
     @Test func indexesTrackedAndNewSnapshotsWithTheirState() throws {
         let repo = try TempRepo()
         let red = png(width: 4, height: 4, rgba: (255, 0, 0, 255))
@@ -77,7 +77,7 @@ import Testing
     }
 }
 
-@Suite struct SnapshotHistoryTests {
+@Suite(.isolated) struct SnapshotHistoryTests {
     @Test func listsVersionsNewestFirstAndReadsEach() throws {
         let repo = try TempRepo()
         let path = "Tests/AppTests/__Snapshots__/CardTests/card.1.png"
@@ -136,7 +136,7 @@ import Testing
     }
 }
 
-@Suite struct OrphanTests {
+@Suite(.isolated) struct OrphanTests {
     @Test func findsSnapshotsOfRenamedAndDeletedTests() throws {
         let repo = try TempRepo()
         try repo.write("Tests/AppTests/CardTests.swift", """
@@ -191,7 +191,7 @@ import Testing
     }
 }
 
-@Suite struct NewReferenceTests {
+@Suite(.isolated) struct NewReferenceTests {
     @Test func recognisesNewlyRecordedReferences() {
         let message = """
             Issue recorded: No reference was found on disk. Automatically recorded snapshot: …

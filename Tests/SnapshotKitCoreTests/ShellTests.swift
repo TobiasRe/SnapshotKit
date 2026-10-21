@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct ShellTests {
+@Suite(.isolated) struct ShellTests {
     let large = Data(repeating: UInt8(ascii: "x"), count: 1 << 20)
 
     @Test func inputToAChildThatExitsWithoutReadingIt() throws {
@@ -49,7 +49,7 @@ import Testing
     }
 }
 
-@Suite struct LineBufferTests {
+@Suite(.isolated) struct LineBufferTests {
     @Test func splitsAtNewlinesAndCarriageReturnsAndDropsBlankLines() {
         let buffer = LineBuffer()
         #expect(buffer.append(Data("one\ntw".utf8)) == ["one"])

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct LastRunTests {
+@Suite(.isolated) struct LastRunTests {
     @Test func keepsEverySuiteAndReadsOlderFiles() throws {
         let repo = try TempRepo()
         let passing = SuiteResult(bundle: "AppTests", path: ["ListTests"], tests: [

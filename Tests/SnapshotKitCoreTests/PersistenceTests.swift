@@ -4,7 +4,7 @@ import Testing
 
 /// Files written by earlier versions, as they wrote them (see the history of ProjectStore.swift,
 /// RunHistory.swift, ProjectContext.swift and RecordSession.swift), still read after an update.
-@Suite struct OlderFilesTests {
+@Suite(.isolated) struct OlderFilesTests {
     /// The first settings file: no `showMenuBarItem`, and paths as they were opened, before paths
     /// were made canonical (`/private/var/…` is `/var/…`).
     @Test func settingsFromTheFirstVersion() throws {
@@ -222,7 +222,7 @@ import Testing
     }
 }
 
-@Suite struct StateFileTests {
+@Suite(.isolated) struct StateFileTests {
     struct Value: Codable, Equatable { var name: String }
 
     @Test func roundTripsAndCreatesItsFolder() throws {
@@ -250,7 +250,7 @@ import Testing
     }
 }
 
-@Suite struct ProjectStorePersistenceTests {
+@Suite(.isolated) struct ProjectStorePersistenceTests {
     func makeStore() -> ProjectStore { ProjectStore(url: testTemp("settings").appendingPathExtension("json")) }
 
     @Test func removingAProjectForgetsItEverywhere() {

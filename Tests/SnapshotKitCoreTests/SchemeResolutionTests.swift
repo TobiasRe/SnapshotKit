@@ -3,7 +3,7 @@ import Testing
 @testable import SnapshotKitCore
 
 /// Without a scheme from CI or `.snapshotkit.yml`, the one `xcodebuild -list` reports is used.
-@Suite struct SchemeResolutionTests {
+@Suite(.isolated) struct SchemeResolutionTests {
     /// A runner whose `xcodebuild` prints `output` for `-list -json` and records its arguments.
     func runner(listing output: String, config: SnapshotConfig = SnapshotConfig()) throws -> (TestRunner, URL) {
         let dir = testTemp("xcodebuild")
@@ -48,7 +48,7 @@ import Testing
     }
 }
 
-@Suite struct ModulePickerTests {
+@Suite(.isolated) struct ModulePickerTests {
     /// The picker offers the test targets that have committed snapshots, by their `…Tests` folder.
     @Test func testTargetsWithSnapshots() throws {
         let repo = try TempRepo()

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct RecordPlannerTests {
+@Suite(.isolated) struct RecordPlannerTests {
     func repo() throws -> TempRepo {
         let repo = try TempRepo()
         try repo.write("Tests/AppTests/CardTests.swift", """

@@ -2,7 +2,7 @@ import CoreGraphics
 import Testing
 @testable import SnapshotKitCore
 
-@Suite struct DiffDiagnosisTests {
+@Suite(.isolated) struct DiffDiagnosisTests {
     /// A 100×100 image of one colour, with optional pixels painted another colour.
     func image(_ base: (UInt8, UInt8, UInt8), painting count: Int = 0, with color: (UInt8, UInt8, UInt8) = (0, 0, 0),
                width: Int = 100, height: Int = 100) -> PixelImage {
@@ -78,7 +78,7 @@ import Testing
     }
 }
 
-@Suite struct ViewportPlacementTests {
+@Suite(.isolated) struct ViewportPlacementTests {
     let image = CGSize(width: 400, height: 800)
     let canvas = CGSize(width: 648, height: 1040)
 
@@ -127,7 +127,7 @@ import Testing
     }
 }
 
-@Suite struct PixelColorTests {
+@Suite(.isolated) struct PixelColorTests {
     @Test func readsAndFormatsPixels() {
         let image = PixelImage(width: 2, height: 1, pixels: [255, 0, 0, 255, 0, 128, 255, 64])
         #expect(image.color(x: 0, y: 0)?.hex == "#FF0000")
@@ -137,7 +137,7 @@ import Testing
     }
 }
 
-@Suite struct ImageComposerTests {
+@Suite(.isolated) struct ImageComposerTests {
     @Test func placesImagesSideBySideWithSpacing() throws {
         let red = PixelImage(width: 2, height: 3, pixels: Array(repeating: [255, 0, 0, 255], count: 6).flatMap { $0 })
         let blue = PixelImage(width: 1, height: 1, pixels: [0, 0, 255, 255])
