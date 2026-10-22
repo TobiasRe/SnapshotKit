@@ -171,7 +171,11 @@ struct ChangesTab: View {
                         Button("Use Detected Branch") { project.setBaseBranch(nil) }
                     }
                 } label: {
-                    Label(project.baseBranch ?? "Base Branch", systemImage: "arrow.triangle.branch")
+                    Label {
+                        Text(project.baseBranch ?? "Base Branch")
+                    } icon: {
+                        Image(systemName: "arrow.triangle.branch")
+                    }
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -219,7 +223,11 @@ struct ChangesTab: View {
                         project.hideViewed = false
                     }
                 } label: {
-                    Label(kindsLabel, systemImage: "line.3.horizontal.decrease.circle")
+                    Label {
+                        Text(kindsLabel)
+                    } icon: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
                 }
                 .fixedSize()
                 .quietControl()

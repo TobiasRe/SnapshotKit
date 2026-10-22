@@ -6,7 +6,7 @@ Xcode, without switching windows.
 ## Turning it on
 
 **Settings › General › Show in menu bar.** With it on, SnapshotKit keeps running when you close its window:
-runs continue, and the menu bar item reopens the window. With it off, closing the last window quits the app.
+runs continue, and the menu bar item, the Dock icon or **Window › SnapshotKit** reopens the window. With it off, closing the last window quits the app.
 
 ## The icon
 

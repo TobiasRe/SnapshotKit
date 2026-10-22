@@ -84,12 +84,17 @@ struct ProjectView: View {
                         Button("Re-record All Snapshot Tests…", systemImage: "camera.on.rectangle") { project.confirmReRecordAll = true }
                             .disabled(project.recordableSnapshots.isEmpty)
                     } label: {
-                        Label("Run", systemImage: "play.fill")
+                        Label {
+                            Text("Run")
+                        } icon: {
+                            Image(systemName: "play.fill")
+                        }
                     } primaryAction: {
                         project.runTests()
                     }
                     .disabled(project.environment == nil)
                     .help("Run snapshot tests with the CI configuration (⌘R); the arrow re-records failed or all snapshot tests")
+                    .accessibilityLabel("Run Snapshot Tests")
                 }
             }
         }

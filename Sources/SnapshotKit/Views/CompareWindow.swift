@@ -75,11 +75,7 @@ struct CompareWindow: View {
 
     private func showInProject(_ location: (repository: URL, path: String)) {
         app.reveal(snapshot: location.path, in: location.repository)
-        if let main = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true }) {
-            main.makeKeyAndOrderFront(nil)
-        } else {
-            openWindow(id: "main")
-        }
+        MainWindow.show(openWindow)
     }
 }
 

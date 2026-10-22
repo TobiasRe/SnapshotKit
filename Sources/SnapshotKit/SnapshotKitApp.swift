@@ -103,8 +103,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// The one main window, wherever something asks for it: the Window menu, the menu bar panel, a
+/// compare window's Show in Project.
+@MainActor
+enum MainWindow {
+    static func isMain(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue.hasPrefix("main") == true
+    }
+
+    /// Brings the main window forward, opening it again if it was closed: a closed window stays in
+    /// `NSApp.windows`, just not visible.
+    static func show(_ openWindow: OpenWindowAction) {
+        if !NSApp.windows.contains(where: { isMain($0) && $0.isVisible }) {
+            openWindow(id: "main")
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first(where: isMain)?.makeKeyAndOrderFront(nil)
+    }
+}
+
 struct SnapshotKitCommands: Commands {
     var model: AppModel
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
 
     var body: some Commands {
@@ -195,6 +215,11 @@ struct SnapshotKitCommands: Commands {
             Button("Zoom to Change") { model.activeCompare.zoomToChangeRequest += 1 }
                 .keyboardShortcut("0", modifiers: [.command, .shift])
             Divider()
+        }
+        CommandGroup(after: .windowArrangement) {
+            // The Window menu doesn't list a closed main window, and with the menu bar item shown
+            // SnapshotKit outlives it: this brings it back without the Dock.
+            Button("SnapshotKit") { MainWindow.show(openWindow) }
         }
     }
 }

@@ -146,11 +146,7 @@ struct MenuBarPanel: View {
     /// Brings the main window forward, opening it if it was closed, and selects `path`.
     private func show(_ path: String?) {
         if let path { model.open(path: path) }
-        if !NSApp.windows.contains(where: { $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible }) {
-            openWindow(id: "main")
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeKeyAndOrderFront(nil)
+        MainWindow.show(openWindow)
     }
 }
 

@@ -54,6 +54,11 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 ### Fixed
 
 **App**
+- Window › SnapshotKit brings the main window back after it was closed with the menu bar item on; the Window
+  menu didn’t list it, which left the Dock icon as the only way.
+- VoiceOver: a sidebar project is one stop that says its failing count (“Chat, 4 failing”) instead of the name
+  and then a bare “4 failing”; the Changes tab’s base branch and kinds menus say what they choose (“Base branch:
+  develop”) instead of only their current value, and the toolbar’s Run button is “Run Snapshot Tests”, not “play”.
 - The compare bar, image captions and ⌘K kept their glass but lost their labels over a snapshot as bright or
   dark as can be: secondary text faded into a white screen in dark mode and a black one in light mode.
 - The sidebar stayed blank, and ⌘K showed only its backdrop, whenever no project was open at launch

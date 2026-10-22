@@ -110,6 +110,8 @@ struct SidebarView: View {
             } icon: {
                 ProjectMonogram(name: project.name)
             }
+            // One VoiceOver stop per project, its failing count included ("Chat, 4 failing").
+            .accessibilityElement(children: .combine)
             // The sidebar keeps the system's selection: on its material it is already as quiet
             // as the lists' (about +15 levels in dark, like Linear's).
             .help(project.path.abbreviatingWithTildeInPath

@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 import SwiftUI
 import Testing
 @testable import SnapshotKit
@@ -100,6 +101,63 @@ extension AppUITests {
             let result = audit(.changes, tab: .changes)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
+        }
+
+        /// Every description and value in this app's windows, read through the Accessibility API as
+        /// VoiceOver does: unlike the in-process walk above, that reaches a list's rows. The main thread
+        /// answers those queries, so they run on another thread while it keeps its run loop going.
+        func spokenTexts(inWindowTitled title: String) -> [String] {
+            // Handed back under a lock: the main queue can't take a block while this test runs on it.
+            let walk = OSAllocatedUnfairLock(initialState: (texts: [String](), done: false))
+            Thread.detachNewThread {
+                func string(_ element: AXUIElement, _ attribute: String) -> String? {
+                    var value: CFTypeRef?
+                    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+                    return (value as? String).flatMap { $0.isEmpty ? nil : $0 }
+                }
+                var texts: [String] = []
+                func visit(_ element: AXUIElement, depth: Int) {
+                    guard depth < 40 else { return }
+                    texts += [kAXDescriptionAttribute, kAXValueAttribute].compactMap { string(element, $0) }
+                    var children: CFTypeRef?
+                    AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children)
+                    for child in (children as? [AXUIElement]) ?? [] { visit(child, depth: depth + 1) }
+                }
+                let app = AXUIElementCreateApplication(getpid())
+                AXUIElementSetMessagingTimeout(app, 0.5)
+                var windows: CFTypeRef?
+                AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows)
+                for window in (windows as? [AXUIElement]) ?? [] where string(window, kAXTitleAttribute) == title {
+                    visit(window, depth: 0)
+                }
+                let result = texts
+                walk.withLock { $0 = (result, true) }
+            }
+            let deadline = Date().addingTimeInterval(20)
+            while !walk.withLock(\.done), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+            return walk.withLock(\.texts)
+        }
+
+        /// What VoiceOver can read of `view`, hosted in a window on screen (only those are in the app's
+        /// accessibility tree), off to the side.
+        func spokenTexts<V: View>(_ view: V, size: CGSize) -> [String] {
+            AppFixtures.host(view, size: size) { hosted in
+                hosted.window?.title = "probe"
+                hosted.window?.setFrameOrigin(CGPoint(x: -10_000, y: -10_000))
+                hosted.window?.orderFrontRegardless()
+                defer { hosted.window?.orderOut(nil) }
+                return spokenTexts(inWindowTitled: "probe")
+            }
+        }
+
+        /// A project row is one VoiceOver stop that names the project with its failing count, not a
+        /// name and then a bare "3 failing" with nothing to say whose.
+        @Test func sidebarRowSaysWhoseFailuresTheyAre() {
+            let app = AppModel(store: AppFixtures.store())
+            app.failingCounts = ["/work/payments-ui": 3]
+            let found = spokenTexts(SidebarView().environment(app), size: CGSize(width: 260, height: 420))
+            #expect(found.contains("payments-ui, 3 failing"), "\(found)")
+            #expect(!found.contains("3 failing"))
         }
 
         @Test func failuresTabWithSlider() {
