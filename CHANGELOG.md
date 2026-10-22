@@ -6,6 +6,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
 ### Added
 - `snapkit failures` shows the images of every device and test case a test failed on, each labeled with its
   device and arguments, and lists every reference its failures name.
@@ -17,7 +19,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Calmer lists: a snapshot’s row and grid tile say how it changed on one line (“● Uncommitted · dark”), with
   only failing tests marked on the right, and the detail’s chip uses the same word. The toolbar’s re-record
   button (the same as each detail header’s) is gone, and the Run tab lists Xcode and the simulator once.
-- One main window: no New Window or window tabs; the Dock icon or the menu bar item brings it back.
+- One main window: no New Window or window tabs; the Dock icon, the menu bar item or **Window › SnapshotKit**
+  brings it back.
 - Calmer chrome: the sidebar lists each project once (Recent appears only once the list is long); the Changes
   header drops the kind chip the selected row already shows, and the footer its empty “viewed” bar; the Run tab
   names the last run as the Failures tab does (“Last run · local · …”).
@@ -58,8 +61,6 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Zoom to Change, so the mode buttons stay under the pointer as you step through snapshots.
 - Settings is as tall as what it shows, growing with each scan folder, instead of a fixed height with empty
   space below.
-- Window › SnapshotKit brings the main window back after it was closed with the menu bar item on; the Window
-  menu didn’t list it, which left the Dock icon as the only way.
 - VoiceOver: a sidebar project is one stop that says its failing count (“Chat, 4 failing”) instead of the name
   and then a bare “4 failing”; the Changes tab’s base branch and kinds menus say what they choose (“Base branch:
   develop”) instead of only their current value, and the toolbar’s Run button is “Run Snapshot Tests”, not “play”.
@@ -257,7 +258,8 @@ snapshot tests built with swift-snapshot-testing.
 - `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
   changes and failures, to try SnapshotKit on.
 
-[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/TobiasRe/SnapshotKit/releases/tag/v0.1.0
