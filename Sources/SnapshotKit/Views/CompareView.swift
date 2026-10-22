@@ -212,6 +212,16 @@ struct CompareView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize()
                 .help(stats.isIdentical ? "Pixel-identical" : "\(stats.changedPixels.formatted()) of \(stats.totalPixels.formatted()) pixels differ")
+            } else if showStats, pair == nil {
+                // While the pair loads, the stats' room stays taken: the bar is centred, so a bar
+                // that grew once they arrived moved the mode buttons under the pointer.
+                HStack(spacing: DS.Space.xs) {
+                    Circle().frame(width: DS.Status.dot, height: DS.Status.dot)
+                    Text(verbatim: "0.00% changed").monospacedDigit()
+                }
+                .font(DS.Font.caption)
+                .fixedSize()
+                .hidden()
             }
 
             if showSize, let size = pair?.pixelSize, size.width > 0 {
@@ -229,6 +239,8 @@ struct CompareView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize()
                 }
+            } else if showSize, pair == nil {
+                Text(verbatim: "0000×0000").font(DS.Font.caption.monospacedDigit()).fixedSize().hidden()
             }
 
             if pair?.stats?.changedBounds != nil {
@@ -236,6 +248,8 @@ struct CompareView: View {
                     .buttonStyle(.borderless)
                     .help("Zoom to Change (⇧⌘0)")
                     .accessibilityLabel("Zoom to Change")
+            } else if pair == nil {
+                Image(systemName: "scope").hidden()
             }
 
             ZoomControls()

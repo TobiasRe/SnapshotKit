@@ -74,7 +74,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 500)
+        .frame(width: 520)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: reload)
     }
 

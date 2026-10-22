@@ -54,6 +54,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 ### Fixed
 
 **App**
+- The compare bar no longer jumps while a pair of images loads: it keeps room for what changed, the size and
+  Zoom to Change, so the mode buttons stay under the pointer as you step through snapshots.
+- Settings is as tall as what it shows, growing with each scan folder, instead of a fixed height with empty
+  space below.
 - Window › SnapshotKit brings the main window back after it was closed with the menu bar item on; the Window
   menu didn’t list it, which left the Dock icon as the only way.
 - VoiceOver: a sidebar project is one stop that says its failing count (“Chat, 4 failing”) instead of the name
