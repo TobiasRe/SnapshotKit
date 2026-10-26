@@ -1,6 +1,6 @@
-# The hosted documentation: docs/ built with MkDocs Material and published with the website
-# (.github/workflows/pages.yml) at https://tobiasre.github.io/SnapshotKit/docs/.
-# Preview: pip install -r requirements-docs.txt && mkdocs serve
+# The hosted documentation: docs/ built with Zensical, which reads this MkDocs configuration, and published with
+# the website (.github/workflows/pages.yml) at https://tobiasre.github.io/SnapshotKit/docs/.
+# Preview: pip install -r requirements-docs.txt && zensical serve
 site_name: SnapshotKit
 site_description: Documentation for SnapshotKit, the companion app for projects that test with swift-snapshot-testing.
 site_url: https://tobiasre.github.io/SnapshotKit/docs/
@@ -14,6 +14,8 @@ site_dir: build/docs-site
 
 theme:
   name: material
+  # Material's look, which extra.css builds on, rather than Zensical's new default.
+  variant: classic
   logo: images/app-icon.png
   favicon: images/app-icon.png
   # The system font, like the app and the website; nothing is loaded from Google.
