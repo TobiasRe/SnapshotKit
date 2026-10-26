@@ -550,6 +550,92 @@ import Testing
         #expect(x.notes[0].contains("group/ios/ci-templates (module.yml)"))
     }
 
+    /// GitLab gives a job's own `variables:` precedence over the top-level ones: the snapshot job's scheme,
+    /// not the app's, even though the top level defines `SCHEME` first.
+    static let jobOverride = """
+    include:
+      - project: 'group/ios/ci-templates'
+        file: 'app.yml'
+
+    variables:
+      SCHEME: "App-Example"
+
+    build:
+      extends: .build-job-template
+      variables:
+        SCHEME: "App-Build"
+
+    snapshotTest:
+      extends: .snapshot-test-job-template
+      variables:
+        SCHEME: "AppSnapshotTests"
+    """
+
+    @Test func theSnapshotJobsVariablesOverrideTheTopLevel() {
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: Self.jobOverride)])
+        #expect(x.invocation == nil)
+        #expect(x.config.scheme == "AppSnapshotTests")
+        #expect(x.config.source(of: .scheme) == ".gitlab-ci.yml · snapshotTest · SCHEME")
+        #expect(x.notes == ["The test job comes from `group/ios/ci-templates (app.yml)`, which SnapshotKit can’t read. "
+                            + "Settings were taken from the variables of job `snapshotTest` and the top level; set anything missing in `.snapshotkit.yml`."])
+    }
+
+    /// The snapshot job may be named for something else, and found by the template it extends.
+    @Test func theSnapshotJobIsFoundByTheTemplateItExtends() {
+        let text = Self.jobOverride.replacingOccurrences(of: "snapshotTest:", with: "ui-tests:")
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.scheme == "AppSnapshotTests")
+    }
+
+    /// Variables come from the jobs it `extends:` too, in any file read; the job's own win, then the last
+    /// template listed.
+    @Test func theSnapshotJobInheritsVariablesFromWhatItExtends() {
+        let templates = """
+        .ios:
+          variables:
+            TEST_PLAN: "Base"
+            SIMULATOR_DEVICE: "Example Phone (99.0)"
+        .snapshots:
+          variables:
+            TEST_PLAN: "Snapshots"
+            SCHEME: "FromTemplate"
+        """
+        let text = """
+        include: 'ci/templates.yml'
+        variables:
+          SCHEME: "App-Example"
+          TEST_PLAN: "All"
+        snapshot-tests:
+          extends: [.ios, .snapshots]
+        """
+        let x = CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text), .init(name: "ci/templates.yml", text: templates)])
+        #expect(x.config.scheme == "FromTemplate")
+        #expect(x.config.testPlan == "Snapshots")
+        #expect(x.config.deviceName == "Example Phone")
+        let own = text + "\n  variables:\n    SCHEME: \"Own\"\n"
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: own), .init(name: "ci/templates.yml", text: templates)])
+            .config.scheme == "Own")
+    }
+
+    /// The same holds for a command in the job: `$SCHEME` is the job's.
+    @Test func aCommandInAJobExpandsTheJobsVariables() {
+        let text = """
+        variables:
+          SCHEME: "App-Example"
+        snapshots:
+          variables:
+            SCHEME: "AppSnapshotTests"
+          script:
+            - xcodebuild test -scheme "$SCHEME" -destination 'platform=iOS Simulator,name=Example Phone'
+        """
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.scheme == "AppSnapshotTests")
+    }
+
+    /// Without a job for snapshots, no job's variables count: the top level's do.
+    @Test func otherJobsVariablesDontCount() {
+        let text = Self.jobOverride.replacingOccurrences(of: "snapshot", with: "unit")
+        #expect(CIConfigParser.extract(from: [.init(name: ".gitlab-ci.yml", text: text)]).config.scheme == "App-Example")
+    }
+
     @Test func deviceVariableForms() {
         let parser = CIConfigParser(variables: [:])
         func device(_ value: String) -> [String] {

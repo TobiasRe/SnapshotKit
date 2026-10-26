@@ -201,7 +201,9 @@ public struct CIConfigParser {
                 var words = ShellWords.split(ShellWords.firstCommand(expandingExpressions(String(line[start...]))))
                 guard words.first == "xcodebuild" else { continue }
                 words.removeFirst()
-                var invocation = parseArguments(words.map(expand))
+                // `$SCHEME` as the job sees it: its own variables over the top-level ones.
+                let parser = scoped(toJobAt: index, in: outline)
+                var invocation = parser.parseArguments(words.map(parser.expand))
 
                 // What runs before it on its line (`cd ios && pod install && `), less the folder it
                 // is called from (`/usr/bin/`). In a subshell (`(cd ios && xcodebuild …)`), what runs before
@@ -586,6 +588,9 @@ public struct CIConfigParser {
         for doc in documents { collectVariables(doc.text, into: &variables) }
         let parser = CIConfigParser(variables: variables, documents: documents.map { YAMLOutline($0.text) })
         var out = Extraction()
+        // The job that runs the snapshot tests, if one can be told: its variables override the top-level ones.
+        let job = parser.snapshotJob()
+        let jobVariables = job.map { parser.variables(ofJob: $0.line, in: parser.documents[$0.document]) } ?? [:]
 
         var best: (Invocation, String)?
         for doc in documents {
@@ -622,17 +627,26 @@ public struct CIConfigParser {
             if remote.isEmpty {
                 out.notes.append("No `xcodebuild` invocation found in \(documents.map { "`\($0.name)`" }.joined(separator: ", ")).")
             } else {
+                let taken = job.map { "the variables of job `\($0.name)` and the top level" } ?? "CI variables"
                 out.notes.append("The test job comes from \(remote.map { "`\($0)`" }.joined(separator: ", ")), which SnapshotKit can’t read. "
-                                 + "Settings were taken from CI variables; set anything missing in `.snapshotkit.yml`.")
+                                 + "Settings were taken from \(taken); set anything missing in `.snapshotkit.yml`.")
             }
         }
 
-        // Settings the command line didn't give (or there was none): common CI variable names.
-        for (field, value, name) in parser.variableSettings(variables) {
+        // Settings the command line didn't give (or there was none): common CI variable names, as the
+        // snapshot job sees them, its own over the top-level ones.
+        let jobParser = CIConfigParser(variables: variables.merging(jobVariables) { _, job in job }, documents: parser.documents)
+        let jobNames = Set(jobVariables.keys.map { $0.uppercased() })
+        for (field, value, name) in jobParser.variableSettings(jobParser.variables) {
             let key = field.rawValue
             guard config.sources[key] == nil else { continue }
-            let source = (documents.first { $0.text.range(of: #"\b"# + name + #"\s*[:=]"#, options: .regularExpression) != nil }?.name
+            let source: String
+            if let job, jobNames.contains(name) {
+                source = documents[job.document].name + " · " + job.name + " · " + name
+            } else {
+                source = (documents.first { $0.text.range(of: #"\b"# + name + #"\s*[:=]"#, options: .regularExpression) != nil }?.name
                           ?? documents.first?.name ?? "CI") + " · " + name
+            }
             switch field {
             case .scheme: config.scheme = value
             case .project: config.project = value
@@ -668,6 +682,87 @@ public struct CIConfigParser {
         }
         out.config = config
         return out
+    }
+
+    // MARK: - Jobs
+
+    /// GitLab keywords that sit where jobs do, at the top level, but aren't jobs.
+    private static let topLevelKeywords: Set<String> = [
+        "default", "include", "stages", "variables", "workflow", "spec", "image", "services", "cache",
+        "before_script", "after_script",
+    ]
+
+    /// A GitLab job: a top-level mapping not named for a keyword, nor hidden (`.template`), which jobs `extends:`.
+    private static func isJob(_ line: Int, in document: YAMLOutline) -> Bool {
+        guard let name = document.key(line), document.value(line)?.isEmpty == true else { return false }
+        return !name.hasPrefix(".") && !topLevelKeywords.contains(name)
+    }
+
+    /// The job that runs the snapshot tests, for when its command is out of sight (in a remote
+    /// template): the first named for snapshots, else the first that `extends:` a template that is,
+    /// directly or through templates of its own. `document` indexes `documents`.
+    func snapshotJob() -> (document: Int, line: Int, name: String)? {
+        let jobs = documents.indices.flatMap { d in
+            documents[d].children(of: -1).filter { Self.isJob($0, in: documents[d]) }.map { (document: d, line: $0, name: documents[d].key($0)!) }
+        }
+        return jobs.first { $0.name.lowercased().contains("snapshot") }
+            ?? jobs.first { extended(by: $0.line, in: documents[$0.document]).contains { $0.lowercased().contains("snapshot") } }
+    }
+
+    /// The names of the jobs that job `job` of `document` `extends:`, and those they extend, in any document read.
+    private func extended(by job: Int, in document: YAMLOutline) -> [String] {
+        var found: [String] = []
+        func visit(_ job: Int, in document: YAMLOutline) {
+            guard let extends = document.line(of: "extends", under: job) else { return }
+            for name in document.values(extends) where !found.contains(name) {
+                found.append(name)
+                if let template = definition(of: name) { visit(template.line, in: template.document) }
+            }
+        }
+        visit(job, in: document)
+        return found
+    }
+
+    /// Where job (or template) `name` is defined, in any document read.
+    private func definition(of name: String) -> (document: YAMLOutline, line: Int)? {
+        for document in documents { if let line = document.line(of: name, under: -1) { return (document, line) } }
+        return nil
+    }
+
+    /// The `variables:` job `job` of `document` runs with, besides the top-level ones they override:
+    /// its own, also from a mapping merged into it, over those of the jobs it `extends:`, the last
+    /// listed over earlier ones, as GitLab merges them.
+    func variables(ofJob job: Int, in document: YAMLOutline) -> [String: String] {
+        var visited: Set<String> = []       // a cycle of `extends:` ends
+        func collect(_ job: Int, in document: YAMLOutline) -> [String: String] {
+            var result: [String: String] = [:]
+            if let extends = document.line(of: "extends", under: job) {
+                for name in document.values(extends) where visited.insert(name).inserted {
+                    if let template = definition(of: name) {
+                        result.merge(collect(template.line, in: template.document)) { _, later in later }
+                    }
+                }
+            }
+            if let block = document.line(of: "variables", under: job) {
+                for line in document.children(of: block) {
+                    // `NAME: value`, or the expanded form `NAME: {value: …, description: …}` as a block.
+                    guard let name = document.key(line), let value = document.value(line).flatMap({ $0.isEmpty
+                        ? document.value(at: ["value"], under: line) : $0 }), !value.isEmpty else { continue }
+                    result[name] = value
+                }
+            }
+            return result
+        }
+        return collect(job, in: document)
+    }
+
+    /// This parser with the variables of the job that holds line `index` of `document` over its own,
+    /// as the job's commands see them.
+    func scoped(toJobAt index: Int, in document: YAMLOutline) -> CIConfigParser {
+        guard let job = document.ancestors(of: index).last, Self.isJob(job, in: document) else { return self }
+        var parser = self
+        parser.variables.merge(variables(ofJob: job, in: document)) { _, job in job }
+        return parser
     }
 
     // MARK: - CI variables

@@ -82,6 +82,11 @@ value`; the first definition wins; for a matrix list the first value) and expand
 `$VAR`, `${VAR}`, and GitHub’s `${{ env.VAR }}`, `${{ vars.VAR }}`, `${{ matrix.VAR }}`, `${{ inputs.VAR }}`.
 A value that still contains `$` after expansion is treated as unknown.
 
+As in GitLab, a job’s own `variables:` override the top-level ones: those it defines, and those of the jobs it
+`extends:` (the last listed over earlier ones), in any of those files. A command in a job sees the job’s
+values. When the command is out of sight in a remote template, the snapshot job’s values count: the first job
+named for snapshots, else the first that `extends:` a template that is (`.snapshot-test-job-template`).
+
 When the command doesn’t name something, a variable can:
 
 | Field | Variables used |
@@ -92,7 +97,8 @@ When the command doesn’t name something, a variable can:
 | device | a name containing `SIMULATOR`, `DEVICE` or `DESTINATION`, with a value like `iPhone 16 Pro`, `iPhone 16 Pro (18.2)`, `iPhone 16 Pro,OS=18.2` or a full destination |
 | os | a name containing `OS_VERSION`, `SIMULATOR_OS` or `RUNTIME` with a numeric value |
 
-The Run tab names the variable as the source (*.gitlab-ci.yml · SIMULATOR*).
+The Run tab names the variable as the source (*.gitlab-ci.yml · SIMULATOR*), and the job when it’s the job’s
+(*.gitlab-ci.yml · snapshotTest · SCHEME*).
 
 ### The Xcode version
 

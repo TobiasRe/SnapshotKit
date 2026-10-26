@@ -18,6 +18,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   the window stays responsive while git checks the folder, and of two quick picks the later one opens.
   A git command runs at the priority of whatever waits for it, so the main thread no longer waits on
   lower-priority work (Xcode’s Thread Performance Checker reported it).
+- A GitLab job’s own `variables:` override the top-level ones, as in GitLab: a snapshot job that sets
+  `SCHEME: AppSnapshotTests` under a top-level `SCHEME: App-Example` now runs `AppSnapshotTests`, also when its
+  command is in a remote template. Variables from the jobs it `extends:` count too, and the Run tab names the
+  job (*.gitlab-ci.yml · snapshotTest · SCHEME*).
 
 ## [0.3.0] - 2026-10-22
 
