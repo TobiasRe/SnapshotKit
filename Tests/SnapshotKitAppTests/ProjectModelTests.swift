@@ -248,7 +248,7 @@ extension AppUITests {
             try Data([1]).write(to: snapshots.appendingPathComponent("a.1.png"))   // recorded, not committed
 
             let app = AppModel(store: AppFixtures.store())
-            app.addDroppedFolders([root])                       // a plain folder becomes a scan folder
+            await app.addDroppedFolders([root])                 // a plain folder becomes a scan folder
             for _ in 0..<200 where app.startupNotice == nil { try await Task.sleep(for: .milliseconds(50)) }
             #expect(app.store.settings.scanRoots == [root.path])
             #expect(app.projects.contains { $0.path == repo.path })
@@ -397,35 +397,58 @@ extension AppUITests {
             #expect(!model.canDiscard(change))
         }
 
-        @Test func droppingASubfolderAddsTheRepositoryRoot() throws {
+        @Test func droppingASubfolderAddsTheRepositoryRoot() async throws {
             let (repo, png) = try makeRepo()
             let app = AppModel(store: AppFixtures.store())
             let subfolder = repo.appendingPathComponent(png).deletingLastPathComponent()
-            #expect(app.addDroppedFolders([subfolder]))
+            #expect(app.acceptsDrop([subfolder]))
+            await app.addDroppedFolders([subfolder])
             #expect(app.current?.project.path == Project(path: repo.path).path)
             #expect(app.projects.contains { $0.path == Project(path: repo.path).path })
             // A file outside any repository is neither a project nor a scan folder.
             let file = AppFixtures.temporaryDirectory("loose").appendingPathExtension("txt")
             try Data("x".utf8).write(to: file)
-            #expect(!app.addDroppedFolders([file]))
+            #expect(!app.acceptsDrop([file]))
             // A result bundle is a folder, but one to import into the open project, not to scan.
             let bundle = AppFixtures.temporaryDirectory("dropped").appendingPathExtension("xcresult")
             try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
-            #expect(app.addDroppedFolders([bundle]))
+            #expect(app.acceptsDrop([bundle]))
+            await app.addDroppedFolders([bundle])
             #expect(app.store.settings.scanRoots.isEmpty)
             #expect(app.current?.lastMessage == "Reading \(bundle.lastPathComponent)…")
         }
 
+        /// Without a project open, a result bundle has nowhere to go: the drop isn't taken.
+        @Test func aResultBundleAloneNeedsAnOpenProject() throws {
+            let app = AppModel(store: AppFixtures.store())
+            let bundle = AppFixtures.temporaryDirectory("dropped").appendingPathExtension("xcresult")
+            try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+            #expect(app.current == nil)
+            #expect(!app.acceptsDrop([bundle]))
+        }
+
+        /// Two opens at once, as from two quick picks in ⌘K: the one asked for last wins, whichever folder git
+        /// checks first, and the window shows it.
+        @Test func ofTwoOpensTheLaterWins() async throws {
+            let (first, _) = try makeRepo(), (second, _) = try makeRepo()
+            let app = AppModel(store: AppFixtures.store())
+            async let earlier = app.open(path: first.path)
+            async let later = app.open(path: second.path)
+            let opened = await [earlier, later].compactMap(\.self)
+            #expect(opened.count == 1)
+            #expect(app.current === opened.first)
+        }
+
         /// A folder that is gone (or never was a repository) is not added as a project, and the window says why.
-        @Test func openingAFolderOutsideAnyRepositoryIsRefused() throws {
+        @Test func openingAFolderOutsideAnyRepositoryIsRefused() async throws {
             let app = AppModel(store: AppFixtures.store())
             let projects = app.projects.map(\.path)
             let missing = AppFixtures.temporaryDirectory("gone").appendingPathComponent("Shop")
-            #expect(app.open(path: missing.path) == nil)
+            #expect(await app.open(path: missing.path) == nil)
             #expect(app.startupNotice == "Can’t open \(missing.path.abbreviatingWithTildeInPath): there is no such folder.")
             let plain = AppFixtures.temporaryDirectory("plain")
             try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
-            #expect(app.open(path: plain.path) == nil)
+            #expect(await app.open(path: plain.path) == nil)
             #expect(app.startupNotice == "Can’t open \(plain.path.abbreviatingWithTildeInPath): it isn’t in a git repository.")
             #expect(app.projects.map(\.path) == projects)
             #expect(app.current == nil)
@@ -873,7 +896,7 @@ extension AppUITests {
             let (repo, _) = try makeRepo()
             saveLastRun(in: repo, suites: [], failed: 2)
             let app = AppModel(store: AppFixtures.store())     // starts counting the projects it knows
-            app.open(path: repo.path)
+            await app.open(path: repo.path)
             for _ in 0..<200 where app.failingCounts[repo.path] == nil { try await Task.sleep(for: .milliseconds(50)) }
             #expect(app.failingCounts[repo.path] == 2)
         }

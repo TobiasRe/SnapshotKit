@@ -37,6 +37,7 @@ final class AppModel {
     static let runFinished = Notification.Name("SnapshotKitRunFinished")
     @ObservationIgnored private var runObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var countsGeneration = 0
+    @ObservationIgnored private var openGeneration = 0
 
     init(store: ProjectStore = ProjectStore()) {
         self.store = store
@@ -107,32 +108,39 @@ final class AppModel {
         }
     }
 
+    /// Whether a drop of `urls` is one `addDroppedFolders` takes: a folder, or a result bundle while a project
+    /// is open. Answered without git, which only `addDroppedFolders` asks, off the main thread.
+    func acceptsDrop(_ urls: [URL]) -> Bool {
+        urls.contains { url in
+            url.pathExtension == "xcresult" ? current != nil
+                : (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        }
+    }
+
     /// Adds dropped folders: a repository (or a folder inside one) opens as a project; any other
     /// folder becomes a scan folder, so dropping ~/Developer finds the projects in it. A result
     /// bundle (`.xcresult`) is imported into the open project.
-    @discardableResult
-    func addDroppedFolders(_ urls: [URL]) -> Bool {
-        var repositories: [URL] = [], folders: [URL] = [], bundles: [URL] = []
-        for url in urls {
+    func addDroppedFolders(_ urls: [URL]) async {
+        // A result bundle is a folder too, but one to import, never a project or scan folder.
+        let bundles = urls.filter { $0.pathExtension == "xcresult" }
+        let others = urls.filter { $0.pathExtension != "xcresult" }
+        let roots = await offCooperativePool { others.map { Git.repository(containing: $0)?.root } }
+        let repositories = roots.compactMap(\.self)
+        let folders = zip(others, roots).filter { url, root in
             let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
-            // A result bundle is a folder too, but one to import, never a project or scan folder.
-            if url.pathExtension == "xcresult" { bundles.append(url) }
-            else if let root = Git.repository(containing: url)?.root { repositories.append(root) }
-            else if values?.isDirectory == true, values?.isPackage != true { folders.append(url) }
-        }
+            return root == nil && values?.isDirectory == true && values?.isPackage != true
+        }.map(\.0)
         // During a run the import says why it waits, rather than the drop bouncing back without a word.
         if let bundle = bundles.last, let current, repositories.isEmpty {
             current.importResultBundle(bundle)
-            return true
+            return
         }
-        guard !repositories.isEmpty || !folders.isEmpty else { return false }
         for root in repositories { store.markOpened(Project(path: root.path)) }
-        if let last = repositories.last { open(path: last.path) }
+        if let last = repositories.last { await open(path: last.path) }
         if !folders.isEmpty {
             for folder in folders { store.addScanRoot(folder.path) }
             rescan()
         }
-        return true
     }
 
     func isPinned(_ project: Project) -> Bool { store.isPinned(project) }
@@ -168,9 +176,9 @@ final class AppModel {
 
     /// Runs a project's snapshot tests from outside its window (the menu bar), opening it first.
     func runTests(path: String) {
-        guard let model = open(path: path) else { return }
-        // A project opened just now is still checking Xcode and the simulator.
         Task {
+            guard let model = await open(path: path) else { return }
+            // A project opened just now is still checking Xcode and the simulator.
             for _ in 0..<300 where model.environment == nil && model.environmentError == nil && model.configError == nil {
                 try? await Task.sleep(for: .milliseconds(100))
             }
@@ -179,10 +187,15 @@ final class AppModel {
     }
 
     /// Opens (and adds) the project at `path`. A folder that is gone or outside any git repository
-    /// is no project: the window says so, and nil comes back.
+    /// is no project: the window says so, and nil comes back. Git checks the folder off the main thread;
+    /// when another open starts meanwhile, the later one wins and this one comes back nil.
     @discardableResult
-    func open(path: String) -> ProjectModel? {
-        if let problem = Self.problem(opening: path) {
+    func open(path: String) async -> ProjectModel? {
+        openGeneration += 1
+        let generation = openGeneration
+        let problem = await offCooperativePool { Self.problem(opening: path) }
+        guard generation == openGeneration else { return nil }
+        if let problem {
             startupNotice = problem
             return nil
         }
@@ -212,8 +225,8 @@ final class AppModel {
     /// Opens the repository (adding it if it's new) and selects the snapshot at `path` in its library
     /// once the library has loaded.
     func reveal(snapshot path: String, in repository: URL) {
-        guard let model = open(path: repository.path) else { return }
         Task {
+            guard let model = await open(path: repository.path) else { return }
             for _ in 0..<100 where !model.isInLibrary(path) {
                 try? await Task.sleep(for: .milliseconds(100))
             }
@@ -286,8 +299,11 @@ final class AppModel {
 
     func addProjectFromPanel() {
         guard let url = chooseFolder(message: "Choose a git repository with snapshot tests") else { return }
-        // A folder outside any repository goes to `open` too, which says why it can't be a project.
-        open(path: Git.repository(containing: url)?.root.path ?? url.path)
+        Task {
+            // A folder outside any repository goes to `open` too, which says why it can't be a project.
+            let root = await offCooperativePool { Git.repository(containing: url)?.root }
+            await open(path: root?.path ?? url.path)
+        }
     }
 
     /// Asks for a folder to scan, then scans it.

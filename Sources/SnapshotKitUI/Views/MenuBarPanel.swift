@@ -145,7 +145,7 @@ struct MenuBarPanel: View {
 
     /// Brings the main window forward, opening it if it was closed, and selects `path`.
     private func show(_ path: String?) {
-        if let path { model.open(path: path) }
+        if let path { Task { await model.open(path: path) } }
         MainWindow.show(openWindow)
     }
 }

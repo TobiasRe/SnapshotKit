@@ -24,7 +24,9 @@ struct ContentView: View {
         }
         // Drop a repository folder anywhere on the window to add and open it.
         .dropDestination(for: URL.self) { urls, _ in
-            model.addDroppedFolders(urls)
+            guard model.acceptsDrop(urls) else { return false }
+            Task { await model.addDroppedFolders(urls) }
+            return true
         } isTargeted: { targeted in
             isDropTargeted = targeted
         }

@@ -72,7 +72,7 @@ enum WindowCapture {
         if let appearance = o.appearance {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
-        if let path = o.project, model.open(path: path) == nil {
+        if let path = o.project, await model.open(path: path) == nil {
             log(model.startupNotice ?? "can't open \(path)"); exit(2)
         }
         guard let window = await waitFor(deadline: Date().addingTimeInterval(15), { mainWindow() }) else {
