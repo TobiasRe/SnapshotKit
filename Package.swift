@@ -7,7 +7,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "SnapshotKitCore", targets: ["SnapshotKitCore"]),
-        .executable(name: "SnapshotKit", targets: ["SnapshotKit"]),
+        // The app's code. SnapshotKit.xcodeproj builds it into SnapshotKit.app, with the icon and Info.plist.
+        .library(name: "SnapshotKitUI", targets: ["SnapshotKitUI"]),
         .executable(name: "snapkit", targets: ["SnapshotKitCLI"]),
     ],
     dependencies: [
@@ -16,7 +17,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "SnapshotKitCore"),
-        .executableTarget(name: "SnapshotKit", dependencies: ["SnapshotKitCore"]),
+        .target(name: "SnapshotKitUI", dependencies: ["SnapshotKitCore"]),
         .executableTarget(name: "SnapshotKitCLI", dependencies: ["SnapshotKitCore"]),
         .testTarget(
             name: "SnapshotKitCoreTests",
@@ -26,7 +27,7 @@ let package = Package(
         .testTarget(
             name: "SnapshotKitAppTests",
             dependencies: [
-                "SnapshotKit",
+                "SnapshotKitUI",
                 .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
             ],
             exclude: ["__Snapshots__"]

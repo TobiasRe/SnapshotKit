@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// Messages name commands in backticks; a note sets them in code type and leaves the rest alone.
 struct StatusNoteTests {

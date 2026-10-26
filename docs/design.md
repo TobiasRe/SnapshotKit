@@ -2,7 +2,7 @@
 
 A deliberately tiny system for a native macOS tool. It follows the Liquid Glass design language
 (macOS 26 and later) and falls back gracefully on macOS 14–25. Tokens and helpers live in
-[`Sources/SnapshotKit/Design/DesignSystem.swift`](https://github.com/TobiasRe/SnapshotKit/blob/main/Sources/SnapshotKit/Design/DesignSystem.swift).
+[`Sources/SnapshotKitUI/Design/DesignSystem.swift`](https://github.com/TobiasRe/SnapshotKit/blob/main/Sources/SnapshotKitUI/Design/DesignSystem.swift).
 
 ## Where the inspiration comes from
 

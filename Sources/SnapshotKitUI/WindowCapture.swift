@@ -78,6 +78,8 @@ enum WindowCapture {
         guard let window = await waitFor(deadline: Date().addingTimeInterval(15), { mainWindow() }) else {
             log("no window appeared"); exit(3)
         }
+        // Off-screen without saving the place as the window's frame, which the app would open at next time.
+        window.setFrameAutosaveName("")
         window.setFrame(NSRect(x: -30000, y: -30000, width: o.size.width, height: o.size.height), display: true)
         if let mode = o.compare { UserDefaults.app.set(mode.rawValue, forKey: "compareMode") }
 

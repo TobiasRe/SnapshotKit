@@ -31,8 +31,11 @@ jobs:
         with:
           path: .build
           key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.swift }}-${{ hashFiles('Package.resolved') }}
-      - name: Build app and CLI
+      - name: Build the package
         run: swift build
+      # Into the derived data scripts/check-runtime-warnings.sh builds into, so the check finds it built.
+      - name: Build the app
+        run: xcodebuild build -project SnapshotKit.xcodeproj -scheme SnapshotKit -derivedDataPath build/DerivedData
       - name: Core tests
         run: swift test --filter SnapshotKitCoreTests
       # Every app test but the pixel comparisons. AppSnapshotTests run locally: their references are rendered

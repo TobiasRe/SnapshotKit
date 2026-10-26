@@ -66,9 +66,12 @@ xattr -d com.apple.quarantine /usr/local/bin/snapkit 2>/dev/null || true
 
 ```bash
 git clone https://github.com/TobiasRe/SnapshotKit.git && cd SnapshotKit
-scripts/make-app.sh          # builds dist/SnapshotKit.app and dist/snapkit
-open dist/SnapshotKit.app
+xcodebuild archive -scheme SnapshotKit -archivePath build/SnapshotKit.xcarchive   # the app, built as released
+open build/SnapshotKit.xcarchive/Products/Applications/SnapshotKit.app
+swift build -c release --product snapkit                                         # the CLI, in .build/release
 ```
+
+Or open `SnapshotKit.xcodeproj` and run the SnapshotKit scheme.
 
 See [Getting started](https://tobiasre.github.io/SnapshotKit/docs/getting-started/) for the details.
 
@@ -201,6 +204,7 @@ with the `perceptualPrecision`, `precision` or both that would pass. See
 ## Development
 
 ```bash
+open SnapshotKit.xcodeproj              # the app: run the SnapshotKit scheme (⌘R)
 swift test                              # everything: core, CLI, app model, layout and the app's own snapshot
                                         #   tests (those need a Retina display and the macOS they were recorded on)
 swift test --skip AppSnapshotTests      # all but the pixel comparisons, as CI runs them
@@ -224,19 +228,21 @@ and sidebar chrome. To update references, delete the PNG or set `record: .all`, 
 SnapshotKit itself. Visual guidelines are in [docs/design.md](docs/design.md).
 
 Repository layout and naming: the Swift package follows SwiftPM conventions: `Sources/` and `Tests/` with one
-PascalCase folder per target (`SnapshotKitCore`, `SnapshotKit`, `SnapshotKitCLI`, which builds the `snapkit`
-executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects. Everything
+PascalCase folder per target (`SnapshotKitCore`, `SnapshotKitUI`, `SnapshotKitCLI`, which builds the `snapkit`
+executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects.
+`SnapshotKit.xcodeproj` builds SnapshotKitUI into SnapshotKit.app. Its one target owns the icon and the version
+(`MARKETING_VERSION`); `app/` holds its entry point and the Info.plist keys build settings can’t set. Everything
 else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, `site/` for the
 website (a single static page; `.github/workflows/pages.yml` deploys it to GitHub Pages together with `docs/`
 built by Zensical under `/docs/`), and `assets/` for
-source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by `scripts/make-app.sh`; the
+source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled by the app target; the
 `Assets/` folder inside it is Icon Composer’s format). Root files keep their usual names (`README.md`,
-`LICENSE`, `CHANGELOG.md`, `Package.swift`).
+`LICENSE`, `CHANGELOG.md`, `Package.swift`, `SnapshotKit.xcodeproj`).
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,
-remote runner and project store. `SnapshotKit` (SwiftUI) and `SnapshotKitCLI` (`snapkit`) are thin front ends.
-`SnapshotKit --capture out.png --project <repo> --tab changes --compare slider --zoom 3` renders the window
-off-screen without activating the app.
+remote runner and project store. `SnapshotKitUI` (SwiftUI) and `SnapshotKitCLI` (`snapkit`) are thin front ends.
+`SnapshotKit.app/Contents/MacOS/SnapshotKit --capture out.png --project <repo> --tab changes --compare slider
+--zoom 3` renders the window off-screen without activating the app.
 
 ## License
 

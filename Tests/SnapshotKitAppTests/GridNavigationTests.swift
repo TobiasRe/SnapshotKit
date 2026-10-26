@@ -1,7 +1,7 @@
 import SnapshotKitCore
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// ↑ and ↓ in the library's grid move by a row as you see it: each suite starts a row of its own.
 struct GridNavigationTests {

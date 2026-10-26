@@ -4,7 +4,7 @@ import OSLog
 import SnapshotKitCore
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     /// Selecting a row in a list has to work, and quietly. Snapshot tests can't see either: a list

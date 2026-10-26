@@ -3,7 +3,7 @@ import ApplicationServices
 import os
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     /// Every control a VoiceOver user can reach must say what it is.

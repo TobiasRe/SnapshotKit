@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     /// Layout that holds on any Mac: no pixels compared, so these run in CI too.

@@ -6,6 +6,11 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Changed
+- The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
+  `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
+  `scripts/make-app.sh` is gone.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

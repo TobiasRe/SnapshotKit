@@ -2,14 +2,16 @@ import AppKit
 import SnapshotKitCore
 import SwiftUI
 
-@main
-struct SnapshotKitApp: App {
+/// The app, started by the SnapshotKit target of SnapshotKit.xcodeproj.
+public struct SnapshotKitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private let model = AppModel.shared
     /// Bound by the menu bar scene; a small object of its own rather than a property of `model`.
     private let menuBar = AppModel.shared.menuBar
 
-    var body: some Scene {
+    public init() {}
+
+    public var body: some Scene {
         // One window: every view of it shows the same model, so a second one would only mirror it.
         Window("SnapshotKit", id: "main") {
             ContentView()
@@ -66,10 +68,9 @@ extension AppModel {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Built as a plain executable, so opt into being a regular foreground app.
+        // A capture draws off-screen: no Dock icon, and the frontmost app stays in front.
         let capture = CaptureOptions.parse(CommandLine.arguments)
-        NSApp.setActivationPolicy(capture == nil ? .regular : .accessory)
-        if capture == nil { NSApp.activate(ignoringOtherApps: true) }
+        if capture != nil { NSApp.setActivationPolicy(.accessory) }
         InterruptGuard.install()
         if let capture {
             Task { await WindowCapture.run(capture, model: AppModel.shared) }
@@ -82,6 +83,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // A single-window app: no window tabs, nor their View menu items.
         NSWindow.allowsAutomaticWindowTabbing = false
+        // A capture skips window restoration, as UI tests do. Started from its executable rather than by Launch
+        // Services, the app otherwise opens no window; and it shares the installed app's bundle id, whose
+        // windows it shouldn't restore or save.
+        if CaptureOptions.parse(CommandLine.arguments) != nil {
+            UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
+        }
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(openURL(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))

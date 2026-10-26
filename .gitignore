@@ -1,6 +1,7 @@
 .DS_Store
 .build/
 .swiftpm/
+xcuserdata/
 *.xcresult
 /build/
 /dist/
