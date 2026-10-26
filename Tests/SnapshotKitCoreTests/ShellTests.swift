@@ -43,6 +43,19 @@ import Testing
         #expect(Shell.quote("$HOME") == "'$HOME'")
     }
 
+    /// A command runs at its caller's quality of service, as do the threads draining it. `ps` shows only
+    /// background apart (priority 4, the others 31), so the caller here is a background thread.
+    @Test func runsAtTheCallersQualityOfService() async throws {
+        let priority = try await withCheckedThrowingContinuation { continuation in
+            let caller = Thread {
+                continuation.resume(with: Result { try Shell.output(["sh", "-c", "ps -o pri= -p $$"]) })
+            }
+            caller.qualityOfService = .background
+            caller.start()
+        }
+        #expect(priority == "4")
+    }
+
     @Test func runsBlockingWorkOffThePool() async throws {
         let value = try await offCooperativePool { try Shell.output(["echo", "hi"]) }
         #expect(value == "hi")
