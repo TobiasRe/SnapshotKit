@@ -11,6 +11,12 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
   `scripts/make-app.sh` is gone.
 
+### Fixed
+- Opening a project from ⌘K, the menu bar, Add Project… or a drop no longer runs git on the main thread:
+  the window stays responsive while git checks the folder, and of two quick picks the later one opens.
+  A git command runs at the priority of whatever waits for it, so the main thread no longer waits on
+  lower-priority work (Xcode’s Thread Performance Checker reported it).
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

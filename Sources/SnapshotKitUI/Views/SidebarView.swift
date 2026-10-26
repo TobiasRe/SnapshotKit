@@ -288,7 +288,7 @@ struct QuickSwitcherView: View {
         let item = shown[index]
         close()
         switch item {
-        case .project(let project): model.open(path: project.path)
+        case .project(let project): Task { await model.open(path: project.path) }
         case .command(let command): command.run()
         }
     }

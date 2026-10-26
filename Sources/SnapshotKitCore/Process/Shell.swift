@@ -74,7 +74,11 @@ public enum Shell {
     private static func execute(
         _ arguments: [String], in directory: URL?, environment: [String: String]?, input: Data?, cancellation: Cancellation?
     ) throws -> (status: Int32, stdout: Data, stderr: Data) {
+        // The caller blocks until the command and the threads draining it are done, so they run at its quality
+        // of service: the main thread waiting on default-QoS work is a priority inversion.
+        let qos = Thread.current.qualityOfService
         let process = Process()
+        process.qualityOfService = qos
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
         if let directory { process.currentDirectoryURL = directory }
@@ -101,10 +105,12 @@ public enum Shell {
             _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)
             // Written while the output is drained below: a child that fills its output pipe before
             // it has read all its input would otherwise wait for us while we wait for it.
-            Thread {
+            let writer = Thread {
                 try? handle.write(contentsOf: input)
                 try? handle.close()
-            }.start()
+            }
+            writer.qualityOfService = qos
+            writer.start()
         }
 
         // Drain both pipes concurrently so a full stderr buffer cannot block stdout. A dedicated
@@ -116,6 +122,7 @@ public enum Shell {
             errData.value = err.fileHandleForReading.readDataToEndOfFile()
             errDone.signal()
         }
+        reader.qualityOfService = qos
         reader.start()
         let outData = out.fileHandleForReading.readDataToEndOfFile()
         errDone.wait()
