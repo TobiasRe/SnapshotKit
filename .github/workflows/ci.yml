@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # The runner image's default Xcode; printed so a failure can be traced to the version that built it.
       - name: Toolchain
         id: toolchain
@@ -27,7 +27,7 @@ jobs:
           xcodebuild -version
           swift --version
           echo "swift=$(swift --version 2>&1 | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .build
           key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.swift }}-${{ hashFiles('Package.resolved') }}
@@ -46,7 +46,7 @@ jobs:
         run: scripts/check-runtime-warnings.sh
       - name: Keep the runtime-warning log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-warnings
           path: |
