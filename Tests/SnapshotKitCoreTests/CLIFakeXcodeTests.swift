@@ -324,6 +324,17 @@ import Testing
         #expect(try repo.read("Tests/AppTests/CardTests.swift") == source)
     }
 
+    /// A test file with uncommitted edits records and verifies like any other, and keeps those edits.
+    @Test func recordATestFileWithUncommittedEdits() throws {
+        let (repo, env, _) = try setUp()
+        let edited = RecordSessionTests.suiteSource + "\n// local edit\n"
+        try repo.write("Tests/AppTests/CardTests.swift", edited)
+        let result = try snapkit("record", "--repo", repo.url.path, "card", environment: env)
+        #expect(result.status == 0 && result.stdout.hasSuffix("Recorded and verified: 1 passed.\n"))
+        #expect(try repo.read(snapshot) == "new")
+        #expect(try repo.read("Tests/AppTests/CardTests.swift") == edited)
+    }
+
     @Test func recordWithoutVerifying() throws {
         let (repo, env, _) = try setUp()
         let result = try snapkit("record", "--repo", repo.url.path, "card", "--no-verify", environment: env)

@@ -33,9 +33,8 @@ The Run tab and the notice follow each stage:
    next to the `__Snapshots__` folder, then the test type in it (named like the file, else the first type ending
    in `Tests` or `Test`, else the first type), by its path through the types and extensions it is nested in
    (`AllSnapshots/CardTests`). Re-recording failing suites finds the file by the type the test result names.
-2. **Enabling record mode** — the test type is patched (below). SnapshotKit refuses if one of those files has
-   uncommitted changes: *Refusing to re-record: these files have uncommitted changes. Commit or stash them
-   first:* followed by the files. That way your own edits can never get mixed up with the patch.
+2. **Enabling record mode** — the test type is patched (below). Uncommitted edits in the test file are fine:
+   SnapshotKit keeps the file’s text as it was before patching and puts exactly that back, edits included.
 3. **Recording snapshots** — `xcodebuild test` runs, limited with `-only-testing` to the chosen tests. Every
    snapshot those tests take is written to disk.
 4. **Restoring test sources** — the patch is removed.
@@ -108,8 +107,8 @@ The patch is never left behind:
 | The app or `snapkit` crashes, or the Mac restarts | the next launch of either restores it: *Restored a record patch left by an interrupted run: …* (`snapkit`: *snapkit: restored leftover record patch in …*) |
 
 How it works: before touching a file, SnapshotKit writes a journal to `.git/snapshotkit/record-patch.json` with
-each file’s original and patched text (and registers the repository in `active-patches.json` in its settings
-folder). Restoring compares each file with the journal:
+each file’s original text (as it was on disk, uncommitted edits included) and patched text, and registers the
+repository in `active-patches.json` in its settings folder. Restoring compares each file with the journal:
 
 - still the patched text → the original is written back,
 - already the original → nothing to do,

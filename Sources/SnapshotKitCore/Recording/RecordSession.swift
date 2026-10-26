@@ -83,8 +83,8 @@ public struct RestoreReport: Sendable {
 /// A temporary record-mode patch over a set of suites. Create with `begin`, end with `restore`.
 ///
 /// Guarantees:
-/// - refuses to patch files with uncommitted changes;
-/// - writes a journal *before* touching any file;
+/// - writes a journal *before* touching any file, with each file's text as it was, uncommitted edits
+///   included: restoring writes that text back, so it never relies on git;
 /// - `restore()` is idempotent and also runs from signal handlers and on next launch.
 public final class RecordSession: @unchecked Sendable { // `restored` is guarded by `lock`.
     public let repository: URL
@@ -117,7 +117,6 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
 
     /// Computes every patch first, then journals, then writes files. Nothing is modified on error.
     public static func begin(repository: URL, targets: [Target]) throws -> RecordSession {
-        let git = Git(root: repository)
         let journalURL = try journalURL(for: repository)
         if FileManager.default.fileExists(atPath: journalURL.path) {
             // A leftover from a crash: restore it first rather than stacking patches.
@@ -125,11 +124,6 @@ public final class RecordSession: @unchecked Sendable { // `restored` is guarded
         }
 
         let paths = Array(Set(targets.map(\.path))).sorted()
-        let dirty = try git.status(paths: paths)
-        if !dirty.isEmpty {
-            throw RecordPatchError.uncommittedChanges(dirty.map(\.path))
-        }
-
         var files: [PatchedFile] = []
         for path in paths {
             let url = repository.appendingPathComponent(path)

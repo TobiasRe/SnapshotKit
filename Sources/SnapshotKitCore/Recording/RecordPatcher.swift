@@ -5,7 +5,6 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
     case xctestAlreadyOverridesInvokeTest(suite: String, file: String)
     case suiteFileNotFound(String)
     case noTopLevelTests(file: String)
-    case uncommittedChanges([String])
     case patchAlreadyActive(String)
 
     public var errorDescription: String? {
@@ -18,8 +17,6 @@ public enum RecordPatchError: Error, LocalizedError, Equatable {
             "Could not find the source file for suite “\(suite)”."
         case let .noTopLevelTests(file):
             "Could not find a @Test function outside a type in \(file)."
-        case let .uncommittedChanges(files):
-            "Refusing to re-record: these files have uncommitted changes. Commit or stash them first:\n" + files.map { "  \($0)" }.joined(separator: "\n")
         case let .patchAlreadyActive(repo):
             "A re-record is already in progress for \(repo)."
         }
