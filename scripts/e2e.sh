@@ -273,15 +273,16 @@ if [ "$SKIP_REMOTE" = 0 ]; then
   check "remote run synced the working tree" "grep -q 'synced working tree to localhost:$WORK/remote-checkout' '$LOGS/remote.log'"
   check "remote run reports the failing suite from remote results" "grep -q 'FAILING SUITE: SampleUITests/GreetingViewTests' '$LOGS/remote.log' && grep -q '\[localhost\]' '$LOGS/remote.log'"
   check "remote copy has no stray files from the local build" "[ ! -d '$WORK/remote-checkout/.git' ]"
+  # Before the re-record: its verification passes and becomes the last run, which leaves flaky nothing failing
+  # to check. A flakiness check doesn't change the last run, so the re-record still finds the failing suite.
+  set +e; sk flaky --iterations 3 > "$LOGS/flaky.log" 2>&1; set -e
+  grep -E "Fails every time|Flaky|Passes" "$LOGS/flaky.log" || true
+  check "flakiness check classifies the regression as failing every time" "grep -q 'Fails every time.*0✔ 3✘' '$LOGS/flaky.log'"
   set +e; sk rerecord --remote > "$LOGS/remote-record.log" 2>&1; status=$?; set -e
   grep -E "snapkit:|Downloaded" "$LOGS/remote-record.log" || true
   check "remote re-record downloaded the new reference" "grep -q 'downloaded $PNG' '$LOGS/remote-record.log'"
   check "remote re-record never patched local sources" "(cd '$SAMPLE' && git diff --quiet HEAD -- '$TEST_FILE')"
   check "remote re-record changed only the PNG locally" "[ \"\$(cd '$SAMPLE' && git status --porcelain)\" = ' M $PNG' ]"
-  (cd "$SAMPLE" && git checkout -q -- "$PNG")
-  set +e; sk flaky --iterations 3 > "$LOGS/flaky.log" 2>&1; set -e
-  grep -E "Fails every time|Flaky|Passes" "$LOGS/flaky.log" || true
-  check "flakiness check classifies the regression as failing every time" "grep -q 'Fails every time.*0✔ 3✘' '$LOGS/flaky.log'"
   sk history > "$LOGS/history.log"
   check "run history recorded local and remote runs" "grep -q 'localhost' '$LOGS/history.log' && grep -q 'local ' '$LOGS/history.log'"
 fi
