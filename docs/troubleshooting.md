@@ -76,10 +76,6 @@ re-record locally: that just moves the failure.
 The test isn’t deterministic. Run **Check Flakiness** and look for animations, async loading, the current date or
 random data in the view.
 
-**Re-recording says “Refusing to re-record: these files have uncommitted changes.”**
-SnapshotKit edits the test file temporarily and won’t mix that with your edits. Commit or stash the test file,
-then try again.
-
 **Re-recording says: “CheckoutTests” in … already overrides invokeTest(); re-record it manually.**
 SnapshotKit adds an `invokeTest` override to XCTest classes to switch record mode on. If the class already has
 one, wrap its body in `withSnapshotTesting(record: .all) { … }` yourself for the recording run.

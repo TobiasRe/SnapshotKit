@@ -292,13 +292,30 @@ import Testing
         #expect(try repo.git.status(paths: ["Tests"]).isEmpty)
     }
 
-    @Test func refusesUncommittedChanges() throws {
+    /// A test file with uncommitted edits is patched like any other, and gets those edits back, not HEAD's text.
+    @Test func keepsUncommittedEdits() throws {
         let repo = try makeRepo()
-        try repo.write(target.path, Self.suiteSource + "\n// local edit\n")
-        #expect(throws: RecordPatchError.uncommittedChanges([target.path])) {
-            try RecordSession.begin(repository: repo.url, targets: [target])
-        }
-        #expect(try repo.read(target.path).hasSuffix("// local edit\n"))
+        let edited = Self.suiteSource + "\n// local edit\n"
+        try repo.write(target.path, edited)
+        let session = try RecordSession.begin(repository: repo.url, targets: [target])
+        let patched = try repo.read(target.path)
+        #expect(patched.contains("record: .all") && patched.hasSuffix("// local edit\n"))
+
+        #expect(session.restore().files.map(\.outcome) == [.restored])
+        #expect(try repo.read(target.path) == edited)
+        #expect(try repo.git.status(paths: [target.path]).map(\.path) == [target.path])
+    }
+
+    /// After a crash, the next launch restores uncommitted edits from the journal too.
+    @Test func restoresUncommittedEditsLeftByACrash() throws {
+        let repo = try makeRepo()
+        let edited = Self.suiteSource + "\n// local edit\n"
+        try repo.write(target.path, edited)
+        _ = try RecordSession.begin(repository: repo.url, targets: [target])   // never restored: the process "died"
+
+        let report = try #require(try RecordSession.restoreLeftover(repository: repo.url, force: true))
+        #expect(report.files.map(\.outcome) == [.restored])
+        #expect(try repo.read(target.path) == edited)
     }
 
     @Test func undoesOnlyThePatchWhenFileWasEditedDuringRun() throws {
