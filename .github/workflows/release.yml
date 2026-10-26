@@ -29,18 +29,30 @@ jobs:
             echo "::error::CHANGELOG.md has no section for $version"
             exit 1
           fi
+      # The app as SnapshotKit.xcodeproj builds it (Release, ad-hoc signed), and the CLI.
       - name: Build
-        run: scripts/make-app.sh
+        run: |
+          xcodebuild archive -project SnapshotKit.xcodeproj -scheme SnapshotKit \
+            -archivePath "$RUNNER_TEMP/SnapshotKit.xcarchive"
+          swift build -c release --product snapkit
+          mkdir dist
+          cp -R "$RUNNER_TEMP/SnapshotKit.xcarchive/Products/Applications/SnapshotKit.app" dist/
+          cp "$(swift build -c release --show-bin-path)/snapkit" dist/
       - name: Check the tag matches the version built
         run: |
-          built="$(dist/snapkit --version)"
-          if [ "$built" != "snapkit ${GITHUB_REF_NAME#v}" ]; then
-            echo "::error::$GITHUB_REF_NAME, but the build says '$built': update SnapshotKitVersion.current"
+          app="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' dist/SnapshotKit.app/Contents/Info.plist)"
+          cli="$(dist/snapkit --version)"
+          if [ "$app" != "${GITHUB_REF_NAME#v}" ] || [ "$cli" != "snapkit ${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::$GITHUB_REF_NAME, but the app is $app and the CLI says '$cli': update MARKETING_VERSION in SnapshotKit.xcodeproj and SnapshotKitVersion.current"
             exit 1
           fi
-      - name: Checksums
+      - name: Archives and checksums
         working-directory: dist
-        run: shasum -a 256 *.zip | tee SHA256SUMS.txt
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ditto -c -k --norsrc --noextattr --noqtn --keepParent SnapshotKit.app "SnapshotKit-$version-macos-arm64.zip"
+          ditto -c -k --norsrc --noextattr --noqtn snapkit "snapkit-$version-macos-arm64.zip"
+          shasum -a 256 *.zip | tee SHA256SUMS.txt
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -27,6 +27,15 @@ import Testing
         #expect(Outcome(try snapkit(argument)) == Outcome(status: 0, stdout: "snapkit \(SnapshotKitVersion.current)\n"))
     }
 
+    /// The app's version is a build setting of SnapshotKit.xcodeproj, in every configuration.
+    @Test func appHasTheSameVersion() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let project = try String(contentsOf: root.appending(path: "SnapshotKit.xcodeproj/project.pbxproj"), encoding: .utf8)
+        let versions = project.matches(of: /MARKETING_VERSION = (.+);/).map { String($0.1) }
+        #expect(!versions.isEmpty && Set(versions) == [SnapshotKitVersion.current])
+    }
+
     struct UsageCase: Sendable, CustomTestStringConvertible {
         var arguments: [String]
         var message: String

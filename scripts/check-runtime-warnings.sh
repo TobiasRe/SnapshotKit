@@ -17,8 +17,9 @@ WORK="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/snapkit-runtime-check.XXXXXX"
 WORK="$(cd "$WORK" && pwd -P)"
 LOG="$WORK/runtime-issues.log"
 
-(cd "$ROOT" && swift build --product SnapshotKit > "$WORK/build.log" 2>&1) || { cat "$WORK/build.log"; exit 1; }
-APP="$(cd "$ROOT" && swift build --show-bin-path)/SnapshotKit"
+(cd "$ROOT" && xcodebuild build -project SnapshotKit.xcodeproj -scheme SnapshotKit -derivedDataPath build/DerivedData \
+  > "$WORK/build.log" 2>&1) || { cat "$WORK/build.log"; exit 1; }
+APP="$ROOT/build/DerivedData/Build/Products/Debug/SnapshotKit.app/Contents/MacOS/SnapshotKit"
 
 # A repository on a feature branch that modified, added and deleted a snapshot, with a last run in which one
 # test failed. Its images are references of the app's own snapshot tests.

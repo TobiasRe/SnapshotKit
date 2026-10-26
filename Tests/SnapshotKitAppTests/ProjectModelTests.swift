@@ -3,7 +3,7 @@ import Foundation
 import SnapshotKitCore
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     @MainActor

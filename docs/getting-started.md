@@ -53,10 +53,13 @@ With Xcode 26 or later:
 ```bash
 git clone https://github.com/TobiasRe/SnapshotKit
 cd SnapshotKit
-scripts/make-app.sh        # builds dist/SnapshotKit.app and dist/snapkit, plus release zips
+xcodebuild archive -scheme SnapshotKit -archivePath build/SnapshotKit.xcarchive
+open build/SnapshotKit.xcarchive/Products/Applications/SnapshotKit.app
+swift build -c release --product snapkit    # the CLI, in .build/release
 ```
 
-`swift run SnapshotKit` starts the app straight from the package while you work on it.
+The archive’s `SnapshotKit.app` is the app as released; move it to `/Applications` to keep it. While you work on
+SnapshotKit, open `SnapshotKit.xcodeproj` and run the SnapshotKit scheme.
 
 ## Add your first project
 

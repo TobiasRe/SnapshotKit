@@ -23,8 +23,9 @@ OUT="$(cd "$OUT" && pwd -P)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/snapkit-capture.XXXXXX")"
 trap 'rm -rf "$HOME_DIR"' EXIT
-(cd "$ROOT" && swift build --product SnapshotKit > "$HOME_DIR/build.log" 2>&1) || { cat "$HOME_DIR/build.log"; exit 1; }
-APP="$(cd "$ROOT" && swift build --show-bin-path)/SnapshotKit"
+(cd "$ROOT" && xcodebuild build -project SnapshotKit.xcodeproj -scheme SnapshotKit -derivedDataPath build/DerivedData \
+  > "$HOME_DIR/build.log" 2>&1) || { cat "$HOME_DIR/build.log"; exit 1; }
+APP="$ROOT/build/DerivedData/Build/Products/Debug/SnapshotKit.app/Contents/MacOS/SnapshotKit"
 
 export SNAPSHOTKIT_HOME="$HOME_DIR/home"
 mkdir -p "$SNAPSHOTKIT_HOME" "$HOME_DIR/projects"

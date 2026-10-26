@@ -1,5 +1,5 @@
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// Section headers name the test target only when the list has several, like the library's modules.
 struct BreadcrumbTests {

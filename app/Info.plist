@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The keys build settings can't set; Xcode generates the rest (GENERATE_INFOPLIST_FILE). -->
+<plist version="1.0">
+<dict>
+	<!-- The app is in English: without this, dates and numbers came out in the system's language
+	     ("17. Okt. 2026" in an English sentence). The user's region still sets their order. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+	</array>
+	<!-- snapshotkit://compare?reference=…&actual=…, from `snapkit open` (the diff tool) or a link. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.snapshotkit.SnapshotKit.compare</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>snapshotkit</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

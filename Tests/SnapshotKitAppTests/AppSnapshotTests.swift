@@ -3,7 +3,7 @@ import SnapshotKitCore
 import SnapshotTesting
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     /// Snapshot tests of SnapshotKit's own UI, in light and dark appearance.

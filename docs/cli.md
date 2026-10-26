@@ -8,8 +8,8 @@ It reads the same configuration and history as the app, so you can switch betwee
 snapkit <command> [options]
 ```
 
-Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it with `scripts/make-app.sh`. See
-[Getting started](getting-started.md#install-the-command-line-tool).
+Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it with
+`swift build -c release --product snapkit`. See [Getting started](getting-started.md#install-the-command-line-tool).
 
 ## Commands at a glance
 

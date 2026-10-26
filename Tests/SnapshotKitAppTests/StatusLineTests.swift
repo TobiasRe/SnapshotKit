@@ -1,6 +1,6 @@
 import SnapshotKitCore
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// A snapshot's row says one thing about it, the most telling: that its test is gone, else how it
 /// differs from the base branch, else that git hasn't committed it.

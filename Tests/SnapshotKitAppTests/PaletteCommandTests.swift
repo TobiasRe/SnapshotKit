@@ -1,6 +1,6 @@
 import SnapshotKitCore
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 extension AppUITests {
     /// ⌘K offers what the open project can do now, named for what it will act on.

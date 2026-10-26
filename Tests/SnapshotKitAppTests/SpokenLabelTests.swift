@@ -1,6 +1,6 @@
 import SnapshotKitCore
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// A row is one VoiceOver stop that says what a sighted user sees on it, in the same words.
 struct SpokenLabelTests {

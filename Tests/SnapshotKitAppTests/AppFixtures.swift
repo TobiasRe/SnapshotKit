@@ -2,7 +2,7 @@ import AppKit
 import SnapshotKitCore
 import SwiftUI
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// Every app test suite lives in here and runs one after another. Suites run in parallel by
 /// default, and app tests share the main thread, windows and caches: a window opened by the

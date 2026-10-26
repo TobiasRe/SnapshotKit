@@ -1,6 +1,6 @@
 import SnapshotKitCore
 import Testing
-@testable import SnapshotKit
+@testable import SnapshotKitUI
 
 /// A failing test's images, from several devices, test cases, runs or assertions, are told apart by
 /// only what varies, and runs are numbered per device.

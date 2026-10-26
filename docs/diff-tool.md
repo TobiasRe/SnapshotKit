@@ -110,7 +110,8 @@ Append `-o diff.png` to write the difference image.
 3. the installed SnapshotKit.app (by its bundle id `org.snapshotkit.SnapshotKit`).
 
 Use `--app` or `SNAPSHOTKIT_APP` for a development build, e.g.
-`Self { "snapkit open --app ~/Developer/SnapshotKit/dist/SnapshotKit.app \"\($0)\" \"\($1)\"" }`.
+`Self { "snapkit open --app ~/Developer/SnapshotKit/build/SnapshotKit.xcarchive/Products/Applications/SnapshotKit.app \"\($0)\" \"\($1)\"" }`
+for the one [Getting started](getting-started.md#build-from-source) builds.
 
 ## From other tools: `snapshotkit://`
 
