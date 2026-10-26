@@ -31,11 +31,14 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docs.txt
       - run: pip install -r requirements-docs.txt
-      # The landing page at the root, the documentation (docs/, MkDocs) under /docs/. The screenshots live
-      # once, in docs/images; the landing page uses them from images/ as well.
+      # The landing page at the root, the documentation (docs/, Zensical) under /docs/. The screenshots live
+      # once, in docs/images; the landing page uses them from images/ as well. Zensical has no --site-dir; it
+      # builds to mkdocs.yml's site_dir.
       - name: Build the website and the documentation
         run: |
-          mkdocs build --strict --site-dir _site/docs
+          zensical build --strict
+          mkdir -p _site
+          cp -R build/docs-site _site/docs
           cp -R site/. _site/
           cp docs/images/* _site/images/
       - if: github.event_name != 'pull_request'
