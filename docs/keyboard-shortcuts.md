@@ -11,7 +11,7 @@
 | ⌘, | Settings |
 | ⌥⌘1 | Working Copy |
 | ⌥⌘2 | Changes vs the base branch (vs develop) |
-| ⌥⌘3 | Last Run (or the loaded CI job) |
+| ⌥⌘3 | Last Run |
 | ⌥⌘4 | Run |
 | ⌥⌘5 | All Snapshots |
 | ⌥⌘6 | Orphaned (while there are orphaned snapshots) |

@@ -429,7 +429,7 @@ enum AppFixtures {
             f.lastResult = lastResult
             f.lastMessage = ProjectModel.failureTitle(tests: 2, suites: 2)
             f.lastMessageIsError = true
-            f.lastMessageAction = .showFailures
+            f.lastMessageAction = .showFailures(.lastRun)
             f.lastDuration = 94
         case .running:
             f.section = .run
@@ -449,7 +449,9 @@ enum AppFixtures {
             f.section = .lastRun
         case .ciJob:
             // The snapshot job loaded, with what its runner no longer had; the branch's other failed job offered.
-            f.section = .ciJob
+            f.section = .ciJob(4567)
+            f.ciJob = GitLabJob(id: 4567, name: "snapshotTest", status: "failed")
+            f.ciMergeRequest = GitLabMergeRequest(iid: 12, title: "Checkout redesign")
             let project = GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop")
             f.failureSource = FailureSource(label: "snapshotTest #4567", date: date, host: "ci-mac-1",
                                             jobURL: URL(string: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"), detail: "!12 · 3f1c2a9b",
@@ -459,7 +461,6 @@ enum AppFixtures {
                                         mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout redesign"), pipeline: GitLabPipeline(id: 89),
                                         failedJobs: [GitLabJob(id: 4567, name: "snapshotTest", status: "failed"),
                                                      GitLabJob(id: 4568, name: "snapshotTest-iPad", status: "failed")])
-            f.loadedCIJobID = 4567
             // As loaded from CI: no local verdicts or history, one image per test, taken on the runner.
             f.flakeResults = []
             f.historyFlaky = []

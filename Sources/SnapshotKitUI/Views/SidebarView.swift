@@ -19,7 +19,7 @@ struct SidebarView: View {
 }
 
 /// The open project's sections, grouped as they're used: what you changed, what the tests say,
-/// and everything there is.
+/// what CI says, and everything there is.
 struct SectionList: View {
     let project: ProjectModel
 
@@ -30,8 +30,16 @@ struct SectionList: View {
                 row(.comparison)
             }
             Section("Tests") {
-                row(project.failureSection)
+                row(.lastRun)
                 row(.run)
+            }
+            // A merge request's failed jobs, each loaded when opened.
+            ForEach(project.ciJobGroups) { group in
+                Section {
+                    ForEach(group.jobs) { row(.ciJob($0.id)) }
+                } header: {
+                    Text(group.title).help(group.mergeRequest?.title ?? "")
+                }
             }
             Section("Library") {
                 row(.library)
@@ -47,9 +55,7 @@ struct SectionList: View {
             HStack(spacing: DS.Space.s) {
                 Text(project.shortTitle(of: section)).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: DS.Space.xs)
-                if let count = project.count(of: section), count > 0 {
-                    SectionCount(count: count, color: Self.color(of: section))
-                }
+                badge(section)
             }
         } icon: {
             Image(systemName: Self.symbol(of: section))
@@ -60,6 +66,20 @@ struct SectionList: View {
         // is in the label: a sidebar row doesn't pass on an accessibility value.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([project.title(of: section), project.countLabel(of: section)].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// The count; for a CI job not loaded yet, a red dot (it failed), or a spinner while it loads.
+    @ViewBuilder
+    private func badge(_ section: ProjectSection) -> some View {
+        if case .ciJob(let id) = section, project.count(of: section) == nil {
+            if project.loadingCIJobs.contains(id) {
+                ProgressView().controlSize(.mini)
+            } else {
+                Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
+            }
+        } else if let count = project.count(of: section), count > 0 {
+            SectionCount(count: count, color: Self.color(of: section))
+        }
     }
 
     static func symbol(of section: ProjectSection) -> String {

@@ -4,7 +4,7 @@ import Testing
 @testable import SnapshotKitUI
 
 extension AppUITests {
-    /// Loading a failed CI job into the failures view, with GitLab and the runner replaced by the model's seams.
+    /// Loading failed CI jobs, each into its own sidebar item, with GitLab and the runner replaced by the model's seams.
     @MainActor
     @Suite(.serialized)
     struct CIJobModelTests {
@@ -41,6 +41,9 @@ extension AppUITests {
             await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567").value
 
             #expect(calls.all == ["4567 as ci-runner"])
+            #expect(model.failureSets[.lastRun] == nil)          // the job has its own failures
+            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            model.section = .ciJob(4567)
             #expect(model.failures.map(\.id) == ["AppTests/CardTests/card()"])
             #expect(model.failingSuites.map(\.identifier) == ["AppTests/CardTests"])     // to re-record here
             let source = try #require(model.failureSource)
@@ -75,6 +78,62 @@ extension AppUITests {
             await model.loadCIJob(job).value
             #expect(calls.all == ["https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"])
             #expect(model.offeredCIJobs.map(\.id) == [4568])
+            // Both stay in the merge request's group: one loaded, one to load.
+            #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4567, 4568]])
+            #expect(model.count(of: .ciJob(4567)) == 1 && model.count(of: .ciJob(4568)) == nil)
+        }
+
+        /// Opening a job's item loads it, beside the last run's failures, which stay as they were.
+        @Test func openingAJobLoadsItBesideTheLastRun() async throws {
+            let (model, _) = model()
+            let detection = CIDetection(project: GitLabLink(host: link.host, projectPath: link.projectPath), branch: "feature",
+                                        mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout"), pipeline: GitLabPipeline(id: 89),
+                                        failedJobs: [job])
+            model.detectCI = { _ in detection }
+            await model.checkCI().value
+            let loaded = loaded()
+            model.importCI = { _, _, _, _ in loaded }
+            var f = ProjectFixture()
+            f.failures = AppFixtures.failures(in: AppFixtures.temporaryDirectory("last-run"))
+            f.failureSource = FailureSource(label: "Local run", date: Date(), host: "local")
+            f.section = .lastRun
+            f.ciDetection = detection
+            model.apply(f)
+            let lastRun = model.failures.map(\.id)
+
+            model.section = .ciJob(job.id)
+            #expect(model.loadingCIJobs == [job.id])
+            #expect(model.countLabel(of: .ciJob(job.id)) == "loading")
+            try await waitUntil(model.loadingCIJobs.isEmpty, "the job didn't load")
+            #expect(model.failures.map(\.id) == ["AppTests/CardTests/card()"])
+            #expect(model.title(of: .ciJob(job.id)) == "CI Job snapshotTest #4567")
+
+            model.section = .lastRun
+            #expect(model.failures.map(\.id) == lastRun)
+            #expect(model.dockBadge == "\(lastRun.count)")      // the last run's, whatever CI says
+        }
+
+        /// A job that couldn't load says why in its item, and loads again only when asked.
+        @Test func aJobThatCouldNotLoadWaitsForTryAgain() async throws {
+            let (model, _) = model()
+            let detection = CIDetection(project: GitLabLink(host: link.host, projectPath: link.projectPath), branch: "feature",
+                                        mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout"), pipeline: GitLabPipeline(id: 89),
+                                        failedJobs: [job])
+            model.detectCI = { _ in detection }
+            await model.checkCI().value
+            let calls = Calls()
+            model.importCI = { _, _, _, _ in
+                calls.append("load")
+                throw GitLabError.request(path: "jobs/4567", output: "500")
+            }
+            model.section = .ciJob(job.id)
+            try await waitUntil(model.loadingCIJobs.isEmpty, "the load didn't end")
+            #expect(model.ciLoadErrors[job.id] != nil)
+            model.section = .library
+            model.section = .ciJob(job.id)              // back again: no second attempt by itself
+            #expect(calls.all == ["load"])
+            await model.loadCIJob(job).value          // Try Again
+            #expect(calls.all == ["load", "load"])
         }
 
         /// No GitLab, no merge request, no access: no banner, and no error either.
@@ -97,8 +156,14 @@ extension AppUITests {
             model.importCI = { _, _, _, _ in throw GitLabError.request(path: "projects/mobile%2Fios%2Fshop/jobs/4567", output: "404 Not Found") }
             await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567").value
             #expect(model.lastMessage == "Couldn’t load the CI job: GitLab answered `projects/mobile%2Fios%2Fshop/jobs/4567` with: 404 Not Found")
-            #expect(model.failureSource == nil)
-            #expect(!model.isLoadingCI)
+            #expect(model.failureSets.isEmpty)
+            #expect(model.loadingCIJobs.isEmpty)
+        }
+
+        func waitUntil(_ condition: @autoclosure () -> Bool, _ comment: Comment,
+                       sourceLocation: SourceLocation = #_sourceLocation) async throws {
+            for _ in 0..<100 where !condition() { try await Task.sleep(for: .milliseconds(20)) }
+            try #require(condition(), comment, sourceLocation: sourceLocation)
         }
 
         @Test func theLoginIsKeptTrimmedAndEmptyIsNone() {

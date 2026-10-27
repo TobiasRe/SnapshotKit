@@ -202,15 +202,20 @@ extension AppUITests {
             #expect(!model.changesAreFiltered)
         }
 
-        /// A CI job's failures go under the job's name, in Last Run's place, until each has an item of its own.
-        @Test func failuresFromACIJobAreNamedAfterIt() {
+        /// A CI job's failures have an item of their own, under the job's merge request, beside the
+        /// last run's; the branch's other failed job waits there to be loaded.
+        @Test func aCIJobsFailuresHaveTheirOwnItem() {
             let model = AppFixtures.project(.ciJob, store: AppFixtures.store())
-            #expect(model.failureSection == .ciJob)
-            #expect(model.menuSections == [.workingCopy, .comparison, .ciJob, .run, .library, .orphaned])
-            #expect(model.isListed(.ciJob) && !model.isListed(.lastRun))
-            #expect(model.shortTitle(of: .ciJob) == "CI · snapshotTest #4567")
-            #expect(model.count(of: .ciJob) == model.failures.count)
-            #expect(NoticeAction.showFailures.section(in: model) == .ciJob)
+            #expect(model.section == .ciJob(4567) && model.failureOrigin == .ciJob(4567))
+            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.first?.jobs.map(\.id) == [4567, 4568])
+            #expect(model.isListed(.ciJob(4567)) && model.isListed(.ciJob(4568)) && !model.isListed(.ciJob(1)))
+            #expect(model.shortTitle(of: .ciJob(4567)) == "snapshotTest #4567")
+            #expect(model.count(of: .ciJob(4567)) == model.failures.count)
+            #expect(model.countLabel(of: .ciJob(4568)) == "failed, not loaded")
+            #expect(model.count(of: .lastRun) == 0)                 // the fixture's last run failed nothing
+            #expect(model.menuSections == [.workingCopy, .comparison, .lastRun, .run, .library, .orphaned])
+            #expect(ProjectSection(id: "ci-job-4567") == .ciJob(4567) && ProjectSection(id: "last-run") == .lastRun)
         }
 
         @Test func reRecordSelectionFollowsTheSection() throws {
@@ -1174,7 +1179,7 @@ extension AppUITests {
             model.section = .comparison                            // moved to another section meanwhile
             try await waitUntilFinished(model)
             #expect(model.section == .comparison)
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
 
             model.section = .run
             model.checkFlakiness()
@@ -1243,7 +1248,7 @@ extension AppUITests {
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "1 failing test in 1 suite")
             #expect(model.lastMessageIsError)
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
             #expect(model.flakeResults.isEmpty)
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             let failure = try #require(model.failures.first?.images.first?.failure)
@@ -1492,7 +1497,7 @@ extension AppUITests {
             await model.importResultBundle(bundle).value
             #expect(model.lastMessage == "Imported 1 failing test from ci.xcresult.")
             #expect(!model.lastMessageIsError)
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
             #expect(model.section == .lastRun)
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier])
@@ -1739,7 +1744,7 @@ extension AppUITests {
             #expect(model.operation == .remoteRun)
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "1 failing test in 1 suite")
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             let source = try #require(model.failureSource)
             #expect(source == FailureSource(label: "Remote run", date: source.date, host: "fake-mac", resultBundle: nil))

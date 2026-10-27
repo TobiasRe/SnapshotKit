@@ -72,7 +72,7 @@ never from disk); for the open project, ⌘K offers the same.
 
 ### Sections
 
-The sections come in three groups: Workspace, Tests and Library.
+The sections come in groups: Workspace, Tests, one per merge request with failed CI jobs, and Library.
 
 | Section | Shortcut | What it shows |
 |---|---|---|
@@ -80,14 +80,16 @@ The sections come in three groups: Workspace, Tests and Library.
 | **vs develop** | ⌥⌘2 | Every snapshot this checkout changes compared with the base branch, committed or not. [Details](changes.md) |
 | **Last Run** | ⌥⌘3 | Failing snapshots from the last run or an imported `.xcresult`. [Details](failures.md) |
 | **Run** | ⌥⌘4 | Configuration, runs, live output and results. [Details](running.md) |
+| **CI · !12** › *snapshotTest #4567* | | A failed GitLab CI job of the branch’s merge request, loaded when you open it. [Details](failures.md#failures-from-gitlab-ci) |
 | **All Snapshots** | ⌥⌘5 | The library: every reference image. [Details](library.md) |
 | **Orphaned** | ⌥⌘6 | Snapshots no test records any more; listed only while there are some. [Details](library.md#orphaned-snapshots) |
 
 **vs develop** is named after the base branch; its full name, in the window title, the menus and VoiceOver,
-is *Changes vs develop*. When the failures were loaded from a GitLab CI job, **Last Run** is named after the
-job instead: *CI · snapshotTest #4567* (in full, *CI Job snapshotTest #4567*).
+is *Changes vs develop*. A CI job’s full name is *CI Job snapshotTest #4567*; ⌘K finds it as *Show CI Job
+snapshotTest #4567*.
 
-Each section carries its count as a badge: Working Copy’s with an orange dot, Last Run’s with a red one.
+Each section carries its count as a badge: Working Copy’s with an orange dot, Last Run’s and a loaded CI job’s
+with a red one. A CI job not loaded yet shows just the red dot.
 
 ## The ⌘K palette
 

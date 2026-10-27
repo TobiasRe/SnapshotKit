@@ -14,7 +14,7 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | A run on a remote Mac | ⌃⌘R. See [Remote runs](remote-runs.md). |
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Last Run header): choose an `.xcresult` downloaded from CI. |
-| A failed GitLab CI job | the banner on Last Run, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
+| A failed GitLab CI job | its item in the sidebar, under its merge request, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
 
 The header says which one you’re looking at: *Local run*, *Remote run* or *Verification run* over
 *local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened), or the bundle’s name
@@ -36,17 +36,20 @@ those failures as it shows a local run’s: each with its reference, the image C
 was measured.
 
 **Finding the job.** When a project opens (and when its branch changes), SnapshotKit asks GitLab about the
-checked-out branch: its open merge request, that request’s latest pipeline and the pipeline’s failed jobs. If
-there are some, Last Run says so, *CI failed on !12: `snapshotTest` #4567*, with **Load**. For any
-other job, **Load Failed CI Job…** (⇧⌘L, the File menu, ⌘K or the ⤓ menu) asks for its URL, or its number
-in this project.
+checked-out branch: its open merge request, that request’s latest pipeline and the pipeline’s failed jobs.
+The sidebar lists them in a section of their own, *CI · !12*, one item per job (*snapshotTest #4567*) with a
+red dot. Click one to load it. For any other job, **Load Failed CI Job…** (⇧⌘L, the File menu, ⌘K or Last
+Run’s ⤓ menu) asks for its URL, or its number in this project; it gets an item under its own merge request.
+
+Each job keeps its failures apart from the last run’s, and from the other jobs’: loading one replaces
+nothing, and its item shows its failing count once it has loaded.
 
 **What loads.**
 
-- The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. In the
-  sidebar, Last Run is named after the job: **CI · snapshotTest #4567**. The header names the job, the
-  runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 · 3f1c2a9b · …*); the ⤓
-  menu opens the job in the browser.
+- The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. The header
+  names the job, the runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 ·
+  3f1c2a9b · …*). **Open in GitLab** opens the job’s page; ↻ loads it again, for images its runner has
+  again. A job that can’t load says why in its item, with **Try Again**.
 - Each reference as it was at the commit the job ran (`git show`), not as the working tree has it now, which
   may have been re-recorded since. A commit that isn’t in your clone yet falls back to the working tree, with
   a note to `git fetch`.

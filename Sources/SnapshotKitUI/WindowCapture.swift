@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Headless screenshots of the full window, for automated UI verification:
 ///
-///     SnapshotKit --capture out.png --project /path/to/repo --section working-copy \
+///     SnapshotKit --capture out.png --project /path/to/repo --section working-copy|comparison|last-run|ci-job-<id>|run|library|orphaned \
 ///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference|toggle]
 ///                 [--zoom 3|change] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
 ///                 [--action run|rerecord|record|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
@@ -35,7 +35,7 @@ struct CaptureOptions: Equatable {
             return args[j + 1]
         }
         o.project = value("--project")
-        o.section = value("--section").flatMap { ProjectSection(rawValue: $0.lowercased()) }
+        o.section = value("--section").flatMap { ProjectSection(id: $0.lowercased()) }
         o.select = value("--select")
         o.compare = value("--compare").flatMap { v in
             switch v.lowercased() {

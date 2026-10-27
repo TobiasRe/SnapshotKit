@@ -92,6 +92,10 @@ extension PaletteCommand {
             commands.append(.init(title: "Show " + project.title(of: section), symbol: SectionList.symbol(of: section),
                                   shortcut: "⌥⌘\(index + 1)") { project.section = section })
         }
+        for job in project.ciJobGroups.flatMap(\.jobs) {
+            commands.append(.init(title: "Show " + project.title(of: .ciJob(job.id)), symbol: SectionList.symbol(of: .ciJob(job.id)),
+                                  shortcut: nil) { project.section = .ciJob(job.id) })
+        }
         commands.append(.init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() })
         if project.displayedChanges.contains(where: { !project.viewedChanges.contains($0.id) }) {
             let title = project.changesAreFiltered ? "Mark All Shown Changes as Viewed" : "Mark All Changes as Viewed"

@@ -31,7 +31,7 @@ struct ProjectView: View {
                 NoticeBanner(text: message, isError: project.lastMessageIsError,
                              action: project.lastMessageAction.flatMap { action in
                                  // No need to offer the section you're in.
-                                 let section = action.section(in: project)
+                                 let section = action.section
                                  return section == project.section ? nil : (action.title, {
                                      dismissedMessage = id
                                      project.section = section
@@ -810,7 +810,7 @@ struct RunResultsList: View {
 
     private func row(_ test: TestCaseResult, suite: SuiteResult) -> some View {
         let id = suite.onlyTestingIdentifier(of: test)   // as Failures names it: never by display name
-        let canOpen = project.failures.contains { $0.id == id }
+        let canOpen = project.isLastRunFailure(id)
         return HStack(spacing: DS.Space.s) {
             Image(systemName: icon(test.outcome))
                 .foregroundStyle(color(test.outcome))

@@ -324,7 +324,7 @@ final class AppModel {
     /// Load Failed CI Job… (⇧⌘L): the failures view asks for the job's URL.
     func loadCIJobFromPrompt() {
         guard let project = current else { return }
-        project.section = project.failureSection
+        if project.section.content != .failures { project.section = .lastRun }
         project.askForCIJob = true
     }
 
