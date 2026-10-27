@@ -29,8 +29,8 @@ Click the icon for a panel:
 *ci-mac: Syncing working tree*…), a progress bar, the passed and failed counts so far, the test running now,
 and ⊗ to cancel it.
 
-**Projects** — your failing projects first (with a red dot and the failing count, as in the sidebar), then
-pinned and recent ones. Click a project to open it in the window; click ▶ to run its snapshot tests right away
+**Projects** — your failing projects first (with a red dot and the failing count, as in the project
+switcher), then pinned and recent ones. Click a project to open it in the window; click ▶ to run its snapshot tests right away
 (the project opens and starts running once its environment is checked).
 
 **Footer** — **Open SnapshotKit** brings the window forward, **Settings…** opens the settings, **Quit** quits.
@@ -39,4 +39,4 @@ pinned and recent ones. Click a project to open it in the window; click ▶ to r
 
 - The **Dock icon** shows the failing count of the open project as a badge, and bounces when a run finishes
   while SnapshotKit is in the background.
-- The **sidebar** shows each project’s failing count from its last run.
+- The sidebar’s **project switcher** shows each project’s failing count from its last run.

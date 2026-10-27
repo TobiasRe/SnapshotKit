@@ -250,7 +250,7 @@ struct FakeGitLab: GitLabAPI {
         #expect(hint("Host key verification failed.") == "ci-mac-1 isn’t a known SSH host yet, and SnapshotKit never trusts one by itself. "
                 + "Connect once with `ssh ci-mac-1 true` and accept its key, then load the job again.")
         #expect(hint("ci@ci-mac-1: Permission denied (publickey).") == "ci-mac-1 refused the SSH login, so the images the tests took couldn’t be "
-                + "copied. The images are in /Users/ci-runner/: set CI login in the Run tab to `ci-runner`.")
+                + "copied. The images are in /Users/ci-runner/: set CI login under Run to `ci-runner`.")
         #expect(hint("Permission denied (publickey).", login: "builder").hasSuffix("that `ssh builder@ci-mac-1 true` works without a password."))
         #expect(hint("Connection timed out").hasPrefix("Couldn’t copy the images the tests took from ci-mac-1: "))
     }

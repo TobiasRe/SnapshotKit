@@ -14,6 +14,20 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   `snapkit failures --ci [URL] [--ci-login USER] [--no-images]` prints the same.
 
 ### Changed
+- The sidebar replaces the tabs. It shows one project at a time: a switcher at the top (the project, its branch,
+  and a list of the others to search), and under it the project's sections with their counts. **Working Copy** has
+  the uncommitted snapshots, **vs develop** everything that differs from the base branch, **Last Run** (or the CI
+  job loaded) the failures, **Run** the run, **All Snapshots** the library and **Orphaned** the snapshots no test
+  records. ⌥⌘1–6 open them; the library's Show scopes and the sidebar's Recent section are gone. The capture
+  option `--tab` is now `--section`.
+- While tests run or re-record, the toolbar shows the stage, a progress bar and how many tests are done, wherever
+  you are in the project (before the tests start, the phase and how long it has taken: "Building · 1:42"); a
+  click opens the output in Run, whose item spins meanwhile. A re-record measures its
+  progress against the tests it records.
+- Each failed CI job has its own item in the sidebar, under its merge request (*CI · !12*), instead of a banner
+  over the failures: a red dot until you open it, which loads it, then its failing count. A job's failures no
+  longer replace the last run's, nor another job's. Its header has **Open in GitLab**; re-recording and
+  flakiness checks are for the last run's failures only, for now.
 - The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
   `scripts/make-app.sh` is gone.
@@ -21,6 +35,14 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   stashed. The patch is undone to the file’s text as it was, uncommitted edits included.
 
 ### Fixed
+- A changed or failing snapshot shows its two images as soon as they're decoded; the difference and its
+  numbers follow, and are computed about six times faster in a Debug build, where they took seconds.
+- ↑ and ↓ on a clicked image keep stepping through the list. After the first step the image gave way to a
+  spinner while the next one loaded, and the keyboard focus went with it.
+- The project CI names is found in its folder: a variable like `XCODE_PROJECT: App.xcodeproj`, used by a
+  shared template that changes into `Example/` first, made `xcodebuild` run at the repository's root and fail
+  with "App.xcodeproj does not exist". When the named workspace or project isn't where the tests would run and
+  one folder of the repository has it, they run there (`snapkit config` and the app's configuration say why).
 - Opening a project from ⌘K, the menu bar, Add Project… or a drop no longer runs git on the main thread:
   the window stays responsive while git checks the folder, and of two quick picks the later one opens.
   A git command runs at the priority of whatever waits for it, so the main thread no longer waits on

@@ -19,7 +19,6 @@ struct FailuresTab: View {
             VStack(spacing: 0) {
                 header
                 Divider()
-                ciOffer
                 sourceNotes
                 list
                 footer
@@ -61,29 +60,20 @@ struct FailuresTab: View {
         }
     }
 
-    /// The failed jobs of the branch's merge request, to load.
-    @ViewBuilder
-    private var ciOffer: some View {
-        if let request = project.ciDetection?.mergeRequest, !project.offeredCIJobs.isEmpty {
-            VStack(alignment: .leading, spacing: DS.Space.xs) {
-                ForEach(project.offeredCIJobs.prefix(3)) { job in
-                    HStack(spacing: DS.Space.s) {
-                        StatusNote("CI failed on !\(request.iid): `\(job.name)` #\(job.id)", symbol: "xmark.octagon.fill", color: DS.Status.failed)
-                            .lineLimit(1)
-                            .help(request.title)
-                        Spacer(minLength: DS.Space.s)
-                        Button("Load") { project.loadCIJob(job) }
-                            .quietControl()
-                            .disabled(project.isRunning || project.isLoadingCI)
-                            .help("Show this job’s failing tests with their references and the images CI took (⇧⌘L for another job)")
-                    }
-                }
-            }
-            .font(DS.Font.secondary)
-            .padding(.horizontal, DS.Space.l)
-            .padding(.vertical, DS.Space.s)
-            Divider()
-        }
+    /// The CI job shown, loaded or not; nil for the last run.
+    private var ciJob: GitLabJob? {
+        if case .ciJob(let id) = project.section { project.ciJob(id) } else { nil }
+    }
+
+    /// The merge request of the CI job shown, before it has loaded.
+    private var ciRequest: GitLabMergeRequest? {
+        ciJob.flatMap { job in project.ciJobGroups.first { $0.jobs.contains(job) }?.mergeRequest }
+    }
+
+    /// The CI job's page: its URL once loaded, else as the branch's merge request names it.
+    private var jobURL: URL? {
+        project.failureSource?.jobURL
+            ?? ciJob.flatMap { job in project.ciDetection?.link(to: job).jobURL }.flatMap(URL.init(string:))
     }
 
     /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on.
@@ -111,7 +101,7 @@ struct FailuresTab: View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
                 VStack(alignment: .leading, spacing: DS.Space.xxs) {
-                    Text(project.failureSource?.label ?? "No results yet")
+                    Text(project.failureSource?.label ?? ciJob.map { "\($0.name) #\($0.id)" } ?? "No results yet")
                         .font(DS.Font.heading)
                         .lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
@@ -121,39 +111,58 @@ struct FailuresTab: View {
                             .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                    } else if let request = ciRequest {
+                        Text("!\(request.iid) · \(request.title)")
+                            .font(DS.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
                 Spacer(minLength: DS.Space.s)
-                GlassSplitButton(title: "Import Result Bundle", symbol: "square.and.arrow.down",
-                                 help: "Import an .xcresult, for example from a CI job (⇧⌘O)") {
-                    app.importResultBundleFromPanel()
-                } menu: {
-                    Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
-                    Button("Load Failed CI Job…") { app.loadCIJobFromPrompt() }
-                    if let job = project.failureSource?.jobURL {
-                        Button("Open Job in Browser") { NSWorkspace.shared.open(job) }
+                if ciJob == nil {
+                    GlassSplitButton(title: "Import Result Bundle", symbol: "square.and.arrow.down",
+                                     help: "Import an .xcresult, for example from a CI job (⇧⌘O)") {
+                        app.importResultBundleFromPanel()
+                    } menu: {
+                        Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
+                        Button("Load Failed CI Job…") { app.loadCIJobFromPrompt() }
+                        if let bundle = project.failureSource?.resultBundle {
+                            Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
+                            Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
+                        }
                     }
-                    if let bundle = project.failureSource?.resultBundle {
-                        Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
-                        Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
-                    }
+                    // A run ending would replace what was imported meanwhile.
+                    .disabled(project.isRunning)
                 }
-                // A run ending would replace what was imported meanwhile.
-                .disabled(project.isRunning)
             }
             FilterBar {
-                // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
-                Button("Re-record Failing Suites") { project.reRecordFailed() }
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
-                    .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
-                Button("Check Flakiness") { project.checkFlakiness() }
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
-                    .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
+                // A CI job's failures are only looked at for now: the way to the job, and nothing to record.
+                if ciJob != nil {
+                    if let url = jobURL {
+                        Button("Open in GitLab") { NSWorkspace.shared.open(url) }
+                            .quietControl()
+                            .help(url.absoluteString)
+                    }
+                } else {
+                    lastRunActions
+                }
             }
         }
         .controlSize(.small)
+    }
+
+    private var lastRunActions: some View {
+        Group {
+            // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
+            Button("Re-record Failing Suites") { project.reRecordFailed() }
+                .quietControl()
+                .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
+                .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
+            Button("Check Flakiness") { project.checkFlakiness() }
+                .quietControl()
+                .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
+                .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
+        }
     }
 
     @ViewBuilder
@@ -216,7 +225,23 @@ struct FailuresTab: View {
         }
         .overlay {
             // "Nothing failing" only once there are results to say it about.
-            if project.failures.isEmpty, project.failureSource == nil {
+            if let job = ciJob, project.failureSource == nil {
+                if let error = project.ciLoadErrors[job.id] {
+                    ContentUnavailableView {
+                        Label("Couldn’t Load the Job", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Try Again") { project.loadCIJob(job) }
+                            .disabled(project.loadingCIJobs.contains(job.id))
+                    }
+                } else {
+                    VStack(spacing: DS.Space.m) {
+                        ProgressView()
+                        Text("Loading \(job.name) #\(job.id)…").foregroundStyle(.secondary)
+                    }
+                }
+            } else if project.failures.isEmpty, project.failureSource == nil {
                 ContentUnavailableView("No Results Yet", systemImage: "play.circle",
                                        description: Text("Run the tests, or import a result bundle from CI."))
             } else if project.failures.isEmpty {
@@ -271,14 +296,16 @@ struct FailuresTab: View {
                          position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
-                    GlassSplitButton(title: "Re-record", symbol: "camera",
-                                     help: "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
-                        project.reRecord(failures: [item])
-                    } menu: {
-                        Button("Re-record Test") { project.reRecord(failures: [item]) }
-                        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                    if project.recordsFailures {
+                        GlassSplitButton(title: "Re-record", symbol: "camera",
+                                         help: "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
+                            project.reRecord(failures: [item])
+                        } menu: {
+                            Button("Re-record Test") { project.reRecord(failures: [item]) }
+                            Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                        }
+                        .disabled(project.isRunning || project.environment == nil)
                     }
-                    .disabled(project.isRunning || project.environment == nil)
                     GlassIconMenu(title: "Test Actions", symbol: "ellipsis", help: "More actions for this test") {
                         actions(for: item)
                     }
@@ -368,13 +395,15 @@ struct FailuresTab: View {
 
     @ViewBuilder
     private func actions(for item: FailureItem) -> some View {
-        Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Button("Re-record \(item.test.name)") { project.reRecord(failures: [item]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Divider()
+        if project.recordsFailures {
+            Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Button("Re-record \(item.test.name)") { project.reRecord(failures: [item]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Divider()
+        }
         if let reference = item.referencePaths.first {
             Button("Open Test in Xcode") { project.openTestInXcode(SnapshotFile(path: reference, byteSize: 0)) }
             Button("Show Reference in Library") { project.showInLibrary(path: reference) }
@@ -650,7 +679,8 @@ struct VerdictTag: View {
     }
 }
 
-/// Several failures selected: what they are, and the two things to do with all of them at once.
+/// Several failures selected: what they are, and the two things to do with all of them at once (for
+/// the last run's; a CI job's are only looked at for now).
 struct BatchFailureDetail: View {
     let project: ProjectModel
 
@@ -666,16 +696,18 @@ struct BatchFailureDetail: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: DS.Space.s)
-                Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
-                    .fixedSize()
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil)
-                    .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
-                Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
-                    .primaryActionStyle()
-                    .fixedSize()
-                    .disabled(project.isRunning || project.environment == nil)
-                    .help("Record these tests’ snapshots again, then check that they pass (⇧⌘R)")
+                if project.recordsFailures {
+                    Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
+                        .fixedSize()
+                        .quietControl()
+                        .disabled(project.isRunning || project.environment == nil)
+                        .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
+                    Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
+                        .primaryActionStyle()
+                        .fixedSize()
+                        .disabled(project.isRunning || project.environment == nil)
+                        .help("Record these tests’ snapshots again, then check that they pass (⇧⌘R)")
+                }
             }
             // Header controls are small everywhere, as in every other detail header.
             .controlSize(.small)

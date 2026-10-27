@@ -12,11 +12,11 @@ references.
 |---|---|---|
 | The selected test | camera button in a detail header; Snapshots › Re-record Selected Test | ⇧⌘R |
 | The selected test’s whole suite | the camera button’s arrow › Re-record Suite *name* | |
-| The failing suites of the last run | **Re-record Failing Suites** in the Failures header; the Run button’s arrow › **Re-record Failing Suites**; **Re-record Failing Suites** on the Run tab; Snapshots › Re-record Failing Suites | ⌥⇧⌘R |
+| The failing suites of the last run | **Re-record Failing Suites** in the Last Run header; the Run button’s arrow › **Re-record Failing Suites**; **Re-record Failing Suites** in Run; Snapshots › Re-record Failing Suites | ⌥⇧⌘R |
 | What the library shows | the library footer’s **Re-record All…** / **Re-record N Shown…** (filter first, e.g. `dark`) | |
 | Every snapshot test in the project | the Run button’s arrow › **Re-record All Snapshot Tests…**; Snapshots menu; ⌘K | |
 | A test from a change or failure | its ··· menu or right-click | |
-| On the CI machine | Run tab › ··· › On *host* › Re-record Failing Suites. [Remote runs](remote-runs.md) | |
+| On the CI machine | Run › ··· › On *host* › Re-record Failing Suites. [Remote runs](remote-runs.md) | |
 
 **Re-record All Snapshot Tests…** always asks first, and the library’s **Re-record N Shown…** does when it
 covers more than ten tests. Orphaned snapshots can’t be re-recorded (their test no longer exists), so those
@@ -27,7 +27,7 @@ them for people doesn’t change what runs.
 
 ## What happens, step by step
 
-The Run tab and the notice follow each stage:
+Run and the notice follow each stage:
 
 1. **Finding suite sources** — the test file of each snapshot: `<suite folder>.swift`, preferring the one
    next to the `__Snapshots__` folder, then the test type in it (named like the file, else the first type ending
@@ -44,14 +44,14 @@ The Run tab and the notice follow each stage:
    after re-recording.
 
 The verification updates the last run instead of replacing it: the tests it ran get their new outcome, and
-every other failure of the last run stays on the Failures tab, so you can work through them one at a time.
+every other failure of the last run stays in Last Run, so you can work through them one at a time.
 
 When the build fails or no test runs, nothing is recorded and the notice says why: *Nothing was recorded: the
 build failed (…).* (`snapkit record` and `rerecord` exit 1). A canceled re-record says *Cancelled.*; the
 sources are restored, and the last run’s failures stay as they were.
 
-The new PNGs are now uncommitted changes. Review them on the [Changes](changes.md) tab — *Discard…* drops the
-ones with no visible change — and commit.
+The new PNGs are now uncommitted changes. Review them in [Working Copy](changes.md) (the notice’s **Review
+Changes** opens it) — *Discard…* drops the ones with no visible change — and commit.
 
 ## The patch
 

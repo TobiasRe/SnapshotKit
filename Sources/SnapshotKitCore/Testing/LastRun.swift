@@ -10,7 +10,7 @@ public struct LastRun: Codable, Sendable {
     public var failed: Int
     /// Exported failure attachments (folder with manifest.json), if any.
     public var attachmentsDirectory: String?
-    /// Every suite of the run, passing ones included, for the Run tab's results after a
+    /// Every suite of the run, passing ones included, for the Run view's results after a
     /// relaunch. Missing in files written by older versions.
     public var suites: [SuiteResult]?
     /// The folder with a failing test's images (by `Bundle/Suite/test()`) when it is not the run's

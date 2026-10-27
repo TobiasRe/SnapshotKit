@@ -10,7 +10,7 @@ struct ProjectView: View {
 
     var body: some View {
         Group {
-            switch project.tab {
+            switch project.section.content {
             case .snapshots: SnapshotsTab(project: project)
             case .run: RunTab(project: project)
             case .failures: FailuresTab(project: project)
@@ -19,21 +19,22 @@ struct ProjectView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Snapshot files are watched; commits, branch switches and runs of `snapkit` made elsewhere
-        // are picked up when you come back to the app, on any tab.
+        // are picked up when you come back to the app, in any section.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             project.refreshAfterActivation()      // skips itself while a run is going on
         }
         // The outcome of the last action floats over the image area (above the compare toolbar)
-        // instead of pushing every pane down. The Run tab says it in its own header.
+        // instead of pushing every pane down. The Run view says it in its own header.
         .overlay(alignment: .bottomTrailing) {
-            if let message = project.lastMessage, project.messageID != dismissedMessage, !project.isRunning, project.tab != .run {
+            if let message = project.lastMessage, project.messageID != dismissedMessage, !project.isRunning, project.section != .run {
                 let id = project.messageID
                 NoticeBanner(text: message, isError: project.lastMessageIsError,
                              action: project.lastMessageAction.flatMap { action in
-                                 // No need to offer the tab you're on.
-                                 action.tab == project.tab ? nil : (action.title, {
+                                 // No need to offer the section you're in.
+                                 let section = action.section
+                                 return section == project.section ? nil : (action.title, {
                                      dismissedMessage = id
-                                     project.tab = action.tab
+                                     project.section = section
                                  })
                              },
                              onClose: { dismissedMessage = id })
@@ -56,26 +57,27 @@ struct ProjectView: View {
                             isPresented: $project.confirmReRecordAll) {
             Button(ProjectModel.testCount(project.recordableSnapshots) == 1 ? "Re-record" : "Re-record All") { project.reRecordAll() }
         } message: {
-            Text("Every reference image is recorded again and then verified. Review the result on the Changes tab before committing.")
+            Text("Every reference image is recorded again and then verified. Review the result in Working Copy before committing.")
         }
-        .navigationTitle(project.project.name)
+        // The sidebar says which project and section; the title repeats the section, as a Mac
+        // window names what it shows, and the subtitle where it is.
+        .navigationTitle(project.title(of: project.section))
         .navigationSubtitle(subtitle)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $project.tab) {
-                    ForEach(ProjectTab.allCases) { tab in
-                        Text(label(for: tab)).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
             // No re-record button here: each detail header has one beside what it records, and ⇧⌘R
             // works from anywhere.
             ToolbarItem(placement: .primaryAction) {
                 if project.isRunning {
-                    Button("Cancel", systemImage: "stop.fill") { project.cancel() }
-                        .help("Cancel (⌘.)")
+                    // How far a run or re-record has got, wherever you are in the project. In this item, which
+                    // is always there: an item added only while running never reached the window's toolbar.
+                    HStack(spacing: DS.Space.m) {
+                        RunProgress(project: project)
+                            // Clear of the capsule's rounded end, which cut off the bar and the text.
+                            .padding(.leading, DS.Space.m)
+                        Button("Cancel", systemImage: "stop.fill") { project.cancel() }
+                            .labelStyle(.iconOnly)
+                            .help("Cancel (⌘.)")
+                    }
                 } else {
                     // Run, with the two bulk re-records one click away under its chevron.
                     Menu {
@@ -100,33 +102,14 @@ struct ProjectView: View {
         }
     }
 
-    private func label(for tab: ProjectTab) -> String {
-        switch tab {
-        // A count only when there is something to count: "Changes (0)" is noise.
-        case .snapshots: Self.counted("Snapshots", project.library?.files.count)
-        case .run: "Run"
-        case .failures: Self.counted("Failures", project.failures.count)
-        case .changes: Self.counted("Changes", project.changeSet?.changes.count)
-        }
-    }
-
-    static func counted(_ title: String, _ count: Int?) -> String {
-        guard let count, count > 0 else { return title }
-        return "\(title) (\(count))"
-    }
-
+    /// "Shop · feature/checkout-redesign": the project, and the branch checked out.
     private var subtitle: String {
-        guard let branch = project.currentBranch else {
-            // Unknown until the project has loaded; after that, no branch means a detached HEAD.
-            return project.context == nil && project.configError == nil ? "" : "detached HEAD"
-        }
-        // "feature → develop" says what Changes compares; on the base branch itself just its name.
-        guard let base = project.baseBranch, base != branch else { return branch }
-        return "\(branch) → \(base)"
+        guard let branch = project.branchLabel else { return project.project.name }
+        return "\(project.project.name) · \(branch)"
     }
 }
 
-// MARK: - Run tab
+// MARK: - Run
 
 struct RunTab: View {
     let project: ProjectModel
@@ -142,6 +125,67 @@ struct RunTab: View {
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// What is running and how far it has got, in the toolbar: the stage, a bar, and how many of the tests
+/// are done; before the tests start, the phase (building, say) and how long it has taken, as no total
+/// is known then. A click shows the output, in Run.
+struct RunProgress: View {
+    let project: ProjectModel
+
+    static let width: CGFloat = 300
+
+    var body: some View {
+        Button { project.section = .run } label: {
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                HStack(spacing: DS.Space.s) {
+                    Text(project.stageLabel).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: DS.Space.s)
+                    Group {
+                        if let counts {
+                            Text(counts)
+                        } else if let started = project.startedAt {
+                            TimelineView(.periodic(from: started, by: 1)) { context in
+                                Text("\(project.phase.label) · \(RunStatusHeader.elapsed(context.date.timeIntervalSince(started)))")
+                            }
+                        } else {
+                            Text(project.phase.label)
+                        }
+                    }
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                }
+                .font(DS.Font.caption)
+                Group {
+                    if let fraction = project.progressFraction {
+                        ProgressView(value: fraction)
+                    } else {
+                        ProgressView().progressViewStyle(.linear)
+                    }
+                }
+                .controlSize(.mini)
+            }
+            .frame(width: Self.width)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show the output (Run)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(project.stageLabel)
+        .accessibilityValue(counts ?? project.phase.label)
+        .accessibilityHint("Shows the output")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// "12 of 30 · 1 failed": failures only where they mean something. Recording fails every test it records.
+    private var counts: String? {
+        let done = project.passed + project.failed + project.skipped
+        guard project.phase == .testing, done > 0 || project.expectedTotal != nil else { return nil }
+        let progress = project.expectedTotal.map { "\(min(done, $0)) of \($0)" } ?? "\(done) done"
+        let showsFailures = project.failed > 0 && project.operation != .rerecord && project.operation != .remoteRecord
+        return showsFailures ? "\(progress) · \(project.failed) failed" : progress
     }
 }
 
@@ -260,10 +304,10 @@ struct RunInspector: View {
             remoteHost = project.settings.remoteHost ?? ""
             ciLogin = project.settings.ciLogin ?? ""
         }
-        // Saved like any Mac field: on Return, and also when you click or tab away or leave the tab.
+        // Saved like any Mac field: on Return, and also when you click or tab away or leave the view.
         .onChange(of: focused) { saveFields() }
         // A host also once you stop typing, so the ··· menu's remote section works without leaving the
-        // field. (Not the base branch: a half-typed one would flash "not found" on the Changes tab.)
+        // field. (Not the base branch: a half-typed one would flash "not found" in the changes.)
         .task(id: remoteHost) {
             guard (try? await Task.sleep(for: .seconds(1))) != nil else { return }
             saveFields()
@@ -772,7 +816,7 @@ struct LogView: View {
     }
 }
 
-/// The last run's tests by suite, failing suites first. Failed tests open on the Failures tab.
+/// The last run's tests by suite, failing suites first. Failed tests open with the run's failures.
 struct RunResultsList: View {
     let project: ProjectModel
     var suites: [SuiteResult]
@@ -835,7 +879,7 @@ struct RunResultsList: View {
 
     private func row(_ test: TestCaseResult, suite: SuiteResult) -> some View {
         let id = suite.onlyTestingIdentifier(of: test)   // as Failures names it: never by display name
-        let canOpen = project.failures.contains { $0.id == id }
+        let canOpen = project.isLastRunFailure(id)
         return HStack(spacing: DS.Space.s) {
             Image(systemName: icon(test.outcome))
                 .foregroundStyle(color(test.outcome))
@@ -853,7 +897,7 @@ struct RunResultsList: View {
             // Every row keeps the button's slot, so durations line up whether a row has it or not.
             Button { project.showFailure(id) } label: { Image(systemName: "arrow.forward.circle") }
                 .buttonStyle(.borderless)
-                .help("Compare on the Failures tab")
+                .help("Compare with the run’s other failures")
                 .opacity(canOpen ? 1 : 0)
                 .disabled(!canOpen)
         }

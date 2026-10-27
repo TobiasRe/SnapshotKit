@@ -162,7 +162,7 @@ extension AppUITests {
             model.selectAdjacent(5)
             #expect(model.selectedChange?.testName == "legacyHeader")
 
-            model.tab = .failures
+            model.section = .lastRun
             #expect(model.displayedFailures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()",
                                                           "AppSnapshotTests/ProfileViewTests/badge()"])
             model.selectedFailureID = nil
@@ -185,32 +185,86 @@ extension AppUITests {
             #expect(model.comparison == nil)
         }
 
-        @Test func reRecordSelectionFollowsTheTab() throws {
+        /// Working copy lists what isn't committed, whatever its kind; comparing with the base lists
+        /// every change of the kinds chosen. Between the two, the selection moves to a row the other shows.
+        @Test func workingCopyListsTheUncommittedChanges() throws {
+            let model = AppFixtures.project(.changes, store: AppFixtures.store())
+            model.section = .comparison
+            #expect(model.displayedChanges.count == 4)
+            model.selectedChangeID = try #require(model.displayedChanges.first { $0.testName == "payButton" }).id
+            model.changeKinds = [.committed]
+            model.section = .workingCopy
+            // The kinds menu is the comparison's: Working copy shows the new, untracked badge too.
+            #expect(model.displayedChanges.map(\.testName) == ["summary", "badge"])
+            #expect(model.selectedChange?.testName == "summary")
+            #expect(model.count(of: .workingCopy) == 2)
+            #expect(model.count(of: .comparison) == 4)
+            #expect(!model.changesAreFiltered)
+
+            // With nothing uncommitted, Working Copy shows no change, also not the one vs develop selected.
+            var f = ProjectFixture()
+            var committed = AppFixtures.changeSet
+            committed.changes.removeAll(where: \.isUncommitted)
+            f.changeSet = committed
+            f.section = .comparison
+            model.apply(f)
+            #expect(model.selectedChange != nil)
+            model.section = .workingCopy
+            #expect(model.displayedChanges.isEmpty && model.shownChange == nil)
+        }
+
+        /// A CI job's failures have an item of their own, under the job's merge request, beside the
+        /// last run's; the branch's other failed job waits there to be loaded.
+        @Test func aCIJobsFailuresHaveTheirOwnItem() {
+            let model = AppFixtures.project(.ciJob, store: AppFixtures.store())
+            #expect(model.section == .ciJob(4567) && model.failureOrigin == .ciJob(4567))
+            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.first?.jobs.map(\.id) == [4567, 4568])
+            #expect(model.isListed(.ciJob(4567)) && model.isListed(.ciJob(4568)) && !model.isListed(.ciJob(1)))
+            #expect(model.shortTitle(of: .ciJob(4567)) == "snapshotTest #4567")
+            #expect(model.count(of: .ciJob(4567)) == model.failures.count)
+            #expect(model.countLabel(of: .ciJob(4568)) == "failed, not loaded")
+            #expect(model.count(of: .lastRun) == 0)                 // the fixture's last run failed nothing
+            #expect(model.menuSections == [.workingCopy, .comparison, .lastRun, .run, .library, .orphaned])
+            #expect(ProjectSection(id: "ci-job-4567") == .ciJob(4567) && ProjectSection(id: "last-run") == .lastRun)
+            // Only looked at, for now: nothing to re-record or check for flakiness from here.
+            #expect(!model.recordsFailures && model.failingSuites.isEmpty && !model.canReRecordSelection)
+        }
+
+        /// A re-record measures its progress against the tests it records: those named, else its suites'.
+        @Test func aReRecordKnowsHowManyTestsItRuns() {
+            let suites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
+            #expect(ProjectModel.testCount(suites: suites, onlyTesting: ["A/B/c()", "A/B/d()", "A/E/f()"]) == 3)
+            #expect(ProjectModel.testCount(suites: suites, onlyTesting: nil) == suites.reduce(0) { $0 + $1.tests.count })
+            #expect(ProjectModel.testCount(suites: [SuiteResult(bundle: "A", path: ["B"], tests: [], failureFiles: [])], onlyTesting: nil) == nil)
+        }
+
+        @Test func reRecordSelectionFollowsTheSection() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
-            model.tab = .snapshots
+            model.section = .library
             model.selectedSnapshotID = try #require(model.displayedSnapshots.first).id
             #expect(model.canReRecordSelection)
             model.selectedSnapshotID = try #require(AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }).0.id
             #expect(model.selectedSnapshot?.testName == "oldAvatar")
             #expect(!model.canReRecordSelection)   // orphaned: its test is gone
-            model.tab = .changes
+            model.section = .comparison
             model.selectedChangeID = try #require(AppFixtures.changes.first { $0.0.kind == .deleted }).0.id
             #expect(model.selectedChange?.testName == "legacyHeader")
             #expect(!model.canReRecordSelection)   // nothing to record for a deleted snapshot
             model.selectedChangeID = AppFixtures.changes[0].0.id
             #expect(model.canReRecordSelection)
-            model.tab = .run
+            model.section = .run
             #expect(!model.canReRecordSelection)
         }
 
-        /// An orphan's test is gone, whichever tab it is selected on.
+        /// An orphan's test is gone, whichever section it is selected in.
         @Test func anOrphanedChangeCannotBeReRecorded() throws {
             let model = ProjectModel(project: Project(path: AppFixtures.repository.path), store: AppFixtures.store(), autoload: false)
             let orphan = try #require(AppFixtures.libraryImages.first { $0.0.testName == "oldAvatar" }).0
             var f = ProjectFixture()
             f.context = AppFixtures.context
             f.environment = AppFixtures.environment
-            f.tab = .changes
+            f.section = .comparison
             f.library = SnapshotLibrary(files: [orphan])
             f.orphanIDs = [orphan.id]
             f.changeSet = SnapshotChangeSet(baseBranch: "develop", baseRef: "develop", diffBase: .mergeBase, baseCommit: "3f1c2a9",
@@ -229,9 +283,9 @@ extension AppUITests {
             #expect(model.displayedSnapshots.map(\.fileName) == ["payButton.dark.png", "payButton.light.png"])
             #expect(model.displayedTree.flatMap(\.suites).map(\.name) == ["CheckoutViewTests"])
             model.libraryFilter = ""
-            model.libraryScope = .failing
-            #expect(model.displayedSnapshots.map(\.testName) == ["badge"])
-            model.libraryScope = .all
+            model.section = .orphaned
+            #expect(model.displayedSnapshots.map(\.testName) == ["oldAvatar"])
+            model.section = .library
             model.librarySort = .size
             #expect(model.displayedSnapshots.map(\.byteSize) == all.map(\.byteSize).sorted(by: >))
             model.librarySort = .name
@@ -375,11 +429,10 @@ extension AppUITests {
         @Test func showInLibraryClearsFiltersThatHideTheSnapshot() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
             let header = try #require(AppFixtures.libraryImages.first { $0.0.testName == "header" }).0
-            model.libraryScope = .failing
+            model.section = .orphaned
             model.libraryFilter = "payButton"
-            model.tab = .changes
             model.showInLibrary(path: header.path)
-            #expect(model.tab == .snapshots)
+            #expect(model.section == .library)
             #expect(model.selectedSnapshotID == header.id)
             #expect(model.displayedSnapshots.contains(header))
             model.showInLibrary(path: "not/a/snapshot.png")
@@ -636,7 +689,7 @@ extension AppUITests {
             #expect(model.selectedSnapshotID == names[2])
         }
 
-        /// ⌥⌘↓ and a jump from the Run tab focus one failure, even inside a multi-selection.
+        /// ⌥⌘↓ and a jump from the Run view focus one failure, even inside a multi-selection.
         @Test func movingTheFocusEndsAMultiSelection() {
             let model = AppFixtures.project(.failures, store: AppFixtures.store())
             let ids = model.displayedFailures.map(\.id)
@@ -656,9 +709,9 @@ extension AppUITests {
             let viewed = try #require(model.changeSet?.changes.first { model.viewedChanges.contains($0.id) })
             model.hideViewed = true
             model.changeKinds = [.committed]
-            model.tab = .snapshots
+            model.section = .library
             model.showChange(path: viewed.path)
-            #expect(model.tab == .changes)
+            #expect(model.section == .comparison)
             #expect(model.selectedChangeID == viewed.id)
             #expect(model.displayedChanges.contains(viewed))
         }
@@ -671,17 +724,17 @@ extension AppUITests {
             model.selectedSnapshotID = header.id
             model.libraryFilter = "Profile"                 // still shown
             #expect(model.selectedSnapshotID == header.id)
-            model.libraryScope = .failing                   // only badge fails
-            #expect(model.selectedSnapshot?.testName == "badge")
-            model.libraryScope = .all
-            #expect(model.selectedSnapshot?.testName == "badge")
+            model.section = .orphaned                       // only oldAvatar's test is gone
+            #expect(model.selectedSnapshot?.testName == "oldAvatar")
+            model.section = .library
+            #expect(model.selectedSnapshot?.testName == "oldAvatar")
             model.libraryFilter = "nothing like this"
-            #expect(model.selectedSnapshot?.testName == "badge")
+            #expect(model.selectedSnapshot?.testName == "oldAvatar")
             model.selectAdjacent(1)                         // nothing to move to
-            #expect(model.selectedSnapshot?.testName == "badge")
+            #expect(model.selectedSnapshot?.testName == "oldAvatar")
 
             let changes = AppFixtures.project(.changes, store: AppFixtures.store())
-            changes.tab = .changes
+            changes.section = .comparison
             changes.selectedChangeID = try #require(changes.displayedChanges.last { $0.testName == "legacyHeader" }).id
             changes.hideViewed = true                       // legacyHeader is viewed
             #expect(changes.selectedChange?.testName == "payButton")
@@ -691,45 +744,6 @@ extension AppUITests {
             #expect(changes.selectedChange?.testName == "badge")
             changes.changeFilter = ""
             #expect(changes.selectedChange?.testName == "payButton")
-        }
-
-        /// A run that fixes the selected snapshot's test takes it out of the Failing scope: the selection
-        /// moves to the first snapshot shown, as when a filter hides it.
-        @Test func aRunThatFixesTheSelectionMovesIt() async throws {
-            let (repo, _) = try makeRepo()
-            let dark = "\(AppFixtures.snapshotDir)/CheckoutViewTests/payButton.dark.png"
-            let message = #"Snapshot does not match reference.\n\n@\u2212\n\"file://\#(repo.path)/\#(dark)\"\n@+\n\"file:///tmp/payButton.dark.png\""#
-            let model = try runnableModel(repo, xcodebuild: "exit 65", testResults: """
-                {"testNodes": [{"name": "AppSnapshotTests", "nodeType": "Unit test bundle", "children": [
-                  {"name": "CheckoutViewTests", "nodeType": "Test Suite", "children": [
-                    {"name": "payButton()", "nodeType": "Test Case", "nodeIdentifier": "CheckoutViewTests/payButton()", "result": "Failed",
-                     "children": [{"name": "\(message)", "nodeType": "Failure Message", "result": "Failed"}]}]},
-                  {"name": "ProfileViewTests", "nodeType": "Test Suite", "children": [
-                    {"name": "badge()", "nodeType": "Test Case", "nodeIdentifier": "ProfileViewTests/badge()", "result": "Passed"}]}]}]}
-                """, failures: true, library: AppFixtures.libraryImages.map(\.0))
-            model.libraryScope = .failing
-            #expect(model.selectedSnapshot?.testName == "badge")
-            model.runTests()
-            try await waitUntilFinished(model)
-            #expect(model.failures.map(\.test.name) == ["payButton()"])
-            #expect(model.selectedSnapshotID == dark)
-        }
-
-        /// Reverting the selected snapshot takes it out of the Changed scope: the selection moves on.
-        @Test func revertingTheSelectionInTheChangedScopeMovesIt() async throws {
-            let (repo, png) = try makeRepo()
-            let other = png.replacingOccurrences(of: "card", with: "other")
-            try AppFixtures.badged.write(to: repo.appendingPathComponent(other))
-            let model = ProjectModel(project: Project(path: repo.path), store: AppFixtures.store())
-            model.updateSettings { $0.baseBranch = "develop" }
-            try await waitForChanges(model)
-            for _ in 0..<200 where model.library?.files.count != 2 { try await Task.sleep(for: .milliseconds(50)) }
-            model.libraryScope = .changed
-            model.selectedSnapshotID = png
-            model.revertToBase([try #require(model.changeSet?.changes.first { $0.path == png })])
-            for _ in 0..<200 where model.changeSet?.changes.count != 1 || model.isLoadingLibrary { try await Task.sleep(for: .milliseconds(50)) }
-            #expect(model.displayedSnapshots.map(\.id) == [other])
-            #expect(model.selectedSnapshotID == other)
         }
 
         // MARK: Viewed marks
@@ -846,7 +860,7 @@ extension AppUITests {
         }
 
         /// Coming back to the app after its own verification saved the last run reads nothing again:
-        /// the flakiness verdicts and the Run tab's result stay. (They went, as the app's save looked
+        /// the flakiness verdicts and the Run view's result stay. (They went, as the app's save looked
         /// like a run in `snapkit`.) A run saved elsewhere since is read.
         @Test func comingBackAfterTheAppsOwnSaveKeepsWhatItShows() async throws {
             let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
@@ -910,7 +924,7 @@ extension AppUITests {
             var f = ProjectFixture()
             f.context = AppFixtures.context(at: repo)
             f.environment = try AppFixtures.fakeXcode(script, testResults: testResults, attachments: attachments)
-            f.tab = .failures
+            f.section = .lastRun
             if failures {
                 f.lastResult = AppFixtures.lastResult
                 f.failingSuites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
@@ -1004,7 +1018,7 @@ extension AppUITests {
             #expect(model.lastMessage == "Cancelled.")
             #expect(model.lastMessageIsCancellation)                 // neither passed nor failed
             #expect(model.failures.map(\.id) == failures)
-            // The Run tab shows the last run as before, not the cancelled run's few results.
+            // The Run view shows the last run as before, not the cancelled run's few results.
             #expect(model.lastResult?.resultBundle == last.resultBundle)
             #expect((model.passed, model.failed, model.skipped) == counts)
             #expect(RunHistory(repository: repo).load().count == runs)
@@ -1012,7 +1026,7 @@ extension AppUITests {
             #expect(try savedLastRun(in: repo) == saved)
         }
 
-        /// A re-record's progress is not measured against the last full run's test count.
+        /// A re-record's progress is measured against the tests it records, not the last full run's count.
         @Test func reRecordingForgetsTheLastRunsTotal() async throws {
             let (repo, _) = try makeRepo()
             let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
@@ -1020,9 +1034,10 @@ extension AppUITests {
             #expect(model.expectedTotal == 3)
             model.cancel()
             try await waitUntilFinished(model)
+            let recorded = model.failingSuites.reduce(0) { $0 + $1.tests.count }
             model.reRecordFailed()
             #expect(model.isRunning)
-            #expect(model.expectedTotal == nil)
+            #expect(recorded > 0 && model.expectedTotal == recorded)
             model.cancel()
             try await waitUntilFinished(model)
         }
@@ -1077,7 +1092,7 @@ extension AppUITests {
             model.cancel()
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "Cancelled.")
-            // The Run tab shows what it did before: not the cancelled record run, nor its duration.
+            // The Run view shows what it did before: not the cancelled record run, nor its duration.
             #expect(model.lastResult?.resultBundle == shown.0)
             #expect((model.passed, model.failed, model.lastDuration) == (shown.1, shown.2, shown.3))
             #expect(try Shell.output(["git", "status", "--porcelain", "--", "Tests/AppTests/CardTests.swift"], in: repo).isEmpty)
@@ -1176,23 +1191,23 @@ extension AppUITests {
             let app = AppModel(store: AppFixtures.store())
             let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.payButtonFailed, failures: true)
             app.show(model)
-            model.tab = .run
+            model.section = .run
             model.checkFlakiness()
             try await waitUntilFinished(model)
-            #expect(model.tab == .failures)
+            #expect(model.section == .lastRun)
 
-            model.tab = .run
+            model.section = .run
             model.checkFlakiness()
-            model.tab = .changes                            // moved to another tab meanwhile
+            model.section = .comparison                            // moved to another section meanwhile
             try await waitUntilFinished(model)
-            #expect(model.tab == .changes)
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.section == .comparison)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
 
-            model.tab = .run
+            model.section = .run
             model.checkFlakiness()
             app.show(AppFixtures.project(.library, store: app.store))   // and to another project
             try await waitUntilFinished(model)
-            #expect(model.tab == .run)
+            #expect(model.section == .run)
         }
 
         /// A project removed while it runs keeps running, and its model goes once the run ends.
@@ -1255,7 +1270,7 @@ extension AppUITests {
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "1 failing test in 1 suite")
             #expect(model.lastMessageIsError)
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
             #expect(model.flakeResults.isEmpty)
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             let failure = try #require(model.failures.first?.images.first?.failure)
@@ -1282,9 +1297,10 @@ extension AppUITests {
             #expect(runs.count == 2)                        // the record and the verification
             for run in runs { #expect(run.contains("-only-testing:AppTests/CardTests/card()")) }
 
-            let said = model.messageID
+            // It shows as running while it looks for the test, then ends saying why it can't.
             model.reRecord([SnapshotFile(path: "Tests/AppTests/__Snapshots__/GoneTests/old.1.png", byteSize: 0)], granularity: .tests)
-            try await waitUntil(model.messageID != said, "the re-record never said why it can't")
+            #expect(model.isRunning && model.stageLabel == "Finding the tests to record")
+            try await waitUntilFinished(model)
             #expect(model.lastMessage == "Can’t re-record: Could not find the source file for suite “AppTests/GoneTests”.")
             #expect(model.lastMessageIsError)
             #expect(!model.isRunning)
@@ -1400,7 +1416,7 @@ extension AppUITests {
             #expect(model.lastMessage == "Nothing was checked: the build failed (CardTests.swift:7:9: cannot find 'card' in scope).")
             #expect(model.lastMessageIsError)
             #expect(model.failures.map(\.verdict) == verdicts)
-            // Nothing new to show: the Run tab's counts and results stay those of the last run.
+            // Nothing new to show: the Run view's counts and results stay those of the last run.
             #expect((model.passed, model.failed, model.skipped, model.lastDuration) == (shown.0, shown.1, shown.2, shown.3))
             #expect(model.resultSuites == shown.4)
         }
@@ -1488,7 +1504,7 @@ extension AppUITests {
 
         /// An imported bundle's failures replace the ones shown, with their images, as a run's would;
         /// the verdicts of earlier checks go (they were of other runs), the history has the import,
-        /// and the Failures tab shows it.
+        /// and the failures show it.
         @Test func anImportShowsTheBundlesFailures() async throws {
             let (repo, _) = try makeRepo()
             let app = AppModel(store: AppFixtures.store())
@@ -1497,15 +1513,15 @@ extension AppUITests {
                                           attachments: try payButtonAttachments(), failures: true, flakeResults: [earlier])
             model.scratchDirectory = AppFixtures.temporaryDirectory("scratch")
             app.show(model)
-            model.tab = .run
+            model.section = .run
             let bundle = AppFixtures.temporaryDirectory("ci").appendingPathComponent("ci.xcresult")
             try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
 
             await model.importResultBundle(bundle).value
             #expect(model.lastMessage == "Imported 1 failing test from ci.xcresult.")
             #expect(!model.lastMessageIsError)
-            #expect(model.lastMessageAction == .showFailures)
-            #expect(model.tab == .failures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
+            #expect(model.section == .lastRun)
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier])
             #expect(model.flakeResults.isEmpty)
@@ -1625,7 +1641,7 @@ extension AppUITests {
                   {"name": "ProfileViewTests", "nodeType": "Test Suite", "children": [
                     {"name": "badge()", "nodeType": "Test Case", "nodeIdentifier": "ProfileViewTests/badge()", "result": "Passed"}]}]}]}
                 """, failures: true)
-            model.tab = .failures
+            model.section = .lastRun
             model.selectFailures(Set(model.displayedFailures.map(\.id)))
             #expect(model.selectedFailures.map(\.suite.name) == ["CheckoutViewTests", "ProfileViewTests"])
             model.reRecordSelection()
@@ -1751,7 +1767,7 @@ extension AppUITests {
             #expect(model.operation == .remoteRun)
             try await waitUntilFinished(model)
             #expect(model.lastMessage == "1 failing test in 1 suite")
-            #expect(model.lastMessageAction == .showFailures)
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
             #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
             let source = try #require(model.failureSource)
             #expect(source == FailureSource(label: "Remote run", date: source.date, host: "fake-mac", resultBundle: nil))

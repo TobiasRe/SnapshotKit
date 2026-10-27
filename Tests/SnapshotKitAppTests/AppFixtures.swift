@@ -223,7 +223,8 @@ enum AppFixtures {
         (SnapshotChange(path: "\(snapshotDir)/CheckoutViewTests/payButton.1.png", kind: .committed), reference, actual),
         // Re-recorded on this machine, but only rendering noise changed.
         (SnapshotChange(path: "\(snapshotDir)/CheckoutViewTests/summary.1.png", kind: .uncommitted), reference, renderingNoise),
-        (SnapshotChange(path: "\(snapshotDir)/ProfileViewTests/badge.1.png", kind: .new), nil, badged),
+        // Recorded for the first time, and not added to git yet.
+        (SnapshotChange(path: "\(snapshotDir)/ProfileViewTests/badge.1.png", kind: .new, isUntracked: true), nil, badged),
         (SnapshotChange(path: "\(snapshotDir)/ProfileViewTests/legacyHeader.1.png", kind: .deleted), screen(accent: .systemGray), nil),
     ]
 
@@ -410,9 +411,9 @@ enum AppFixtures {
 
         switch scenario {
         case .library:
-            f.tab = .snapshots
+            f.section = .library
         case .manyVariants:
-            f.tab = .snapshots
+            f.section = .library
             // payButton in light and dark at three text sizes: more variants than fit side by side.
             let sizes = ["large-dark", "large-light", "xl-dark", "xl-light"].map {
                 (SnapshotFile(path: "\(snapshotDir)/CheckoutViewTests/payButton.\($0).png", byteSize: 50_000),
@@ -421,17 +422,17 @@ enum AppFixtures {
             add(sizes)
             f.library = SnapshotLibrary(files: libraryImages.map(\.0) + sizes.map(\.0))
         case .failedRun:
-            f.tab = .run
+            f.section = .run
             f.passed = 1
             f.failed = 2
             f.log = log
             f.lastResult = lastResult
             f.lastMessage = ProjectModel.failureTitle(tests: 2, suites: 2)
             f.lastMessageIsError = true
-            f.lastMessageAction = .showFailures
+            f.lastMessageAction = .showFailures(.lastRun)
             f.lastDuration = 94
         case .running:
-            f.tab = .run
+            f.section = .run
             f.operation = .run
             f.stageLabel = "Running tests"
             f.phase = .testing
@@ -441,14 +442,16 @@ enum AppFixtures {
             f.currentTest = "summary()"
             f.log = Array(log.prefix(9))
         case .changes:
-            f.tab = .changes
+            f.section = .comparison
             // Mid-review: one snapshot already looked at.
             f.viewedChanges = [changes[3].0.id]
         case .failures:
-            f.tab = .failures
+            f.section = .lastRun
         case .ciJob:
             // The snapshot job loaded, with what its runner no longer had; the branch's other failed job offered.
-            f.tab = .failures
+            f.section = .ciJob(4567)
+            f.ciJob = GitLabJob(id: 4567, name: "snapshotTest", status: "failed")
+            f.ciMergeRequest = GitLabMergeRequest(iid: 12, title: "Checkout redesign")
             let project = GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop")
             f.failureSource = FailureSource(label: "snapshotTest #4567", date: date, host: "ci-mac-1",
                                             jobURL: URL(string: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"), detail: "!12 · 3f1c2a9b",
@@ -458,7 +461,6 @@ enum AppFixtures {
                                         mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout redesign"), pipeline: GitLabPipeline(id: 89),
                                         failedJobs: [GitLabJob(id: 4567, name: "snapshotTest", status: "failed"),
                                                      GitLabJob(id: 4568, name: "snapshotTest-iPad", status: "failed")])
-            f.loadedCIJobID = 4567
             // As loaded from CI: no local verdicts or history, one image per test, taken on the runner.
             f.flakeResults = []
             f.historyFlaky = []
@@ -482,7 +484,7 @@ enum AppFixtures {
                 return item
             }
         case .missingXcode:
-            f.tab = .run
+            f.section = .run
             f.context = context(at: repository, xcode: "99.2", remoteHost: remoteHost) // what CI asks for, which this Mac lacks
             f.environment = nil
             f.environmentError = EnvironmentError.xcodeNotInstalled(
@@ -492,22 +494,22 @@ enum AppFixtures {
             f.failures = []
             f.failureSource = nil
         case .brokenConfig:
-            f.tab = .run
+            f.section = .run
             f.context = nil
             f.environment = nil
             f.configError = ConfigError.invalidOverride("line 3: nested mappings are not supported").errorDescription
         case .missingBaseBranch:
-            f.tab = .changes
+            f.section = .comparison
             f.changeSet = nil
             f.changesError = SnapshotChangeError.baseBranchNotFound("develop").errorDescription
         case .neverRun:
-            f.tab = .run
+            f.section = .run
             f.failingSuites = []
             f.failures = []
             f.failureSource = nil
             f.historyFlaky = []
         case .empty:
-            f.tab = .run
+            f.section = .run
             f.library = SnapshotLibrary(files: [])
             f.failingSuites = []
             f.failures = []

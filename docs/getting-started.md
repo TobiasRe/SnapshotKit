@@ -72,14 +72,15 @@ When SnapshotKit starts without projects it shows a welcome screen. There are th
   [Projects and scanning](projects.md).
 - **Drop a folder onto the window**: a repository is added as a project, any other folder as a scan folder.
 
-The project opens on its **Snapshots** tab, the library of every reference image.
+The project opens on **All Snapshots**, the library of every reference image. The sidebar lists its other
+sections; see [Projects and scanning](projects.md#the-sidebar).
 
 ## Try it on sample projects
 
 No project at hand? `scripts/make-samples.sh` (in the source repository) generates five Swift packages,
 Shop, Weather, Chat, Fitness and DesignKit, with about 140 recorded snapshots. Four of them have a feature
 branch with committed and uncommitted changes, a failing last run, an orphaned and a new snapshot, so every
-tab has something to show:
+section has something to show:
 
 ```bash
 scripts/make-samples.sh ~/Developer/snapshotkit-samples
@@ -90,14 +91,15 @@ the folder as a scan folder.
 
 ## A first tour
 
-1. **Snapshots** — every reference image, grouped by test target and test file. Select one to see it large,
+1. **All Snapshots** — every reference image, grouped by test target and test file. Select one to see it large,
    switch between its variants (light and dark, devices) and compare it with an earlier commit.
    See [The snapshot library](library.md).
-2. **Changes** — every snapshot your branch changed compared with the base branch, side by side or as a
-   difference, with *Viewed* marks like a code review. See [Reviewing changes](changes.md).
+2. **Working Copy** and **vs develop** — the snapshots you haven’t committed yet, and every snapshot your
+   branch changed compared with the base branch, side by side or as a difference, with *Viewed* marks like a
+   code review. See [Reviewing changes](changes.md).
 3. **Run** — run the snapshot tests exactly the way CI does (the configuration is read from your CI files).
    See [Running tests](running.md).
-4. **Failures** — after a run (or after importing a CI `.xcresult`), every failing snapshot with reference,
+4. **Last Run** — after a run (or after importing a CI `.xcresult`), every failing snapshot with reference,
    actual image and difference, diagnosed. See [Failures and flaky tests](failures.md).
 5. **Re-record** — the camera button in a detail header (⇧⌘R) records the selected test again and verifies
    it; the arrow next to the toolbar’s Run button re-records the failing suites or every snapshot test. See

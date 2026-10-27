@@ -133,7 +133,7 @@ extension AppUITests {
 
         @Test func orphanedSnapshots() {
             let (app, project) = makeApp(.library)
-            project.libraryScope = .orphaned
+            project.section = .orphaned
             project.selectedSnapshotID = project.displayedSnapshots.first?.id
             assertPane(project, app: app, appearance: .aqua)
         }
@@ -141,8 +141,7 @@ extension AppUITests {
         /// A snapshot whose test failed and that is new on this branch links to both views.
         @Test func snapshotWithFailureAndChange() {
             let (app, project) = makeApp(.library)
-            project.libraryScope = .failing
-            project.selectedSnapshotID = project.displayedSnapshots.first?.id
+            project.selectedSnapshotID = project.displayedSnapshots.first { project.status(of: $0).failureID != nil }?.id
             assertPane(project, app: app, appearance: .aqua)
         }
 
@@ -164,6 +163,26 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        /// Before the tests start nothing can be counted: the toolbar names the phase instead.
+        @Test func runProgressWhileBuilding() {
+            let (app, project) = makeApp(.running)
+            var f = ProjectFixture()
+            f.operation = .rerecord
+            f.stageLabel = "Recording snapshots"
+            f.phase = .building
+            project.apply(f)
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 340, height: 64), appearance: .aqua)
+        }
+
+        /// The toolbar while a run goes on, wherever you are: the stage, the bar, and how far it has got.
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func runProgress(appearance: NSAppearance.Name) {
+            let (app, project) = makeApp(.running)
+            project.section = .library
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 340, height: 64),
+                       appearance: appearance, named: appearance == .darkAqua ? "dark" : "light")
+        }
+
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func changesTab(appearance: NSAppearance.Name) {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
@@ -171,24 +190,24 @@ extension AppUITests {
             assertPane(project, app: app, appearance: appearance)
         }
 
-        /// The outcome of the last run floats over another tab, with the way to its failures.
+        /// The outcome of the last run floats over another section, with the way to its failures.
         @Test func noticeAfterAFailedRun() {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
             let (app, project) = makeApp(.failedRun)
-            project.tab = .changes
+            project.section = .comparison
             let view = ProjectView(project: project).environment(app)
             assertView(view, size: Self.paneSize, appearance: .aqua)
         }
 
         /// The narrowest pane the window allows (980 points less the sidebar): header buttons keep
         /// their labels and the titles beside them give way.
-        @Test(arguments: [ProjectTab.changes, .run])
-        func narrowPane(tab: ProjectTab) {
+        @Test(arguments: [ProjectSection.comparison, .run])
+        func narrowPane(section: ProjectSection) {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
-            let (app, project) = makeApp(tab == .run ? .failedRun : .changes)
-            project.tab = tab
+            let (app, project) = makeApp(section == .run ? .failedRun : .changes)
+            project.section = section
             let view = ProjectView(project: project).environment(app)
-            assertView(view, size: CGSize(width: 740, height: 520), appearance: .aqua, named: tab.rawValue.lowercased())
+            assertView(view, size: CGSize(width: 740, height: 520), appearance: .aqua, named: section.id)
         }
 
         /// Increase Contrast: the selection, hairlines and labels must stay visible.
@@ -226,27 +245,40 @@ extension AppUITests {
 
         @Test func nothingChangedOrFailing() {
             let (app, project) = makeApp(.empty)
-            project.tab = .changes
+            project.section = .comparison
             assertPane(project, app: app, appearance: .aqua)
         }
 
         /// A project whose tests haven't recorded anything yet: one message, and the way to record.
         @Test func noSnapshotsYet() {
             let (app, project) = makeApp(.empty)
-            project.tab = .snapshots
+            project.section = .library
             assertPane(project, app: app, appearance: .aqua)
         }
 
         // MARK: Sidebar, quick switcher, welcome
 
+        /// The project and its branch on top, then its sections with their counts.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func sidebar(appearance: NSAppearance.Name) {
-            // No selection: the sidebar's selection material can't be rendered off-screen.
-            let app = AppModel(store: AppFixtures.store())
-            app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
+            let (app, _) = makeApp(.changes)
             let view = SidebarView().environment(app)
             assertView(view, size: CGSize(width: 260, height: 420), appearance: appearance,
                        named: appearance == .darkAqua ? "dark" : "light")
+        }
+
+        /// A merge request's failed jobs under its own heading: one loaded with its count, one to load.
+        @Test func sidebarWithCIJob() {
+            let (app, _) = makeApp(.ciJob)
+            assertView(SidebarView().environment(app), size: CGSize(width: 260, height: 480), appearance: .aqua)
+        }
+
+        /// The other projects: pinned first, then by name, each with its failing count.
+        @Test func projectSwitcher() {
+            let (app, _) = makeApp(.changes)
+            app.failingCounts = ["/work/payments-ui": 3, "/work/SampleApp": 2]
+            let view = ProjectSwitcherList(close: {}).environment(app)
+            assertView(view, size: CGSize(width: 300, height: 340), appearance: .aqua)
         }
 
         @Test func quickSwitcher() {

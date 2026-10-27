@@ -20,8 +20,9 @@ enum CompareMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Decoded images plus their pixel difference, computed off the main thread.
-struct ComparePair {
+/// Decoded images plus their pixel difference, computed off the main thread. Sendable by hand:
+/// its images are made once and never changed, so the diff can be added on another thread.
+struct ComparePair: @unchecked Sendable {
     var before: NSImage?
     var after: NSImage?
     var diff: NSImage?
@@ -31,6 +32,9 @@ struct ComparePair {
     /// Raw pixels for the hover readout.
     var beforePixels: PixelImage?
     var afterPixels: PixelImage?
+    /// Whether the difference is known, or there is none to compute (a side is missing). Until
+    /// then the images show without it.
+    var isDiffed: Bool
 
     /// Approximate memory: raw pixels of both sides, the diff, and the decoded images.
     var byteCost: Int {
@@ -39,17 +43,34 @@ struct ComparePair {
     }
 
     static func make(before: Data?, after: Data?) -> ComparePair {
+        decode(before: before, after: after).diffed()
+    }
+
+    /// The two images, decoded: enough to show them while the difference is computed.
+    static func decode(before: Data?, after: Data?) -> ComparePair {
         let a = before.flatMap(PixelImage.init(data:))
         let b = after.flatMap(PixelImage.init(data:))
-        func ns(_ p: PixelImage?) -> NSImage? {
-            guard let p, let cg = p.cgImage else { return nil }
-            return NSImage(cgImage: cg, size: NSSize(width: p.width, height: p.height))
-        }
-        var stats: ImageDiffResult?
-        if let a, let b { stats = ImageDiff.compare(a, b) }
         let size = CGSize(width: max(a?.width ?? 0, b?.width ?? 0), height: max(a?.height ?? 0, b?.height ?? 0))
-        return ComparePair(before: ns(a), after: ns(b), diff: ns(stats?.image), stats: stats,
-                           diagnosis: stats.map(DiffDiagnosis.init), pixelSize: size, beforePixels: a, afterPixels: b)
+        return ComparePair(before: image(a), after: image(b), pixelSize: size, beforePixels: a, afterPixels: b,
+                           isDiffed: a == nil || b == nil)
+    }
+
+    /// The pair with its pixel difference, its numbers and its diagnosis: the slow part, seconds
+    /// for a large screenshot in a Debug build.
+    func diffed() -> ComparePair {
+        guard !isDiffed, let a = beforePixels, let b = afterPixels else { return self }
+        let stats = ImageDiff.compare(a, b)
+        var pair = self
+        pair.stats = stats
+        pair.diff = Self.image(stats.image)
+        pair.diagnosis = DiffDiagnosis(stats)
+        pair.isDiffed = true
+        return pair
+    }
+
+    private static func image(_ pixels: PixelImage?) -> NSImage? {
+        guard let pixels, let cg = pixels.cgImage else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: pixels.width, height: pixels.height))
     }
 }
 
@@ -154,23 +175,34 @@ struct CompareView: View {
             }
         }
         .task(id: identity) {
-            if let cached = ComparePairCache.shared.object(forKey: identity as NSString) {
-                pair = cached.pair
+            let cached = ComparePairCache.shared.object(forKey: identity as NSString)?.pair
+            if cached?.isDiffed == true {
+                pair = cached
                 return
             }
-            pair = nil
             ImageDecoding.pending += 1
             defer { ImageDecoding.pending -= 1 }
             let load = load, identity = identity
-            let computed = await Task.detached {
-                let (before, after) = load()
-                return ComparePair.make(before: before, after: after)
-            }.value
-            ComparePairCache.store(computed, for: identity)
+            let images: ComparePair
+            if let cached {
+                images = cached
+            } else {
+                pair = nil
+                images = await Task.detached(priority: .userInitiated) {
+                    let (before, after) = load()
+                    return ComparePair.decode(before: before, after: after)
+                }.value
+                ComparePairCache.store(images, for: identity)
+            }
             // The decode doesn't stop when the selection moves on; its result must not land on the
-            // snapshot selected since.
+            // snapshot selected since. Nor is the difference computed for one no longer shown.
             guard !Task.isCancelled else { return }
-            pair = computed
+            // The images show at once; the difference, its numbers and the diagnosis follow.
+            pair = images
+            let diffed = await Task.detached(priority: .userInitiated) { images.diffed() }.value
+            ComparePairCache.store(diffed, for: identity)
+            guard !Task.isCancelled else { return }
+            pair = diffed
         }
     }
 
@@ -212,7 +244,7 @@ struct CompareView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize()
                 .help(stats.isIdentical ? "Pixel-identical" : "\(stats.changedPixels.formatted()) of \(stats.totalPixels.formatted()) pixels differ")
-            } else if showStats, pair == nil {
+            } else if showStats, pair?.isDiffed != true {
                 // While the pair loads, the stats' room stays taken: the bar is centred, so a bar
                 // that grew once they arrived moved the mode buttons under the pointer.
                 HStack(spacing: DS.Space.xs) {
@@ -284,8 +316,14 @@ struct CompareView: View {
     private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
         if mode == .slider, key == .leftArrow || key == .rightArrow { return nudgeSplit(key == .leftArrow ? -1 : 1) }
         var viewport = compare.viewport
-        guard viewport.pan(arrow: key) else { return .ignored }
-        withAnimation(DS.motion) { compare.viewport = viewport }
+        if viewport.pan(arrow: key) {
+            withAnimation(DS.motion) { compare.viewport = viewport }
+            return .handled
+        }
+        // Not zoomed in: ↑ ↓ step through the list beside it, as they would with the list focused.
+        // (Not in a compare window, which has no list.)
+        guard windowCompare == nil, key == .upArrow || key == .downArrow, let project = app.current else { return .ignored }
+        project.selectAdjacent(key == .upArrow ? -1 : 1)
         return .handled
     }
 
@@ -296,12 +334,7 @@ struct CompareView: View {
             showingAfter.toggle()
             return true
         }
-        if arrow(key) == .handled { return true }
-        // Not zoomed in: ↑ ↓ step through the list beside it, as they would with the list focused.
-        // (Not in a compare window, which has no list.)
-        guard windowCompare == nil, key == .upArrow || key == .downArrow, let project = app.current else { return false }
-        project.selectAdjacent(key == .upArrow ? -1 : 1)
-        return true
+        return arrow(key) == .handled
     }
 
     private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
@@ -362,9 +395,13 @@ struct CompareView: View {
                     .help("Show the \(showingAfter ? beforeLabel : afterLabel) image (Space)")
                 }
         case .difference:
-            pane(pair.diff ?? pair.after ?? pair.before,
-                 label: pair.diff == nil ? "Only one side exists" : "Changed pixels",
-                 missing: afterMissing, size: pair.pixelSize)
+            if pair.isDiffed {
+                pane(pair.diff ?? pair.after ?? pair.before,
+                     label: pair.diff == nil ? "Only one side exists" : "Changed pixels",
+                     missing: afterMissing, size: pair.pixelSize)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -654,6 +691,24 @@ struct ZoomPanSurface: NSViewRepresentable {
         var onHover: ((point: CGPoint, canvas: CGSize)?) -> Void = { _ in }
         var onKey: (KeyEquivalent) -> Bool = { _ in false }
         private var tracking: NSTrackingArea?
+
+        /// The window (by number: it may be closing) whose image surface had the keyboard when it went
+        /// away: stepping to the next snapshot swaps the image for a spinner while that one loads. The
+        /// next surface to appear there takes the keyboard back, so ↑ ↓ keep stepping, unless something
+        /// else took it meanwhile.
+        private static var handingOver: Int?
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            if newWindow == nil, let window, window.firstResponder === self { Self.handingOver = window.windowNumber }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, Self.handingOver == window.windowNumber else { return }
+            Self.handingOver = nil
+            if window.firstResponder === window || window.firstResponder == nil { window.makeFirstResponder(self) }
+        }
 
         override func keyDown(with event: NSEvent) {
             let key: KeyEquivalent? = switch event.keyCode {

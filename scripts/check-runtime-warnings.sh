@@ -7,7 +7,7 @@
 #   REPO  a git repository with snapshot tests to open (default: a sample repository made for the check,
 #         with changes against its base branch and a failed last run, so no screen is an empty state)
 #
-# Opens every tab, compare mode, the ⌘K palette and the welcome screen in the real app window (off-screen,
+# Opens every section's view, compare mode, the ⌘K palette and the welcome screen in the real app window (off-screen,
 # with --capture) while watching the log, using a throwaway SNAPSHOTKIT_HOME so your settings are untouched.
 # On failure the log and the captures are kept (under $RUNNER_TEMP on CI).
 set -euo pipefail
@@ -114,15 +114,16 @@ show() {
 
 echo "Showing SnapshotKit's screens for $REPO:"
 for appearance in light dark; do
-  show "snapshots-$appearance" --project "$REPO" --tab snapshots --appearance "$appearance"
-  show "changes-$appearance" --project "$REPO" --tab changes --appearance "$appearance"
-  show "failures-$appearance" --project "$REPO" --tab failures --appearance "$appearance"
-  show "run-$appearance" --project "$REPO" --tab run --appearance "$appearance"
+  show "snapshots-$appearance" --project "$REPO" --section library --appearance "$appearance"
+  show "working-copy-$appearance" --project "$REPO" --section working-copy --appearance "$appearance"
+  show "changes-$appearance" --project "$REPO" --section comparison --appearance "$appearance"
+  show "failures-$appearance" --project "$REPO" --section last-run --appearance "$appearance"
+  show "run-$appearance" --project "$REPO" --section run --appearance "$appearance"
 done
 for mode in side-by-side slider difference toggle; do
-  show "compare-$mode" --project "$REPO" --tab changes --compare "$mode"
+  show "compare-$mode" --project "$REPO" --section comparison --compare "$mode"
 done
-show "palette" --project "$REPO" --tab snapshots --quick-switcher ""
+show "palette" --project "$REPO" --section library --quick-switcher ""
 rm -f "$SNAPSHOTKIT_HOME/settings.json"
 show "welcome"
 

@@ -6,12 +6,12 @@ way a test that passes in SnapshotKit passes in CI, and references recorded here
 
 ## Starting a run
 
-- **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar’s ▶, or **Run Tests** on the Run tab.
+- **⌘R**, **Snapshots › Run Snapshot Tests**, the toolbar’s ▶, or **Run Tests** in Run.
 - **⌘.** or **Cancel** stops it (the run is terminated and any record patch is restored). A canceled run
   says *Cancelled.* and leaves the last run’s failures as they were, as does a run whose build fails (*Build
   failed: …*).
 
-The **Run** tab (⌥⌘4) shows the run as it happens:
+**Run** (⌥⌘4, in the sidebar) shows the run as it happens:
 
 - a header with the phase (*Preparing*, *Resolving packages*, *Building*, *Testing*, *Finished*) and a progress
   bar once the number of tests is known,
@@ -26,14 +26,14 @@ count appears in the sidebar, the Dock icon and the [menu bar item](menu-bar.md)
 
 ## The configuration panel
 
-The left side of the Run tab shows what SnapshotKit will run and where each value comes from:
+The left side of Run shows what SnapshotKit will run and where each value comes from:
 
 | Section | Shows |
 |---|---|
 | **Environment** | the Xcode version (and build) that will be used, *Not pinned by CI* when CI doesn’t name one, and the simulator with its state (e.g. *Booted*). |
 | **Scope** | **Test target**: *What CI runs* (default), or one test target with snapshots, to run only its tests. |
 | **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection and working directory. A footer names the CI files they come from; a value from somewhere else (*.snapshotkit.yml*, a script) names its source. Notes say what SnapshotKit had to guess or couldn’t read. Until Xcode and the simulator are found, it also shows the Xcode and device that were asked for. |
-| **Comparison & Remote** | the **Base branch** for the Changes tab and the **Remote host** for remote runs; type to override them for this project. |
+| **Comparison & Remote** | the **Base branch** for Working Copy and vs develop, and the **Remote host** for remote runs; type to override them for this project. |
 
 When something is missing or wrong — Xcode not installed, no simulator runtime, a broken `.snapshotkit.yml` —
 the inspector on the left says exactly what and how to fix it, and the header offers **Check Again**. See
@@ -70,7 +70,7 @@ run’s, whatever other projects run.
 
 ## Running part of the tests
 
-- **Test target** (Run tab › Scope): run only one test target. The list is built from the targets that have
+- **Test target** (Run › Scope): run only one test target. The list is built from the targets that have
   `__Snapshots__` folders. The choice is stored per project.
 - `onlyTesting` / `skipTesting` in `.snapshotkit.yml`: a fixed selection for everyone.
 - From the command line: `snapkit run --only AppSnapshotTests/CheckoutViewTests` (repeatable) or
@@ -78,10 +78,10 @@ run’s, whatever other projects run.
 
 ## More run actions
 
-Next to **Run Tests**, the Run tab has a **Re-record Failing Suites** button and a **···** menu. The same actions are
-in the **Snapshots** menu, some under other names:
+Next to **Run Tests**, Run has a **Re-record Failing Suites** button and a **···** menu. The same actions are in
+the **Snapshots** menu, some under other names:
 
-| On the Run tab | In the Snapshots menu | Shortcut | Does |
+| In Run | In the Snapshots menu | Shortcut | Does |
 |---|---|---|---|
 | **Re-record Failing Suites** | Re-record Failing Suites | ⌥⇧⌘R | re-records the failing suites of the last run, then verifies. [Re-recording](re-recording.md) |
 | ··· › **Re-record All Snapshot Tests…** | Re-record All Snapshot Tests… | | re-records every snapshot test, after asking. |
@@ -93,11 +93,11 @@ in the **Snapshots** menu, some under other names:
 
 | Where | What you see |
 |---|---|
-| Run tab › Results | every test with its outcome |
-| Failures tab | the failing snapshots, with reference, actual and difference. [Failures](failures.md) |
-| Library | failing snapshots marked with ✕, and the *Failing* scope |
+| Run › Results | every test with its outcome |
+| Last Run | the failing snapshots, with reference, actual and difference. [Failures](failures.md) |
+| Library | failing snapshots marked with ✕ |
 | Sidebar, Dock, menu bar | the failing count |
 
-The last run is remembered per clone (`.git/snapshotkit/last-run.json`), so the Failures tab still shows it after
-a restart, and `snapkit rerecord` / `snapkit failures` in a terminal use it too. A run made with `snapkit` shows
+The last run is remembered per clone (`.git/snapshotkit/last-run.json`), so Last Run still shows it after a
+restart, and `snapkit rerecord` / `snapkit failures` in a terminal use it too. A run made with `snapkit` shows
 in the app when you come back to it.

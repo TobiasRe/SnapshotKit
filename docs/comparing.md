@@ -88,7 +88,7 @@ comparing it. Record where CI runs (see [remote runs](remote-runs.md)) rather th
 
 | Where | Before | After |
 |---|---|---|
-| Changes tab | the base branch (merge-base or tip) | this branch or the working tree |
-| Failures tab | the reference | the image the test produced |
+| Working Copy, vs develop | the base branch (merge-base or tip) | this branch or the working tree |
+| Last Run | the reference | the image the test produced |
 | Library › Compare with… | another variant or an earlier commit | the selected snapshot |
 | A pair opened from outside ([diff tool](diff-tool.md)) | the reference | the actual image |

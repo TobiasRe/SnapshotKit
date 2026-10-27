@@ -3,17 +3,6 @@ import Foundation
 import Observation
 import SnapshotKitCore
 
-/// Which snapshots the library shows.
-enum LibraryScope: String, CaseIterable, Identifiable {
-    case all = "All"
-    case changed = "Changed"
-    case failing = "Failing"
-    case uncommitted = "Uncommitted"
-    /// Snapshots whose test no longer exists.
-    case orphaned = "Orphaned"
-    var id: String { rawValue }
-}
-
 /// How the library orders snapshots. Anything but name shows one flat list.
 enum LibrarySort: String, CaseIterable, Identifiable {
     case name = "Name"
@@ -39,23 +28,68 @@ enum SnapshotComparison: Equatable {
     case variant(SnapshotFile)
 }
 
-/// What the Run tab shows under its header.
+/// What the Run view shows under its header.
 enum RunPane: String, CaseIterable, Identifiable {
     case results = "Results"
     case output = "Output"
     var id: String { rawValue }
 }
 
-enum ProjectTab: String, CaseIterable, Identifiable {
+/// An item in the sidebar under the project, in the order it lists them. Each opens one of the
+/// project's views, set up for what the item is about.
+enum ProjectSection: Hashable, Identifiable {
+    /// Snapshots changed in the working tree and not committed yet: review before committing.
+    case workingCopy
+    /// Every snapshot this checkout changes compared with the base branch, committed or not.
+    case comparison
+    /// The failing tests of the last run (local, remote or imported): investigate.
+    case lastRun
+    /// The failing tests of a CI job, by its id in GitLab: loaded, or offered to load.
+    case ciJob(Int)
+    /// Run and record. Goes once the run has a place of its own.
+    case run
     /// Every snapshot in the project: browse, inspect, manage.
-    case snapshots = "Snapshots"
-    /// Snapshots that differ from the base branch: review.
-    case changes = "Changes"
-    /// Snapshots whose tests failed in the last run: investigate.
-    case failures = "Failures"
-    /// Run and record.
-    case run = "Run"
-    var id: String { rawValue }
+    case library
+    /// Snapshots whose test no longer exists.
+    case orphaned
+
+    /// Its name for `--section`: "working-copy", "ci-job-4567".
+    var id: String {
+        switch self {
+        case .workingCopy: "working-copy"
+        case .comparison: "comparison"
+        case .lastRun: "last-run"
+        case .ciJob(let job): "ci-job-\(job)"
+        case .run: "run"
+        case .library: "library"
+        case .orphaned: "orphaned"
+        }
+    }
+
+    init?(id: String) {
+        if id.hasPrefix("ci-job-"), let job = Int(id.dropFirst("ci-job-".count)) {
+            self = .ciJob(job)
+            return
+        }
+        guard let section = [Self.workingCopy, .comparison, .lastRun, .run, .library, .orphaned].first(where: { $0.id == id })
+        else { return nil }
+        self = section
+    }
+
+    /// The view the section opens.
+    var content: SectionContent {
+        switch self {
+        case .workingCopy, .comparison: .changes
+        case .lastRun, .ciJob: .failures
+        case .run: .run
+        case .library, .orphaned: .snapshots
+        }
+    }
+}
+
+/// The views behind the sidebar's sections.
+enum SectionContent {
+    case snapshots, changes, failures, run
 }
 
 enum RunOperation: Equatable {
@@ -105,7 +139,7 @@ struct RepositoryGone: LocalizedError {
     }
 }
 
-/// Where the failures on the Failures tab came from.
+/// Where the failures came from: a run, a result bundle or a CI job.
 struct FailureSource: Equatable {
     var label: String
     var date: Date
@@ -118,6 +152,38 @@ struct FailureSource: Equatable {
     var detail: String?
     /// What couldn't be fetched with them, such as images gone from a CI runner.
     var notes: [String] = []
+}
+
+/// Where a set of failures comes from: the last run (local, remote or imported), or a CI job.
+enum FailureOrigin: Hashable {
+    case lastRun
+    case ciJob(Int)
+
+    var section: ProjectSection {
+        switch self {
+        case .lastRun: .lastRun
+        case .ciJob(let job): .ciJob(job)
+        }
+    }
+}
+
+/// One source's failing tests, and how far you've got with them: each keeps its own selection,
+/// diagnoses and flakiness verdicts.
+struct FailureSet {
+    var items: [FailureItem] = []
+    var source: FailureSource?
+    /// Its failing suites: for the last run's, what Re-record Failing Suites and Check Flakiness act on.
+    var failingSuites: [SuiteResult] = []
+    var flakeResults: [FlakeResult] = []
+    /// What kind of difference each failure is (first repetition), computed in the background.
+    var diagnoses: [String: DiffDiagnosis] = [:]
+    var selectedID: String?
+    /// Failures selected together with ⌘- or ⇧-click. `selectedID` stays the one in focus; a set
+    /// that no longer contains it (the selection moved by keyboard) no longer counts.
+    var selection: Set<String> = []
+    /// A CI job's job and merge request, which the sidebar names and groups it by.
+    var job: GitLabJob?
+    var mergeRequest: GitLabMergeRequest?
 }
 
 @MainActor @Observable
@@ -137,7 +203,19 @@ final class ProjectModel {
     private(set) var currentBranch: String?
     /// Local branches plus origin's, for choosing the base branch.
     private(set) var branches: [String] = []
-    var tab: ProjectTab = .snapshots
+    /// The sidebar item shown. Two sections can share a view and its selection; the selection then
+    /// moves to a row the new one shows.
+    var section: ProjectSection = .library {
+        didSet {
+            guard oldValue != section else { return }
+            switch section.content {
+            case .snapshots: keepSnapshotSelectionShown()
+            case .changes: keepChangeSelectionShown()
+            case .failures: loadOpenCIJob()
+            case .run: break
+            }
+        }
+    }
     /// Whether the window shows this project (set by the app model).
     @ObservationIgnored var isShown = false
 
@@ -153,15 +231,12 @@ final class ProjectModel {
     var libraryFilter = "" {
         didSet { if oldValue != libraryFilter { keepSnapshotSelectionShown() } }
     }
-    /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
+    /// Bumped by ⌘F; the visible section's filter field takes the cursor.
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
-    /// Set by Load Failed CI Job… (menu, ⌘K, the Failures tab); the Failures tab asks for the job.
+    /// Set by Load Failed CI Job… (menu, ⌘K, the failures view); the failures view asks for the job.
     var askForCIJob = false
-    var libraryScope = LibraryScope.all {
-        didSet { if oldValue != libraryScope { keepSnapshotSelectionShown() } }
-    }
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }
@@ -217,28 +292,39 @@ final class ProjectModel {
     @ObservationIgnored private var fullRunTotal: Int?
 
     // Failures
-    private(set) var failures: [FailureItem] = [] {
+    /// The last run's failures, and each loaded CI job's.
+    private(set) var failureSets: [FailureOrigin: FailureSet] = [:] {
         didSet {
+            // The library marks the last run's failures (a selection moving in a list changes nothing there).
+            let items = failureSets[.lastRun]?.items ?? []
+            guard items != oldValue[.lastRun]?.items ?? [] else { return }
             var byPath: [String: FailureItem] = [:]
-            for item in failures { for path in item.referencePaths where byPath[path] == nil { byPath[path] = item } }
+            for item in items { for path in item.referencePaths where byPath[path] == nil { byPath[path] = item } }
             failureByPath = byPath
-            // A run that fixed the selected snapshot's test takes it out of the Failing scope.
-            keepSnapshotSelectionShown()
         }
     }
-    private(set) var failureSource: FailureSource?
-    var selectedFailureID: String?
-    /// Failures selected together with ⌘- or ⇧-click. `selectedFailureID` stays the one in focus;
-    /// a set that no longer contains it (the selection moved by keyboard) no longer counts.
-    var failureSelection: Set<String> = []
-    private(set) var flakeResults: [FlakeResult] = []
+    /// The failures shown: the open CI job's, else the last run's.
+    var failureOrigin: FailureOrigin {
+        if case .ciJob(let job) = section { .ciJob(job) } else { .lastRun }
+    }
+    var failures: [FailureItem] { failureSets[failureOrigin]?.items ?? [] }
+    var failureSource: FailureSource? { failureSets[failureOrigin]?.source }
+    /// Selections go to a set that exists: an empty one made here would pass for a CI job loaded.
+    var selectedFailureID: String? {
+        get { failureSets[failureOrigin]?.selectedID }
+        set { failureSets[failureOrigin]?.selectedID = newValue }
+    }
+    var failureSelection: Set<String> {
+        get { failureSets[failureOrigin]?.selection ?? [] }
+        set { failureSets[failureOrigin]?.selection = newValue }
+    }
+    var flakeResults: [FlakeResult] { failureSets[failureOrigin]?.flakeResults ?? [] }
+    var diagnoses: [String: DiffDiagnosis] { failureSets[failureOrigin]?.diagnoses ?? [:] }
     private(set) var historyFlaky: [FlakySignal] = []
-    /// What kind of difference each failure is (first repetition), computed in the background.
-    private(set) var diagnoses: [String: DiffDiagnosis] = [:]
-    @ObservationIgnored private var diagnoseTask: Task<Void, Never>?
+    @ObservationIgnored private var diagnoseTasks: [FailureOrigin: Task<Void, Never>] = [:]
     /// All suites of the last run, read back from disk at launch (before any run in this session).
     private(set) var restoredSuites: [SuiteResult] = []
-    /// The suites the Run tab's results list shows.
+    /// The suites the Run view's results list shows.
     /// This session's run, if there is one (also when it has no summary); else the one read from disk.
     var resultSuites: [SuiteResult] { lastResult.map { $0.summary?.suites ?? [] } ?? restoredSuites }
     /// Output while running, results once there are some.
@@ -249,8 +335,6 @@ final class ProjectModel {
     private(set) var changeSet: SnapshotChangeSet? {
         didSet {
             changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a })
-            // A revert takes the selected snapshot out of the Changed scope.
-            keepSnapshotSelectionShown()
         }
     }
     /// Lookups for the library's status marks, rebuilt when changes or failures change.
@@ -264,7 +348,7 @@ final class ProjectModel {
     /// orphans), so the order is computed once per change instead of on every redraw.
     private var libraryRevision = 0
     private struct LibraryOrderKey: Equatable {
-        var revision: Int, filter: String, scope: LibraryScope, sort: LibrarySort
+        var revision: Int, filter: String, orphans: Bool, sort: LibrarySort
     }
     @ObservationIgnored private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
     private(set) var changesError: String?
@@ -276,6 +360,11 @@ final class ProjectModel {
     }
     var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
     var selectedChangeID: String?
+    /// The selected change, while the section lists it: Working Copy has no committed changes to show,
+    /// even when one stays selected for vs develop.
+    var shownChange: SnapshotChange? {
+        selectedChange.flatMap { change in sectionChanges.contains(change) ? change : nil }
+    }
     /// Changes marked as viewed whose file hasn't changed since.
     private(set) var viewedChanges: Set<String> = []
     var hideViewed = false {
@@ -287,10 +376,11 @@ final class ProjectModel {
     private(set) var isLoadingChanges = false
 
     @ObservationIgnored private var cancelAction: (() -> Void)?
-    /// The tab the current operation was started from.
-    @ObservationIgnored private var operationTab: ProjectTab?
+    /// The section the current operation was started from.
+    @ObservationIgnored private var operationSection: ProjectSection?
+    /// The failures the current operation acts on (a re-record's verification, a flakiness check).
+    @ObservationIgnored private var operationOrigin: FailureOrigin = .lastRun
     private let lineBuffer = LineBatcher()
-    private var lastFailingSuites: [SuiteResult] = []
 
     /// Image bytes for changes, used instead of git when set (previews and snapshot tests).
     @ObservationIgnored private var fixtureImages: [String: (Data?, Data?)]?
@@ -323,7 +413,13 @@ final class ProjectModel {
     var settings: ProjectSettings { store.settings(for: project) }
     var config: SnapshotConfig? { context?.config }
     var isRunning: Bool { operation != nil }
-    var failingSuites: [SuiteResult] { lastFailingSuites }
+    /// The failing suites of the failures shown, which Re-record Failing Suites and Check Flakiness act
+    /// on: none for a CI job's, which are only looked at for now.
+    var failingSuites: [SuiteResult] { recordsFailures ? failureSets[failureOrigin]?.failingSuites ?? [] : [] }
+
+    /// Whether the failures shown can be re-recorded and checked for flakiness here: the last run's,
+    /// not (yet) a CI job's.
+    var recordsFailures: Bool { failureOrigin == .lastRun }
     var hasRemote: Bool { !(config?.remoteHost ?? "").isEmpty }
     var baseBranch: String? { config?.baseBranch }
 
@@ -373,7 +469,7 @@ final class ProjectModel {
             validateEnvironment()
             // Only a last run saved elsewhere since (or the first look): the app's own saves are what it
             // shows already, and taking them for an outside run cleared the session's verdicts.
-            let savedElsewhere = loaded.lastRunSaved != lastRunSaved || failureSource == nil
+            let savedElsewhere = loaded.lastRunSaved != lastRunSaved || failureSets[.lastRun]?.source == nil
             lastRunSaved = loaded.lastRunSaved
             if savedElsewhere { loadLastRun() }
             refreshChanges()
@@ -385,7 +481,7 @@ final class ProjectModel {
 
     /// Saves the last run and notes when: coming back to the app reloads only a last run saved
     /// elsewhere (by `snapkit`). Taken for an outside run, the app's own save cleared the flakiness
-    /// verdicts and the Run tab's result on the next activation.
+    /// verdicts and the Run view's result on the next activation.
     private func saveLastRun(_ save: (URL) -> Void) {
         save(project.url)
         lastRunSaved = LastRun.savedDate(repository: project.url)
@@ -451,18 +547,17 @@ final class ProjectModel {
     /// Shows the last run on disk, unless what is shown is newer: a run of this session, or an
     /// imported bundle, which a reload (another base branch) must not replace.
     private func loadLastRun() {
-        guard let last = LastRun.load(repository: project.url), failureSource.map({ last.date > $0.date }) ?? true else { return }
-        // Newer than what is shown, so the tests ran elsewhere since (in `snapkit`): the Run tab's
+        guard let last = LastRun.load(repository: project.url),
+              failureSets[.lastRun]?.source.map({ last.date > $0.date }) ?? true else { return }
+        // Newer than what is shown, so the tests ran elsewhere since (in `snapkit`): the Run view's
         // results and the verdicts of earlier flakiness checks aren't this run's.
         lastResult = nil
-        flakeResults = []
-        lastFailingSuites = last.failingSuites
         restoredSuites = last.suites ?? []
         fullRunTotal = last.suites.map { $0.reduce(0) { $0 + $1.tests.count } }
         passed = last.passed
         failed = last.failed
         skipped = (last.suites ?? []).reduce(0) { $0 + $1.tests.filter { $0.outcome == .skipped }.count }
-        setFailures(suites: last.failingSuites, images: last.failureImages(),
+        setFailures(.lastRun, suites: last.failingSuites, images: last.failureImages(), keepingVerdicts: false,
                     source: FailureSource(label: "Last run", date: last.date, host: last.host,
                                           resultBundle: last.resultBundle.map { URL(fileURLWithPath: $0) }.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }))
     }
@@ -537,15 +632,10 @@ final class ProjectModel {
         }
     }
 
+    /// The library's snapshots matching the filter: all of them, or the orphans in Orphaned.
     var filteredSnapshots: [SnapshotFile] {
         let files = SnapshotLibrary.filter(library?.files ?? [], text: libraryFilter)
-        switch libraryScope {
-        case .all: return files
-        case .changed: return files.filter { status(of: $0).change != nil }
-        case .failing: return files.filter { status(of: $0).failureID != nil }
-        case .uncommitted: return files.filter { $0.state != .clean }
-        case .orphaned: return files.filter { orphanIDs.contains($0.id) }
-        }
+        return section == .orphaned ? files.filter { orphanIDs.contains($0.id) } : files
     }
 
     /// Changes and failures, keyed by snapshot path.
@@ -560,15 +650,76 @@ final class ProjectModel {
         return status
     }
 
-    func count(in scope: LibraryScope) -> Int {
-        let files = library?.files ?? []
-        switch scope {
-        case .all: return files.count
-        case .changed: return files.filter { status(of: $0).change != nil }.count
-        case .failing: return files.filter { status(of: $0).failureID != nil }.count
-        case .uncommitted: return files.filter { $0.state != .clean }.count
-        case .orphaned: return orphanIDs.count
+    /// What a section's badge counts: changes, failing tests or snapshots; nil before it is known.
+    func count(of section: ProjectSection) -> Int? {
+        switch section {
+        case .workingCopy: changeSet.map { $0.changes.filter(\.isUncommitted).count }
+        case .comparison: changeSet?.changes.count
+        case .lastRun: failureSets[.lastRun]?.items.count ?? 0
+        case .ciJob(let job): failureSets[.ciJob(job)]?.items.count
+        case .run: nil
+        case .library: library?.files.count
+        case .orphaned: orphanIDs.count
         }
+    }
+
+    /// The sections with a menu shortcut (⌥⌘1…), in sidebar order. CI jobs come and go; ⌘K finds them.
+    var menuSections: [ProjectSection] { [.workingCopy, .comparison, .lastRun, .run, .library, .orphaned] }
+
+    /// Whether the sidebar lists `section`: Orphaned only while there are orphans (or it is open), a CI
+    /// job while it is offered or loaded.
+    func isListed(_ section: ProjectSection) -> Bool {
+        switch section {
+        case .orphaned: !orphanIDs.isEmpty || self.section == .orphaned
+        case .ciJob(let id): ciJob(id) != nil
+        default: true
+        }
+    }
+
+    /// A section's name in the window title and for VoiceOver.
+    func title(of section: ProjectSection) -> String {
+        switch section {
+        case .workingCopy: "Working Copy"
+        case .comparison: baseBranch.map { "Changes vs \($0)" } ?? "Changes vs Base Branch"
+        case .lastRun: "Last Run"
+        case .ciJob(let id): "CI Job " + (ciJob(id).map { "\($0.name) #\(id)" } ?? "#\(id)")
+        case .run: "Run"
+        case .library: "All Snapshots"
+        case .orphaned: "Orphaned Snapshots"
+        }
+    }
+
+    /// A section's name in the sidebar, where its group heading says the rest: "vs develop" under
+    /// Workspace, the job's name under its merge request.
+    func shortTitle(of section: ProjectSection) -> String {
+        switch section {
+        case .comparison: "vs \(baseBranch ?? "base branch")"
+        case .ciJob(let id): ciJob(id).map { "\($0.name) #\(id)" } ?? "#\(id)"
+        case .orphaned: "Orphaned"
+        default: title(of: section)
+        }
+    }
+
+    /// A section's count in words, as VoiceOver reads it beside the name.
+    func countLabel(of section: ProjectSection) -> String? {
+        if case .ciJob(let id) = section, failureSets[.ciJob(id)] == nil {
+            return loadingCIJobs.contains(id) ? "loading" : "failed, not loaded"
+        }
+        if section == .run { return isRunning ? stageLabel : nil }
+        guard let count = count(of: section) else { return nil }
+        let noun = switch section {
+        case .workingCopy: "uncommitted change"
+        case .comparison: "change"
+        case .lastRun, .ciJob: "failing test"
+        case .run: ""
+        case .library, .orphaned: "snapshot"
+        }
+        return "\(count) \(noun)\(count == 1 ? "" : "s")"
+    }
+
+    /// The branch checked out, or "detached HEAD"; nil until the project has loaded.
+    var branchLabel: String? {
+        currentBranch ?? (context == nil && configError == nil ? nil : "detached HEAD")
     }
 
     /// How a file goes to the Trash: the Finder's, or a stand-in in tests, which must not fill the user's.
@@ -602,23 +753,23 @@ final class ProjectModel {
     func showInLibrary(path: String) {
         guard library?.files.contains(where: { $0.path == path }) == true else { return }
         libraryFilter = ""
-        libraryScope = .all
+        section = .library
         selectedSnapshotID = path
-        tab = .snapshots
     }
 
     func isInLibrary(_ path: String) -> Bool {
         library?.files.contains { $0.path == path } ?? false
     }
 
-    /// Opens a snapshot's change on the Changes tab, clearing filters that would hide it.
+    /// Opens a snapshot's change, in Working Copy when it isn't committed yet, clearing filters that
+    /// would hide it.
     func showChange(path: String) {
         guard let change = changeSet?.changes.first(where: { $0.path == path }) else { return }
         changeFilter = ""
-        changeKinds.insert(change.kind)
+        if !change.isUncommitted { changeKinds.insert(change.kind) }
         if viewedChanges.contains(change.id) { hideViewed = false }
         selectedChangeID = path
-        tab = .changes
+        section = change.isUncommitted ? .workingCopy : .comparison
     }
 
     /// Snapshots in the order the list shows them: module, suite, test, variant.
@@ -628,7 +779,7 @@ final class ProjectModel {
     var displayedTree: [SnapshotModule] { libraryOrder.tree }
 
     private var libraryOrder: (tree: [SnapshotModule], files: [SnapshotFile]) {
-        let key = LibraryOrderKey(revision: libraryRevision, filter: libraryFilter, scope: libraryScope, sort: librarySort)
+        let key = LibraryOrderKey(revision: libraryRevision, filter: libraryFilter, orphans: section == .orphaned, sort: librarySort)
         if let cache = libraryOrderCache, cache.key == key { return (cache.tree, cache.files) }
         let filtered = filteredSnapshots
         let tree = SnapshotLibrary.tree(filtered)
@@ -727,8 +878,15 @@ final class ProjectModel {
         }
     }
 
+    /// The changes the section is about: the uncommitted ones in Working Copy, those of the chosen
+    /// kinds when comparing with the base branch.
+    var sectionChanges: [SnapshotChange] {
+        let changes = changeSet?.changes ?? []
+        return section == .workingCopy ? changes.filter(\.isUncommitted) : changes.filter { changeKinds.contains($0.kind) }
+    }
+
     var filteredChanges: [SnapshotChange] {
-        let changes = SnapshotChangeSet.filter(changeSet?.changes ?? [], text: changeFilter, kinds: changeKinds)
+        let changes = SnapshotChangeSet.filter(sectionChanges, text: changeFilter)
         return hideViewed ? changes.filter { !viewedChanges.contains($0.id) } : changes
     }
 
@@ -738,8 +896,10 @@ final class ProjectModel {
     }
 
     /// Failures in the order the list shows them: grouped by suite.
-    var displayedFailures: [FailureItem] {
-        Dictionary(grouping: failures, by: \.suite.identifier).sorted { $0.key < $1.key }.flatMap(\.value)
+    var displayedFailures: [FailureItem] { Self.displayOrder(failures) }
+
+    static func displayOrder(_ items: [FailureItem]) -> [FailureItem] {
+        Dictionary(grouping: items, by: \.suite.identifier).sorted { $0.key < $1.key }.flatMap(\.value)
     }
 
     /// What to select once `selected` is gone (trashed, discarded, reverted): the next row that was
@@ -771,14 +931,14 @@ final class ProjectModel {
         if kept != selectedChangeID { selectedChangeID = kept }
     }
 
-    /// Moves the selection in the current tab's list, from anywhere in the window.
+    /// Moves the selection in the current section's list, from anywhere in the window.
     func selectAdjacent(_ step: Int) {
         func move(_ ids: [String], _ current: String?) -> String? {
             guard !ids.isEmpty else { return current }
             guard let current, let i = ids.firstIndex(of: current) else { return ids.first }
             return ids[min(max(i + step, 0), ids.count - 1)]
         }
-        switch tab {
+        switch section.content {
         case .failures: focusFailure(move(displayedFailures.map(\.id), selectedFailureID))
         case .changes: selectedChangeID = move(displayedChanges.map(\.id), selectedChangeID)
         case .snapshots: selectedSnapshotID = move(displayedSnapshots.map(\.id), selectedSnapshotID)
@@ -786,11 +946,15 @@ final class ProjectModel {
         }
     }
 
-    /// Shows a test from the run results on the Failures tab.
+    /// Shows a failing test of the last run (from its results, or a snapshot's Failing chip).
     func showFailure(_ id: String) {
-        guard failures.contains(where: { $0.id == id }) else { return }
+        guard isLastRunFailure(id) else { return }
+        section = .lastRun
         focusFailure(id)
-        tab = .failures
+    }
+
+    func isLastRunFailure(_ id: String) -> Bool {
+        failureSets[.lastRun]?.items.contains { $0.id == id } ?? false
     }
 
     /// Selects just this failure, even when it was one of several selected.
@@ -1022,14 +1186,14 @@ final class ProjectModel {
         selectedFailureID = displayedFailures.first { ids.contains($0.id) }?.id
     }
 
-    /// Diagnoses every failure's reference/actual pair off the main thread.
-    private func diagnoseFailures() {
-        diagnoseTask?.cancel()
-        let items = failures
-        diagnoseTask = Task {
+    /// Diagnoses every failure's reference/actual pair of a set off the main thread.
+    private func diagnoseFailures(_ origin: FailureOrigin) {
+        diagnoseTasks[origin]?.cancel()
+        let items = failureSets[origin]?.items ?? []
+        diagnoseTasks[origin] = Task {
             let result = await Task.detached { Self.diagnose(items) }.value
             guard !Task.isCancelled else { return }
-            diagnoses = result
+            failureSets[origin]?.diagnoses = result
         }
     }
 
@@ -1049,18 +1213,25 @@ final class ProjectModel {
         history = records
         historyFlaky = RunHistory.flakySignals(records)
         let flaky = Dictionary(historyFlaky.map { ($0.test, $0) }, uniquingKeysWith: { a, _ in a })
-        failures = failures.map { item in
-            var item = item
-            item.historyFlaky = flaky[item.id]
-            item.timeline = RunHistory.timeline(for: item.id, in: records)
-            return item
+        for origin in failureSets.keys {
+            failureSets[origin]?.items = failureSets[origin]?.items.map { item in
+                var item = item
+                item.historyFlaky = flaky[item.id]
+                item.timeline = RunHistory.timeline(for: item.id, in: records)
+                return item
+            } ?? []
         }
     }
 
-    private func setFailures(suites: [SuiteResult], images: [SnapshotFailureImages], source: FailureSource) {
+    /// Replaces the failures of `origin` with those of `suites`. A new run's set starts without
+    /// verdicts (they belong to the runs they came from); a verification keeps the set's.
+    private func setFailures(_ origin: FailureOrigin, suites: [SuiteResult], images: [SnapshotFailureImages], keepingVerdicts: Bool,
+                             source: FailureSource) {
+        var set = failureSets[origin] ?? FailureSet()
+        if !keepingVerdicts { set.flakeResults = [] }
         let flaky = Dictionary(historyFlaky.map { ($0.test, $0) }, uniquingKeysWith: { a, _ in a })
-        let verdicts = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        failures = suites.flatMap { suite in
+        let verdicts = Dictionary(set.flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        set.items = suites.flatMap { suite in
             suite.tests.filter { $0.outcome == .failed }.map { test in
                 let id = suite.onlyTestingIdentifier(of: test)
                 return FailureItem(
@@ -1075,11 +1246,14 @@ final class ProjectModel {
                 )
             }
         }
-        failureSource = source
-        diagnoseFailures()
-        if selectedFailureID == nil || !failures.contains(where: { $0.id == selectedFailureID }) {
-            selectedFailureID = displayedFailures.first?.id
+        set.source = source
+        set.failingSuites = suites
+        if set.selectedID == nil || !set.items.contains(where: { $0.id == set.selectedID }) {
+            set.selectedID = Self.displayOrder(set.items).first?.id
+            set.selection = []
         }
+        failureSets[origin] = set
+        diagnoseFailures(origin)
     }
 
     /// Opens an `.xcresult` (e.g. downloaded from CI) and shows its failures. The task ends once the
@@ -1092,7 +1266,7 @@ final class ProjectModel {
             return Task {}
         }
         notify("Reading \(url.lastPathComponent)…")
-        let repo = project.url, start = tab
+        let repo = project.url, start = section
         let dir = scratchDirectory.appendingPathComponent("imported/\(UUID().uuidString)", isDirectory: true)
         // The Xcode CI runs, once found, rather than the selected one: an older xcresulttool can't
         // read a newer Xcode's bundles.
@@ -1111,14 +1285,12 @@ final class ProjectModel {
                 runs.append(RunRecord(kind: .imported, host: url.lastPathComponent, commit: nil, branch: nil, dirty: false,
                                       summary: summary, passed: summary.passed, failed: summary.failed, skipped: summary.skipped, resultBundle: url.path))
                 setHistory(runs.load())
-                lastFailingSuites = summary.failingSuites
                 // Verdicts belong to the runs they came from, not to another machine's bundle.
-                flakeResults = []
-                setFailures(suites: summary.failingSuites, images: images,
+                setFailures(.lastRun, suites: summary.failingSuites, images: images, keepingVerdicts: false,
                             source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
                 notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).",
-                       action: .showFailures)
-                moveOn(to: .failures, from: start)
+                       action: .showFailures(.lastRun))
+                moveOn(to: .lastRun, from: start)
             case .failure(let error):
                 notify("Could not read \(url.lastPathComponent): \(error.localizedDescription)", isError: true)
             }
@@ -1127,14 +1299,51 @@ final class ProjectModel {
 
     // MARK: CI
 
-    /// The checked-out branch's merge request and the failed jobs of its latest pipeline, offered on the
-    /// Failures tab.
+    /// The checked-out branch's merge request and the failed jobs of its latest pipeline, which the
+    /// sidebar lists.
     private(set) var ciDetection: CIDetection?
-    /// The job the failures were loaded from, which isn't offered again.
-    private(set) var loadedCIJobID: Int?
-    private(set) var isLoadingCI = false
-    /// The failed jobs the Failures tab offers to load.
-    var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { $0.id != loadedCIJobID } }
+    /// The CI jobs being loaded, by id.
+    private(set) var loadingCIJobs: Set<Int> = []
+    /// Why a job couldn't be loaded, by id, until it loads.
+    private(set) var ciLoadErrors: [Int: String] = [:]
+    /// The branch's failed jobs not loaded yet.
+    var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { failureSets[.ciJob($0.id)] == nil } }
+
+    /// A CI job the sidebar lists: one of the branch's failed jobs, or one loaded.
+    func ciJob(_ id: Int) -> GitLabJob? {
+        failureSets[.ciJob(id)]?.job ?? ciDetection?.failedJobs.first { $0.id == id }
+    }
+
+    /// The jobs of one merge request, under its heading in the sidebar.
+    struct CIJobGroup: Identifiable {
+        var mergeRequest: GitLabMergeRequest?
+        var jobs: [GitLabJob]
+        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? "CI" }
+        var id: String { title }
+    }
+
+    /// The branch's merge request with its failed jobs and any loaded since; then jobs loaded for
+    /// other merge requests, each under its own.
+    var ciJobGroups: [CIJobGroup] {
+        let loaded = failureSets.values.compactMap { set in set.job.map { (job: $0, mergeRequest: set.mergeRequest) } }
+            .sorted { $0.job.id < $1.job.id }
+        var groups: [CIJobGroup] = []
+        var others = loaded
+        if let detection = ciDetection {
+            let iid = detection.mergeRequest.iid, failed = Set(detection.failedJobs.map(\.id))
+            let extra = loaded.filter { $0.mergeRequest?.iid == iid && !failed.contains($0.job.id) }
+            // The branch's jobs are listed here only, whatever their load said of their merge request.
+            others.removeAll { $0.mergeRequest?.iid == iid || failed.contains($0.job.id) }
+            let jobs = detection.failedJobs + extra.map(\.job)
+            if !jobs.isEmpty { groups.append(CIJobGroup(mergeRequest: detection.mergeRequest, jobs: jobs)) }
+        }
+        let byRequest = Dictionary(grouping: others) { $0.mergeRequest?.iid }
+        for iid in byRequest.keys.sorted(by: { ($0 ?? .max) < ($1 ?? .max) }) {
+            let jobs = byRequest[iid] ?? []
+            groups.append(CIJobGroup(mergeRequest: jobs.first?.mergeRequest, jobs: jobs.map(\.job)))
+        }
+        return groups
+    }
 
     /// How the model reaches GitLab and the runners, off the main thread; tests replace them.
     @ObservationIgnored var detectCI: @Sendable (URL) throws -> CIDetection? = { try CIDetector.detect(repository: $0) }
@@ -1149,7 +1358,7 @@ final class ProjectModel {
     @ObservationIgnored private var ciCheckedBranch: String??
 
     /// Looks for failed jobs of the branch's merge request. Quiet when there is none, or no GitLab or access
-    /// to it: the banner is an offer.
+    /// to it: the sidebar just lists no jobs.
     @discardableResult
     func checkCI() -> Task<Void, Never> {
         ciGeneration += 1
@@ -1166,41 +1375,50 @@ final class ProjectModel {
     @discardableResult
     func loadCIJob(url text: String) -> Task<Void, Never> {
         let resolve = resolveCI, repository = project.url
-        return loadCI("the CI job") { try resolve(text, repository) }
+        return loadCI("the CI job", id: nil) { try resolve(text, repository) }
     }
 
+    /// Loads one of the branch's failed jobs, or loads a loaded one again (its runner may have more images now).
     @discardableResult
     func loadCIJob(_ job: GitLabJob) -> Task<Void, Never> {
-        guard let detection = ciDetection else { return Task {} }
-        let link = detection.link(to: job)
-        return loadCI("\(job.name) #\(job.id)") { link }
+        let link = failureSets[.ciJob(job.id)]?.source?.jobURL.flatMap { GitLabLink.job(url: $0.absoluteString) }
+            ?? ciDetection?.link(to: job)
+        guard let link else { return Task {} }
+        return loadCI("\(job.name) #\(job.id)", id: job.id) { link }
+    }
+
+    /// Opening a CI job's item loads it, once: after a failed load, its view offers Try Again.
+    private func loadOpenCIJob() {
+        guard case .ciJob(let id) = section, failureSets[.ciJob(id)] == nil, !loadingCIJobs.contains(id), ciLoadErrors[id] == nil,
+              let job = ciJob(id) else { return }
+        loadCIJob(job)
     }
 
     /// Shows a CI job's failures as a run's: what failed, the references at its commit, the images its runner
-    /// took. What couldn't be fetched is noted on the Failures tab, not a failure of the whole load.
-    private func loadCI(_ name: String, resolve: @escaping @Sendable () throws -> GitLabLink) -> Task<Void, Never> {
-        // A run ending would replace what was loaded meanwhile.
-        guard !isRunning else {
-            notify("Load the CI job once the run has finished.", isError: true)
-            return Task {}
+    /// took. What couldn't be fetched is noted with the failures, not a failure of the whole load.
+    private func loadCI(_ name: String, id: Int?, resolve: @escaping @Sendable () throws -> GitLabLink) -> Task<Void, Never> {
+        if let id {
+            guard !loadingCIJobs.contains(id) else { return Task {} }
+            loadingCIJobs.insert(id)
+            ciLoadErrors[id] = nil
         }
-        guard !isLoadingCI else { return Task {} }
-        isLoadingCI = true
         notify("Loading \(name)…")
-        let repository = project.url, login = settings.ciLogin, start = tab, load = importCI
+        let repository = project.url, login = settings.ciLogin, start = section, load = importCI
         let directory = scratchDirectory.appendingPathComponent("ci/\(UUID().uuidString)", isDirectory: true)
         return Task {
             let result = await offCooperativePool { Result { try load(try resolve(), login, repository, directory) } }
-            isLoadingCI = false
+            if let id { loadingCIJobs.remove(id) }
             switch result {
             case .success(let ci):
                 show(ci)
                 let count = ci.summary.failed
                 notify("Loaded \(count) failing test\(count == 1 ? "" : "s") from \(ci.job.name) #\(ci.job.id)."
-                       + (ci.notes.isEmpty ? "" : " Not everything could be fetched; the Failures tab says what."),
-                       action: .showFailures)
-                moveOn(to: .failures, from: start)
+                       + (ci.notes.isEmpty ? "" : " Not everything could be fetched; the job’s failures say what."),
+                       action: .showFailures(.ciJob(ci.job.id)))
+                // From its own item, or from the prompt anywhere: the job is what was asked for.
+                if start == .ciJob(ci.job.id) || id == nil { moveOn(to: .ciJob(ci.job.id), from: start) }
             case .failure(let error):
+                if let id { ciLoadErrors[id] = error.localizedDescription }
                 notify("Couldn’t load \(name): \(error.localizedDescription)", isError: true)
             }
         }
@@ -1213,12 +1431,16 @@ final class ProjectModel {
         runs.append(RunRecord(kind: .imported, host: runner, commit: nil, branch: nil, dirty: false, summary: ci.summary,
                               passed: ci.passed, failed: ci.summary.failed, skipped: ci.skipped, resultBundle: nil))
         setHistory(runs.load())
-        lastFailingSuites = ci.summary.failingSuites
+        let origin = FailureOrigin.ciJob(ci.job.id)
+        ciLoadErrors[ci.job.id] = nil
+        // A job of the branch's pipeline ran for its merge request, also when the load didn't find it.
+        let mergeRequest = ci.mergeRequest
+            ?? ciDetection.flatMap { detection in detection.failedJobs.contains { $0.id == ci.job.id } ? detection.mergeRequest : nil }
+        failureSets[origin, default: FailureSet()].job = ci.job
+        failureSets[origin]?.mergeRequest = mergeRequest
+        let detail = [mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }].compactMap { $0 }
         // Verdicts belong to the runs they came from.
-        flakeResults = []
-        loadedCIJobID = ci.job.id
-        let detail = [ci.mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }].compactMap { $0 }
-        setFailures(suites: ci.summary.failingSuites, images: ci.images,
+        setFailures(origin, suites: ci.summary.failingSuites, images: ci.images, keepingVerdicts: false,
                     source: FailureSource(label: "\(ci.job.name) #\(ci.job.id)", date: ci.job.finished ?? Date(), host: runner,
                                           jobURL: ci.link.jobURL.flatMap(URL.init(string:)),
                                           detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes))
@@ -1235,7 +1457,8 @@ final class ProjectModel {
     private func begin(_ op: RunOperation) -> Bool {
         guard operation == nil else { return false }
         operation = op
-        operationTab = tab
+        operationSection = section
+        operationOrigin = failureOrigin
         startedAt = Date()
         stageLabel = op.label
         runPane = .output
@@ -1251,16 +1474,24 @@ final class ProjectModel {
         return true
     }
 
+    /// How many tests a re-record runs, which the recording and the verification each measure their progress
+    /// against: the tests named, else the suites' tests when they are known.
+    static func testCount(suites: [SuiteResult], onlyTesting: [String]?) -> Int? {
+        if let onlyTesting { return onlyTesting.count }
+        let count = suites.reduce(0) { $0 + $1.tests.count }
+        return count > 0 ? count : nil
+    }
+
     /// Completed share of the tests, when the total is known (from the last run of the same scope).
     var progressFraction: Double? {
         guard isRunning, phase == .testing, let total = expectedTotal, total > 0 else { return nil }
         return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
-    /// The Run tab's counts and duration when an operation began, put back if it's cancelled.
+    /// The Run view's counts and duration when an operation began, put back if it's cancelled.
     @ObservationIgnored private var shownBeforeOperation: (passed: Int, failed: Int, skipped: Int, duration: TimeInterval?, result: URL?)?
 
-    /// The notice after a cancel, which the Run tab marks as neither passed nor failed.
+    /// The notice after a cancel, which the Run view marks as neither passed nor failed.
     static let cancelled = "Cancelled."
     var lastMessageIsCancellation: Bool { lastMessage == Self.cancelled }
 
@@ -1303,13 +1534,16 @@ final class ProjectModel {
 
     /// Shows `next` once an action is done, if the user is still where they started it (on `start`,
     /// in this project). If they went elsewhere meanwhile, they stay there: the notice offers it.
-    private func moveOn(to next: ProjectTab, from start: ProjectTab?) {
-        if isShown, tab == start { tab = next }
+    private func moveOn(to next: ProjectSection, from start: ProjectSection?) {
+        if isShown, section == start { section = next }
     }
 
     /// What the Dock badge says: the failing tests, as Failures lists them (not a flakiness check's
     /// failed repetitions).
-    var dockBadge: String? { failures.isEmpty ? nil : "\(failures.count)" }
+    var dockBadge: String? {
+        let count = failureSets[.lastRun]?.items.count ?? 0
+        return count == 0 ? nil : "\(count)"
+    }
 
     /// Dock badge (the open project's; the window keeps it in step as you switch, this also with the
     /// window closed), and a bounce when the run ends while you're elsewhere; VoiceOver reads the
@@ -1392,7 +1626,7 @@ final class ProjectModel {
     }
 
     private func completeRun(_ result: TestRunResult, images: [SnapshotFailureImages], kind: RunKind, attachmentsDirectory: URL? = nil) {
-        // A cancelled run's few results would stand in the Run tab beside the last run's failures
+        // A cancelled run's few results would stand in the Run view beside the last run's failures
         // everywhere else; it keeps showing the last run (`finish` puts its counts back).
         if !result.cancelled {
             lastResult = result
@@ -1407,9 +1641,7 @@ final class ProjectModel {
         if kind == .run, !result.cancelled, result.nothingTested == nil {
             fullRunTotal = result.summary?.total
             saveLastRun { LastRun.update(with: result, attachmentsDirectory: attachmentsDirectory, repository: $0) }
-            lastFailingSuites = result.failingSuites
-            flakeResults = []
-            setFailures(suites: result.failingSuites, images: images,
+            setFailures(.lastRun, suites: result.failingSuites, images: images, keepingVerdicts: false,
                         source: FailureSource(label: result.host == "local" ? "Local run" : "Remote run", date: Date(), host: result.host,
                                               resultBundle: result.host == "local" ? result.resultBundle : nil))
         }
@@ -1420,11 +1652,12 @@ final class ProjectModel {
         else if result.nothingTested != nil { message = "No test ran." }
         else { message = result.passed == 1 ? "1 test passed." : "All \(result.passed) tests passed." }
         finish(message: message, isError: result.failed > 0 || (!result.succeeded && !result.cancelled) || result.nothingTested != nil,
-               action: result.failed > 0 && !result.cancelled ? .showFailures : nil)
+               action: result.failed > 0 && !result.cancelled ? .showFailures(.lastRun) : nil)
     }
 
+    /// Re-records the failing suites of the failures shown (the last run's, or the open CI job's), then verifies.
     func reRecordFailed(suites: [SuiteResult]? = nil) {
-        let targets = suites ?? lastFailingSuites
+        let targets = suites ?? failingSuites
         guard !targets.isEmpty else {
             notify("No failing suites to re-record. Run the tests first.", isError: true)
             return
@@ -1457,9 +1690,9 @@ final class ProjectModel {
         reRecord(files, granularity: .tests)
     }
 
-    /// The snapshot behind the current tab's selection (a library file, a change, a failure's reference).
+    /// The snapshot behind the current section's selection (a library file, a change, a failure's reference).
     var selectedSnapshotFile: SnapshotFile? {
-        switch tab {
+        switch section.content {
         case .snapshots: selectedSnapshot
         case .changes: selectedChange?.file
         case .failures: selectedFailure?.referencePaths.first.map { SnapshotFile(path: $0, byteSize: 0) }
@@ -1469,7 +1702,7 @@ final class ProjectModel {
 
     /// Names what ⇧⌘R will record: several failures can be selected at once.
     var reRecordSelectionTitle: String {
-        tab == .failures && selectedFailures.count > 1 ? "Re-record \(selectedFailures.count) Selected Tests" : "Re-record Selected Test"
+        section.content == .failures && selectedFailures.count > 1 ? "Re-record \(selectedFailures.count) Selected Tests" : "Re-record Selected Test"
     }
 
     /// The selected snapshot's test exists to open (an orphan's is gone).
@@ -1479,10 +1712,10 @@ final class ProjectModel {
 
     var canReRecordSelection: Bool {
         guard !isRunning, environment != nil else { return false }
-        switch tab {
+        switch section.content {
         case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
         case .changes: return selectedChange.map { $0.kind != .deleted && !orphanIDs.contains($0.id) } ?? false
-        case .failures: return selectedFailure != nil
+        case .failures: return selectedFailure != nil && recordsFailures
         case .run: return false
         }
     }
@@ -1490,7 +1723,7 @@ final class ProjectModel {
     /// Re-records the test of the selected snapshot, change or failure.
     func reRecordSelection() {
         guard canReRecordSelection else { return }
-        switch tab {
+        switch section.content {
         case .snapshots: if let file = selectedSnapshot { reRecord([file], granularity: .tests) }
         case .changes: if let change = selectedChange { reRecord([change.file], granularity: .tests) }
         case .failures: if !selectedFailures.isEmpty { reRecord(failures: selectedFailures) }
@@ -1509,25 +1742,44 @@ final class ProjectModel {
 
     /// Re-records the tests behind `files` (or their whole suites), then verifies.
     func reRecord(_ files: [SnapshotFile], granularity: RecordPlanner.Granularity) {
-        guard !files.isEmpty, !isRunning else { return }
+        // Begun before the plan, which reads every test file involved (seconds for a whole project): the
+        // re-record shows, and can be cancelled, from the start.
+        guard !files.isEmpty, begin(.rerecord) else { return }
+        stageLabel = "Finding the tests to record"
+        planCancelled = false
+        cancelAction = { [weak self] in self?.planCancelled = true }
         let repo = project.url
         Task {
             let planned = await Task.detached { Result { try RecordPlanner.plan(files, granularity: granularity, repository: repo) } }.value
+            guard !planCancelled else {
+                finish(message: Self.cancelled)
+                return
+            }
             switch planned {
             case .success(let selection):
                 let tests = Set(files.map { $0.suite + "/" + $0.testName })
                 let what = granularity == .suites
                     ? selection.suites.map(\.name).joined(separator: ", ")
                     : tests.count == 1 ? files[0].testName : "\(tests.count) tests"
-                reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
+                startReRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
             case .failure(let error):
-                notify("Can’t re-record: \(error.localizedDescription)", isError: true)
+                finish(message: "Can’t re-record: \(error.localizedDescription)", isError: true)
             }
         }
     }
 
+    /// Set by Cancel while a re-record is still planning, before there is a run to stop.
+    @ObservationIgnored private var planCancelled = false
+
     private func reRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
-        guard begin(.rerecord), let (ctx, env) = requireEnvironment() else { return }
+        guard begin(.rerecord) else { return }
+        startReRecord(suites: targets, onlyTesting: onlyTesting, what: what)
+    }
+
+    /// Records `targets` once the re-record has begun, then verifies.
+    private func startReRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
+        guard let (ctx, env) = requireEnvironment() else { return }
+        expectedTotal = Self.testCount(suites: targets, onlyTesting: onlyTesting)
         let recorder = ReRecorder(runner: TestRunner(repository: ctx.repository, config: ctx.config, environment: env))
         cancelAction = { recorder.cancel() }
         let verify = store.settings.verifyAfterRecord
@@ -1554,7 +1806,7 @@ final class ProjectModel {
                     isError = isError || verified.isError
                 }
                 if outcome.verifyRun?.cancelled == true { message += " The verification was cancelled." }
-                // A cancelled run's few results don't replace what the Run tab shows (see `completeRun`).
+                // A cancelled run's few results don't replace what the Run view shows (see `completeRun`).
                 if !record.cancelled, outcome.verifyRun?.cancelled != true { lastResult = outcome.verifyRun ?? record }
                 // New references are working-tree changes: the next step is to look at them.
                 finish(message: message, isError: isError, action: record.nothingTested == nil ? .reviewChanges : nil)
@@ -1578,29 +1830,34 @@ final class ProjectModel {
                              : ("Verification still fails (\(run.failed)) — the test may be flaky; try Check Flakiness.", true)
     }
 
-    /// Takes in a run of some tests (a re-record's verification): those tests have their new
-    /// results and images; the others keep the last run's, here and on disk.
+    /// Takes in a run of some tests (a re-record's verification) into the failures it re-recorded:
+    /// those tests have their new results and images; the others keep theirs, here and, for the last
+    /// run, on disk.
     private func applyPartialRun(_ run: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?) {
-        saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
+        let origin = operationOrigin
+        if origin == .lastRun {
+            saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
+        }
+        let set = failureSets[origin] ?? FailureSet()
         let ran = run.summary?.suites ?? []
         let rerun = Set(ran.flatMap { suite in suite.tests.map(suite.onlyTestingIdentifier) })
-        lastFailingSuites = SuiteResult.merging(ran, into: lastFailingSuites).filter(\.isFailing)
-        setFailures(suites: lastFailingSuites, images: failures.filter { !rerun.contains($0.id) }.flatMap(\.images) + images,
-                    source: failureSource ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
+        setFailures(origin, suites: SuiteResult.merging(ran, into: set.failingSuites).filter(\.isFailing),
+                    images: set.items.filter { !rerun.contains($0.id) }.flatMap(\.images) + images, keepingVerdicts: true,
+                    source: set.source ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
     }
 
     /// Reruns the failing suites — or just `tests` (`Bundle/Suite/test()`) — N times.
-    /// The last run's failing tests, as `-only-testing` names them: a flakiness check repeats just
-    /// those, not the passing tests beside them. (A suite whose tests aren't known stands for them.)
+    /// The failing tests shown, as `-only-testing` names them: a flakiness check repeats just those,
+    /// not the passing tests beside them. (A suite whose tests aren't known stands for them.)
     var failingTestIdentifiers: [String] {
-        lastFailingSuites.flatMap { suite in
+        failingSuites.flatMap { suite in
             let failed = suite.tests.filter { $0.outcome == .failed }
             return failed.isEmpty ? suite.onlyTestingIdentifiers : failed.map { suite.onlyTestingIdentifier(of: $0) }
         }
     }
 
     func checkFlakiness(remote: Bool = false, tests: [String]? = nil) {
-        let targets = lastFailingSuites
+        let targets = failingSuites
         guard !targets.isEmpty || tests != nil else {
             notify("No failing suites to check. Run the tests first.", isError: true)
             return
@@ -1646,30 +1903,34 @@ final class ProjectModel {
         }
         // Merge, so checking one test keeps verdicts for the others.
         let checked = Flakiness.classify(summary)
-        var merged = Dictionary(flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // Into the failures it checked, the last run's or a CI job's.
+        let origin = operationOrigin
+        var set = failureSets[origin] ?? FailureSet()
+        var merged = Dictionary(set.flakeResults.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for r in checked { merged[r.id] = r }
-        flakeResults = merged.values.sorted { $0.id < $1.id }
-        lastResult = result
-        passed = checked.reduce(0) { $0 + $1.passed }
-        failed = checked.reduce(0) { $0 + $1.failed }
-        failures = failures.map { item in
+        set.flakeResults = merged.values.sorted { $0.id < $1.id }
+        set.items = set.items.map { item in
             var item = item
-            let flake = flakeResults.first { $0.id == item.id }
+            let flake = merged[item.id]
             item.verdict = flake?.verdict
             item.failingDevices = flake?.failingDevices
             return item
         }
+        failureSets[origin] = set
+        lastResult = result
+        passed = checked.reduce(0) { $0 + $1.passed }
+        failed = checked.reduce(0) { $0 + $1.failed }
         // What this check found: earlier checks' verdicts are not its news.
         let flaky = checked.filter { $0.verdict == .flaky }.count
         let onSome = checked.filter { $0.failingDevices != nil }.count
         let always = checked.filter { $0.verdict == .alwaysFails }.count - onSome
         let passing = checked.count - always - onSome - flaky
-        let start = operationTab
+        let start = operationSection
         finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, "
                 + (onSome > 0 ? "\(onSome) only on some devices, " : "")
                 + "\(flaky) flaky, \(passing) pass\(passing == 1 ? "es" : "").",
-               action: .showFailures)
-        moveOn(to: .failures, from: start)
+               action: .showFailures(origin))
+        moveOn(to: origin.section, from: start)
     }
 
     func runRemote() {
@@ -1680,11 +1941,11 @@ final class ProjectModel {
     @ObservationIgnored var remoteTransport: (SnapshotConfig) throws -> any RemoteTransport = { try $0.remoteTransport() }
 
     func reRecordOnRemote() {
-        guard !lastFailingSuites.isEmpty else {
+        guard !failingSuites.isEmpty else {
             notify("No failing suites to re-record. Run the tests first.", isError: true)
             return
         }
-        runRemote(.remoteRecord, mode: .record(suites: lastFailingSuites), onlyTesting: nil)
+        runRemote(.remoteRecord, mode: .record(suites: failingSuites), onlyTesting: nil)
     }
 
     private func runRemote(_ op: RunOperation, mode: RemoteMode, onlyTesting: [String]?) {
@@ -1714,9 +1975,9 @@ final class ProjectModel {
                     } else if out.run.cancelled {
                         finish(message: Self.cancelled)
                     } else {
-                        let start = operationTab, count = out.downloadedSnapshots.count
+                        let start = operationSection, count = out.downloadedSnapshots.count
                         var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false
-                        // The Run tab shows the verification, as for a local re-record; the record run
+                        // The Run view shows the verification, as for a local re-record; the record run
                         // when there is none to show (not asked for, or it couldn't run).
                         if !verify { lastResult = out.run }
                         // Verified where it was recorded, as `snapkit rerecord --remote` does.
@@ -1739,7 +2000,7 @@ final class ProjectModel {
                             }
                         }
                         finish(message: message, isError: isError, action: .reviewChanges)
-                        moveOn(to: .changes, from: start)
+                        moveOn(to: .workingCopy, from: start)
                     }
                 }
             } catch {
@@ -1798,7 +2059,7 @@ struct ProjectFixture {
     var detectedBaseBranch: String?
     var currentBranch: String?
     var branches: [String] = ["develop", "main", "feature/checkout-redesign"]
-    var tab: ProjectTab = .run
+    var section: ProjectSection = .run
     var library: SnapshotLibrary?
     var snapshotImages: [String: Data] = [:]
     var orphanIDs: Set<String> = []
@@ -1826,7 +2087,9 @@ struct ProjectFixture {
     var flakeResults: [FlakeResult] = []
     var historyFlaky: [FlakySignal] = []
     var ciDetection: CIDetection?
-    var loadedCIJobID: Int?
+    /// Set when the failures above are a CI job's (with its merge request) rather than the last run's.
+    var ciJob: GitLabJob?
+    var ciMergeRequest: GitLabMergeRequest?
     var changeSet: SnapshotChangeSet?
     var changeImages: [String: (Data?, Data?)] = [:]
     var viewedChanges: Set<String> = []
@@ -1842,7 +2105,6 @@ extension ProjectModel {
         detectedBaseBranch = f.detectedBaseBranch ?? f.context?.config.baseBranch
         currentBranch = f.currentBranch
         branches = f.branches
-        tab = f.tab
         operation = f.operation
         stageLabel = f.stageLabel
         phase = f.phase
@@ -1859,15 +2121,12 @@ extension ProjectModel {
         notify(f.lastMessage, isError: f.lastMessageIsError, action: f.lastMessageAction)
         startedAt = f.startedAt
         lastDuration = f.lastDuration
-        lastFailingSuites = f.failingSuites
-        flakeResults = f.flakeResults
         historyFlaky = f.historyFlaky
-        failures = f.failures
-        diagnoses = Self.diagnose(f.failures)
-        failureSource = f.failureSource
+        let origin = f.ciJob.map { FailureOrigin.ciJob($0.id) } ?? .lastRun
+        failureSets = [origin: FailureSet(items: f.failures, source: f.failureSource, failingSuites: f.failingSuites,
+                                          flakeResults: f.flakeResults, diagnoses: Self.diagnose(f.failures),
+                                          selectedID: Self.displayOrder(f.failures).first?.id, job: f.ciJob, mergeRequest: f.ciMergeRequest)]
         ciDetection = f.ciDetection
-        loadedCIJobID = f.loadedCIJobID
-        selectedFailureID = displayedFailures.first?.id
         changeSet = f.changeSet
         changesError = f.changesError
         isLoadingChanges = false
@@ -1885,6 +2144,8 @@ extension ProjectModel {
             return (change.id, DiffDiagnosis(ImageDiff.compare(pa, pb)))
         })
         selectedChangeID = displayedChanges.first?.id
+        // Last: opening a section looks at what it shows (a CI job not loaded would load).
+        section = f.section
     }
 }
 
@@ -1921,7 +2182,8 @@ final class LineBatcher: @unchecked Sendable {
 
 /// Where a notice can take you next.
 enum NoticeAction: Equatable {
-    case reviewChanges, showFailures
+    case reviewChanges
+    case showFailures(FailureOrigin)
 
     var title: String {
         switch self {
@@ -1930,10 +2192,11 @@ enum NoticeAction: Equatable {
         }
     }
 
-    var tab: ProjectTab {
+    /// Where it leads: re-recorded snapshots are uncommitted changes.
+    var section: ProjectSection {
         switch self {
-        case .reviewChanges: .changes
-        case .showFailures: .failures
+        case .reviewChanges: .workingCopy
+        case .showFailures(let origin): origin.section
         }
     }
 }

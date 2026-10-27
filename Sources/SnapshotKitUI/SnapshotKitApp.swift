@@ -54,7 +54,7 @@ extension UserDefaults {
            let suite = UserDefaults(suiteName: name) {
             return suite
         }
-        guard CaptureOptions.parse(CommandLine.arguments) != nil else { return .standard }
+        guard CaptureOptions.isCapturing else { return .standard }
         let name = "org.snapshotkit.SnapshotKit.capture"
         UserDefaults.standard.removePersistentDomain(forName: name)
         return UserDefaults(suiteName: name) ?? .standard
@@ -151,7 +151,7 @@ struct SnapshotKitCommands: Commands {
         CommandMenu("Snapshots") {
             let project = model.current
             let busy = project?.isRunning ?? true
-            // Without Xcode and a simulator nothing runs locally: the same rule as the Run tab and ⌘K.
+            // Without Xcode and a simulator nothing runs locally: the same rule as the Run view and ⌘K.
             let cantRun = busy || project?.environment == nil
             Button("Run Snapshot Tests") { project?.runTests() }
                 .keyboardShortcut("r")
@@ -183,29 +183,31 @@ struct SnapshotKitCommands: Commands {
         }
         CommandGroup(after: .toolbar) {
             if let project = model.current {
-                // The Failures list has no filter field to focus.
+                // The failures list has no filter field to focus.
                 Button("Filter…") { project.focusFilterRequest += 1 }.keyboardShortcut("f")
-                    .disabled(project.tab == .failures)
+                    .disabled(project.section.content == .failures)
                 Divider()
-                Button("Snapshots") { project.tab = .snapshots }.keyboardShortcut("1", modifiers: [.command, .option])
-                Button("Changes") { project.tab = .changes }.keyboardShortcut("2", modifiers: [.command, .option])
-                Button("Failures") { project.tab = .failures }.keyboardShortcut("3", modifiers: [.command, .option])
-                Button("Run") { project.tab = .run }.keyboardShortcut("4", modifiers: [.command, .option])
+                // The sidebar's sections, in its order.
+                ForEach(Array(project.menuSections.enumerated()), id: \.element) { index, section in
+                    Button(project.title(of: section)) { project.section = section }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                        .disabled(!project.isListed(section))
+                }
                 Divider()
                 // Step through snapshots even while the image, not the list, has focus.
                 Button("Previous Item") { project.selectAdjacent(-1) }
                     .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-                    .disabled(project.tab == .run)
+                    .disabled(project.section == .run)
                 Button("Next Item") { project.selectAdjacent(1) }
                     .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-                    .disabled(project.tab == .run)
+                    .disabled(project.section == .run)
                 // Says which way it goes, like the list's context menu.
                 let viewed = project.selectedChange.map { project.viewedChanges.contains($0.id) } ?? false
                 Button(viewed ? "Mark as Not Viewed" : "Mark as Viewed") {
                     if let change = project.selectedChange { project.setViewed(!viewed, for: change) }
                 }
                 .keyboardShortcut("v", modifiers: [.command, .option])
-                .disabled(project.tab != .changes || project.selectedChange == nil)
+                .disabled(project.section.content != .changes || project.selectedChange == nil)
                 Divider()
             }
             Picker("Compare", selection: $compareMode) {

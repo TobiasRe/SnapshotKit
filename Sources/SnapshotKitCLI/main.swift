@@ -74,7 +74,7 @@ func color(_ code: String, _ text: String, onStderr: Bool = false) -> String {
     (onStderr ? stderrHasColor : stdoutHasColor) ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text
 }
 
-/// ✔ ✘ ◐ per run, oldest first, as on the app's Failures tab.
+/// ✔ ✘ ◐ per run, oldest first, as in the app's failures.
 func historyStrip(_ points: [HistoryPoint]) -> String {
     points.map { p in
         switch p.result {

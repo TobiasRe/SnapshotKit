@@ -222,8 +222,8 @@ public struct CIImporter: Sendable {
                 return parts.count > 2 && parts[0] == "Users" ? String(parts[1]) : nil
             }.first
             let hint = (login ?? "").isEmpty && owner != nil
-                ? " The images are in /Users/\(owner!)/: set CI login in the Run tab to `\(owner!)`."
-                : " Check CI login in the Run tab, and that `ssh \(destination) true` works without a password."
+                ? " The images are in /Users/\(owner!)/: set CI login under Run to `\(owner!)`."
+                : " Check CI login under Run, and that `ssh \(destination) true` works without a password."
             return "\(destination) refused the SSH login, so the images the tests took couldn’t be copied." + hint
         }
         return "Couldn’t copy the images the tests took from \(runner): \(output)"

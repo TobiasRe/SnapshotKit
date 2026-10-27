@@ -78,7 +78,7 @@ public struct PixelColor: Equatable, Sendable {
 
     /// CIE94 difference to another colour (below ~2.3 is invisible).
     public func perceptualDistance(to other: PixelColor) -> Double {
-        Lab.deltaE94(Lab([r, g, b, a], 0), Lab([other.r, other.g, other.b, other.a], 0))
+        Lab.deltaE94(Lab(r, g, b), Lab(other.r, other.g, other.b))
     }
 }
 
@@ -109,40 +109,48 @@ public enum ImageDiff {
         var changed = 0, perceptible = 0
         var maxDelta = 0.0
         var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
-        for y in 0..<h {
-            for x in 0..<w {
-                let o = (y * w + x) * 4
-                let inA = x < a.width && y < a.height, inB = x < b.width && y < b.height
-                var differs = inA != inB
-                var gray: UInt8 = 255
-                if inA {
-                    let ia = (y * a.width + x) * 4
-                    let r = Int(a.pixels[ia]), g = Int(a.pixels[ia + 1]), bl = Int(a.pixels[ia + 2])
-                    gray = UInt8((r * 30 + g * 59 + bl * 11) / 100)
-                    if inB {
-                        let ib = (y * b.width + x) * 4
-                        for c in 0..<4 where abs(Int(a.pixels[ia + c]) - Int(b.pixels[ib + c])) > Int(tolerance) {
-                            differs = true
-                            break
+        let tolerance = Int(tolerance)
+        // Raw buffers, and a pixel compared as one 32-bit word when nothing is tolerated: checked
+        // subscripts per channel made an unoptimized (Debug) build take seconds per screenshot.
+        a.pixels.withUnsafeBytes { aBytes in
+            b.pixels.withUnsafeBytes { bBytes in
+                out.withUnsafeMutableBytes { outBytes in
+                    let ra = aBytes.baseAddress!, rb = bBytes.baseAddress!
+                    let pa = ra.assumingMemoryBound(to: UInt8.self), pb = rb.assumingMemoryBound(to: UInt8.self)
+                    let po = outBytes.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                    for y in 0..<h {
+                        for x in 0..<w {
+                            let o = (y * w + x) * 4
+                            let inA = x < a.width && y < a.height, inB = x < b.width && y < b.height
+                            let ia = (y * a.width + x) * 4, ib = (y * b.width + x) * 4
+                            var differs = inA != inB
+                            if inA && inB {
+                                if tolerance == 0 {
+                                    differs = ra.loadUnaligned(fromByteOffset: ia, as: UInt32.self) != rb.loadUnaligned(fromByteOffset: ib, as: UInt32.self)
+                                } else {
+                                    differs = abs(Int(pa[ia]) - Int(pb[ib])) > tolerance || abs(Int(pa[ia + 1]) - Int(pb[ib + 1])) > tolerance
+                                        || abs(Int(pa[ia + 2]) - Int(pb[ib + 2])) > tolerance || abs(Int(pa[ia + 3]) - Int(pb[ib + 3])) > tolerance
+                                }
+                            }
+                            if differs {
+                                if inA && inB {
+                                    let delta = Lab.deltaE94(Lab(pa[ia], pa[ia + 1], pa[ia + 2]), Lab(pb[ib], pb[ib + 1], pb[ib + 2]))
+                                    maxDelta = max(maxDelta, delta)
+                                    if delta >= Lab.justNoticeable { perceptible += 1 }
+                                } else {
+                                    perceptible += 1
+                                }
+                                changed += 1
+                                minX = min(minX, x); minY = min(minY, y); maxX = max(maxX, x); maxY = max(maxY, y)
+                                po[o] = 255; po[o + 1] = 0; po[o + 2] = 255; po[o + 3] = 255
+                            } else {
+                                // Faded context so the changes stand out.
+                                let gray = inA ? (Int(pa[ia]) * 30 + Int(pa[ia + 1]) * 59 + Int(pa[ia + 2]) * 11) / 100 : 255
+                                let faded = UInt8(160 + gray * 95 / 255)
+                                po[o] = faded; po[o + 1] = faded; po[o + 2] = faded; po[o + 3] = 255
+                            }
                         }
                     }
-                }
-                if differs {
-                    if inA && inB {
-                        let ia = (y * a.width + x) * 4, ib = (y * b.width + x) * 4
-                        let delta = Lab.deltaE94(Lab(a.pixels, ia), Lab(b.pixels, ib))
-                        maxDelta = max(maxDelta, delta)
-                        if delta >= Lab.justNoticeable { perceptible += 1 }
-                    } else {
-                        perceptible += 1
-                    }
-                    changed += 1
-                    minX = min(minX, x); minY = min(minY, y); maxX = max(maxX, x); maxY = max(maxY, y)
-                    out[o] = 255; out[o + 1] = 0; out[o + 2] = 255; out[o + 3] = 255
-                } else {
-                    // Faded context so the changes stand out.
-                    let faded = UInt8(160 + Int(gray) * 95 / 255)
-                    out[o] = faded; out[o + 1] = faded; out[o + 2] = faded; out[o + 3] = 255
                 }
             }
         }
@@ -164,12 +172,12 @@ struct Lab {
     static let justNoticeable = 2.3
     var l: Double, a: Double, b: Double
 
-    init(_ pixels: [UInt8], _ i: Int) {
+    init(_ red: UInt8, _ green: UInt8, _ blue: UInt8) {
         func linear(_ v: UInt8) -> Double {
             let c = Double(v) / 255
             return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }
-        let r = linear(pixels[i]), g = linear(pixels[i + 1]), bl = linear(pixels[i + 2])
+        let r = linear(red), g = linear(green), bl = linear(blue)
         let x = (0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047
         let y = 0.2126 * r + 0.7152 * g + 0.0722 * bl
         let z = (0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883

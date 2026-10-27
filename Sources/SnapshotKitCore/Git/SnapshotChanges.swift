@@ -26,6 +26,9 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
     public var kind: SnapshotChangeKind
     /// A file git doesn't track yet: discarding the change deletes it.
     public var isUntracked: Bool
+    /// Not committed yet, whatever its kind: modified, added or deleted in the working tree or the
+    /// index, or untracked.
+    public var isUncommitted: Bool
     /// The working-tree file's size and modification time (nil when deleted): re-recording a snapshot
     /// that is already changed keeps its path and kind, so caches of its image key on this as well.
     public var contentStamp: String?
@@ -44,10 +47,12 @@ public struct SnapshotChange: Identifiable, Hashable, Sendable {
     /// library reads it.
     public var testName: String { SnapshotFile(path: path, byteSize: 0).testName }
 
-    public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false, contentStamp: String? = nil) {
+    /// `isUncommitted` defaults to what `kind` and `isUntracked` say; new and deleted files need it said.
+    public init(path: String, kind: SnapshotChangeKind, isUntracked: Bool = false, isUncommitted: Bool? = nil, contentStamp: String? = nil) {
         self.path = path
         self.kind = kind
         self.isUntracked = isUntracked
+        self.isUncommitted = isUncommitted ?? (kind == .uncommitted || isUntracked)
         self.contentStamp = contentStamp
     }
 }
@@ -162,7 +167,7 @@ extension Git {
                 kind = .deleted
             default: kind = sinceHead.contains(path) ? .uncommitted : .committed
             }
-            changes[path] = SnapshotChange(path: path, kind: kind)
+            changes[path] = SnapshotChange(path: path, kind: kind, isUncommitted: sinceHead.contains(path))
         }
         // An untracked file the base also has (re-created after this branch deleted it, or brought
         // back by a revert) is new only if the base doesn't have it; otherwise compare the content.

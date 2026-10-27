@@ -67,38 +67,38 @@ extension AppUITests {
             return (interactive, found)
         }
 
-        /// Audits the project pane showing `tab`.
-        func audit(_ scenario: AppFixtures.Scenario, tab: ProjectTab, compare: CompareMode = .sideBySide) -> (interactive: [String], unlabeled: [String]) {
+        /// Audits the project pane showing `section`.
+        func audit(_ scenario: AppFixtures.Scenario, section: ProjectSection, compare: CompareMode = .sideBySide) -> (interactive: [String], unlabeled: [String]) {
             AppFixtures.defaults.set(compare.rawValue, forKey: "compareMode")
             let store = AppFixtures.store()
             let app = AppModel(store: store)
             let project = AppFixtures.project(scenario, store: store)
-            project.tab = tab
+            project.section = section
             app.show(project)
             return AppFixtures.host(ProjectView(project: project).environment(app)) { audit($0) }
         }
 
         @Test func runTab() {
-            let result = audit(.failedRun, tab: .run)
-            #expect(result.interactive.count >= 5, "the walk should reach the run tab's controls")
+            let result = audit(.failedRun, section: .run)
+            #expect(result.interactive.count >= 5, "the walk should reach the Run view’s controls")
             #expect(result.unlabeled == [])
         }
 
         @Test func snapshotsTab() {
-            let result = audit(.library, tab: .snapshots)
+            let result = audit(.library, section: .library)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
 
         @Test func snapshotsGrid() {
             AppFixtures.defaults.set(LibraryLayout.grid.rawValue, forKey: "libraryLayout")
-            let result = audit(.library, tab: .snapshots)
+            let result = audit(.library, section: .library)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
 
         @Test func changesTab() {
-            let result = audit(.changes, tab: .changes)
+            let result = audit(.changes, section: .comparison)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }
@@ -152,16 +152,29 @@ extension AppUITests {
 
         /// A project row is one VoiceOver stop that names the project with its failing count, not a
         /// name and then a bare "3 failing" with nothing to say whose.
-        @Test func sidebarRowSaysWhoseFailuresTheyAre() {
+        @Test func switcherRowSaysWhoseFailuresTheyAre() {
             let app = AppModel(store: AppFixtures.store())
             app.failingCounts = ["/work/payments-ui": 3]
-            let found = spokenTexts(SidebarView().environment(app), size: CGSize(width: 260, height: 420))
+            let found = spokenTexts(ProjectSwitcherList(close: {}).environment(app), size: CGSize(width: 300, height: 340))
             #expect(found.contains("payments-ui, 3 failing"), "\(found)")
             #expect(!found.contains("3 failing"))
         }
 
+        /// A section reads by its full name, with what its count counts: "Changes vs develop, 4
+        /// changes", not "vs develop" and a bare number.
+        @Test func sidebarSectionsSayWhatTheyCount() {
+            let store = AppFixtures.store()
+            let app = AppModel(store: store)
+            app.show(AppFixtures.project(.failures, store: store))
+            let found = spokenTexts(SidebarView().environment(app), size: CGSize(width: 260, height: 420))
+            #expect(found.contains("Changes vs develop, 4 changes"), "\(found)")
+            #expect(found.contains("Last Run, 2 failing tests"), "\(found)")
+            #expect(found.contains("Run"), "\(found)")             // nothing to count
+            #expect(!found.contains("vs develop"))
+        }
+
         @Test func failuresTabWithSlider() {
-            let result = audit(.failures, tab: .failures, compare: .slider)
+            let result = audit(.failures, section: .lastRun, compare: .slider)
             #expect(result.interactive.count >= 5)
             #expect(result.unlabeled == [])
         }

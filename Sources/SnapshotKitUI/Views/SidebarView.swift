@@ -1,129 +1,366 @@
 import SnapshotKitCore
 import SwiftUI
 
+/// One project at a time: the switcher on top, and under it what there is to look at in it.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
-    private var pinned: [Project] { model.projects.filter { model.isPinned($0) } }
-    /// Recent is a shortcut into a long list; in a short one every project is in view already, and
-    /// listing some twice only doubled the rows.
-    static let recentsAbove = 8
-    private var recents: [Project] {
-        guard all.count > Self.recentsAbove else { return [] }
-        let recent = Set(model.store.settings.recents)
-        return model.projects.filter { recent.contains($0.path) && !model.isPinned($0) }
+    var body: some View {
+        // Above the list, not inset over it or a row of it: drawn off-screen (`--capture`), the list
+        // came out blank either way.
+        VStack(spacing: 0) {
+            ProjectSwitcher()
+                .padding(.horizontal, DS.Space.s)
+                .padding(.bottom, DS.Space.xs)
+            if let project = model.current {
+                SectionList(project: project)
+            } else {
+                // Keeps the sidebar's material while no project is open; the switcher says what to do.
+                List {}.listStyle(.sidebar)
+            }
+        }
     }
-    /// The projects not pinned, alphabetically, in a fixed place: opening one adds it to Recent but
-    /// doesn't take it out of here.
-    private var all: [Project] {
-        model.projects.filter { !model.isPinned($0) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
+}
 
-    /// In a long list recent projects appear twice, so their shortcut rows get their own tags: a
-    /// click there highlights that row, not both.
-    private static let shortcutTags = ["recent:"]
-    @State private var clickedTag: String?
+/// The open project's sections, grouped as they're used: what you changed, what the tests say,
+/// what CI says, and everything there is.
+struct SectionList: View {
+    let project: ProjectModel
 
-    private static func path(of tag: String) -> String {
-        for prefix in shortcutTags where tag.hasPrefix(prefix) { return String(tag.dropFirst(prefix.count)) }
-        return tag
-    }
-
-    private var selection: Binding<String?> {
-        Binding(
-            get: {
-                guard let path = model.selectedPath else { return nil }
-                return clickedTag.map(Self.path(of:)) == path ? clickedTag : path
-            },
-            set: { tag in
-                clickedTag = tag
-                model.selectedPath = tag.map(Self.path(of:))
-            })
-    }
+    /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
+    /// black and its vibrancy drops the dots' colour: there the selected row is filled by hand, grey as in
+    /// a window in the background, and the counts are flattened.
+    static var drawsOffScreen: Bool { DS.solidSurfaces || CaptureOptions.isCapturing }
 
     var body: some View {
-        List(selection: selection) {
-            if !pinned.isEmpty {
-                Section("Pinned") { rows(pinned) }
+        List(selection: Binding(get: { Self.drawsOffScreen ? nil : project.section },
+                                set: { if let section = $0 { project.section = section } })) {
+            Section("Workspace") {
+                row(.workingCopy)
+                row(.comparison)
             }
-            if !recents.isEmpty {
-                Section("Recent") { rows(recents, tagPrefix: "recent:") }
+            Section("Tests") {
+                row(.lastRun)
+                row(.run)
             }
-            // Not when every project is pinned: a heading over nothing.
-            if !all.isEmpty || model.projects.isEmpty || model.isScanning {
-                Section(model.isScanning ? "Projects (scanning…)" : "Projects") {
-                    if model.projects.isEmpty {
-                        Text("Drop a repository here, or use + below.")
-                            .font(DS.Font.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    rows(all)
+            // A merge request's failed jobs, each loaded when opened.
+            ForEach(project.ciJobGroups) { group in
+                Section {
+                    ForEach(group.jobs) { row(.ciJob($0.id)) }
+                } header: {
+                    Text(group.title).help(group.mergeRequest?.title ?? "")
                 }
+            }
+            Section("Library") {
+                row(.library)
+                // Only while there are orphans to clear away (or you're looking at them).
+                if project.isListed(.orphaned) { row(.orphaned) }
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Menu {
-                    Button("Add Project…") { model.addProjectFromPanel() }
-                    Button("Add Scan Folder…") { model.addScanRootFromPanel() }
-                    Button("Rescan Folders") { model.rescan() }
-                        .disabled(model.store.settings.scanRoots.isEmpty)
-                } label: {
-                    // Titled, so VoiceOver reads "Add" rather than the symbol's name.
-                    Label("Add", systemImage: "plus").labelStyle(.iconOnly)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Add a project or a folder to scan")
-                Spacer()
-                Button { model.showQuickSwitcher = true } label: {
-                    Label("⌘K", systemImage: "magnifyingglass")
-                        .labelStyle(.titleAndIcon)
-                        .font(DS.Font.caption)
-                }
-                .buttonStyle(.borderless)
-                .help("Projects and commands (⌘K)")
-                // Shows "⌘K"; says what it opens.
-                .accessibilityLabel("Go to Project or Command")
+    }
+
+    private func row(_ section: ProjectSection) -> some View {
+        Label {
+            HStack(spacing: DS.Space.s) {
+                Text(project.shortTitle(of: section)).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: DS.Space.xs)
+                badge(section)
             }
-            .padding(.horizontal, DS.Space.m)
-            // Level with the lists' footers.
-            .frame(height: DS.Bar.footer)
+        } icon: {
+            Image(systemName: Self.symbol(of: section))
+        }
+        .tag(section)
+        .listRowBackground(Self.drawsOffScreen && project.section == section
+            ? RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill(DS.Surface.selection).padding(.horizontal, DS.Space.s + 2)
+            : nil)
+        .help(project.title(of: section))
+        // One VoiceOver stop per item, by its full name: "Changes vs develop, 7 changes". The count
+        // is in the label: a sidebar row doesn't pass on an accessibility value.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([project.title(of: section), project.countLabel(of: section)].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// The count; for a CI job not loaded yet, a red dot (it failed), or a spinner while it loads; for
+    /// Run, a spinner while something runs.
+    @ViewBuilder
+    private func badge(_ section: ProjectSection) -> some View {
+        if section == .run, project.isRunning {
+            ProgressView().controlSize(.mini)
+        } else if case .ciJob(let id) = section, project.count(of: section) == nil {
+            if project.loadingCIJobs.contains(id) {
+                ProgressView().controlSize(.mini)
+            } else {
+                Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
+            }
+        } else if let count = project.count(of: section), count > 0 {
+            if Self.drawsOffScreen {
+                // Off-screen the sidebar's vibrancy drops the dot's colour; flattened, the count keeps it.
+                SectionCount(count: count, color: Self.color(of: section), textColor: Color(nsColor: .secondaryLabelColor))
+                    .drawingGroup()
+            } else {
+                SectionCount(count: count, color: Self.color(of: section))
+            }
         }
     }
 
-    @ViewBuilder
-    private func rows(_ projects: [Project], tagPrefix: String = "") -> some View {
-        ForEach(projects) { project in
-            Label {
-                HStack(spacing: DS.Space.s) {
-                    Text(project.name).fontWeight(.medium).lineLimit(1)
-                    Spacer(minLength: DS.Space.xs)
-                    // A failing count is status, so it carries the failed colour (the system
-                    // badge would be a plain grey number).
-                    if let failing = model.failingCounts[project.path], failing > 0 {
-                        FailingCount(count: failing)
-                    }
-                }
-            } icon: {
-                ProjectMonogram(name: project.name)
-            }
-            // One VoiceOver stop per project, its failing count included ("Chat, 4 failing").
-            .accessibilityElement(children: .combine)
-            // The sidebar keeps the system's selection: on its material it is already as quiet
-            // as the lists' (about +15 levels in dark, like Linear's).
-            .help(project.path.abbreviatingWithTildeInPath
-                  + (model.failingCounts[project.path].map { " — \($0) failing in the last run" } ?? ""))
-            .tag(tagPrefix + project.path)
-            .contextMenu {
-                Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
-                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }
-                Divider()
-                Button("Remove from List") { model.remove(project) }
-            }
+    static func symbol(of section: ProjectSection) -> String {
+        switch section {
+        case .workingCopy: "square.and.pencil"
+        case .comparison: "arrow.triangle.branch"
+        case .lastRun: "testtube.2"
+        case .ciJob: "server.rack"
+        case .run: "terminal"
+        case .library: "photo.stack"
+        case .orphaned: "questionmark.square.dashed"
         }
+    }
+
+    /// Counts that need you carry their status colour, as a project's failing count does; the
+    /// others are quantities.
+    static func color(of section: ProjectSection) -> Color? {
+        switch section {
+        case .workingCopy: DS.Status.color(for: .uncommitted)
+        case .lastRun, .ciJob: DS.Status.failed
+        case .comparison, .run, .library, .orphaned: nil
+        }
+    }
+}
+
+/// A sidebar item's count, with a status dot when it is one.
+struct SectionCount: View {
+    var count: Int
+    var color: Color?
+    /// The number's colour, when the secondary style has nothing to resolve against (a flattened badge).
+    var textColor: Color?
+
+    var body: some View {
+        HStack(spacing: DS.Space.xs) {
+            if let color { Circle().fill(color).frame(width: DS.Status.dot, height: DS.Status.dot) }
+            Text("\(count)").monospacedDigit()
+                .foregroundStyle(textColor.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+        }
+        .font(DS.Font.caption)
+    }
+}
+
+/// The open project and its branch, at the top of the sidebar; a click lists the others.
+struct ProjectSwitcher: View {
+    @Environment(AppModel.self) private var model
+    @State private var isPresented = false
+
+    var body: some View {
+        Button { isPresented = true } label: {
+            HStack(spacing: DS.Space.s) {
+                if let project = model.current {
+                    ProjectMonogram(name: project.project.name)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(project.project.name).fontWeight(.semibold).lineLimit(1)
+                        if let branch = project.branchLabel {
+                            Text(branch).font(DS.Font.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                } else {
+                    Text(model.projects.isEmpty ? "Add a Project" : "Choose a Project").fontWeight(.semibold)
+                }
+                Spacer(minLength: DS.Space.xs)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, DS.Space.s)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
+            .fill(isPresented ? DS.Surface.selection : .clear))
+        .help("Switch project (⌘K also finds projects and commands)")
+        .accessibilityLabel(model.current.map { "Project: \($0.project.name)" } ?? "Choose a project")
+        .accessibilityValue(model.current?.branchLabel ?? "")
+        .accessibilityHint("Shows the other projects")
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            ProjectSwitcherList(close: { isPresented = false })
+                .environment(model)
+        }
+    }
+}
+
+/// The projects to switch to: a search field, then pinned ones and the rest by name, and ways to
+/// add more. Arrow keys and Return work from the field, as in the ⌘K palette.
+struct ProjectSwitcherList: View {
+    @Environment(AppModel.self) private var model
+    var close: () -> Void
+    @State private var query = ""
+    @State private var highlighted = 0
+    @FocusState private var focused: Bool
+
+    private var pinned: [Project] { model.projects.filter { model.isPinned($0) } }
+    private var others: [Project] {
+        model.projects.filter { !model.isPinned($0) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+    private var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// The projects in the order shown, which the highlight steps through.
+    private var shown: [Project] {
+        guard isSearching else { return pinned + others }
+        return PaletteItem.ranked(projects: model.projects, commands: [], query: query).compactMap {
+            if case .project(let project) = $0 { project } else { nil }
+        }
+    }
+    static let rowHeight: CGFloat = 30
+
+    var body: some View {
+        let shown = shown
+        VStack(spacing: 0) {
+            HStack(spacing: DS.Space.s) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                TextField("", text: $query)
+                    .textFieldStyle(.plain)
+                    .placeholder("Find a project", shown: query.isEmpty)
+                    .accessibilityLabel("Find a project")
+                    .focused($focused)
+                    .onSubmit { open(at: highlighted, in: shown) }
+                    .onKeyPress(.downArrow) { move(1, in: shown); return .handled }
+                    .onKeyPress(.upArrow) { move(-1, in: shown); return .handled }
+            }
+            .fieldChrome()
+            .padding(DS.Space.s)
+            Divider()
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if isSearching {
+                            rows(shown, from: 0)
+                        } else {
+                            if !pinned.isEmpty {
+                                header("Pinned")
+                                rows(pinned, from: 0)
+                            }
+                            if !others.isEmpty || model.isScanning {
+                                header(model.isScanning ? "Projects (scanning…)" : "Projects")
+                                rows(others, from: pinned.count)
+                            }
+                        }
+                        if shown.isEmpty {
+                            Text(isSearching ? "No matching projects" : "No projects yet. Drop a repository on the window, or add one below.")
+                                .font(DS.Font.secondary)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(DS.Space.s)
+                        }
+                    }
+                    .padding(DS.Space.xs)
+                }
+                // As tall as its rows, up to twelve: no empty panel under three projects.
+                .frame(height: min(CGFloat(max(shown.count, 1)) * Self.rowHeight + (isSearching ? 0 : 2 * Self.rowHeight),
+                                   12 * Self.rowHeight) + DS.Space.s)
+                .onChange(of: highlighted) { _, value in proxy.scrollTo(value) }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 0) {
+                action("Add Project…") { model.addProjectFromPanel() }
+                action("Add Scan Folder…") { model.addScanRootFromPanel() }
+                if !model.store.settings.scanRoots.isEmpty {
+                    action("Rescan Folders") { model.rescan() }
+                }
+            }
+            .padding(DS.Space.xs)
+        }
+        .frame(width: 300)
+        .onAppear {
+            highlighted = shown.firstIndex { $0.path == model.selectedPath } ?? 0
+            focused = true
+        }
+        .onChange(of: query) { _, _ in highlighted = 0 }
+    }
+
+    private func header(_ title: String) -> some View {
+        Text(title)
+            .font(DS.Font.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, DS.Space.s)
+            .padding(.top, DS.Space.s)
+            .padding(.bottom, DS.Space.xxs)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func rows(_ projects: [Project], from offset: Int) -> some View {
+        ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+            ProjectSwitcherRow(project: project, failing: model.failingCounts[project.path] ?? 0,
+                               current: project.path == model.selectedPath, highlighted: offset + index == highlighted)
+                .id(offset + index)
+                .onTapGesture { open(project) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { open(project) }
+                .help(project.path.abbreviatingWithTildeInPath)
+                .contextMenu {
+                    Button(model.isPinned(project) ? "Unpin" : "Pin") { model.togglePin(project) }
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }
+                    Divider()
+                    Button("Remove from List") { model.remove(project) }
+                }
+        }
+    }
+
+    /// One of the ways to add projects, under the list like a menu's last items. The popover closes
+    /// first: each opens a panel.
+    private func action(_ title: String, run: @escaping () -> Void) -> some View {
+        Button {
+            close()
+            run()
+        } label: {
+            Text(title)
+                .padding(.horizontal, DS.Space.s)
+                .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func move(_ delta: Int, in shown: [Project]) {
+        guard !shown.isEmpty else { return }
+        highlighted = (highlighted + delta + shown.count) % shown.count
+        // Focus stays in the field, so VoiceOver wouldn't otherwise say where the highlight went.
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: shown[highlighted].name])
+    }
+
+    private func open(at index: Int, in shown: [Project]) {
+        guard shown.indices.contains(index) else { return }
+        open(shown[index])
+    }
+
+    private func open(_ project: Project) {
+        close()
+        model.selectedPath = project.path
+    }
+}
+
+/// A project in the switcher: monogram, name, and its failing count from the last run.
+struct ProjectSwitcherRow: View {
+    var project: Project
+    var failing: Int
+    var current: Bool
+    var highlighted: Bool
+
+    var body: some View {
+        HStack(spacing: DS.Space.s) {
+            ProjectMonogram(name: project.name)
+            Text(project.name).fontWeight(current ? .semibold : .regular).lineLimit(1)
+            Spacer(minLength: DS.Space.s)
+            // A failing count is status, so it carries the failed colour.
+            if failing > 0 { FailingCount(count: failing) }
+        }
+        .padding(.horizontal, DS.Space.s)
+        .frame(height: ProjectSwitcherList.rowHeight)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
+            .fill(highlighted ? DS.Surface.selection : .clear))
+        .contentShape(Rectangle())
+        // One VoiceOver stop per project, its failing count included ("Chat, 4 failing").
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(current ? .isSelected : [])
     }
 }
 
