@@ -160,16 +160,16 @@ extension AppUITests {
             #expect(!found.contains("3 failing"))
         }
 
-        /// A section reads by its full name and what its count counts: "Changes vs develop", not "vs
-        /// develop"; "2 failing tests", not a bare number.
+        /// A section reads by its full name, with what its count counts: "Changes vs develop, 4
+        /// changes", not "vs develop" and a bare number.
         @Test func sidebarSectionsSayWhatTheyCount() {
             let store = AppFixtures.store()
             let app = AppModel(store: store)
             app.show(AppFixtures.project(.failures, store: store))
             let found = spokenTexts(SidebarView().environment(app), size: CGSize(width: 260, height: 420))
-            #expect(found.contains("Changes vs develop"), "\(found)")
-            #expect(found.contains("Last Run"), "\(found)")
-            #expect(found.contains("2 failing tests"), "\(found)")
+            #expect(found.contains("Changes vs develop, 4 changes"), "\(found)")
+            #expect(found.contains("Last Run, 2 failing tests"), "\(found)")
+            #expect(found.contains("Run"), "\(found)")             // nothing to count
             #expect(!found.contains("vs develop"))
         }
 

@@ -56,10 +56,10 @@ struct SectionList: View {
         }
         .tag(section)
         .help(project.title(of: section))
-        // One VoiceOver stop per item, by its full name: "Changes vs develop, 7 changes".
+        // One VoiceOver stop per item, by its full name: "Changes vs develop, 7 changes". The count
+        // is in the label: a sidebar row doesn't pass on an accessibility value.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(project.title(of: section))
-        .accessibilityValue(project.countLabel(of: section) ?? "")
+        .accessibilityLabel([project.title(of: section), project.countLabel(of: section)].compactMap { $0 }.joined(separator: ", "))
     }
 
     static func symbol(of section: ProjectSection) -> String {
