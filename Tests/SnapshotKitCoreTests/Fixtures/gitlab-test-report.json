@@ -1,0 +1,89 @@
+{
+  "total_time": 9.8,
+  "total_count": 5,
+  "success_count": 2,
+  "failed_count": 3,
+  "skipped_count": 0,
+  "error_count": 0,
+  "test_suites": [
+    {
+      "name": "snapshotTest",
+      "total_time": 1.15,
+      "total_count": 3,
+      "success_count": 1,
+      "failed_count": 2,
+      "skipped_count": 0,
+      "error_count": 0,
+      "suite_error": null,
+      "test_cases": [
+        {
+          "status": "failed",
+          "name": "testPayButton",
+          "classname": "ShopSnapshotTests.CardTests",
+          "file": null,
+          "execution_time": 0.512,
+          "system_output": "Snapshot does not match reference.\n\n@−\n\"file:///Users/ci-runner/builds/x1Y2z3/0/mobile/ios/shop/Example/ShopSnapshotTests/__Snapshots__/CardTests/testPayButton.1.png\"\n@+\n\"file:///Users/ci-runner/Library/Developer/CoreSimulator/Devices/7F3C1E2A-0000-4000-8000-000000000001/data/tmp/CardTests/testPayButton.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.\nThe percentage of pixels that match 0.9935 is less than required 1.0\nThe lowest perceptual color precision 0.365 is less than required 0.98",
+          "stack_trace": null,
+          "attachment_url": null,
+          "recent_failures": null
+        },
+        {
+          "status": "success",
+          "name": "testPrice",
+          "classname": "ShopSnapshotTests.CardTests",
+          "file": null,
+          "execution_time": 0.233,
+          "system_output": null,
+          "stack_trace": null,
+          "attachment_url": null,
+          "recent_failures": null
+        },
+        {
+          "status": "failed",
+          "name": "testSummary",
+          "classname": "CheckoutTests",
+          "file": null,
+          "execution_time": 0.402,
+          "system_output": "Snapshot \"dark\" does not match reference.\n\n@−\n\"file:///Users/ci-runner/builds/x1Y2z3/0/mobile/ios/shop/Example/ShopSnapshotTests/__Snapshots__/CheckoutTests/testSummary.dark.png\"\n@+\n\"file:///Users/ci-runner/Library/Developer/CoreSimulator/Devices/7F3C1E2A-0000-4000-8000-000000000001/data/tmp/CheckoutTests/testSummary.dark.png\"\n\nNewly-taken snapshot@(390.0, 844.0) does not match reference@(390.0, 800.0).",
+          "stack_trace": null,
+          "attachment_url": null,
+          "recent_failures": null
+        }
+      ]
+    },
+    {
+      "name": "unitTests",
+      "total_time": 8.65,
+      "total_count": 2,
+      "success_count": 1,
+      "failed_count": 1,
+      "skipped_count": 0,
+      "error_count": 0,
+      "suite_error": null,
+      "test_cases": [
+        {
+          "status": "failed",
+          "name": "testTotals",
+          "classname": "ShopTests.CartTests",
+          "file": null,
+          "execution_time": 0.01,
+          "system_output": "XCTAssertEqual failed: (\"12\") is not equal to (\"13\")",
+          "stack_trace": null,
+          "attachment_url": null,
+          "recent_failures": null
+        },
+        {
+          "status": "success",
+          "name": "testEmpty",
+          "classname": "ShopTests.CartTests",
+          "file": null,
+          "execution_time": 0.01,
+          "system_output": null,
+          "stack_trace": null,
+          "attachment_url": null,
+          "recent_failures": null
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 | ⌘K | Go to a project or run a command (the palette) |
 | ⌘O | Add a project |
 | ⇧⌘O | Import a result bundle (`.xcresult`, e.g. a CI artifact) |
+| ⇧⌘L | Load a failed GitLab CI job |
 | ⌘, | Settings |
 | ⌥⌘1 | Snapshots tab |
 | ⌥⌘2 | Changes tab |

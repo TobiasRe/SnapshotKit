@@ -112,6 +112,12 @@ struct FailureSource: Equatable {
     var host: String
     /// Local result bundle, when there is one (not for remote runs).
     var resultBundle: URL?
+    /// The CI job they were loaded from.
+    var jobURL: URL?
+    /// More on where they came from: the merge request and commit of a CI job.
+    var detail: String?
+    /// What couldn't be fetched with them, such as images gone from a CI runner.
+    var notes: [String] = []
 }
 
 @MainActor @Observable
@@ -151,6 +157,8 @@ final class ProjectModel {
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
+    /// Set by Load Failed CI Job… (menu, ⌘K, the Failures tab); the Failures tab asks for the job.
+    var askForCIJob = false
     var libraryScope = LibraryScope.all {
         didSet { if oldValue != libraryScope { keepSnapshotSelectionShown() } }
     }
@@ -348,6 +356,7 @@ final class ProjectModel {
             guard generation == reloadGeneration else { return }
             // With the configuration, so the window never shows one without the other.
             currentBranch = loaded.branch
+            if ciCheckedBranch != loaded.branch { checkCI() }
             branches = loaded.branches
             modules = loaded.modules
             setHistory(loaded.history)
@@ -1116,6 +1125,111 @@ final class ProjectModel {
         }
     }
 
+    // MARK: CI
+
+    /// The checked-out branch's merge request and the failed jobs of its latest pipeline, offered on the
+    /// Failures tab.
+    private(set) var ciDetection: CIDetection?
+    /// The job the failures were loaded from, which isn't offered again.
+    private(set) var loadedCIJobID: Int?
+    private(set) var isLoadingCI = false
+    /// The failed jobs the Failures tab offers to load.
+    var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { $0.id != loadedCIJobID } }
+
+    /// How the model reaches GitLab and the runners, off the main thread; tests replace them.
+    @ObservationIgnored var detectCI: @Sendable (URL) throws -> CIDetection? = { try CIDetector.detect(repository: $0) }
+    /// A job's URL, or its number in the repository's project, as the job.
+    @ObservationIgnored var resolveCI: @Sendable (String, URL) throws -> GitLabLink = { try CIDetector.job($0, repository: $1) }
+    /// Loads a job with the CI login into a folder.
+    @ObservationIgnored var importCI: @Sendable (GitLabLink, String?, URL, URL) throws -> CIImport = { link, login, repository, directory in
+        try CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repository, login: login).load(link, into: directory)
+    }
+    @ObservationIgnored private var ciGeneration = 0
+    /// The branch the last check was for: a check runs when a project opens and when its branch changes.
+    @ObservationIgnored private var ciCheckedBranch: String??
+
+    /// Looks for failed jobs of the branch's merge request. Quiet when there is none, or no GitLab or access
+    /// to it: the banner is an offer.
+    @discardableResult
+    func checkCI() -> Task<Void, Never> {
+        ciGeneration += 1
+        let generation = ciGeneration, repository = project.url, detect = detectCI
+        ciCheckedBranch = currentBranch
+        return Task {
+            let found = await offCooperativePool { try? detect(repository) }
+            guard generation == ciGeneration else { return }
+            ciDetection = found
+        }
+    }
+
+    /// Loads the failed CI job `text` names: its URL, or its number in this project's GitLab.
+    @discardableResult
+    func loadCIJob(url text: String) -> Task<Void, Never> {
+        let resolve = resolveCI, repository = project.url
+        return loadCI("the CI job") { try resolve(text, repository) }
+    }
+
+    @discardableResult
+    func loadCIJob(_ job: GitLabJob) -> Task<Void, Never> {
+        guard let detection = ciDetection else { return Task {} }
+        let link = detection.link(to: job)
+        return loadCI("\(job.name) #\(job.id)") { link }
+    }
+
+    /// Shows a CI job's failures as a run's: what failed, the references at its commit, the images its runner
+    /// took. What couldn't be fetched is noted on the Failures tab, not a failure of the whole load.
+    private func loadCI(_ name: String, resolve: @escaping @Sendable () throws -> GitLabLink) -> Task<Void, Never> {
+        // A run ending would replace what was loaded meanwhile.
+        guard !isRunning else {
+            notify("Load the CI job once the run has finished.", isError: true)
+            return Task {}
+        }
+        guard !isLoadingCI else { return Task {} }
+        isLoadingCI = true
+        notify("Loading \(name)…")
+        let repository = project.url, login = settings.ciLogin, start = tab, load = importCI
+        let directory = scratchDirectory.appendingPathComponent("ci/\(UUID().uuidString)", isDirectory: true)
+        return Task {
+            let result = await offCooperativePool { Result { try load(try resolve(), login, repository, directory) } }
+            isLoadingCI = false
+            switch result {
+            case .success(let ci):
+                show(ci)
+                let count = ci.summary.failed
+                notify("Loaded \(count) failing test\(count == 1 ? "" : "s") from \(ci.job.name) #\(ci.job.id)."
+                       + (ci.notes.isEmpty ? "" : " Not everything could be fetched; the Failures tab says what."),
+                       action: .showFailures)
+                moveOn(to: .failures, from: start)
+            case .failure(let error):
+                notify("Couldn’t load \(name): \(error.localizedDescription)", isError: true)
+            }
+        }
+    }
+
+    private func show(_ ci: CIImport) {
+        let runner = ci.job.runner?.description ?? ci.link.host
+        // Without a commit: another machine's results tell nothing about flakiness here.
+        let runs = RunHistory(repository: project.url)
+        runs.append(RunRecord(kind: .imported, host: runner, commit: nil, branch: nil, dirty: false, summary: ci.summary,
+                              passed: ci.passed, failed: ci.summary.failed, skipped: ci.skipped, resultBundle: nil))
+        setHistory(runs.load())
+        lastFailingSuites = ci.summary.failingSuites
+        // Verdicts belong to the runs they came from.
+        flakeResults = []
+        loadedCIJobID = ci.job.id
+        let detail = [ci.mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }].compactMap { $0 }
+        setFailures(suites: ci.summary.failingSuites, images: ci.images,
+                    source: FailureSource(label: "\(ci.job.name) #\(ci.job.id)", date: ci.job.finished ?? Date(), host: runner,
+                                          jobURL: ci.link.jobURL.flatMap(URL.init(string:)),
+                                          detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes))
+    }
+
+    /// The SSH login on CI runners. Saved without reloading the configuration, which it isn't part of.
+    func setCILogin(_ login: String?) {
+        let login = login?.trimmingCharacters(in: .whitespaces)
+        store.updateSettings(for: project) { $0.ciLogin = login?.isEmpty == false ? login : nil }
+    }
+
     // MARK: Operations
 
     private func begin(_ op: RunOperation) -> Bool {
@@ -1711,6 +1825,8 @@ struct ProjectFixture {
     var failureSource: FailureSource?
     var flakeResults: [FlakeResult] = []
     var historyFlaky: [FlakySignal] = []
+    var ciDetection: CIDetection?
+    var loadedCIJobID: Int?
     var changeSet: SnapshotChangeSet?
     var changeImages: [String: (Data?, Data?)] = [:]
     var viewedChanges: Set<String> = []
@@ -1749,6 +1865,8 @@ extension ProjectModel {
         failures = f.failures
         diagnoses = Self.diagnose(f.failures)
         failureSource = f.failureSource
+        ciDetection = f.ciDetection
+        loadedCIJobID = f.loadedCIJobID
         selectedFailureID = displayedFailures.first?.id
         changeSet = f.changeSet
         changesError = f.changesError

@@ -27,6 +27,17 @@ import Testing
         #expect(Outcome(try snapkit(argument)) == Outcome(status: 0, stdout: "snapkit \(SnapshotKitVersion.current)\n"))
     }
 
+    /// Without a GitLab remote there is no merge request to ask about, nor a project for a job number.
+    @Test func ciFailuresNeedAJob() throws {
+        let repo = try TempRepo()
+        try repo.write("README.md", "x")
+        try repo.commitAll("init")
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--ci")) == failure(
+            "No failed CI job to show: the branch has no open merge request, or nothing failed in its latest pipeline. Pass --ci URL."))
+        #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--ci", "4567")) == failure(
+            "“4567” isn’t a GitLab job’s URL (https://gitlab.example.com/group/project/-/jobs/123)."))
+    }
+
     /// The app's version is a build setting of SnapshotKit.xcodeproj, in every configuration.
     @Test func appHasTheSameVersion() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -65,6 +76,8 @@ import Testing
         UsageCase(arguments: ["flaky", "--repo", "REPO", "--iterations", "1"], message: "--iterations needs a whole number of at least 2, not '1'"),
         UsageCase(arguments: ["rerecord", "--repo", "REPO", "--suite", "CardTests"],
                   message: "--suite CardTests: name its test target too, as in --suite AppTests/CardTests"),
+        UsageCase(arguments: ["failures", "--repo", "REPO", "--no-images"], message: "--ci-login and --no-images go with --ci"),
+        UsageCase(arguments: ["failures", "--repo", "REPO", "--ci-login", "builder"], message: "--ci-login and --no-images go with --ci"),
     ])
     func wrongArgumentsExitWith64(_ usage: UsageCase) throws {
         var arguments = usage.arguments

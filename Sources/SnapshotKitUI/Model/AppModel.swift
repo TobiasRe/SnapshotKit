@@ -321,6 +321,13 @@ final class AppModel {
         if panel.runModal() == .OK, let url = panel.url { current?.importResultBundle(url) }
     }
 
+    /// Load Failed CI Job… (⇧⌘L): the Failures tab asks for the job's URL.
+    func loadCIJobFromPrompt() {
+        guard let project = current else { return }
+        project.tab = .failures
+        project.askForCIJob = true
+    }
+
     /// Shows a prepared project model (snapshot tests and previews).
     func show(_ model: ProjectModel) {
         models[model.project.path] = model

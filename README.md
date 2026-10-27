@@ -28,7 +28,8 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
   snapshots and changes into a review, or copy them or a side-by-side comparison.
 - **Failing and flaky tests** are part of the same picture: reference vs. actual vs. difference (also for an
   `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
-  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs.
+  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs. A failed GitLab
+  CI job of the branch’s merge request loads the same way, with the images copied from its runner.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 
 ## How it fits with swift-snapshot-testing
@@ -92,6 +93,7 @@ last run.
 | ⌃⌘R | Run on the remote machine |
 | ⌘. | Cancel |
 | ⇧⌘O | Import an `.xcresult` (e.g. a CI artifact) |
+| ⇧⌘L | Load a failed GitLab CI job |
 | ⌘K | Go to a project or run a command |
 | ⌘F | Filter the list (Escape clears the filter, then leaves the field) |
 | ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |

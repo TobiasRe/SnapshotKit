@@ -22,7 +22,7 @@ Install it from the release (`snapkit-<version>-macos-arm64.zip`) or build it wi
 | [`record`](#record) | re-record the tests of matching snapshots, then verify |
 | [`rerecord`](#rerecord) | re-record the failing suites of the last run, then verify |
 | [`flaky`](#flaky) | run the failing tests repeatedly and classify them |
-| [`failures`](#failures) | list and diagnose failures of the last run or an `.xcresult` |
+| [`failures`](#failures) | list and diagnose failures of the last run, an `.xcresult` or a GitLab CI job |
 | [`history`](#history) | recent runs and flaky tests |
 | [`diff`](#diff) | compare two PNGs and diagnose the difference |
 | [`open`](#open) | compare two PNGs in the app (the diff tool for swift-snapshot-testing) |
@@ -285,6 +285,7 @@ instead of verdicts and exits 1.
 
 ```
 snapkit failures [--repo PATH] [--xcresult PATH] [--out DIR]
+snapkit failures --ci [URL] [--repo PATH] [--ci-login USER] [--no-images] [--out DIR]
 ```
 
 Lists the failing tests of the last run, or of an `.xcresult` (for example a CI artifact), with their images and
@@ -328,7 +329,29 @@ pass with …*: `perceptualPrecision: …`, `precision: …`, or both (see
 | Option | |
 |---|---|
 | `--xcresult PATH` | read this result bundle instead of the last run’s |
-| `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`). Only the files of an earlier export there are replaced. |
+| `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`; with `--ci`, `snapkit-ci-<job>` in the temporary folder). Only the files of an earlier export there are replaced. |
+| `--ci [URL]` | a GitLab CI job’s failures: the job at `URL`, else the failed job of the branch’s merge request |
+| `--ci-login USER` | the SSH login on the runner, for this run (a user, or `user@host`); default: the project’s **CI login** |
+| `--no-images` | with `--ci`: don’t copy the images from the runner |
+
+With `--ci`, it lists the failing tests of a GitLab CI job instead: the one at `URL` (or that job number in the
+project), else the failed job of the branch’s open merge request (the snapshot job, when several failed). Each
+comes with its reference at the commit the job ran, the image the runner took, copied over SSH, and what the
+failure message measured. What couldn’t be fetched follows as notes. See
+[Failures from GitLab CI](failures.md#failures-from-gitlab-ci) for what it needs.
+
+```
+snapshotTest #4567 · !12 · 3f1c2a9b · ci-mac-1
+https://gitlab.example.com/mobile/ios/shop/-/jobs/4567
+ShopSnapshotTests/CardTests
+  ✘ testPayButton()  (1/1 repetitions failed)
+    reference: Example/ShopSnapshotTests/__Snapshots__/CardTests/testPayButton.1.png
+    measured:   0.65% of pixels differ, none may · worst pixel matches 0.365, 0.98 required
+    failure:    /…/snapkit-ci-4567/actual/…/CardTests/testPayButton.1.png
+    difference: —
+    Visible change in a 64×20 area at 24, 180.
+note: 1 of the 2 images the tests took is no longer on ci-mac-1: it removes them when its next job starts. Run the job again to see it.
+```
 
 An imported bundle is added to the history (once). No failures: *No failing tests in ….* Without a local bundle:
 *No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).* If the last run’s bundle has been removed:

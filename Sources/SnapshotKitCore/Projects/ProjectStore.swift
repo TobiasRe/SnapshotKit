@@ -7,11 +7,15 @@ public struct ProjectSettings: Codable, Equatable, Sendable {
     public var remoteHost: String?
     /// The module picked in the run scope picker; nil means "what CI runs".
     public var module: String?
+    /// The SSH login on CI runners, to copy the images a failed job's tests took: a user, `user@host`, or
+    /// nil for ssh's default (or `~/.ssh/config`).
+    public var ciLogin: String?
 
-    public init(baseBranch: String? = nil, remoteHost: String? = nil, module: String? = nil) {
+    public init(baseBranch: String? = nil, remoteHost: String? = nil, module: String? = nil, ciLogin: String? = nil) {
         self.baseBranch = baseBranch
         self.remoteHost = remoteHost
         self.module = module
+        self.ciLogin = ciLogin
     }
 }
 

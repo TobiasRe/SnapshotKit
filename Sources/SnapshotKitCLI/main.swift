@@ -21,6 +21,9 @@ commands:
   flaky      [--repo P] [--suite ID]... [--iterations N] [--remote [HOST]] [--verbose]
                                                  run those suites N times; exits 1 if a test is flaky or always fails
   failures   [--repo P] [--xcresult PATH] [--out DIR]   list failures, diagnose each diff, show recent runs
+             [--ci [URL]] [--ci-login USER] [--no-images]
+                                                 or a failed GitLab CI job's (URL, or the branch's merge request's),
+                                                 with the references at its commit and the images its runner took
   changes    [--repo P] [--base BRANCH] [--tip] [--filter TEXT]
                                                  snapshot images that differ from the base branch
   history    [--repo P] [TEST]                   recent runs and flaky tests; TEST = Bundle/Suite/test()
@@ -48,7 +51,8 @@ let commands: [String: (options: [String: CommandArguments.Option], positional: 
     "run": (["--repo": .value, "--only": .value, "--module": .value, "--iterations": .value, "--remote": .optionalValue, "--verbose": .flag], 0...0),
     "rerecord": (["--repo": .value, "--suite": .value, "--no-verify": .flag, "--remote": .optionalValue, "--verbose": .flag], 0...0),
     "flaky": (["--repo": .value, "--suite": .value, "--iterations": .value, "--remote": .optionalValue, "--verbose": .flag], 0...0),
-    "failures": (["--repo": .value, "--xcresult": .value, "--out": .value], 0...0),
+    "failures": (["--repo": .value, "--xcresult": .value, "--out": .value, "--ci": .optionalValue, "--ci-login": .value,
+                  "--no-images": .flag], 0...0),
     "changes": (["--repo": .value, "--base": .value, "--tip": .flag, "--filter": .value], 0...0),
     "history": (["--repo": .value], 0...1),
     "restore": (["--repo": .value, "--force": .flag], 0...0),
@@ -582,6 +586,11 @@ func main() async {
         exit(verdicts.allSatisfy { $0.verdict == .passes } ? 0 : 1)
 
     case "failures":
+        if o.has("--ci") {
+            ciFailures(o)
+            break
+        }
+        if o.has("--ci-login") || o.has("--no-images") { usageError("--ci-login and --no-images go with --ci") }
         let ctx = context(o)
         let last = LastRun.load(repository: ctx.repository)
         let out = o.value("--out").map { URL(fileURLWithPath: $0) }
@@ -617,33 +626,7 @@ func main() async {
             } else {
                 fail("No local result bundle. Pass --xcresult PATH (e.g. a CI artifact).")
             }
-            for suite in failingSuites {
-                say(color("31", suite.identifier))
-                for test in suite.tests where test.outcome == .failed {
-                    say("  ✘ \(test.name)  (\(test.failedRepetitions)/\(test.repetitions.count) repetitions failed)")
-                    // Every reference once: repetitions and devices repeat them, a parameterized test's cases don't.
-                    var references: [String] = []
-                    for path in test.failureMessages.flatMap({ FailureAttachments.referencePaths(in: $0, repository: ctx.repository) })
-                    where !references.contains(path) {
-                        references.append(path)
-                        say("    reference: \(path)")
-                    }
-                    let shown = images.filter { $0.belong(to: test, in: suite) && $0.repetition == 1 }
-                    let severalDevices = Set(shown.map(\.deviceID)).count > 1, severalCases = Set(shown.map(\.arguments)).count > 1
-                    for img in shown {
-                        // Say whose images these are: which device, which case of a parameterized test.
-                        let owner = [severalDevices ? img.device : nil, severalCases ? img.arguments?.joined(separator: ", ") : nil].compactMap { $0 }
-                        if !owner.isEmpty { say("    " + owner.joined(separator: " · ") + ":") }
-                        say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
-                        if let ref = img.reference.flatMap({ try? readImage($0.path) }), let act = img.failure.flatMap({ try? readImage($0.path) }) {
-                            let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))
-                            say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
-                        }
-                    }
-                    let timeline = RunHistory.timeline(for: suite.onlyTestingIdentifier(of: test), in: RunHistory(repository: ctx.repository).load())
-                    if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
-                }
-            }
+            printFailures(failingSuites, images: images, repository: ctx.repository)
             if failingSuites.isEmpty { say("No failing tests in \(bundle.lastPathComponent).") }
             if let summary = imported {
                 RunHistory(repository: ctx.repository).append(RunRecord(kind: .imported, host: bundle.lastPathComponent, commit: nil, branch: nil, dirty: false,
@@ -756,3 +739,77 @@ func main() async {
 }
 
 await main()
+
+/// Each failing test: its references, its images with a diagnosis of the difference, and its recent runs.
+func printFailures(_ failingSuites: [SuiteResult], images: [SnapshotFailureImages], repository: URL) {
+    for suite in failingSuites {
+        say(color("31", suite.identifier))
+        for test in suite.tests where test.outcome == .failed {
+            say("  ✘ \(test.name)  (\(test.failedRepetitions)/\(test.repetitions.count) repetitions failed)")
+            // Every reference once: repetitions and devices repeat them, a parameterized test's cases don't.
+            var references: [String] = []
+            for path in test.failureMessages.flatMap({ FailureAttachments.referencePaths(in: $0, repository: repository) })
+            where !references.contains(path) {
+                references.append(path)
+                say("    reference: \(path)")
+            }
+            // What the failure messages measured: "0.65% of pixels differ, none may".
+            let measured = test.failureMessages.flatMap(SnapshotMismatch.parse).flatMap(\.metrics)
+            if !measured.isEmpty { say("    measured:   " + measured.joined(separator: " · ")) }
+            let shown = images.filter { $0.belong(to: test, in: suite) && $0.repetition == 1 }
+            let severalDevices = Set(shown.map(\.deviceID)).count > 1, severalCases = Set(shown.map(\.arguments)).count > 1
+            for img in shown {
+                // Say whose images these are: which device, which case of a parameterized test.
+                let owner = [severalDevices ? img.device : nil, severalCases ? img.arguments?.joined(separator: ", ") : nil].compactMap { $0 }
+                if !owner.isEmpty { say("    " + owner.joined(separator: " · ") + ":") }
+                say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
+                if let ref = img.reference.flatMap({ try? readImage($0.path) }), let act = img.failure.flatMap({ try? readImage($0.path) }) {
+                    let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))
+                    say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
+                }
+            }
+            let timeline = RunHistory.timeline(for: suite.onlyTestingIdentifier(of: test), in: RunHistory(repository: repository).load())
+            if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
+        }
+    }
+}
+
+/// `failures --ci`: a failed GitLab CI job's failing tests, with the references at the commit it ran and the
+/// images its runner took. The job is the one `--ci URL` names, else the failed one of the branch's merge request.
+func ciFailures(_ o: CommandArguments) {
+    let repo = repository(o)
+    do {
+        let link: GitLabLink
+        if let text = o.value("--ci") {
+            link = try CIDetector.job(text, repository: repo)
+        } else {
+            guard let found = try CIDetector.detect(repository: repo) else {
+                fail("No failed CI job to show: the branch has no open merge request, or nothing failed in its latest pipeline. Pass --ci URL.")
+            }
+            // The snapshot job, when several failed.
+            let job = found.failedJobs.first { $0.name.lowercased().contains("snapshot") } ?? found.failedJobs[0]
+            if found.failedJobs.count > 1 {
+                say("Failed in !\(found.mergeRequest.iid): " + found.failedJobs.map { "\($0.name) #\($0.id)" }.joined(separator: ", ")
+                    + ". Showing \(job.name); pass --ci URL for another.")
+            }
+            link = found.link(to: job)
+        }
+        let out = o.value("--out").map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("snapkit-ci-\(link.jobID ?? 0)", isDirectory: true)
+        let login = o.value("--ci-login") ?? ProjectStore().settings(for: Project(path: repo.path)).ciLogin
+        let importer = CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repo, login: login, fetchImages: !o.has("--no-images"))
+        let ci = try importer.load(link, into: out)
+        let runner = ci.job.runner?.description ?? link.host
+        say(color("1", "\(ci.job.name) #\(ci.job.id)") + " · "
+            + [ci.mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }, runner].compactMap { $0 }.joined(separator: " · "))
+        if let url = link.jobURL { say(url) }
+        printFailures(ci.summary.failingSuites, images: ci.images, repository: repo)
+        if ci.summary.failingSuites.isEmpty { say("No failing tests in \(ci.job.name) #\(ci.job.id).") }
+        for note in ci.notes { say(color("33", "note: ") + note) }
+        // Without a commit: another machine's results say nothing about flakiness here.
+        RunHistory(repository: repo).append(RunRecord(kind: .imported, host: runner, commit: nil, branch: nil, dirty: false, summary: ci.summary,
+                                                      passed: ci.passed, failed: ci.summary.failed, skipped: ci.skipped, resultBundle: nil))
+    } catch {
+        fail(error.localizedDescription)
+    }
+}
