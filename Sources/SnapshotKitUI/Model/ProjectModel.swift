@@ -1742,25 +1742,43 @@ final class ProjectModel {
 
     /// Re-records the tests behind `files` (or their whole suites), then verifies.
     func reRecord(_ files: [SnapshotFile], granularity: RecordPlanner.Granularity) {
-        guard !files.isEmpty, !isRunning else { return }
+        // Begun before the plan, which reads every test file involved (seconds for a whole project): the
+        // re-record shows, and can be cancelled, from the start.
+        guard !files.isEmpty, begin(.rerecord) else { return }
+        stageLabel = "Finding the tests to record"
+        planCancelled = false
+        cancelAction = { [weak self] in self?.planCancelled = true }
         let repo = project.url
         Task {
             let planned = await Task.detached { Result { try RecordPlanner.plan(files, granularity: granularity, repository: repo) } }.value
+            guard !planCancelled else {
+                finish(message: Self.cancelled)
+                return
+            }
             switch planned {
             case .success(let selection):
                 let tests = Set(files.map { $0.suite + "/" + $0.testName })
                 let what = granularity == .suites
                     ? selection.suites.map(\.name).joined(separator: ", ")
                     : tests.count == 1 ? files[0].testName : "\(tests.count) tests"
-                reRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
+                startReRecord(suites: selection.suites, onlyTesting: selection.onlyTesting, what: what)
             case .failure(let error):
-                notify("Can’t re-record: \(error.localizedDescription)", isError: true)
+                finish(message: "Can’t re-record: \(error.localizedDescription)", isError: true)
             }
         }
     }
 
+    /// Set by Cancel while a re-record is still planning, before there is a run to stop.
+    @ObservationIgnored private var planCancelled = false
+
     private func reRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
-        guard begin(.rerecord), let (ctx, env) = requireEnvironment() else { return }
+        guard begin(.rerecord) else { return }
+        startReRecord(suites: targets, onlyTesting: onlyTesting, what: what)
+    }
+
+    /// Records `targets` once the re-record has begun, then verifies.
+    private func startReRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
+        guard let (ctx, env) = requireEnvironment() else { return }
         expectedTotal = Self.testCount(suites: targets, onlyTesting: onlyTesting)
         let recorder = ReRecorder(runner: TestRunner(repository: ctx.repository, config: ctx.config, environment: env))
         cancelAction = { recorder.cancel() }

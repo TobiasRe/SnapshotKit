@@ -64,18 +64,18 @@ struct ProjectView: View {
         .navigationTitle(project.title(of: project.section))
         .navigationSubtitle(subtitle)
         .toolbar {
-            // A run or re-record says how far it has got wherever you are in the project.
-            if project.isRunning {
-                ToolbarItem(placement: .principal) {
-                    RunProgress(project: project)
-                }
-            }
             // No re-record button here: each detail header has one beside what it records, and ⇧⌘R
             // works from anywhere.
             ToolbarItem(placement: .primaryAction) {
                 if project.isRunning {
-                    Button("Cancel", systemImage: "stop.fill") { project.cancel() }
-                        .help("Cancel (⌘.)")
+                    // How far a run or re-record has got, wherever you are in the project. In this item, which
+                    // is always there: an item added only while running never reached the window's toolbar.
+                    HStack(spacing: DS.Space.m) {
+                        RunProgress(project: project)
+                        Button("Cancel", systemImage: "stop.fill") { project.cancel() }
+                            .labelStyle(.iconOnly)
+                            .help("Cancel (⌘.)")
+                    }
                 } else {
                     // Run, with the two bulk re-records one click away under its chevron.
                     Menu {
@@ -132,7 +132,7 @@ struct RunTab: View {
 struct RunProgress: View {
     let project: ProjectModel
 
-    static let width: CGFloat = 260
+    static let width: CGFloat = 300
 
     var body: some View {
         Button { project.section = .run } label: {

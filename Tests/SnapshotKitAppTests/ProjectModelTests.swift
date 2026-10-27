@@ -1297,9 +1297,10 @@ extension AppUITests {
             #expect(runs.count == 2)                        // the record and the verification
             for run in runs { #expect(run.contains("-only-testing:AppTests/CardTests/card()")) }
 
-            let said = model.messageID
+            // It shows as running while it looks for the test, then ends saying why it can't.
             model.reRecord([SnapshotFile(path: "Tests/AppTests/__Snapshots__/GoneTests/old.1.png", byteSize: 0)], granularity: .tests)
-            try await waitUntil(model.messageID != said, "the re-record never said why it can't")
+            #expect(model.isRunning && model.stageLabel == "Finding the tests to record")
+            try await waitUntilFinished(model)
             #expect(model.lastMessage == "Can’t re-record: Could not find the source file for suite “AppTests/GoneTests”.")
             #expect(model.lastMessageIsError)
             #expect(!model.isRunning)

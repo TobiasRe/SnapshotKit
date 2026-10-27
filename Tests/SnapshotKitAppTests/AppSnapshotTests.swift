@@ -171,7 +171,7 @@ extension AppUITests {
             f.stageLabel = "Recording snapshots"
             f.phase = .building
             project.apply(f)
-            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 300, height: 64), appearance: .aqua)
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 340, height: 64), appearance: .aqua)
         }
 
         /// The toolbar while a run goes on, wherever you are: the stage, the bar, and how far it has got.
@@ -179,7 +179,7 @@ extension AppUITests {
         func runProgress(appearance: NSAppearance.Name) {
             let (app, project) = makeApp(.running)
             project.section = .library
-            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 300, height: 64),
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 340, height: 64),
                        appearance: appearance, named: appearance == .darkAqua ? "dark" : "light")
         }
 

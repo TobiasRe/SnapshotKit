@@ -7,7 +7,11 @@ import SwiftUI
 ///     SnapshotKit --capture out.png --project /path/to/repo --section working-copy|comparison|last-run|ci-job-<id>|run|library|orphaned \
 ///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference|toggle]
 ///                 [--zoom 3|change] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
-///                 [--action run|rerecord|record|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
+///                 [--action run|rerecord|rerecord-all|record|flaky|remote [--while-running SECONDS]] [--size 1400x880]
+///                 [--appearance light|dark] [--timeout 600]
+///
+/// `--while-running` shoots the window that many seconds into the action instead of after it, then cancels it
+/// (a re-record's test sources are restored before the app quits).
 ///
 /// The window is placed off-screen and the app does not activate, so it does not disturb
 /// whatever is on screen. Set SNAPSHOTKIT_HOME to keep captures away from real settings.
@@ -26,6 +30,8 @@ struct CaptureOptions: Equatable {
     var quickSwitcher: String?
     var importBundle: String?
     var action: String?
+    /// Seconds into the action to shoot, instead of after it.
+    var whileRunning: TimeInterval?
     var size = CGSize(width: 1400, height: 880)
     var appearance: String?
     var timeout: TimeInterval = 900
@@ -57,6 +63,7 @@ struct CaptureOptions: Equatable {
         if args.contains("--quick-switcher") { o.quickSwitcher = value("--quick-switcher") ?? "" }
         o.importBundle = value("--import-xcresult")
         o.action = value("--action")
+        o.whileRunning = value("--while-running").flatMap(Double.init)
         if let size = value("--size")?.split(separator: "x"), size.count == 2, let w = Double(size[0]), let h = Double(size[1]) {
             o.size = CGSize(width: w, height: h)
         }
@@ -109,12 +116,20 @@ enum WindowCapture {
                     _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.library != nil ? true : nil }
                     let file = project.library?.files.first { $0.path == o.select } ?? project.library?.files.first
                     if let file { project.reRecord([file], granularity: .tests) }
-                    // Planning happens before the run starts.
-                    _ = await waitFor(deadline: Date().addingTimeInterval(20)) { project.isRunning ? true : nil }
+                case "rerecord-all":
+                    // Re-record All Snapshot Tests…, as confirmed.
+                    _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.library != nil ? true : nil }
+                    project.reRecordAll()
                 default: log("unknown action \(action)")
                 }
-                _ = await waitFor(deadline: deadline) { project.isRunning ? nil : true }
-                log("action finished: \(project.lastMessage ?? "-")")
+                if let seconds = o.whileRunning {
+                    _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.isRunning ? true : nil }
+                    try? await Task.sleep(for: .seconds(seconds))
+                    log("shooting \(Int(seconds)) s in: \(project.stageLabel), \(project.phase.label)")
+                } else {
+                    _ = await waitFor(deadline: deadline) { project.isRunning ? nil : true }
+                    log("action finished: \(project.lastMessage ?? "-")")
+                }
                 if let section = o.section { project.section = section }
             }
             _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.isLoadingChanges ? nil : true }
@@ -156,6 +171,12 @@ enum WindowCapture {
         do {
             try png.write(to: URL(fileURLWithPath: o.output))
             log("wrote \(o.output) (\(Int(o.size.width))×\(Int(o.size.height)) pt)")
+            // Shot mid-run: stop it, and let a re-record put the test sources back, before quitting.
+            if let project = model.current, project.isRunning {
+                project.cancel()
+                _ = await waitFor(deadline: Date().addingTimeInterval(120)) { project.isRunning ? nil : true }
+                log("cancelled: \(project.lastMessage ?? "-")")
+            }
             exit(0)
         } catch {
             log("could not write \(o.output): \(error.localizedDescription)")
