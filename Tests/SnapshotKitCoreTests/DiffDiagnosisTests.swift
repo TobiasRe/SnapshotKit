@@ -72,7 +72,7 @@ import Testing
 
     @Test func deltaEMatchesKnownValues() {
         // Black vs white is ΔE 100 in every CIE formula.
-        let black = Lab([0, 0, 0, 255], 0), white = Lab([255, 255, 255, 255], 0)
+        let black = Lab(0, 0, 0), white = Lab(255, 255, 255)
         #expect(abs(Lab.deltaE94(black, white) - 100) < 0.1)
         #expect(Lab.deltaE94(white, white) == 0)
     }
