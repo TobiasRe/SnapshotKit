@@ -59,7 +59,7 @@ open it once, then choose **Open Anyway** in System Settings › Privacy & Secur
 binary on your `PATH`:
 
 ```bash
-unzip snapkit-0.3.0-macos-arm64.zip
+unzip snapkit-0.4.0-macos-arm64.zip
 sudo mkdir -p /usr/local/bin && sudo mv snapkit /usr/local/bin/
 xattr -d com.apple.quarantine /usr/local/bin/snapkit 2>/dev/null || true
 ```

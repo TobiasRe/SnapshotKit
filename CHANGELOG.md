@@ -6,28 +6,28 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
 ### Added
 - Failures of a GitLab CI job, shown as a local run’s: each failing test with its reference at the commit the job
-  ran, the image the runner took (copied over SSH) and what its failure message measured. The Failures tab offers
-  the failed jobs of the branch’s merge request; **Load Failed CI Job…** (⇧⌘L) takes any job’s URL. What can’t be
-  fetched becomes a note, not a failed load. **CI login** on the Run tab is the SSH user on the runner.
-  `snapkit failures --ci [URL] [--ci-login USER] [--no-images]` prints the same.
+  ran, the image the runner took (copied over SSH) and what its failure message measured. The sidebar lists the
+  failed jobs of the branch’s merge request under it (*CI · !12*): a red dot until you open one, which loads it,
+  then its failing count. Each job keeps its failures apart from the last run’s; **Open in GitLab** opens its
+  page. **Load Failed CI Job…** (⇧⌘L) takes any job’s URL. What can’t be fetched becomes a note, not a failed
+  load. **CI login** in Run is the SSH user on the runner. A job’s failures are for looking at, for now:
+  re-recording and flakiness checks work on the last run’s. `snapkit failures --ci [URL] [--ci-login USER]
+  [--no-images]` prints the same.
 
 ### Changed
 - The sidebar replaces the tabs. It shows one project at a time: a switcher at the top (the project, its branch,
   and a list of the others to search), and under it the project's sections with their counts. **Working Copy** has
-  the uncommitted snapshots, **vs develop** everything that differs from the base branch, **Last Run** (or the CI
-  job loaded) the failures, **Run** the run, **All Snapshots** the library and **Orphaned** the snapshots no test
-  records. ⌥⌘1–6 open them; the library's Show scopes and the sidebar's Recent section are gone. The capture
+  the uncommitted snapshots, **vs develop** everything that differs from the base branch, **Last Run** the last
+  run’s failures, **Run** the run, **All Snapshots** the library and **Orphaned** the snapshots no test records. ⌥⌘1–6 open them; the library's Show scopes and the sidebar's Recent section are gone. The capture
   option `--tab` is now `--section`.
 - While tests run or re-record, the toolbar shows the stage, a progress bar and how many tests are done, wherever
   you are in the project (before the tests start, the phase and how long it has taken: "Building · 1:42"); a
-  click opens the output in Run, whose item spins meanwhile. A re-record measures its
+  click opens the output in Run, whose item spins meanwhile. A re-record shows from its start and measures its
   progress against the tests it records.
-- Each failed CI job has its own item in the sidebar, under its merge request (*CI · !12*), instead of a banner
-  over the failures: a red dot until you open it, which loads it, then its failing count. A job's failures no
-  longer replace the last run's, nor another job's. Its header has **Open in GitLab**; re-recording and
-  flakiness checks are for the last run's failures only, for now.
 - The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
   `scripts/make-app.sh` is gone.
@@ -49,8 +49,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   lower-priority work (Xcode’s Thread Performance Checker reported it).
 - A GitLab job’s own `variables:` override the top-level ones, as in GitLab: a snapshot job that sets
   `SCHEME: AppSnapshotTests` under a top-level `SCHEME: App-Example` now runs `AppSnapshotTests`, also when its
-  command is in a remote template. Variables from the jobs it `extends:` count too, and the Run tab names the
-  job (*.gitlab-ci.yml · snapshotTest · SCHEME*).
+  command is in a remote template. Variables from the jobs it `extends:` count too, and Run names the job
+  (*.gitlab-ci.yml · snapshotTest · SCHEME*).
 
 ## [0.3.0] - 2026-10-22
 
@@ -304,7 +304,8 @@ snapshot tests built with swift-snapshot-testing.
 - `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
   changes and failures, to try SnapshotKit on.
 
-[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.0...v0.1.1
