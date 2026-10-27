@@ -87,17 +87,16 @@ extension PaletteCommand {
         if project.isRunning {
             commands.append(.init(title: "Cancel Run", symbol: "stop", shortcut: "⌘.") { project.cancel() })
         }
-        commands += [
-            .init(title: "Show Snapshots", symbol: "photo.stack", shortcut: "⌥⌘1") { project.tab = .snapshots },
-            .init(title: "Show Changes", symbol: "arrow.triangle.branch", shortcut: "⌥⌘2") { project.tab = .changes },
-            .init(title: "Show Failures", symbol: "xmark.circle", shortcut: "⌥⌘3") { project.tab = .failures },
-            .init(title: "Show Run", symbol: "terminal", shortcut: "⌥⌘4") { project.tab = .run },
-            .init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() },
-        ]
+        // The sidebar's sections, by their full names: "Show Changes vs develop".
+        for (index, section) in project.menuSections.enumerated() where project.isListed(section) {
+            commands.append(.init(title: "Show " + project.title(of: section), symbol: SectionList.symbol(of: section),
+                                  shortcut: "⌥⌘\(index + 1)") { project.section = section })
+        }
+        commands.append(.init(title: "Refresh Changes", symbol: "arrow.clockwise", shortcut: nil) { project.refreshChanges() })
         if project.displayedChanges.contains(where: { !project.viewedChanges.contains($0.id) }) {
             let title = project.changesAreFiltered ? "Mark All Shown Changes as Viewed" : "Mark All Changes as Viewed"
             commands.append(.init(title: title, symbol: "checkmark.circle", shortcut: nil) {
-                project.tab = .changes
+                if project.section.content != .changes { project.section = .comparison }
                 project.setAllViewed(true)
             })
         }

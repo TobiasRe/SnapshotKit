@@ -1,6 +1,6 @@
 # Failures and flaky tests
 
-The **Failures** tab (⌥⌘3) shows every failing snapshot test of the last run — or of a result bundle you
+**Last Run** (⌥⌘3) shows every failing snapshot test of the last run — or of a result bundle you
 import from CI — with the reference, the image the test produced and the difference, and tells you what kind
 of failure it is: a real change, rendering noise, a size change or a flaky test.
 
@@ -10,11 +10,11 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 
 | Source | How |
 |---|---|
-| A run in SnapshotKit | the Run tab, ⌘R, or the ▶ toolbar button. See [Running tests](running.md). |
+| A run in SnapshotKit | **Run** (⌥⌘4), ⌘R, or the ▶ toolbar button. See [Running tests](running.md). |
 | A run on a remote Mac | ⌃⌘R. See [Remote runs](remote-runs.md). |
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
-| A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Failures header): choose an `.xcresult` downloaded from CI. |
-| A failed GitLab CI job | the banner on the Failures tab, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
+| A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Last Run header): choose an `.xcresult` downloaded from CI. |
+| A failed GitLab CI job | the banner on Last Run, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
 
 The header says which one you’re looking at: *Local run*, *Remote run* or *Verification run* over
 *local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened), or the bundle’s name
@@ -37,15 +37,16 @@ was measured.
 
 **Finding the job.** When a project opens (and when its branch changes), SnapshotKit asks GitLab about the
 checked-out branch: its open merge request, that request’s latest pipeline and the pipeline’s failed jobs. If
-there are some, the Failures tab says so, *CI failed on !12: `snapshotTest` #4567*, with **Load**. For any
+there are some, Last Run says so, *CI failed on !12: `snapshotTest` #4567*, with **Load**. For any
 other job, **Load Failed CI Job…** (⇧⌘L, the File menu, ⌘K or the ⤓ menu) asks for its URL, or its number
 in this project.
 
 **What loads.**
 
-- The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. The header
-  names the job, the runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 ·
-  3f1c2a9b · …*); the ⤓ menu opens the job in the browser.
+- The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. In the
+  sidebar, Last Run is named after the job: **CI · snapshotTest #4567**. The header names the job, the
+  runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 · 3f1c2a9b · …*); the ⤓
+  menu opens the job in the browser.
 - Each reference as it was at the commit the job ran (`git show`), not as the working tree has it now, which
   may have been re-recorded since. A commit that isn’t in your clone yet falls back to the working tree, with
   a note to `git fetch`.
@@ -65,7 +66,7 @@ from your clone. **Re-record Failing Suites** then records the CI failures here.
 | GitLab’s API | the [`glab`](https://gitlab.com/gitlab-org/cli) CLI, signed in (`glab auth login --hostname …`), or `GITLAB_TOKEN` (or `GITLAB_PRIVATE_TOKEN`) set to a token with `read_api`. SnapshotKit only reads. |
 | The failure messages | the job uploading its JUnit report: `artifacts: reports: junit:`. Without one, the log still names the failing tests. |
 | The images | SSH access to the runner with a key: SnapshotKit never asks for a password and never accepts a host key by itself. Connect once with `ssh user@runner true` to trust it. |
-| The login | **CI login** on the Run tab: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, the note suggests the user whose home folder the images are in. |
+| The login | **CI login** in Run: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, the note suggests the user whose home folder the images are in. |
 
 The runner is the job’s runner as GitLab names it, so its name has to be one ssh can reach (or an alias in
 `~/.ssh/config`). A CI job is recorded in the history as imported, without a commit, so it doesn’t count
@@ -138,15 +139,15 @@ arguments (a parameterized Swift Testing test) is one row, and fails when it fai
 
 | Diagnosis | Usually means | Do |
 |---|---|---|
-| **Visible** change you intended | the UI changed on purpose | Re-record (⇧⌘R), then review on the Changes tab and commit. |
+| **Visible** change you intended | the UI changed on purpose | Re-record (⇧⌘R), then review in Working Copy and commit. |
 | **Visible** change you didn’t intend | a regression | Fix the code; don’t re-record. |
 | **Invisible** | the reference was recorded on another machine, GPU or OS version | Record where CI runs ([remote runs](remote-runs.md)), or relax `perceptualPrecision` to the suggested value. Re-recording locally just moves the problem to CI. |
 | **Few pixels** | anti-aliasing, a blinking caret, a timestamp | Make the view deterministic, or relax `precision` (with `perceptualPrecision`, when there is rendering noise too) to the suggested values. |
 | **Size changed** | another device, scale or layout | Check the test’s device and the simulator CI uses. |
 | **Flaky** | the test isn’t deterministic | Find the animation, async load, date or random value. Re-recording won’t help. |
 
-**Re-record Failing Suites** in the Failures header re-records every failing suite of the last run (⌥⇧⌘R does the same
-from anywhere).
+**Re-record Failing Suites** in the Last Run header re-records every failing suite of the last run (⌥⇧⌘R
+does the same from anywhere).
 
 ## Working on several failures at once
 
@@ -162,7 +163,7 @@ those.
 
 ## Checking for flakiness
 
-**Check Flakiness** (⌥⌘R, the Failures header, or a test’s ··· menu for just that test) runs the failing
+**Check Flakiness** (⌥⌘R, the Last Run header, or a test’s ··· menu for just that test) runs the failing
 tests several times in a row — 5 by default, set under Settings › Flakiness check runs (2–50). Each repetition
 runs in a fresh process (`-test-iterations N -test-repetition-relaunch-enabled YES`), so state can’t leak
 between them.

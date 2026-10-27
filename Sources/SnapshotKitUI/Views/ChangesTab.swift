@@ -201,14 +201,17 @@ struct ChangesTab: View {
                 .help("Merge-base shows only this branch’s changes; branch tip also shows changes made on the base branch since.")
 
                 Menu {
-                    ForEach(SnapshotChangeKind.allCases, id: \.self) { kind in
-                        // A count only when there is one: "Deleted (0)" is noise.
-                        Toggle(count(kind) > 0 ? "\(kind.label) (\(count(kind)))" : kind.label, isOn: Binding(
-                            get: { project.changeKinds.contains(kind) },
-                            set: { on in if on { project.changeKinds.insert(kind) } else { project.changeKinds.remove(kind) } }
-                        ))
+                    // Working copy shows every uncommitted change, whatever its kind.
+                    if project.section == .comparison {
+                        ForEach(SnapshotChangeKind.allCases, id: \.self) { kind in
+                            // A count only when there is one: "Deleted (0)" is noise.
+                            Toggle(count(kind) > 0 ? "\(kind.label) (\(count(kind)))" : kind.label, isOn: Binding(
+                                get: { project.changeKinds.contains(kind) },
+                                set: { on in if on { project.changeKinds.insert(kind) } else { project.changeKinds.remove(kind) } }
+                            ))
+                        }
+                        Divider()
                     }
-                    Divider()
                     Toggle(project.viewedChanges.isEmpty ? "Hide Viewed" : "Hide Viewed (\(project.viewedChanges.count))", isOn: $project.hideViewed)
                     let all = project.changesAreFiltered ? "All Shown" : "All"
                     Button("Mark \(all) as Viewed") { project.setAllViewed(true) }
@@ -219,7 +222,7 @@ struct ChangesTab: View {
                         .disabled(project.displayedChanges.isEmpty || project.isRunning)
                     Divider()
                     Button("Show All") {
-                        project.changeKinds = Set(SnapshotChangeKind.allCases)
+                        if project.section == .comparison { project.changeKinds = Set(SnapshotChangeKind.allCases) }
                         project.hideViewed = false
                     }
                 } label: {
@@ -231,7 +234,9 @@ struct ChangesTab: View {
                 }
                 .fixedSize()
                 .quietControl()
-                .help("Which kinds of change to show: committed, uncommitted, new, deleted; and whether to hide viewed ones")
+                .help(project.section == .comparison
+                      ? "Which kinds of change to show: committed, uncommitted, new, deleted; and whether to hide viewed ones"
+                      : "Whether to hide viewed changes")
                 .accessibilityLabel("Change kinds: \(kindsLabel)")
             }
             .controlSize(.small)
@@ -245,7 +250,8 @@ struct ChangesTab: View {
             PaneFooter {
                 // "18 changes", or "5 of 18" while filtered; when narrow, the commit goes first, then
                 // the base branch, instead of cutting words in the middle.
-                let shown = project.filteredChanges.count, total = set.changes.count
+                let all = project.section == .workingCopy ? project.sectionChanges : set.changes
+                let shown = project.filteredChanges.count, total = all.count
                 let count = total == 0 ? nil : shown == total ? "\(total) change\(total == 1 ? "" : "s")" : "\(shown) of \(total)"
                 let base = "vs \(set.baseRef)"
                 ViewThatFits(in: .horizontal) {
@@ -255,17 +261,17 @@ struct ChangesTab: View {
                 }
                 .lineLimit(1)
                 Spacer(minLength: DS.Space.s)
-                if !set.changes.isEmpty {
-                    let viewed = set.changes.filter { project.viewedChanges.contains($0.id) }.count
+                if !all.isEmpty {
+                    let viewed = all.filter { project.viewedChanges.contains($0.id) }.count
                     // An empty bar beside "0 of 18 viewed" says nothing more.
                     if viewed > 0 {
-                        Gauge(value: Double(viewed), in: 0...Double(set.changes.count)) { EmptyView() }
+                        Gauge(value: Double(viewed), in: 0...Double(all.count)) { EmptyView() }
                             .gaugeStyle(.accessoryLinearCapacity)
                             .tint(DS.Status.passed)
                             .frame(width: 44)
                             .accessibilityHidden(true)
                     }
-                    Text("\(viewed) of \(set.changes.count) viewed").monospacedDigit().fixedSize()
+                    Text("\(viewed) of \(all.count) viewed").monospacedDigit().fixedSize()
                 }
             }
         }
@@ -312,7 +318,7 @@ struct ChangesTab: View {
     }
 
     private var kindsLabel: String {
-        let kinds = project.changeKinds.count == SnapshotChangeKind.allCases.count
+        let kinds = project.section != .comparison || project.changeKinds.count == SnapshotChangeKind.allCases.count
             ? "All"
             : "\(project.changeKinds.count) of \(SnapshotChangeKind.allCases.count)"
         return project.hideViewed ? kinds + ", Unviewed" : kinds
@@ -379,9 +385,12 @@ struct ChangesTab: View {
             }
             .overlay {
                 if groups.isEmpty {
-                    if project.hideViewed && !(project.changeSet?.changes.isEmpty ?? true) && project.changeFilter.isEmpty {
+                    if project.hideViewed && !project.sectionChanges.isEmpty && project.changeFilter.isEmpty {
                         ContentUnavailableView("All Snapshots Viewed", systemImage: "checkmark.circle",
                                                description: Text("Turn off Hide Viewed to see them again."))
+                    } else if project.section == .workingCopy && project.sectionChanges.isEmpty {
+                        ContentUnavailableView("No Uncommitted Snapshots", systemImage: "checkmark.circle",
+                                               description: Text("Snapshots you re-record appear here until they’re committed."))
                     } else if project.changeSet?.changes.isEmpty == true {
                         ContentUnavailableView("No Changed Snapshots", systemImage: "checkmark.circle",
                                                description: Text("Every PNG matches \(project.baseBranch ?? "the base branch")."))
@@ -441,7 +450,9 @@ struct ChangeOrigin: View {
 extension ProjectModel {
     /// Whether the filter or the kinds menu hides changes, so "all" actions name what they act on:
     /// the changes shown.
-    var changesAreFiltered: Bool { !changeFilter.isEmpty || changeKinds.count < SnapshotChangeKind.allCases.count }
+    var changesAreFiltered: Bool {
+        !changeFilter.isEmpty || (section == .comparison && changeKinds.count < SnapshotChangeKind.allCases.count)
+    }
 }
 
 extension SnapshotChange {

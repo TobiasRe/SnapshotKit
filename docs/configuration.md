@@ -4,7 +4,7 @@ Most projects need no configuration: SnapshotKit reads how your CI runs the snap
 This page explains what it reads, in which order, how to override it with `.snapshotkit.yml`, and how Xcode,
 the simulator and the base branch are chosen.
 
-`snapkit config` (or the Run tab’s configuration panel) shows the result, with the source of every value:
+`snapkit config` (or the configuration panel in Run) shows the result, with the source of every value:
 
 ```
 $ snapkit config
@@ -36,8 +36,8 @@ From lowest to highest — a later source overrides an earlier one, field by fie
 1. **CI variables** — values found in variables your CI defines (`SCHEME: Shop`, `SIMULATOR: iPhone 16 Pro`).
 2. **The CI command line** — the arguments of the `xcodebuild` call your CI makes.
 3. **`.snapshotkit.yml`** — every key it sets.
-4. **Per-project settings in the app** (and `snapkit` options): the base branch and remote host you typed on
-   the Run tab, and the test target you picked. These are personal and not committed.
+4. **Per-project settings in the app** (and `snapkit` options): the base branch and remote host you typed in
+   Run, and the test target you picked. These are personal and not committed.
 
 Anything still unset falls back to defaults: the base branch from git, the only workspace or project in the
 repository, the scheme from `xcodebuild -list`.
@@ -97,8 +97,8 @@ When the command doesn’t name something, a variable can:
 | device | a name containing `SIMULATOR`, `DEVICE` or `DESTINATION`, with a value like `iPhone 16 Pro`, `iPhone 16 Pro (18.2)`, `iPhone 16 Pro,OS=18.2` or a full destination |
 | os | a name containing `OS_VERSION`, `SIMULATOR_OS` or `RUNTIME` with a numeric value |
 
-The Run tab names the variable as the source (*.gitlab-ci.yml · SIMULATOR*), and the job when it’s the job’s
-(*.gitlab-ci.yml · snapshotTest · SCHEME*).
+Run’s configuration panel names the variable as the source (*.gitlab-ci.yml · SIMULATOR*), and the job when
+it’s the job’s (*.gitlab-ci.yml · snapshotTest · SCHEME*).
 
 ### The Xcode version
 
@@ -151,7 +151,7 @@ remoteHost: ci-mac
 | `testPlan` | | string | `-testPlan` | `Snapshots` |
 | `onlyTesting` | | list | `-only-testing` identifiers | `[ShopSnapshotTests]` |
 | `skipTesting` | | list | `-skip-testing` identifiers | `[ShopSnapshotTests/SlowTests]` |
-| `baseBranch` | | string | the branch the Changes tab compares with | `develop` |
+| `baseBranch` | | string | the branch Working Copy and vs develop compare with | `develop` |
 | `workingDirectory` | | path | where to run `xcodebuild`, relative to the root | `Modules/Feature` |
 | `extraArguments` | | string or list | more `xcodebuild` arguments; a string is split like a shell would | `-configuration Debug` |
 | `remoteHost` | `remote` | string | the Mac for [remote runs](remote-runs.md) | `ci-mac` |
@@ -170,9 +170,9 @@ typo shows up in `snapkit config`.
 
 ## The base branch
 
-The branch the Changes tab compares with, highest priority first:
+The branch Working Copy and vs develop compare with, highest priority first:
 
-1. the base branch chosen in the app (the Changes tab’s branch menu, or the Run tab),
+1. the base branch chosen in the app (the branch menu of vs develop, or Run),
 2. `baseBranch` in `.snapshotkit.yml`,
 3. the target branch your CI uses: the GitLab merge request target it checks
    (`$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"`), or the GitHub `pull_request:` /
@@ -210,7 +210,7 @@ set `device:` / `os:` to one you have.
 
 ## Test targets and modules
 
-The **Test target** picker on the Run tab lists every test target that has snapshots: the nearest folder
+The **Test target** picker in Run lists every test target that has snapshots: the nearest folder
 ending in `Tests` above each `__Snapshots__` folder. Picking one runs `-only-testing:<target>` instead of CI’s
 selection; *What CI runs* goes back. `snapkit run --module <target>` does the same once.
 
@@ -236,7 +236,7 @@ The app manages it; edit it only while SnapshotKit isn’t running.
 | `scanRoots` | scan folders |
 | `discovered` | projects found by scanning or added |
 | `removed` | projects removed from the list, which a rescan leaves out until you open them again |
-| `pinned`, `recents` | the sidebar’s Pinned and Recent sections (up to 10 recents) |
+| `pinned`, `recents` | the project switcher’s Pinned group; the projects you opened most recently (up to 10), for the menu bar item and `snapkit projects list` |
 | `projectSettings` | per project path: `baseBranch`, `remoteHost`, `module` (the test target) |
 | `lastProject` | the project to reopen |
 | `flakeIterations` | runs per flakiness check (default 5) |

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// A reference and the image a test produced instead, opened from outside the app: `snapkit open`,
 /// the diff tool swift-snapshot-testing names in a failure message, opens a `snapshotkit://compare`
-/// URL, and this window shows the pair with the same compare view as the Failures tab.
+/// URL, and this window shows the pair with the same compare view as the failures.
 struct CompareWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(\.openWindow) private var openWindow

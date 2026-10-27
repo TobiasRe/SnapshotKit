@@ -25,7 +25,7 @@ Nothing else needs installing there: no SnapshotKit, no `snapkit`.
 
 Set the host in one of two places (the project setting wins):
 
-- **Run tab › Comparison & Remote › Remote host** — stored only for you, in your settings. Hosts are often
+- **Run › Comparison & Remote › Remote host** — stored only for you, in your settings. Hosts are often
   personal, so this is the usual place.
 - **`remoteHost:` in `.snapshotkit.yml`** — shared with everyone who uses the repository.
 
@@ -43,9 +43,9 @@ refused, so a repository can’t slip `ssh` options in.
    --exclude-standard`) are copied with `rsync`, including uncommitted changes. Files you deleted are deleted
    there too, except build products (`.build`, `.swiftpm`, `DerivedData`, `.snapshotkit`).
 3. **Running tests remotely** — `xcodebuild test` with the CI configuration, over `ssh -tt`, so canceling here
-   stops it there. The output streams into the Run tab.
+   stops it there. The output streams into Run.
 4. **Collecting results** — the result summary and failure images are fetched, and remote paths are mapped back
-   to your repository, so the Failures tab and `snapkit failures` work as for a local run. (`snapkit failures
+   to your repository, so Last Run and `snapkit failures` work as for a local run. (`snapkit failures
    --out` needs the bundle itself: it stays on the remote Mac, so pass a downloaded one with `--xcresult`.)
    The remote Mac keeps the bundles of the last 10 runs, in `.snapshotkit/results` of its copy.
 
@@ -54,7 +54,7 @@ remote runs.
 
 ## Re-recording remotely
 
-**Run tab › ··· › On *host* › Re-record Failing Suites** (or `snapkit rerecord --remote`; without a last run it
+**Run › ··· › On *host* › Re-record Failing Suites** (or `snapkit rerecord --remote`; without a last run it
 first runs the tests there to find the failing suites):
 
 - Your files are **never patched**. The record patch is applied to the remote copy only, and the original sources
@@ -64,11 +64,11 @@ first runs the tests there to find the failing suites):
 - Then the suites run again on the remote Mac, unpatched, to verify the new references there, as a local
   re-record verifies them locally: *Recorded on ci-mac; downloaded 3 snapshots. Verified: 3 passed.* Settings ›
   Verify after re-recording off (or `--no-verify`) skips it.
-- Review them on the Changes tab and commit, as with a local re-record.
+- Review them in Working Copy and commit, as with a local re-record.
 
 ## Checking flakiness remotely
 
-**Run tab › ··· › On *host* › Check Flakiness of Failing Tests** (or `snapkit flaky --remote`) repeats the failing tests on the
+**Run › ··· › On *host* › Check Flakiness of Failing Tests** (or `snapkit flaky --remote`) repeats the failing tests on the
 remote Mac. A test that fails on CI but passes on your Mac often shows its true colors there.
 
 ## A local “remote”

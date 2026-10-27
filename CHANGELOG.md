@@ -14,6 +14,12 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   `snapkit failures --ci [URL] [--ci-login USER] [--no-images]` prints the same.
 
 ### Changed
+- The sidebar replaces the tabs. It shows one project at a time: a switcher at the top (the project, its branch,
+  and a list of the others to search), and under it the project's sections with their counts. **Working Copy** has
+  the uncommitted snapshots, **vs develop** everything that differs from the base branch, **Last Run** (or the CI
+  job loaded) the failures, **Run** the run, **All Snapshots** the library and **Orphaned** the snapshots no test
+  records. ⌥⌘1–6 open them; the library's Show scopes and the sidebar's Recent section are gone. The capture
+  option `--tab` is now `--section`.
 - The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
   `scripts/make-app.sh` is gone.

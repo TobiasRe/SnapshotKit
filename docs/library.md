@@ -1,6 +1,6 @@
 # The snapshot library
 
-The **Snapshots** tab (⌥⌘1) is the library: every reference image in the project, the way your tests named
+**All Snapshots** (⌥⌘5) is the library: every reference image in the project, the way your tests named
 them. Use it to find a snapshot, inspect it pixel by pixel, compare it with its other variants or an earlier
 commit, and re-record it.
 
@@ -28,17 +28,10 @@ their names (`dark` before `light`, `2` before `10`).
 `checkout dark` finds the dark variants of the checkout tests. Escape clears the filter, a second Escape
 leaves the field.
 
-**Show** narrows the library, with a count for each:
-
-| Scope | Shows |
-|---|---|
-| All | everything |
-| Changed | snapshots that differ from the base branch (what the Changes tab lists) |
-| Failing | snapshots whose test failed in the last run |
-| Uncommitted | snapshots modified or added in the working tree |
-| Orphaned | snapshots no test records any more (only offered when there are some) |
-
-In a narrow window the scope control becomes a *Show:* menu.
+The filter field sits at the top of the list, with the **Sort** menu and the **List**/**Grid** switch under
+it. The sidebar’s other sections each show a part of the library: **vs develop** what differs from the base
+branch, **Last Run** what failed, **Working Copy** what isn’t committed, and **Orphaned** (⌥⌘6) what no test
+records any more. See [Sections](projects.md#sections).
 
 **Sort** (the ⇅ button): **Name** groups by module and suite; **Size** (largest first) and **Recently
 Changed** show one flat list, useful for finding oversized images or what was recorded last.
@@ -47,7 +40,7 @@ Changed** show one flat list, useful for finding oversized images or what was re
 click a tile to select it and double-click (or press Return) to open it large; the arrow keys move the
 selection, Space Quick Looks it and ⌘C copies it, as in the list.
 
-![The library as a grid of thumbnails, with the All, Changed, Failing, Uncommitted and Orphaned scopes](images/library-grid.png)
+![The library as a grid of thumbnails](images/library-grid.png)
 
 ## Rows and tiles
 
@@ -56,8 +49,8 @@ the snapshot, then its variant, for example *● Uncommitted · dark*. The line 
 colored dot:
 
 - **Orphaned** — its test no longer exists,
-- otherwise its change against the base branch: **Changed** (committed on this branch; the Changes tab calls
-  it *Committed*), **Uncommitted**, **New** or **Deleted**,
+- otherwise its change against the base branch: **Changed** (committed on this branch; vs develop calls it
+  *Committed*), **Uncommitted**, **New** or **Deleted**,
 - otherwise an edit git hasn’t committed: **Modified** or **New**.
 
 A snapshot with nothing notable shows just its variant. Only failing gets a mark of its own, at the trailing
@@ -72,8 +65,9 @@ Selecting a snapshot shows it large on the right.
 
 **Header** — the test name and variant, the breadcrumb (`ShopTests › CheckoutTests`), status chips, and the
 actions. The chips are **Failing** (or **Flaky**) when its test failed in the last run, and the same word as the
-row’s status line (*Uncommitted*, *New*, *Orphaned*…). Click **Failing** to compare it with the actual image on
-the Failures tab, or a change’s chip to review it on the Changes tab.
+row’s status line (*Uncommitted*, *New*, *Orphaned*…). Click **Failing** to compare it with the actual image in
+Last Run (or the CI job), or a change’s chip to review it in Working Copy when it isn’t committed, else in vs
+develop.
 
 - **Re-record** (camera): records this test again, then verifies it. Its arrow offers **Re-record Test** and
   **Re-record Suite** (every test in the file). See [Re-recording](re-recording.md).
@@ -102,7 +96,7 @@ the pixel under the pointer.
 | Put snapshots in a document, a ticket or a chat | drag rows or tiles out of the list |
 | Open the test that records it | ⌥⌘O, or ··· › Open Test in Xcode. Xcode opens the test file at the test function. |
 | Re-record what the list shows | the footer’s **Re-record All** (or **Re-record N Shown** when filtered; with “…” when it asks first). Filter first to narrow it down, e.g. every `dark` variant. More than ten tests asks first. |
-| Clean up orphans | Show › Orphaned, then the footer’s **Move N to Trash…**. Committed files stay recoverable through git, all of them from the Trash; commit the deletion to remove them from the repository. |
+| Clean up orphans | **Orphaned** in the sidebar, then the footer’s **Move N to Trash…**. Committed files stay recoverable through git, all of them from the Trash; commit the deletion to remove them from the repository. |
 
 The footer counts what the library holds: snapshots, tests, modules and total size.
 
@@ -110,5 +104,6 @@ The footer counts what the library holds: snapshots, tests, modules and total si
 
 A snapshot is orphaned when no test in its test file records that name any more — typically after a test
 was renamed or deleted, or a variant was dropped. Orphans can’t be re-recorded (there’s no test to run).
-They are found by reading the test sources, so a test that builds its snapshot names dynamically may be
-flagged by mistake; check before trashing.
+While there are some, the sidebar lists them under **Orphaned** (⌥⌘6), with their count. They are found by
+reading the test sources, so a test that builds its snapshot names dynamically may be flagged by mistake;
+check before trashing.

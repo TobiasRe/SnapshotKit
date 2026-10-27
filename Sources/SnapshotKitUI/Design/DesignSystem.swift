@@ -522,7 +522,7 @@ enum Breadcrumb {
 }
 
 /// A list beside its detail, with one divider position shared by every tab and kept across
-/// launches: switching tabs never moves the divider, and dragging it sets it everywhere.
+/// launches: switching sections never moves the divider, and dragging it sets it everywhere.
 struct ListDetailSplit<List: View, Detail: View>: View {
     @AppStorage("listColumnWidth") private var width = Self.idealWidth
     @State private var dragStart: Double?

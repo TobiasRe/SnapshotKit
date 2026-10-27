@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Headless screenshots of the full window, for automated UI verification:
 ///
-///     SnapshotKit --capture out.png --project /path/to/repo --tab changes \
+///     SnapshotKit --capture out.png --project /path/to/repo --section working-copy \
 ///                 [--select <change path | failure id>] [--compare side-by-side|slider|difference|toggle]
 ///                 [--zoom 3|change] [--pan 40,-20] [--quick-switcher [query]] [--import-xcresult PATH]
 ///                 [--action run|rerecord|record|flaky|remote] [--size 1400x880] [--appearance light|dark] [--timeout 600]
@@ -14,7 +14,7 @@ import SwiftUI
 struct CaptureOptions: Equatable {
     var output: String
     var project: String?
-    var tab: ProjectTab?
+    var section: ProjectSection?
     var select: String?
     var compare: CompareMode?
     var zoom: CGFloat?
@@ -35,7 +35,7 @@ struct CaptureOptions: Equatable {
             return args[j + 1]
         }
         o.project = value("--project")
-        o.tab = value("--tab").flatMap { v in ProjectTab.allCases.first { $0.rawValue.lowercased() == v.lowercased() } }
+        o.section = value("--section").flatMap { ProjectSection(rawValue: $0.lowercased()) }
         o.select = value("--select")
         o.compare = value("--compare").flatMap { v in
             switch v.lowercased() {
@@ -84,7 +84,7 @@ enum WindowCapture {
         if let mode = o.compare { UserDefaults.app.set(mode.rawValue, forKey: "compareMode") }
 
         if let project = model.current {
-            if let tab = o.tab { project.tab = tab }
+            if let section = o.section { project.section = section }
             // Wait for the environment check so actions can start.
             _ = await waitFor(deadline: Date().addingTimeInterval(60)) {
                 (project.environment != nil || project.environmentError != nil || project.configError != nil) ? true : nil
@@ -92,7 +92,7 @@ enum WindowCapture {
             if let bundle = o.importBundle {
                 await project.importResultBundle(URL(fileURLWithPath: bundle)).value
                 if project.lastMessageIsError { log(project.lastMessage ?? "could not import \(bundle)"); exit(7) }
-                if let tab = o.tab { project.tab = tab }
+                if let section = o.section { project.section = section }
             }
             if let action = o.action {
                 log("running \(action)…")
@@ -112,11 +112,11 @@ enum WindowCapture {
                 }
                 _ = await waitFor(deadline: deadline) { project.isRunning ? nil : true }
                 log("action finished: \(project.lastMessage ?? "-")")
-                if let tab = o.tab { project.tab = tab }
+                if let section = o.section { project.section = section }
             }
             _ = await waitFor(deadline: Date().addingTimeInterval(30)) { project.isLoadingChanges ? nil : true }
             if let select = o.select {
-                switch project.tab {
+                switch project.section.content {
                 case .failures: project.selectedFailureID = select
                 case .snapshots: project.selectedSnapshotID = select
                 default: project.selectedChangeID = select

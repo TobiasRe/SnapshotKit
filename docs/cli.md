@@ -182,7 +182,7 @@ Failure images: 2 (see `snapkit failures`)
 ```
 
 plus up to ten build errors when the build failed. A canceled run starts the summary with *Cancelled.* The run
-is added to the history and, without `--iterations`, remembered as the last run, which the app’s Failures tab
+is added to the history and, without `--iterations`, remembered as the last run, which the app’s Last Run
 and `rerecord` / `failures` use. A canceled run isn’t, nor one in which no test ran (the build failed): the last
 run’s failures stay as they were.
 

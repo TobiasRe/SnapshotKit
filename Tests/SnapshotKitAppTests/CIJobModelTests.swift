@@ -4,7 +4,7 @@ import Testing
 @testable import SnapshotKitUI
 
 extension AppUITests {
-    /// Loading a failed CI job into the Failures tab, with GitLab and the runner replaced by the model's seams.
+    /// Loading a failed CI job into the failures view, with GitLab and the runner replaced by the model's seams.
     @MainActor
     @Suite(.serialized)
     struct CIJobModelTests {
@@ -50,7 +50,7 @@ extension AppUITests {
             #expect(source.jobURL == URL(string: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"))
             #expect(source.notes == loaded.notes)
             #expect(source.date == job.finished)
-            #expect(model.lastMessage == "Loaded 1 failing test from snapshotTest #4567. Not everything could be fetched; the Failures tab says what.")
+            #expect(model.lastMessage == "Loaded 1 failing test from snapshotTest #4567. Not everything could be fetched; the job’s failures say what.")
             // Recorded, without a commit: another machine's results say nothing about flakiness here.
             let record = try #require(RunHistory(repository: repo).load().last)
             #expect(record.kind == .imported && record.host == "ci-mac-1" && record.commit == nil && record.failed == 1 && record.passed == 3)

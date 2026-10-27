@@ -3,17 +3,6 @@ import Foundation
 import Observation
 import SnapshotKitCore
 
-/// Which snapshots the library shows.
-enum LibraryScope: String, CaseIterable, Identifiable {
-    case all = "All"
-    case changed = "Changed"
-    case failing = "Failing"
-    case uncommitted = "Uncommitted"
-    /// Snapshots whose test no longer exists.
-    case orphaned = "Orphaned"
-    var id: String { rawValue }
-}
-
 /// How the library orders snapshots. Anything but name shows one flat list.
 enum LibrarySort: String, CaseIterable, Identifiable {
     case name = "Name"
@@ -39,23 +28,46 @@ enum SnapshotComparison: Equatable {
     case variant(SnapshotFile)
 }
 
-/// What the Run tab shows under its header.
+/// What the Run view shows under its header.
 enum RunPane: String, CaseIterable, Identifiable {
     case results = "Results"
     case output = "Output"
     var id: String { rawValue }
 }
 
-enum ProjectTab: String, CaseIterable, Identifiable {
+/// An item in the sidebar under the project, in the order it lists them. Each opens one of the
+/// project's views, set up for what the item is about.
+enum ProjectSection: String, CaseIterable, Identifiable {
+    /// Snapshots changed in the working tree and not committed yet: review before committing.
+    case workingCopy = "working-copy"
+    /// Every snapshot this checkout changes compared with the base branch, committed or not.
+    case comparison
+    /// The failing tests of the last run (local, remote or imported): investigate.
+    case lastRun = "last-run"
+    /// The failing tests of a CI job loaded from GitLab.
+    case ciJob = "ci-job"
+    /// Run and record. Goes once the run has a place of its own.
+    case run
     /// Every snapshot in the project: browse, inspect, manage.
-    case snapshots = "Snapshots"
-    /// Snapshots that differ from the base branch: review.
-    case changes = "Changes"
-    /// Snapshots whose tests failed in the last run: investigate.
-    case failures = "Failures"
-    /// Run and record.
-    case run = "Run"
+    case library
+    /// Snapshots whose test no longer exists.
+    case orphaned
     var id: String { rawValue }
+
+    /// The view the section opens.
+    var content: SectionContent {
+        switch self {
+        case .workingCopy, .comparison: .changes
+        case .lastRun, .ciJob: .failures
+        case .run: .run
+        case .library, .orphaned: .snapshots
+        }
+    }
+}
+
+/// The views behind the sidebar's sections.
+enum SectionContent {
+    case snapshots, changes, failures, run
 }
 
 enum RunOperation: Equatable {
@@ -105,7 +117,7 @@ struct RepositoryGone: LocalizedError {
     }
 }
 
-/// Where the failures on the Failures tab came from.
+/// Where the failures came from: a run, a result bundle or a CI job.
 struct FailureSource: Equatable {
     var label: String
     var date: Date
@@ -118,6 +130,8 @@ struct FailureSource: Equatable {
     var detail: String?
     /// What couldn't be fetched with them, such as images gone from a CI runner.
     var notes: [String] = []
+    /// Loaded from a CI job, rather than from a run or a result bundle.
+    var isCIJob: Bool { jobURL != nil }
 }
 
 @MainActor @Observable
@@ -137,7 +151,18 @@ final class ProjectModel {
     private(set) var currentBranch: String?
     /// Local branches plus origin's, for choosing the base branch.
     private(set) var branches: [String] = []
-    var tab: ProjectTab = .snapshots
+    /// The sidebar item shown. Two sections can share a view and its selection; the selection then
+    /// moves to a row the new one shows.
+    var section: ProjectSection = .library {
+        didSet {
+            guard oldValue != section else { return }
+            switch section.content {
+            case .snapshots: keepSnapshotSelectionShown()
+            case .changes: keepChangeSelectionShown()
+            case .failures, .run: break
+            }
+        }
+    }
     /// Whether the window shows this project (set by the app model).
     @ObservationIgnored var isShown = false
 
@@ -153,15 +178,12 @@ final class ProjectModel {
     var libraryFilter = "" {
         didSet { if oldValue != libraryFilter { keepSnapshotSelectionShown() } }
     }
-    /// Bumped by ⌘F; the visible tab's filter field takes the cursor.
+    /// Bumped by ⌘F; the visible section's filter field takes the cursor.
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
-    /// Set by Load Failed CI Job… (menu, ⌘K, the Failures tab); the Failures tab asks for the job.
+    /// Set by Load Failed CI Job… (menu, ⌘K, the failures view); the failures view asks for the job.
     var askForCIJob = false
-    var libraryScope = LibraryScope.all {
-        didSet { if oldValue != libraryScope { keepSnapshotSelectionShown() } }
-    }
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }
@@ -222,8 +244,6 @@ final class ProjectModel {
             var byPath: [String: FailureItem] = [:]
             for item in failures { for path in item.referencePaths where byPath[path] == nil { byPath[path] = item } }
             failureByPath = byPath
-            // A run that fixed the selected snapshot's test takes it out of the Failing scope.
-            keepSnapshotSelectionShown()
         }
     }
     private(set) var failureSource: FailureSource?
@@ -238,7 +258,7 @@ final class ProjectModel {
     @ObservationIgnored private var diagnoseTask: Task<Void, Never>?
     /// All suites of the last run, read back from disk at launch (before any run in this session).
     private(set) var restoredSuites: [SuiteResult] = []
-    /// The suites the Run tab's results list shows.
+    /// The suites the Run view's results list shows.
     /// This session's run, if there is one (also when it has no summary); else the one read from disk.
     var resultSuites: [SuiteResult] { lastResult.map { $0.summary?.suites ?? [] } ?? restoredSuites }
     /// Output while running, results once there are some.
@@ -249,8 +269,6 @@ final class ProjectModel {
     private(set) var changeSet: SnapshotChangeSet? {
         didSet {
             changeKindByPath = Dictionary((changeSet?.changes ?? []).map { ($0.path, $0.kind) }, uniquingKeysWith: { a, _ in a })
-            // A revert takes the selected snapshot out of the Changed scope.
-            keepSnapshotSelectionShown()
         }
     }
     /// Lookups for the library's status marks, rebuilt when changes or failures change.
@@ -264,7 +282,7 @@ final class ProjectModel {
     /// orphans), so the order is computed once per change instead of on every redraw.
     private var libraryRevision = 0
     private struct LibraryOrderKey: Equatable {
-        var revision: Int, filter: String, scope: LibraryScope, sort: LibrarySort
+        var revision: Int, filter: String, orphans: Bool, sort: LibrarySort
     }
     @ObservationIgnored private var libraryOrderCache: (key: LibraryOrderKey, tree: [SnapshotModule], files: [SnapshotFile])?
     private(set) var changesError: String?
@@ -287,8 +305,8 @@ final class ProjectModel {
     private(set) var isLoadingChanges = false
 
     @ObservationIgnored private var cancelAction: (() -> Void)?
-    /// The tab the current operation was started from.
-    @ObservationIgnored private var operationTab: ProjectTab?
+    /// The section the current operation was started from.
+    @ObservationIgnored private var operationSection: ProjectSection?
     private let lineBuffer = LineBatcher()
     private var lastFailingSuites: [SuiteResult] = []
 
@@ -385,7 +403,7 @@ final class ProjectModel {
 
     /// Saves the last run and notes when: coming back to the app reloads only a last run saved
     /// elsewhere (by `snapkit`). Taken for an outside run, the app's own save cleared the flakiness
-    /// verdicts and the Run tab's result on the next activation.
+    /// verdicts and the Run view's result on the next activation.
     private func saveLastRun(_ save: (URL) -> Void) {
         save(project.url)
         lastRunSaved = LastRun.savedDate(repository: project.url)
@@ -452,7 +470,7 @@ final class ProjectModel {
     /// imported bundle, which a reload (another base branch) must not replace.
     private func loadLastRun() {
         guard let last = LastRun.load(repository: project.url), failureSource.map({ last.date > $0.date }) ?? true else { return }
-        // Newer than what is shown, so the tests ran elsewhere since (in `snapkit`): the Run tab's
+        // Newer than what is shown, so the tests ran elsewhere since (in `snapkit`): the Run view's
         // results and the verdicts of earlier flakiness checks aren't this run's.
         lastResult = nil
         flakeResults = []
@@ -537,15 +555,10 @@ final class ProjectModel {
         }
     }
 
+    /// The library's snapshots matching the filter: all of them, or the orphans in Orphaned.
     var filteredSnapshots: [SnapshotFile] {
         let files = SnapshotLibrary.filter(library?.files ?? [], text: libraryFilter)
-        switch libraryScope {
-        case .all: return files
-        case .changed: return files.filter { status(of: $0).change != nil }
-        case .failing: return files.filter { status(of: $0).failureID != nil }
-        case .uncommitted: return files.filter { $0.state != .clean }
-        case .orphaned: return files.filter { orphanIDs.contains($0.id) }
-        }
+        return section == .orphaned ? files.filter { orphanIDs.contains($0.id) } : files
     }
 
     /// Changes and failures, keyed by snapshot path.
@@ -560,15 +573,74 @@ final class ProjectModel {
         return status
     }
 
-    func count(in scope: LibraryScope) -> Int {
-        let files = library?.files ?? []
-        switch scope {
-        case .all: return files.count
-        case .changed: return files.filter { status(of: $0).change != nil }.count
-        case .failing: return files.filter { status(of: $0).failureID != nil }.count
-        case .uncommitted: return files.filter { $0.state != .clean }.count
-        case .orphaned: return orphanIDs.count
+    /// What a section's badge counts: changes, failing tests or snapshots; nil before it is known.
+    func count(of section: ProjectSection) -> Int? {
+        switch section {
+        case .workingCopy: changeSet.map { $0.changes.filter(\.isUncommitted).count }
+        case .comparison: changeSet?.changes.count
+        case .lastRun, .ciJob: failureSection == section ? failures.count : 0
+        case .run: nil
+        case .library: library?.files.count
+        case .orphaned: orphanIDs.count
         }
+    }
+
+    /// The section the failures belong to: a CI job's, or the last run's (until each has its own).
+    var failureSection: ProjectSection { failureSource?.isCIJob == true ? .ciJob : .lastRun }
+
+    /// The sections in sidebar order, one per menu shortcut (⌥⌘1…): the failures are the last
+    /// run's or a CI job's.
+    var menuSections: [ProjectSection] { [.workingCopy, .comparison, failureSection, .run, .library, .orphaned] }
+
+    /// Whether the sidebar lists `section`: Orphaned only while there are orphans (or it is open).
+    func isListed(_ section: ProjectSection) -> Bool {
+        switch section {
+        case .orphaned: !orphanIDs.isEmpty || self.section == .orphaned
+        case .lastRun, .ciJob: section == failureSection
+        default: true
+        }
+    }
+
+    /// A section's name in the window title and for VoiceOver.
+    func title(of section: ProjectSection) -> String {
+        switch section {
+        case .workingCopy: "Working Copy"
+        case .comparison: baseBranch.map { "Changes vs \($0)" } ?? "Changes vs Base Branch"
+        case .lastRun: "Last Run"
+        case .ciJob: failureSource.map { "CI Job \($0.label)" } ?? "CI Job"
+        case .run: "Run"
+        case .library: "All Snapshots"
+        case .orphaned: "Orphaned Snapshots"
+        }
+    }
+
+    /// A section's name in the sidebar, where its group heading says the rest: "vs develop" under
+    /// Workspace, the job's name under Tests.
+    func shortTitle(of section: ProjectSection) -> String {
+        switch section {
+        case .comparison: "vs \(baseBranch ?? "base branch")"
+        case .ciJob: failureSource.map { "CI · \($0.label)" } ?? "CI"
+        case .orphaned: "Orphaned"
+        default: title(of: section)
+        }
+    }
+
+    /// A section's count in words, as VoiceOver reads it beside the name.
+    func countLabel(of section: ProjectSection) -> String? {
+        guard let count = count(of: section) else { return nil }
+        let noun = switch section {
+        case .workingCopy: "uncommitted change"
+        case .comparison: "change"
+        case .lastRun, .ciJob: "failing test"
+        case .run: ""
+        case .library, .orphaned: "snapshot"
+        }
+        return "\(count) \(noun)\(count == 1 ? "" : "s")"
+    }
+
+    /// The branch checked out, or "detached HEAD"; nil until the project has loaded.
+    var branchLabel: String? {
+        currentBranch ?? (context == nil && configError == nil ? nil : "detached HEAD")
     }
 
     /// How a file goes to the Trash: the Finder's, or a stand-in in tests, which must not fill the user's.
@@ -602,23 +674,23 @@ final class ProjectModel {
     func showInLibrary(path: String) {
         guard library?.files.contains(where: { $0.path == path }) == true else { return }
         libraryFilter = ""
-        libraryScope = .all
+        section = .library
         selectedSnapshotID = path
-        tab = .snapshots
     }
 
     func isInLibrary(_ path: String) -> Bool {
         library?.files.contains { $0.path == path } ?? false
     }
 
-    /// Opens a snapshot's change on the Changes tab, clearing filters that would hide it.
+    /// Opens a snapshot's change, in Working copy when it isn't committed yet, clearing filters that
+    /// would hide it.
     func showChange(path: String) {
         guard let change = changeSet?.changes.first(where: { $0.path == path }) else { return }
         changeFilter = ""
-        changeKinds.insert(change.kind)
+        if !change.isUncommitted { changeKinds.insert(change.kind) }
         if viewedChanges.contains(change.id) { hideViewed = false }
         selectedChangeID = path
-        tab = .changes
+        section = change.isUncommitted ? .workingCopy : .comparison
     }
 
     /// Snapshots in the order the list shows them: module, suite, test, variant.
@@ -628,7 +700,7 @@ final class ProjectModel {
     var displayedTree: [SnapshotModule] { libraryOrder.tree }
 
     private var libraryOrder: (tree: [SnapshotModule], files: [SnapshotFile]) {
-        let key = LibraryOrderKey(revision: libraryRevision, filter: libraryFilter, scope: libraryScope, sort: librarySort)
+        let key = LibraryOrderKey(revision: libraryRevision, filter: libraryFilter, orphans: section == .orphaned, sort: librarySort)
         if let cache = libraryOrderCache, cache.key == key { return (cache.tree, cache.files) }
         let filtered = filteredSnapshots
         let tree = SnapshotLibrary.tree(filtered)
@@ -727,8 +799,15 @@ final class ProjectModel {
         }
     }
 
+    /// The changes the section is about: the uncommitted ones in Working copy, those of the chosen
+    /// kinds when comparing with the base branch.
+    var sectionChanges: [SnapshotChange] {
+        let changes = changeSet?.changes ?? []
+        return section == .workingCopy ? changes.filter(\.isUncommitted) : changes.filter { changeKinds.contains($0.kind) }
+    }
+
     var filteredChanges: [SnapshotChange] {
-        let changes = SnapshotChangeSet.filter(changeSet?.changes ?? [], text: changeFilter, kinds: changeKinds)
+        let changes = SnapshotChangeSet.filter(sectionChanges, text: changeFilter)
         return hideViewed ? changes.filter { !viewedChanges.contains($0.id) } : changes
     }
 
@@ -771,14 +850,14 @@ final class ProjectModel {
         if kept != selectedChangeID { selectedChangeID = kept }
     }
 
-    /// Moves the selection in the current tab's list, from anywhere in the window.
+    /// Moves the selection in the current section's list, from anywhere in the window.
     func selectAdjacent(_ step: Int) {
         func move(_ ids: [String], _ current: String?) -> String? {
             guard !ids.isEmpty else { return current }
             guard let current, let i = ids.firstIndex(of: current) else { return ids.first }
             return ids[min(max(i + step, 0), ids.count - 1)]
         }
-        switch tab {
+        switch section.content {
         case .failures: focusFailure(move(displayedFailures.map(\.id), selectedFailureID))
         case .changes: selectedChangeID = move(displayedChanges.map(\.id), selectedChangeID)
         case .snapshots: selectedSnapshotID = move(displayedSnapshots.map(\.id), selectedSnapshotID)
@@ -786,11 +865,11 @@ final class ProjectModel {
         }
     }
 
-    /// Shows a test from the run results on the Failures tab.
+    /// Shows a failing test with the others of its run or job.
     func showFailure(_ id: String) {
         guard failures.contains(where: { $0.id == id }) else { return }
         focusFailure(id)
-        tab = .failures
+        section = failureSection
     }
 
     /// Selects just this failure, even when it was one of several selected.
@@ -1076,6 +1155,8 @@ final class ProjectModel {
             }
         }
         failureSource = source
+        // Whichever item they belong to now, the failures stay in view.
+        if section.content == .failures { section = failureSection }
         diagnoseFailures()
         if selectedFailureID == nil || !failures.contains(where: { $0.id == selectedFailureID }) {
             selectedFailureID = displayedFailures.first?.id
@@ -1092,7 +1173,7 @@ final class ProjectModel {
             return Task {}
         }
         notify("Reading \(url.lastPathComponent)…")
-        let repo = project.url, start = tab
+        let repo = project.url, start = section
         let dir = scratchDirectory.appendingPathComponent("imported/\(UUID().uuidString)", isDirectory: true)
         // The Xcode CI runs, once found, rather than the selected one: an older xcresulttool can't
         // read a newer Xcode's bundles.
@@ -1118,7 +1199,7 @@ final class ProjectModel {
                             source: FailureSource(label: url.lastPathComponent, date: Date(), host: "imported", resultBundle: url))
                 notify("Imported \(summary.failed) failing test\(summary.failed == 1 ? "" : "s") from \(url.lastPathComponent).",
                        action: .showFailures)
-                moveOn(to: .failures, from: start)
+                moveOn(to: failureSection, from: start)
             case .failure(let error):
                 notify("Could not read \(url.lastPathComponent): \(error.localizedDescription)", isError: true)
             }
@@ -1128,12 +1209,12 @@ final class ProjectModel {
     // MARK: CI
 
     /// The checked-out branch's merge request and the failed jobs of its latest pipeline, offered on the
-    /// Failures tab.
+    /// failures view.
     private(set) var ciDetection: CIDetection?
     /// The job the failures were loaded from, which isn't offered again.
     private(set) var loadedCIJobID: Int?
     private(set) var isLoadingCI = false
-    /// The failed jobs the Failures tab offers to load.
+    /// The failed jobs the failures view offers to load.
     var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { $0.id != loadedCIJobID } }
 
     /// How the model reaches GitLab and the runners, off the main thread; tests replace them.
@@ -1177,7 +1258,7 @@ final class ProjectModel {
     }
 
     /// Shows a CI job's failures as a run's: what failed, the references at its commit, the images its runner
-    /// took. What couldn't be fetched is noted on the Failures tab, not a failure of the whole load.
+    /// took. What couldn't be fetched is noted with the failures, not a failure of the whole load.
     private func loadCI(_ name: String, resolve: @escaping @Sendable () throws -> GitLabLink) -> Task<Void, Never> {
         // A run ending would replace what was loaded meanwhile.
         guard !isRunning else {
@@ -1187,7 +1268,7 @@ final class ProjectModel {
         guard !isLoadingCI else { return Task {} }
         isLoadingCI = true
         notify("Loading \(name)…")
-        let repository = project.url, login = settings.ciLogin, start = tab, load = importCI
+        let repository = project.url, login = settings.ciLogin, start = section, load = importCI
         let directory = scratchDirectory.appendingPathComponent("ci/\(UUID().uuidString)", isDirectory: true)
         return Task {
             let result = await offCooperativePool { Result { try load(try resolve(), login, repository, directory) } }
@@ -1197,9 +1278,9 @@ final class ProjectModel {
                 show(ci)
                 let count = ci.summary.failed
                 notify("Loaded \(count) failing test\(count == 1 ? "" : "s") from \(ci.job.name) #\(ci.job.id)."
-                       + (ci.notes.isEmpty ? "" : " Not everything could be fetched; the Failures tab says what."),
+                       + (ci.notes.isEmpty ? "" : " Not everything could be fetched; the job’s failures say what."),
                        action: .showFailures)
-                moveOn(to: .failures, from: start)
+                moveOn(to: failureSection, from: start)
             case .failure(let error):
                 notify("Couldn’t load \(name): \(error.localizedDescription)", isError: true)
             }
@@ -1235,7 +1316,7 @@ final class ProjectModel {
     private func begin(_ op: RunOperation) -> Bool {
         guard operation == nil else { return false }
         operation = op
-        operationTab = tab
+        operationSection = section
         startedAt = Date()
         stageLabel = op.label
         runPane = .output
@@ -1257,10 +1338,10 @@ final class ProjectModel {
         return min(Double(passed + failed + skipped) / Double(total), 1)
     }
 
-    /// The Run tab's counts and duration when an operation began, put back if it's cancelled.
+    /// The Run view's counts and duration when an operation began, put back if it's cancelled.
     @ObservationIgnored private var shownBeforeOperation: (passed: Int, failed: Int, skipped: Int, duration: TimeInterval?, result: URL?)?
 
-    /// The notice after a cancel, which the Run tab marks as neither passed nor failed.
+    /// The notice after a cancel, which the Run view marks as neither passed nor failed.
     static let cancelled = "Cancelled."
     var lastMessageIsCancellation: Bool { lastMessage == Self.cancelled }
 
@@ -1303,8 +1384,8 @@ final class ProjectModel {
 
     /// Shows `next` once an action is done, if the user is still where they started it (on `start`,
     /// in this project). If they went elsewhere meanwhile, they stay there: the notice offers it.
-    private func moveOn(to next: ProjectTab, from start: ProjectTab?) {
-        if isShown, tab == start { tab = next }
+    private func moveOn(to next: ProjectSection, from start: ProjectSection?) {
+        if isShown, section == start { section = next }
     }
 
     /// What the Dock badge says: the failing tests, as Failures lists them (not a flakiness check's
@@ -1392,7 +1473,7 @@ final class ProjectModel {
     }
 
     private func completeRun(_ result: TestRunResult, images: [SnapshotFailureImages], kind: RunKind, attachmentsDirectory: URL? = nil) {
-        // A cancelled run's few results would stand in the Run tab beside the last run's failures
+        // A cancelled run's few results would stand in the Run view beside the last run's failures
         // everywhere else; it keeps showing the last run (`finish` puts its counts back).
         if !result.cancelled {
             lastResult = result
@@ -1457,9 +1538,9 @@ final class ProjectModel {
         reRecord(files, granularity: .tests)
     }
 
-    /// The snapshot behind the current tab's selection (a library file, a change, a failure's reference).
+    /// The snapshot behind the current section's selection (a library file, a change, a failure's reference).
     var selectedSnapshotFile: SnapshotFile? {
-        switch tab {
+        switch section.content {
         case .snapshots: selectedSnapshot
         case .changes: selectedChange?.file
         case .failures: selectedFailure?.referencePaths.first.map { SnapshotFile(path: $0, byteSize: 0) }
@@ -1469,7 +1550,7 @@ final class ProjectModel {
 
     /// Names what ⇧⌘R will record: several failures can be selected at once.
     var reRecordSelectionTitle: String {
-        tab == .failures && selectedFailures.count > 1 ? "Re-record \(selectedFailures.count) Selected Tests" : "Re-record Selected Test"
+        section.content == .failures && selectedFailures.count > 1 ? "Re-record \(selectedFailures.count) Selected Tests" : "Re-record Selected Test"
     }
 
     /// The selected snapshot's test exists to open (an orphan's is gone).
@@ -1479,7 +1560,7 @@ final class ProjectModel {
 
     var canReRecordSelection: Bool {
         guard !isRunning, environment != nil else { return false }
-        switch tab {
+        switch section.content {
         case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
         case .changes: return selectedChange.map { $0.kind != .deleted && !orphanIDs.contains($0.id) } ?? false
         case .failures: return selectedFailure != nil
@@ -1490,7 +1571,7 @@ final class ProjectModel {
     /// Re-records the test of the selected snapshot, change or failure.
     func reRecordSelection() {
         guard canReRecordSelection else { return }
-        switch tab {
+        switch section.content {
         case .snapshots: if let file = selectedSnapshot { reRecord([file], granularity: .tests) }
         case .changes: if let change = selectedChange { reRecord([change.file], granularity: .tests) }
         case .failures: if !selectedFailures.isEmpty { reRecord(failures: selectedFailures) }
@@ -1554,7 +1635,7 @@ final class ProjectModel {
                     isError = isError || verified.isError
                 }
                 if outcome.verifyRun?.cancelled == true { message += " The verification was cancelled." }
-                // A cancelled run's few results don't replace what the Run tab shows (see `completeRun`).
+                // A cancelled run's few results don't replace what the Run view shows (see `completeRun`).
                 if !record.cancelled, outcome.verifyRun?.cancelled != true { lastResult = outcome.verifyRun ?? record }
                 // New references are working-tree changes: the next step is to look at them.
                 finish(message: message, isError: isError, action: record.nothingTested == nil ? .reviewChanges : nil)
@@ -1664,12 +1745,12 @@ final class ProjectModel {
         let onSome = checked.filter { $0.failingDevices != nil }.count
         let always = checked.filter { $0.verdict == .alwaysFails }.count - onSome
         let passing = checked.count - always - onSome - flaky
-        let start = operationTab
+        let start = operationSection
         finish(message: "\(iterations)× on \(result.host): \(always) fail\(always == 1 ? "s" : "") every time, "
                 + (onSome > 0 ? "\(onSome) only on some devices, " : "")
                 + "\(flaky) flaky, \(passing) pass\(passing == 1 ? "es" : "").",
                action: .showFailures)
-        moveOn(to: .failures, from: start)
+        moveOn(to: failureSection, from: start)
     }
 
     func runRemote() {
@@ -1714,9 +1795,9 @@ final class ProjectModel {
                     } else if out.run.cancelled {
                         finish(message: Self.cancelled)
                     } else {
-                        let start = operationTab, count = out.downloadedSnapshots.count
+                        let start = operationSection, count = out.downloadedSnapshots.count
                         var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false
-                        // The Run tab shows the verification, as for a local re-record; the record run
+                        // The Run view shows the verification, as for a local re-record; the record run
                         // when there is none to show (not asked for, or it couldn't run).
                         if !verify { lastResult = out.run }
                         // Verified where it was recorded, as `snapkit rerecord --remote` does.
@@ -1739,7 +1820,7 @@ final class ProjectModel {
                             }
                         }
                         finish(message: message, isError: isError, action: .reviewChanges)
-                        moveOn(to: .changes, from: start)
+                        moveOn(to: .workingCopy, from: start)
                     }
                 }
             } catch {
@@ -1798,7 +1879,7 @@ struct ProjectFixture {
     var detectedBaseBranch: String?
     var currentBranch: String?
     var branches: [String] = ["develop", "main", "feature/checkout-redesign"]
-    var tab: ProjectTab = .run
+    var section: ProjectSection = .run
     var library: SnapshotLibrary?
     var snapshotImages: [String: Data] = [:]
     var orphanIDs: Set<String> = []
@@ -1842,7 +1923,7 @@ extension ProjectModel {
         detectedBaseBranch = f.detectedBaseBranch ?? f.context?.config.baseBranch
         currentBranch = f.currentBranch
         branches = f.branches
-        tab = f.tab
+        section = f.section
         operation = f.operation
         stageLabel = f.stageLabel
         phase = f.phase
@@ -1930,10 +2011,12 @@ enum NoticeAction: Equatable {
         }
     }
 
-    var tab: ProjectTab {
+    /// Where it leads in `project`: re-recorded snapshots are uncommitted changes.
+    @MainActor
+    func section(in project: ProjectModel) -> ProjectSection {
         switch self {
-        case .reviewChanges: .changes
-        case .showFailures: .failures
+        case .reviewChanges: .workingCopy
+        case .showFailures: project.failureSection
         }
     }
 }

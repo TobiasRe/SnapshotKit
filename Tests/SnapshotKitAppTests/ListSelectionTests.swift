@@ -27,27 +27,27 @@ extension AppUITests {
         }
 
         @Test func clicksOnLibraryRowsReachTheList() throws {
-            try expectClicksReachTheList(.library, tab: .snapshots)
+            try expectClicksReachTheList(.library, section: .library)
         }
 
         @Test func clicksOnChangesReachTheList() throws {
-            try expectClicksReachTheList(.changes, tab: .changes)
+            try expectClicksReachTheList(.changes, section: .comparison)
         }
 
         @Test func clicksOnFailuresReachTheList() throws {
-            try expectClicksReachTheList(.failures, tab: .failures)
+            try expectClicksReachTheList(.failures, section: .lastRun)
         }
 
         @Test func selectingSnapshotsLogsNoRuntimeIssue() throws {
-            try expectQuietSelection(.library, tab: .snapshots) { $0.selectedSnapshotID }
+            try expectQuietSelection(.library, section: .library) { $0.selectedSnapshotID }
         }
 
         @Test func selectingChangesLogsNoRuntimeIssue() throws {
-            try expectQuietSelection(.changes, tab: .changes) { $0.selectedChangeID }
+            try expectQuietSelection(.changes, section: .comparison) { $0.selectedChangeID }
         }
 
         @Test func selectingFailuresLogsNoRuntimeIssue() throws {
-            try expectQuietSelection(.failures, tab: .failures) { $0.selectedFailureID }
+            try expectQuietSelection(.failures, section: .lastRun) { $0.selectedFailureID }
         }
 
         /// The selection tests pass when nothing is logged, so first make sure a runtime issue would be
@@ -60,9 +60,9 @@ extension AppUITests {
 
         // MARK: Helpers
 
-        private func expectClicksReachTheList(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
+        private func expectClicksReachTheList(_ scenario: AppFixtures.Scenario, section: ProjectSection,
                                               sourceLocation: SourceLocation = #_sourceLocation) throws {
-            try hostProject(scenario, tab: tab) { root, _ in
+            try hostProject(scenario, section: section) { root, _ in
                 let table = try #require(tables(in: root).first { $0.numberOfRows > 2 }, "no list found",
                                          sourceLocation: sourceLocation)
                 var checked = 0
@@ -78,10 +78,10 @@ extension AppUITests {
             }
         }
 
-        private func expectQuietSelection(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
+        private func expectQuietSelection(_ scenario: AppFixtures.Scenario, section: ProjectSection,
                                           selection: (ProjectModel) -> String?,
                                           sourceLocation: SourceLocation = #_sourceLocation) throws {
-            try hostProject(scenario, tab: tab) { root, project in
+            try hostProject(scenario, section: section) { root, project in
                 let table = try #require(tables(in: root).first { $0.numberOfRows > 2 }, "no list found",
                                          sourceLocation: sourceLocation)
                 let since = Date()
@@ -98,12 +98,12 @@ extension AppUITests {
             }
         }
 
-        private func hostProject(_ scenario: AppFixtures.Scenario, tab: ProjectTab,
+        private func hostProject(_ scenario: AppFixtures.Scenario, section: ProjectSection,
                                  _ body: (NSView, ProjectModel) throws -> Void) rethrows {
             let store = AppFixtures.store()
             let app = AppModel(store: store)
             let project = AppFixtures.project(scenario, store: store)
-            project.tab = tab
+            project.section = section
             app.show(project)
             try AppFixtures.host(ProjectView(project: project).environment(app)) { try body($0, project) }
         }

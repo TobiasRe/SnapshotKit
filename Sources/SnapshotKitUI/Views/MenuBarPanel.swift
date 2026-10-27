@@ -180,7 +180,7 @@ struct RunProgressRow: View {
             }
             .accessibilityLabel("\(project.project.name) progress")
             HStack(spacing: DS.Space.m) {
-                // The icons carry the status colors; the numbers stay readable, as on the Run tab.
+                // The icons carry the status colors; the numbers stay readable, as in the Run view.
                 Label { Text("\(project.passed)") } icon: {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(DS.Status.passed)
                 }

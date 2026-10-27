@@ -31,12 +31,12 @@ find out why they failed, and re-record what should change.
 
 | Page | Covers |
 |---|---|
-| [Projects and scanning](projects.md) | adding projects, scan folders, the sidebar, the ⌘K palette, the window, notices, settings |
-| [The snapshot library](library.md) | the Snapshots tab: naming, filtering, scopes, sorting, the detail, variants and history, orphans |
-| [Reviewing changes](changes.md) | the Changes tab: kinds of change, the base branch, merge-base vs tip, Viewed marks, discarding noise |
-| [Failures and flaky tests](failures.md) | the Failures tab: result bundles, diagnosis, history strips, flakiness checks, run history |
+| [Projects and scanning](projects.md) | adding projects, scan folders, the project switcher and sections, the ⌘K palette, the window, notices, settings |
+| [The snapshot library](library.md) | All Snapshots: naming, filtering, sorting, the detail, variants and history, orphans |
+| [Reviewing changes](changes.md) | Working Copy and vs develop: kinds of change, the base branch, merge-base vs tip, Viewed marks, discarding noise |
+| [Failures and flaky tests](failures.md) | Last Run: result bundles, diagnosis, history strips, flakiness checks, run history |
 | [Comparing images](comparing.md) | the compare view: modes, zoom, pixel readout, the diagnosis and suggested precision |
-| [Running tests](running.md) | the Run tab: how runs mirror CI, the command, scope, results |
+| [Running tests](running.md) | Run: how runs mirror CI, the command, scope, results |
 | [Re-recording](re-recording.md) | what can be re-recorded, the record patch, how it is always restored, verification |
 | [Remote runs](remote-runs.md) | running, recording and checking flakiness on another Mac over SSH |
 | [The menu bar item](menu-bar.md) | run progress, failing counts and quick access from the menu bar |

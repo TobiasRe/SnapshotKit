@@ -77,15 +77,17 @@ struct SnapshotsTab: View {
         }
     }
 
-    /// Search and view options, then the scope: the same two bars as the detail's header and info row.
+    /// Search, then how to show what it finds: the same two bars as the detail's header and info row.
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneBar(height: DS.Bar.header) {
-                SearchField(prompt: "Filter snapshots", text: $project.libraryFilter, focusRequest: project.focusFilterRequest)
+                SearchField(prompt: section == .orphaned ? "Filter orphaned snapshots" : "Filter snapshots",
+                            text: $project.libraryFilter, focusRequest: project.focusFilterRequest)
                     .help("Filter by module, suite, test or variant; every word must match")
                     // In the full-width grid a window-wide field reads as a page title.
                     .frame(maxWidth: DS.Pane.readableWidth)
-                Spacer(minLength: 0)
+            }
+            FilterBar {
                 GlassIconMenu(title: "Sort By", symbol: "arrow.up.arrow.down", help: "Sort by name (grouped), size or most recently changed") {
                     Picker("Sort By", selection: $project.librarySort) {
                         ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
@@ -100,22 +102,6 @@ struct SnapshotsTab: View {
                 ], selection: $layoutRaw)
                 .fixedSize()
             }
-            FilterBar {
-                // Counts when they fit, then without, then a menu: never wraps or clips.
-                ViewThatFits(in: .horizontal) {
-                    scopeSegments(counts: true)
-                    scopeSegments(counts: false)
-                    Menu {
-                        scopePicker.pickerStyle(.inline)
-                    } label: {
-                        Label(scopeMenuTitle, systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                    .fixedSize()
-                    .quietControl()
-                    .accessibilityLabel("Show")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
         }
         .confirmationDialog(project.displayedSnapshots.count == 1 ? "Move the orphaned snapshot to the Trash?"
                             : "Move \(project.displayedSnapshots.count) orphaned snapshots to the Trash?", isPresented: $confirmTrashOrphans) {
@@ -126,7 +112,7 @@ struct SnapshotsTab: View {
         .confirmationDialog("Re-record \(testCount(project.recordableShownSnapshots)) tests?", isPresented: $confirmRecordShown) {
             Button("Re-record") { project.reRecord(project.recordableShownSnapshots, granularity: .tests) }
         } message: {
-            Text("Their reference images are recorded again and then verified. You can review the result on the Changes tab before committing.")
+            Text("Their reference images are recorded again and then verified. You can review the result in Working copy before committing.")
         }
     }
 
@@ -139,7 +125,7 @@ struct SnapshotsTab: View {
                 Text(LibraryStats(library).summary).lineLimit(1)
                 Spacer(minLength: DS.Space.s)
                 let shown = project.displayedSnapshots, recordable = project.recordableShownSnapshots
-                if project.libraryScope == .orphaned && !shown.isEmpty {
+                if section == .orphaned && !shown.isEmpty {
                     // A quiet glass control, like every bulk action: grey text alone didn't read as one.
                     Button("Move \(shown.count) to Trash…") { confirmTrashOrphans = true }
                         .quietControl()
@@ -160,35 +146,7 @@ struct SnapshotsTab: View {
         }
     }
 
-    /// Orphaned only once there are any (or it is the current scope).
-    private var scopes: [LibraryScope] {
-        LibraryScope.allCases.filter { $0 != .orphaned || !project.orphanIDs.isEmpty || project.libraryScope == .orphaned }
-    }
-
-    private func scopeTitle(_ scope: LibraryScope, counts: Bool) -> String {
-        let count = project.count(in: scope)
-        return scope == .all || !counts || count == 0 ? scope.rawValue : "\(scope.rawValue) \(count)"
-    }
-
-    private func scopeSegments(counts: Bool) -> some View {
-        GlassSegmented(title: "Show",
-                       segments: scopes.map { Segment(scopeTitle($0, counts: counts), value: $0) },
-                       selection: $project.libraryScope)
-            .fixedSize()
-    }
-
-    private var scopePicker: some View {
-        Picker("Show", selection: $project.libraryScope) {
-            ForEach(scopes) { Text(scopeTitle($0, counts: true)).tag($0) }
-        }
-    }
-
-    /// "Show: All", "Show: Failing 1": the narrow column's stand-in for the segmented control.
-    private var scopeMenuTitle: String {
-        let scope = project.libraryScope
-        let count = project.count(in: scope)
-        return scope == .all || count == 0 ? "Show: \(scope.rawValue)" : "Show: \(scope.rawValue) \(count)"
-    }
+    private var section: ProjectSection { project.section }
 
     private func testCount(_ files: [SnapshotFile]) -> Int { ProjectModel.testCount(files) }
 
@@ -362,8 +320,8 @@ struct SnapshotStatusLine: View {
         if status.orphaned { return ("Orphaned", DS.Status.neutral, "Its test no longer exists") }
         if let change = status.change {
             // In the library "Committed" would read as unchanged: a change committed on this branch
-            // is "Changed" here, as the scope filter says. (The Changes tab, where everything is a
-            // change, keeps Committed and Uncommitted apart.)
+            // is "Changed" here. (The changes, where everything is a change, keep Committed and
+            // Uncommitted apart.)
             let label = change == .committed ? "Changed" : change.label
             return (label, DS.Status.color(for: change), change == .committed
                     ? "Changed in a commit on this branch" : "\(change.label) change against the base branch")
@@ -399,7 +357,7 @@ struct SnapshotStatusLine: View {
     }
 }
 
-/// Why an empty library list or grid is empty: the filter, or the scope. A library without any
+/// Why an empty library list or grid is empty: the filter, or no orphans. A library without any
 /// snapshot says so in the detail, with the way to record the first ones.
 struct LibraryEmptyState: View {
     let project: ProjectModel
@@ -407,9 +365,9 @@ struct LibraryEmptyState: View {
     var body: some View {
         if !project.libraryFilter.isEmpty {
             ContentUnavailableView.search(text: project.libraryFilter)
-        } else if project.libraryScope != .all {
-            ContentUnavailableView("Nothing \(project.libraryScope.rawValue)", systemImage: "checkmark.circle",
-                                   description: Text("No snapshot is \(project.libraryScope.rawValue.lowercased()) right now."))
+        } else if project.section == .orphaned {
+            ContentUnavailableView("No Orphaned Snapshots", systemImage: "checkmark.circle",
+                                   description: Text("Every snapshot belongs to a test."))
         }
     }
 }
@@ -552,7 +510,7 @@ struct SnapshotDetail: View {
             .help("Its test failed in the last run. Click to compare with the actual image.")
             .accessibilityLabel(status.verdict == .flaky ? "Flaky, compare with actual" : "Failing, compare with actual")
         }
-        // The same word as the snapshot's row (and the Changes tab): the change against the base
+        // The same word as the snapshot's row (and the changes): the change against the base
         // branch, else an uncommitted edit, else orphaned. A change opens for review.
         if let state = SnapshotStatusLine.state(of: file, status) {
             if status.change != nil, !status.orphaned {

@@ -1,8 +1,12 @@
 # Reviewing changes
 
-The **Changes** tab (⌥⌘2) lists every snapshot image that differs from your base branch — committed on this
-branch or not yet — and shows each one before and after. Review them the way you review code: one by one,
-marking each as viewed.
+Two sidebar sections list changed snapshot images and show each one before and after:
+
+- **Working Copy** (⌥⌘1): the snapshots you changed and haven’t committed yet — modified, new or deleted.
+- **vs develop** (⌥⌘2, named after your base branch; in full *Changes vs develop*): every snapshot that
+  differs from your base branch, committed on this branch or not yet.
+
+Review them the way you review code: one by one, marking each as viewed.
 
 ![Changes compared with the base branch](images/changes-dark.png)
 
@@ -31,7 +35,7 @@ The base branch is found in this order (see [Configuration](configuration.md#the
 4. `origin/HEAD`, else the first of `develop`, `main` and `master` that exists.
 
 `origin/<branch>` is preferred over a local branch of the same name, so fetch to compare with the latest
-state. If the branch doesn’t exist, the tab says so: *Base branch “x” was not found locally or on origin.
+state. If the branch doesn’t exist, the list says so: *Base branch “x” was not found locally or on origin.
 Fetch it or choose a different base branch.*
 
 Comparing at the merge-base needs the commit where your branch left the base branch. A shallow clone (common
@@ -46,7 +50,11 @@ The filter bar has three menus:
   only your branch’s changes, what a pull request shows), or with the base branch’s current tip (also shows
   what changed there since you branched, labeled **Committed** like your own commits).
 - **Kinds** (*All*): show or hide Committed, Uncommitted, New and Deleted; **Hide Viewed**; **Mark All as
-  Viewed** / **Mark All as Not Viewed**.
+  Viewed** / **Mark All as Not Viewed**. In Working Copy it has no kinds to choose, only Hide Viewed and
+  actions such as Mark All as Viewed.
+
+For now both sections compare with the base branch, and share its branch menu and the Merge-base / Branch
+tip choice.
 
 ↻ (Refresh) compares again. It also happens by itself when snapshot files change on disk and when you return
 to SnapshotKit from another app.

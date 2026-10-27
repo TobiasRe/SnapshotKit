@@ -1,6 +1,6 @@
 # Keyboard shortcuts
 
-## Projects and tabs
+## Projects and sections
 
 | Shortcut | Action |
 |---|---|
@@ -9,11 +9,13 @@
 | ⇧⌘O | Import a result bundle (`.xcresult`, e.g. a CI artifact) |
 | ⇧⌘L | Load a failed GitLab CI job |
 | ⌘, | Settings |
-| ⌥⌘1 | Snapshots tab |
-| ⌥⌘2 | Changes tab |
-| ⌥⌘3 | Failures tab |
-| ⌥⌘4 | Run tab |
-| ⌘F | Filter the current list (Escape clears the filter, a second Escape leaves the field); the Failures list has no filter |
+| ⌥⌘1 | Working Copy |
+| ⌥⌘2 | Changes vs the base branch (vs develop) |
+| ⌥⌘3 | Last Run (or the loaded CI job) |
+| ⌥⌘4 | Run |
+| ⌥⌘5 | All Snapshots |
+| ⌥⌘6 | Orphaned (while there are orphaned snapshots) |
+| ⌘F | Filter the current list (Escape clears the filter, a second Escape leaves the field); the Last Run list has no filter |
 
 ## Running and recording
 
@@ -34,10 +36,10 @@
 | ↑ / ↓ | Previous / next item in the focused list (in the library’s grid, the arrow keys move the selection; ↑ / ↓ by a row) |
 | Return | Open the selected tile large (library grid) |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
-| V (in the Changes list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
-| ⌘-click, ⇧-click | Select several failures (Failures list), to re-record or flakiness-check them together |
+| V (in the Working Copy or vs develop list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
+| ⌘-click, ⇧-click | Select several failures (Last Run list), to re-record or flakiness-check them together |
 | Space | Quick Look the selected snapshot, change or failure’s image (while comparing in Toggle mode, it flips the images instead) |
-| ⌘C | Copy the selected image (in Failures, the actual image of the attempt shown) |
+| ⌘C | Copy the selected image (in Last Run, the actual image of the attempt shown) |
 
 ## Comparing
 

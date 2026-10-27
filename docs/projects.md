@@ -1,7 +1,7 @@
 # Projects and scanning
 
 A *project* in SnapshotKit is a git repository with snapshot tests. This page covers adding projects,
-scan folders, the sidebar, the ⌘K palette and the settings that apply to all projects.
+scan folders, the sidebar and its sections, the ⌘K palette and the settings that apply to all projects.
 
 ## What counts as a project
 
@@ -21,9 +21,9 @@ ones.
 | How | What happens |
 |---|---|
 | **File › Add Project…** (⌘O) | Choose any folder inside a repository; the repository’s root is added and opened. |
-| Sidebar **+** › **Add Project…** | The same. |
+| Project switcher › **Add Project…** | The same. |
 | Drop a repository folder onto the window | Added and opened. |
-| Sidebar **+** › **Add Scan Folder…** | Choose a folder that contains repositories; it is scanned now and on every **Rescan Folders**. |
+| Project switcher › **Add Scan Folder…** | Choose a folder that contains repositories; it is scanned now and on every **Rescan Folders**. |
 | Drop any other folder onto the window | Added as a scan folder and scanned. |
 | ⌘K, type a path | Projects match by name and by path. |
 
@@ -53,20 +53,41 @@ projects it finds.
 
 ## The sidebar
 
-The sidebar has up to three sections:
+The sidebar shows one project at a time: the project switcher at the top, and the project’s sections under
+it.
 
-- **Pinned** — projects you pinned (right-click › Pin). Always at the top.
-- **Recent** — once you have more than eight projects: the ones you opened most recently, newest first (up to
-  ten), as shortcuts into the long list below.
-- **Projects** — every other project, alphabetically. A project stays in its place here when you open it.
+### The project switcher
 
-Each row shows the project’s initials, its name and, after a run with failures, a red dot with the number of
-failing tests. Hover a row for its full path. Right-click for **Pin**/**Unpin**, **Reveal in Finder** and
-**Remove from List** (which only removes it from SnapshotKit, never from disk); for the open project, ⌘K
-offers the same.
+The switcher shows the project’s name and the checked-out branch. Click it to open another project:
 
-The **+** menu at the bottom adds projects and scan folders and rescans; the **⌘K** button opens the
-palette.
+- **Find a project** — type to filter; ↑/↓ and Return work from the field.
+- **Pinned** — projects you pinned (right-click › Pin).
+- **Projects** — every project, alphabetically.
+- **Add Project…**, **Add Scan Folder…** and, when you have scan folders, **Rescan Folders**.
+
+Each project shows its initials and name and, after a run with failures, a red dot with the number of failing
+tests. Hover a project for its full path. Right-click a project
+for **Pin**/**Unpin**, **Reveal in Finder** and **Remove from List** (which only removes it from SnapshotKit,
+never from disk); for the open project, ⌘K offers the same.
+
+### Sections
+
+The sections come in three groups: Workspace, Tests and Library.
+
+| Section | Shortcut | What it shows |
+|---|---|---|
+| **Working Copy** | ⌥⌘1 | Snapshots changed and not committed yet: modified, new or deleted. [Details](changes.md) |
+| **vs develop** | ⌥⌘2 | Every snapshot this checkout changes compared with the base branch, committed or not. [Details](changes.md) |
+| **Last Run** | ⌥⌘3 | Failing snapshots from the last run or an imported `.xcresult`. [Details](failures.md) |
+| **Run** | ⌥⌘4 | Configuration, runs, live output and results. [Details](running.md) |
+| **All Snapshots** | ⌥⌘5 | The library: every reference image. [Details](library.md) |
+| **Orphaned** | ⌥⌘6 | Snapshots no test records any more; listed only while there are some. [Details](library.md#orphaned-snapshots) |
+
+**vs develop** is named after the base branch; its full name, in the window title, the menus and VoiceOver,
+is *Changes vs develop*. When the failures were loaded from a GitLab CI job, **Last Run** is named after the
+job instead: *CI · snapshotTest #4567* (in full, *CI Job snapshotTest #4567*).
+
+Each section carries its count as a badge: Working Copy’s with an orange dot, Last Run’s with a red one.
 
 ## The ⌘K palette
 
@@ -77,30 +98,24 @@ to choose; Escape to close.
   their folder.
 - **Commands** act on the open project, each with its keyboard shortcut where it has one: Run Snapshot
   Tests, Run on Remote Machine, Re-record Selected Test, Open Test in Xcode, Re-record Failing Suites, Check
-  Flakiness of Failing Tests, Re-record All Snapshot Tests…, Cancel Run, Show Snapshots/Changes/Failures/Run,
-  Import Result Bundle…, Refresh Changes, Mark All Changes as Viewed, Pin/Unpin Project, Reveal Project in
-  Finder, Remove Project from List and Add Project…. A command that can’t do anything now (nothing failing,
+  Flakiness of Failing Tests, Re-record All Snapshot Tests…, Cancel Run, Show Working Copy, Show Changes vs
+  develop, Show Last Run, Show Run, Show All Snapshots, Show Orphaned Snapshots, Import Result Bundle…, Refresh
+  Changes, Mark All Changes as Viewed, Pin/Unpin Project, Reveal Project in Finder, Remove Project from List
+  and Add Project…. A command that can’t do anything now (nothing failing,
   no remote machine, everything viewed, a run in progress) is left out.
 
 Matching is fuzzy: `rrf` finds *Re-record Failing Suites*, `pay` finds *payments-ui*.
 
 ## The window
 
-SnapshotKit has one main window. A project shows in it with a toolbar and four tabs:
+SnapshotKit has one main window. A project shows in it with the [sidebar](#the-sidebar) on the left and the
+open section on the right. A project opens on All Snapshots.
 
-| Tab | Shortcut | What it shows |
-|---|---|---|
-| **Snapshots** | ⌥⌘1 | The library: every reference image. [Details](library.md) |
-| **Changes** | ⌥⌘2 | Snapshots that differ from the base branch. [Details](changes.md) |
-| **Failures** | ⌥⌘3 | Failing snapshots from the last run or an imported `.xcresult`. [Details](failures.md) |
-| **Run** | ⌥⌘4 | Configuration, runs, live output and results. [Details](running.md) |
+The window title is the open section’s name (*Working Copy*, *Changes vs develop*); the subtitle is the project
+and its branch (`payments-ui · feature/checkout`).
 
-The tab labels carry counts: *Snapshots (26)*, *Changes (16)*, *Failures (3)*. The window title is the project
-name; the subtitle is the current branch and, when it isn’t the base branch, the base branch it is compared
-with (`feature/checkout → develop`).
-
-Besides the tabs, the toolbar holds **Run** (▶, ⌘R): run the snapshot tests the way CI does. Its arrow offers
-**Re-record Failing Suites** and **Re-record All Snapshot Tests…**. While a run is going, it becomes
+The toolbar holds **Run** (▶, ⌘R): run the snapshot tests the way CI does. Its arrow offers **Re-record
+Failing Suites** and **Re-record All Snapshot Tests…**. While a run is going, it becomes
 **Cancel** (⌘.). To re-record the selected test, use the camera button in its detail header, or ⇧⌘R from
 anywhere.
 
@@ -108,20 +123,21 @@ There is no second main window to open (only the compare windows of the [diff to
 the last window quits SnapshotKit, unless the [menu bar item](menu-bar.md) is on: then it keeps running, and
 the Dock icon or the menu bar item brings the window back.
 
-The list column on the left of Snapshots, Changes and Failures has one width shared by all three tabs; drag
-the divider to change it.
+The list column on the left of every section with a list has one width shared by all of them; drag the
+divider to change it.
 
 ## Notices
 
 When something finishes — a run, a re-record — a notice floats at the bottom right of the window with the
-outcome and, where there is one, the next step (*Show Failures* after a failing run, *Review Changes* after a
-re-record). It fades after a few seconds unless it reports a problem. A scan’s result floats at the bottom
-center until you close it. VoiceOver reads both out. Notices never push the panes around.
+outcome and, where there is one, the next step (*Show Failures* after a failing run opens Last Run, *Review
+Changes* after a re-record opens Working Copy). It fades after a few seconds unless it reports a problem. A
+scan’s result floats at the bottom center until you close it. VoiceOver reads both out. Notices never push
+the panes around.
 
 ## Live updates
 
 While a project is open, SnapshotKit watches its `__Snapshots__` folders. When a test re-records images from
-Xcode or the command line, the library and the Changes tab update by themselves. When you come back to
+Xcode or the command line, the library, Working Copy and vs develop update by themselves. When you come back to
 SnapshotKit from another app, the changes are refreshed too.
 
 ## Settings
@@ -136,5 +152,5 @@ SnapshotKit from another app, the changes are refreshed too.
 | Verify after re-recording | on | After recording new references, run the same tests again to confirm they pass. |
 | Settings file | | **Show in Finder** reveals `settings.json`. |
 
-Per-project choices — the base branch, the remote host and the test target — are made on the Run tab and
-the Changes tab and stored in the same file. See [Configuration](configuration.md).
+Per-project choices — the base branch, the remote host and the test target — are made in Run and in
+the branch menu of vs develop, and stored in the same file. See [Configuration](configuration.md).

@@ -78,11 +78,12 @@ See [Getting started](https://tobiasre.github.io/SnapshotKit/docs/getting-starte
 
 ## Quick start
 
-Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (sidebar **+** › Add Scan
-Folder, or drop a folder that isn’t a repository). Scanning looks six folders deep for git repositories with
+Add a repository (⌘O, or drop its folder onto the window), or a folder to scan (project switcher › Add Scan
+Folder…, or drop a folder that isn’t a repository). Scanning looks six folders deep for git repositories with
 `__Snapshots__` images, a `.snapshotkit.yml`, or a dependency on swift-snapshot-testing, and says what it
-found. A project opens on its snapshot library. The sidebar shows each project’s failing count from its
-last run.
+found. A project opens on its snapshot library. The sidebar shows one project: the project switcher at the
+top, with each project’s failing count from its last run, and under it the project’s sections with their
+counts: Working Copy, vs develop (the base branch), Last Run, Run, All Snapshots and Orphaned.
 
 | Shortcut | Action |
 |---|---|
@@ -96,7 +97,7 @@ last run.
 | ⇧⌘L | Load a failed GitLab CI job |
 | ⌘K | Go to a project or run a command |
 | ⌘F | Filter the list (Escape clears the filter, then leaves the field) |
-| ⌥⌘1 – ⌥⌘4 | Snapshots / Changes / Failures / Run |
+| ⌥⌘1 – ⌥⌘6 | Working Copy / vs develop / Last Run / Run / All Snapshots / Orphaned |
 | ⌘1 – ⌘4 | Side by side / slider / difference / toggle |
 | ⌘= / ⌘− / ⌘0 | Zoom in / out / to fit. Pinch to zoom, two-finger or mouse drag to pan, double-click to fit |
 | ⇧⌘0 | Zoom to the changed pixels |
@@ -107,16 +108,16 @@ last run.
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous snapshot, change or failure, wherever the focus is |
 | V (in the list), ⌥⌘V | Toggle a change’s *Viewed* mark; marking it viewed goes to the next one |
 
-In the library, filter by name and narrow to **Changed**, **Failing**, **Uncommitted** or **Orphaned**
-snapshots; sort by size or recency; switch between list and grid. A snapshot’s detail lists its variants
-and committed versions to compare against, and links to its change or failure. The footer’s
-**Re-record All** (or **Re-record N Shown** when filtered) records everything the list shows (say, every
+In the library, filter by name, sort by size or recency, and switch between list and grid; **vs develop**,
+**Last Run**, **Working Copy** and **Orphaned** show the changed, failing, uncommitted and orphaned snapshots.
+A snapshot’s detail lists its variants and committed versions to compare against, and links to its change
+or failure. The footer’s **Re-record All** (or **Re-record N Shown** when filtered) records everything the list shows (say, every
 `dark` variant), asking first above ten tests. The arrow beside the toolbar’s Run button re-records the failing
 suites, or every snapshot test after asking.
 
 Right-click a snapshot, change or failure to re-record its test or suite, copy the image or a side-by-side
-comparison, open or reveal it, or jump to it in another view. The Changes tab picks the base branch from a
-menu and can revert any change to it. The Dock icon shows the open project’s failing count, and bounces when a run finishes
+comparison, open or reveal it, or jump to it in another view. In vs develop, pick the base branch
+from a menu and revert any change to it. The Dock icon shows the open project’s failing count, and bounces when a run finishes
 in the background.
 
 **Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie
@@ -221,7 +222,7 @@ zensical serve                          # the documentation at localhost:8000 (p
 `make-samples.sh` creates Shop, Weather, Chat, Fitness and DesignKit (Swift packages using
 swift-snapshot-testing, each a git repository) next to this repository, records their references on a
 dedicated simulator, and gives four of them a feature branch with committed and uncommitted changes, a
-failing last run, an orphaned and a new snapshot. Add the folder as a scan folder to try every tab.
+failing last run, an orphaned and a new snapshot. Add the folder as a scan folder to try every section.
 
 The app’s UI is covered by snapshot tests (swift-snapshot-testing with Swift Testing) in
 `Tests/SnapshotKitAppTests`. They render real views from fixture state in light and dark. Liquid Glass
@@ -243,7 +244,7 @@ source artwork such as `assets/app-icon.icon` (an Icon Composer file, compiled b
 
 `SnapshotKitCore` holds all the logic: config, process runner, xcresult parser, git, record-patch manager,
 remote runner and project store. `SnapshotKitUI` (SwiftUI) and `SnapshotKitCLI` (`snapkit`) are thin front ends.
-`SnapshotKit.app/Contents/MacOS/SnapshotKit --capture out.png --project <repo> --tab changes --compare slider
+`SnapshotKit.app/Contents/MacOS/SnapshotKit --capture out.png --project <repo> --section comparison --compare slider
 --zoom 3` renders the window off-screen without activating the app.
 
 ## License

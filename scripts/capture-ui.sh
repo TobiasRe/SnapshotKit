@@ -53,18 +53,19 @@ capture() {
     -AppleLanguages "(en)" -AppleLocale en_US 2>&1 | { grep '^capture:' || true; }
 }
 
-capture 00-snapshots --project "$REPO" --tab snapshots
-capture 00-snapshots-dark --project "$REPO" --tab snapshots --appearance dark
+capture 00-snapshots --project "$REPO" --section library
+capture 00-snapshots-dark --project "$REPO" --section library --appearance dark
 if [ "$WITH_RUN" = 1 ]; then
-  capture 01-run-after-run --project "$REPO" --tab run --action run --timeout 900
+  capture 01-run-after-run --project "$REPO" --section run --action run --timeout 900
 else
-  capture 01-run --project "$REPO" --tab run
+  capture 01-run --project "$REPO" --section run
 fi
-capture 02-changes-side-by-side --project "$REPO" --tab changes --compare side-by-side
-capture 03-changes-slider --project "$REPO" --tab changes --compare slider
-capture 04-changes-difference-zoomed --project "$REPO" --tab changes --compare difference --zoom 4 --pan 200,0
-capture 05-failures --project "$REPO" --tab failures --compare side-by-side
-capture 06-quick-switcher --project "$REPO" --tab changes --quick-switcher "pay"
+capture 02-working-copy --project "$REPO" --section working-copy
+capture 02-changes-side-by-side --project "$REPO" --section comparison --compare side-by-side
+capture 03-changes-slider --project "$REPO" --section comparison --compare slider
+capture 04-changes-difference-zoomed --project "$REPO" --section comparison --compare difference --zoom 4 --pan 200,0
+capture 05-failures --project "$REPO" --section last-run --compare side-by-side
+capture 06-quick-switcher --project "$REPO" --section comparison --quick-switcher "pay"
 rm -f "$SNAPSHOTKIT_HOME/settings.json"
 capture 07-welcome
 

@@ -39,7 +39,7 @@ your `.gitignore` ignores the snapshot folder, git doesn’t see the files and n
 
 ## Running tests
 
-Every problem SnapshotKit finds before a run is shown on the left of the Run tab, under Environment or
+Every problem SnapshotKit finds before a run is shown on the left of Run, under Environment or
 Configuration, with the fix; the header offers **Check Again**. `snapkit config` prints the same checks.
 
 | Message | Fix |
@@ -55,7 +55,7 @@ Configuration, with the fix; the header offers **Check Again**. `snapkit config`
 
 **The configuration SnapshotKit found is wrong.**
 Run `snapkit config` to see every value and where it came from, then override what’s wrong in
-`.snapshotkit.yml`. Values typed on the Run tab (base branch, remote host) override everything for you alone.
+`.snapshotkit.yml`. Values typed in Run (base branch, remote host) override everything for you alone.
 
 **My CI uses `swift test`, not `xcodebuild`.**
 SnapshotKit runs `xcodebuild`. Set `scheme:` (for a package, `<Package>-Package`) and `device:` in
@@ -97,20 +97,20 @@ sure it’s gone — `snapkit restore --force`.
 
 ## Changes
 
-**The Changes tab says: Base branch “develop” was not found locally or on origin.**
-Fetch it (`git fetch origin develop`), or pick another base branch in the Changes tab’s branch menu.
+**Changes vs develop says: Base branch “develop” was not found locally or on origin.**
+Fetch it (`git fetch origin develop`), or pick another base branch in the branch menu of vs develop.
 
 **“This shallow clone doesn’t have the commit where the branch left origin/develop.”**
 The clone has only the latest commits (CI often clones with `--depth`), so the merge-base isn’t there. Fetch
-the history with `git fetch --unshallow`, or switch the Changes tab to **Branch tip** (`snapkit changes
+the history with `git fetch --unshallow`, or switch vs develop to **Branch tip** (`snapkit changes
 --tip`). Without a shallow clone, the same problem reads *This branch has no history in common with …*: pick
 another base branch, or compare with the tip.
 
 **“This repository has no commits yet, so there is nothing to compare with.”**
-Commit the snapshots once; from then on the Changes tab compares with the base branch.
+Commit the snapshots once; from then on vs develop compares with the base branch.
 
 **Re-records with no visible change clutter my pull request.**
-Use **Discard…** on the Changes tab: it restores every uncommitted snapshot whose difference is invisible.
+Use **Discard…** in Working Copy: it restores every uncommitted snapshot whose difference is invisible.
 
 ## Remote runs
 
