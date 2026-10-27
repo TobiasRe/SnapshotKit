@@ -705,6 +705,7 @@ final class ProjectModel {
         if case .ciJob(let id) = section, failureSets[.ciJob(id)] == nil {
             return loadingCIJobs.contains(id) ? "loading" : "failed, not loaded"
         }
+        if section == .run { return isRunning ? stageLabel : nil }
         guard let count = count(of: section) else { return nil }
         let noun = switch section {
         case .workingCopy: "uncommitted change"
@@ -1473,6 +1474,14 @@ final class ProjectModel {
         return true
     }
 
+    /// How many tests a re-record runs, which the recording and the verification each measure their progress
+    /// against: the tests named, else the suites' tests when they are known.
+    static func testCount(suites: [SuiteResult], onlyTesting: [String]?) -> Int? {
+        if let onlyTesting { return onlyTesting.count }
+        let count = suites.reduce(0) { $0 + $1.tests.count }
+        return count > 0 ? count : nil
+    }
+
     /// Completed share of the tests, when the total is known (from the last run of the same scope).
     var progressFraction: Double? {
         guard isRunning, phase == .testing, let total = expectedTotal, total > 0 else { return nil }
@@ -1752,6 +1761,7 @@ final class ProjectModel {
 
     private func reRecord(suites targets: [SuiteResult], onlyTesting: [String]?, what: String) {
         guard begin(.rerecord), let (ctx, env) = requireEnvironment() else { return }
+        expectedTotal = Self.testCount(suites: targets, onlyTesting: onlyTesting)
         let recorder = ReRecorder(runner: TestRunner(repository: ctx.repository, config: ctx.config, environment: env))
         cancelAction = { recorder.cancel() }
         let verify = store.settings.verifyAfterRecord

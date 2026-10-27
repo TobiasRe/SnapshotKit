@@ -81,10 +81,13 @@ struct SectionList: View {
         .accessibilityLabel([project.title(of: section), project.countLabel(of: section)].compactMap { $0 }.joined(separator: ", "))
     }
 
-    /// The count; for a CI job not loaded yet, a red dot (it failed), or a spinner while it loads.
+    /// The count; for a CI job not loaded yet, a red dot (it failed), or a spinner while it loads; for
+    /// Run, a spinner while something runs.
     @ViewBuilder
     private func badge(_ section: ProjectSection) -> some View {
-        if case .ciJob(let id) = section, project.count(of: section) == nil {
+        if section == .run, project.isRunning {
+            ProgressView().controlSize(.mini)
+        } else if case .ciJob(let id) = section, project.count(of: section) == nil {
             if project.loadingCIJobs.contains(id) {
                 ProgressView().controlSize(.mini)
             } else {

@@ -163,6 +163,15 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        /// The toolbar while a run goes on, wherever you are: the stage, the bar, and how far it has got.
+        @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+        func runProgress(appearance: NSAppearance.Name) {
+            let (app, project) = makeApp(.running)
+            project.section = .library
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 300, height: 64),
+                       appearance: appearance, named: appearance == .darkAqua ? "dark" : "light")
+        }
+
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func changesTab(appearance: NSAppearance.Name) {
             AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")

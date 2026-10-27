@@ -64,6 +64,12 @@ struct ProjectView: View {
         .navigationTitle(project.title(of: project.section))
         .navigationSubtitle(subtitle)
         .toolbar {
+            // A run or re-record says how far it has got wherever you are in the project.
+            if project.isRunning {
+                ToolbarItem(placement: .principal) {
+                    RunProgress(project: project)
+                }
+            }
             // No re-record button here: each detail header has one beside what it records, and ⇧⌘R
             // works from anywhere.
             ToolbarItem(placement: .primaryAction) {
@@ -117,6 +123,53 @@ struct RunTab: View {
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// What is running and how far it has got, in the toolbar: the stage, a bar, and how many of the tests
+/// are done. A click shows the output, in Run.
+struct RunProgress: View {
+    let project: ProjectModel
+
+    static let width: CGFloat = 260
+
+    var body: some View {
+        Button { project.section = .run } label: {
+            VStack(alignment: .leading, spacing: DS.Space.xxs) {
+                HStack(spacing: DS.Space.s) {
+                    Text(project.stageLabel).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: DS.Space.s)
+                    if let counts { Text(counts).monospacedDigit().foregroundStyle(.secondary).fixedSize() }
+                }
+                .font(DS.Font.caption)
+                Group {
+                    if let fraction = project.progressFraction {
+                        ProgressView(value: fraction)
+                    } else {
+                        ProgressView().progressViewStyle(.linear)
+                    }
+                }
+                .controlSize(.mini)
+            }
+            .frame(width: Self.width)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show the output (Run)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(project.stageLabel)
+        .accessibilityValue(counts ?? "")
+        .accessibilityHint("Shows the output")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// "12 of 30 · 1 failed": failures only where they mean something. Recording fails every test it records.
+    private var counts: String? {
+        let done = project.passed + project.failed + project.skipped
+        guard project.phase == .testing, done > 0 || project.expectedTotal != nil else { return nil }
+        let progress = project.expectedTotal.map { "\(min(done, $0)) of \($0)" } ?? "\(done) done"
+        let showsFailures = project.failed > 0 && project.operation != .rerecord && project.operation != .remoteRecord
+        return showsFailures ? "\(progress) · \(project.failed) failed" : progress
     }
 }
 

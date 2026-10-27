@@ -231,6 +231,14 @@ extension AppUITests {
             #expect(!model.recordsFailures && model.failingSuites.isEmpty && !model.canReRecordSelection)
         }
 
+        /// A re-record measures its progress against the tests it records: those named, else its suites'.
+        @Test func aReRecordKnowsHowManyTestsItRuns() {
+            let suites = [AppFixtures.checkoutSuite, AppFixtures.profileSuite]
+            #expect(ProjectModel.testCount(suites: suites, onlyTesting: ["A/B/c()", "A/B/d()", "A/E/f()"]) == 3)
+            #expect(ProjectModel.testCount(suites: suites, onlyTesting: nil) == suites.reduce(0) { $0 + $1.tests.count })
+            #expect(ProjectModel.testCount(suites: [SuiteResult(bundle: "A", path: ["B"], tests: [], failureFiles: [])], onlyTesting: nil) == nil)
+        }
+
         @Test func reRecordSelectionFollowsTheSection() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())
             model.section = .library
@@ -1018,7 +1026,7 @@ extension AppUITests {
             #expect(try savedLastRun(in: repo) == saved)
         }
 
-        /// A re-record's progress is not measured against the last full run's test count.
+        /// A re-record's progress is measured against the tests it records, not the last full run's count.
         @Test func reRecordingForgetsTheLastRunsTotal() async throws {
             let (repo, _) = try makeRepo()
             let model = try runnableModel(repo, xcodebuild: Self.longRun, failures: true)
@@ -1026,9 +1034,10 @@ extension AppUITests {
             #expect(model.expectedTotal == 3)
             model.cancel()
             try await waitUntilFinished(model)
+            let recorded = model.failingSuites.reduce(0) { $0 + $1.tests.count }
             model.reRecordFailed()
             #expect(model.isRunning)
-            #expect(model.expectedTotal == nil)
+            #expect(recorded > 0 && model.expectedTotal == recorded)
             model.cancel()
             try await waitUntilFinished(model)
         }
