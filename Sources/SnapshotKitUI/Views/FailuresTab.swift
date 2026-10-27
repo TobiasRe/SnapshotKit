@@ -119,18 +119,7 @@ struct FailuresTab: View {
                     }
                 }
                 Spacer(minLength: DS.Space.s)
-                if let job = ciJob {
-                    // A job's images can come back once its runner has them again, so it loads again.
-                    GlassIconButton(title: "Reload", symbol: "arrow.clockwise", help: "Load the job again") {
-                        project.loadCIJob(job)
-                    }
-                    .disabled(project.loadingCIJobs.contains(job.id))
-                    if let url = jobURL {
-                        Button("Open in GitLab") { NSWorkspace.shared.open(url) }
-                            .quietControl()
-                            .help(url.absoluteString)
-                    }
-                } else {
+                if ciJob == nil {
                     GlassSplitButton(title: "Import Result Bundle", symbol: "square.and.arrow.down",
                                      help: "Import an .xcresult, for example from a CI job (⇧⌘O)") {
                         app.importResultBundleFromPanel()
@@ -147,19 +136,33 @@ struct FailuresTab: View {
                 }
             }
             FilterBar {
-                // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
-                Button("Re-record Failing Suites") { project.reRecordFailed() }
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
-                    .help(ciJob == nil ? "Re-record the failing suites of the last run, then verify (⌥⇧⌘R)"
-                          : "Re-record the suites that failed in this job here, then verify (⌥⇧⌘R)")
-                Button("Check Flakiness") { project.checkFlakiness() }
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
-                    .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
+                // A CI job's failures are only looked at for now: the way to the job, and nothing to record.
+                if ciJob != nil {
+                    if let url = jobURL {
+                        Button("Open in GitLab") { NSWorkspace.shared.open(url) }
+                            .quietControl()
+                            .help(url.absoluteString)
+                    }
+                } else {
+                    lastRunActions
+                }
             }
         }
         .controlSize(.small)
+    }
+
+    private var lastRunActions: some View {
+        Group {
+            // The name it has everywhere; "Re-record All…" is the library's, for every snapshot.
+            Button("Re-record Failing Suites") { project.reRecordFailed() }
+                .quietControl()
+                .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
+                .help("Re-record the failing suites of the last run, then verify (⌥⇧⌘R)")
+            Button("Check Flakiness") { project.checkFlakiness() }
+                .quietControl()
+                .disabled(project.isRunning || project.environment == nil || project.failingSuites.isEmpty)
+                .help("Run the failing tests several times and say which are flaky (⌥⌘R)")
+        }
     }
 
     @ViewBuilder
@@ -293,14 +296,16 @@ struct FailuresTab: View {
                          position: shown.firstIndex(of: item.id).map { ($0 + 1, shown.count) },
                          step: { project.selectAdjacent($0) }) {
                 HStack(spacing: DS.Space.s) {
-                    GlassSplitButton(title: "Re-record", symbol: "camera",
-                                     help: "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
-                        project.reRecord(failures: [item])
-                    } menu: {
-                        Button("Re-record Test") { project.reRecord(failures: [item]) }
-                        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                    if project.recordsFailures {
+                        GlassSplitButton(title: "Re-record", symbol: "camera",
+                                         help: "Record this test’s snapshots again, then check that it passes (⇧⌘R)") {
+                            project.reRecord(failures: [item])
+                        } menu: {
+                            Button("Re-record Test") { project.reRecord(failures: [item]) }
+                            Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                        }
+                        .disabled(project.isRunning || project.environment == nil)
                     }
-                    .disabled(project.isRunning || project.environment == nil)
                     GlassIconMenu(title: "Test Actions", symbol: "ellipsis", help: "More actions for this test") {
                         actions(for: item)
                     }
@@ -390,13 +395,15 @@ struct FailuresTab: View {
 
     @ViewBuilder
     private func actions(for item: FailureItem) -> some View {
-        Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Button("Re-record \(item.test.name)") { project.reRecord(failures: [item]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
-            .disabled(project.isRunning || project.environment == nil)
-        Divider()
+        if project.recordsFailures {
+            Button("Check Flakiness of This Test") { project.checkFlakiness(tests: [item.id]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Button("Re-record \(item.test.name)") { project.reRecord(failures: [item]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Button("Re-record Suite \(item.suite.name)") { project.reRecordFailed(suites: [item.suite]) }
+                .disabled(project.isRunning || project.environment == nil)
+            Divider()
+        }
         if let reference = item.referencePaths.first {
             Button("Open Test in Xcode") { project.openTestInXcode(SnapshotFile(path: reference, byteSize: 0)) }
             Button("Show Reference in Library") { project.showInLibrary(path: reference) }
@@ -672,7 +679,8 @@ struct VerdictTag: View {
     }
 }
 
-/// Several failures selected: what they are, and the two things to do with all of them at once.
+/// Several failures selected: what they are, and the two things to do with all of them at once (for
+/// the last run's; a CI job's are only looked at for now).
 struct BatchFailureDetail: View {
     let project: ProjectModel
 
@@ -688,16 +696,18 @@ struct BatchFailureDetail: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: DS.Space.s)
-                Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
-                    .fixedSize()
-                    .quietControl()
-                    .disabled(project.isRunning || project.environment == nil)
-                    .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
-                Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
-                    .primaryActionStyle()
-                    .fixedSize()
-                    .disabled(project.isRunning || project.environment == nil)
-                    .help("Record these tests’ snapshots again, then check that they pass (⇧⌘R)")
+                if project.recordsFailures {
+                    Button("Check Flakiness") { project.checkFlakiness(tests: items.map(\.id)) }
+                        .fixedSize()
+                        .quietControl()
+                        .disabled(project.isRunning || project.environment == nil)
+                        .help("Run just these tests several times and say which are flaky (\(project.store.settings.flakeIterations)×)")
+                    Button("Re-record \(items.count) Tests") { project.reRecord(failures: items) }
+                        .primaryActionStyle()
+                        .fixedSize()
+                        .disabled(project.isRunning || project.environment == nil)
+                        .help("Record these tests’ snapshots again, then check that they pass (⇧⌘R)")
+                }
             }
             // Header controls are small everywhere, as in every other detail header.
             .controlSize(.small)

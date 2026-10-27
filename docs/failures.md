@@ -48,8 +48,8 @@ nothing, and its item shows its failing count once it has loaded.
 
 - The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. The header
   names the job, the runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 ·
-  3f1c2a9b · …*). **Open in GitLab** opens the job’s page; ↻ loads it again, for images its runner has
-  again. A job that can’t load says why in its item, with **Try Again**.
+  3f1c2a9b · …*), and **Open in GitLab** opens the job’s page. A job that can’t load says why in its item,
+  with **Try Again**; **Load Failed CI Job…** with its URL loads one again, say after setting the CI login.
 - Each reference as it was at the commit the job ran (`git show`), not as the working tree has it now, which
   may have been re-recorded since. A commit that isn’t in your clone yet falls back to the working tree, with
   a note to `git fetch`.
@@ -60,7 +60,10 @@ nothing, and its item shows its failing count once it has loaded.
 
 **Notes, not errors.** Whatever couldn’t be fetched is listed above the failures, and the rest still shows:
 images no longer on the runner, an SSH login that was refused, a host key not yet trusted, a commit missing
-from your clone. **Re-record Failing Suites** then records the CI failures here.
+from your clone.
+
+A CI job’s failures are for looking at, for now: re-recording them and checking them for flakiness work on
+the last run only.
 
 **What it needs.**
 

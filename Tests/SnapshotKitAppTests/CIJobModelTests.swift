@@ -45,7 +45,7 @@ extension AppUITests {
             #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
             model.section = .ciJob(4567)
             #expect(model.failures.map(\.id) == ["AppTests/CardTests/card()"])
-            #expect(model.failingSuites.map(\.identifier) == ["AppTests/CardTests"])     // to re-record here
+            #expect(model.failureSets[.ciJob(4567)]?.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
             let source = try #require(model.failureSource)
             #expect(source.label == "snapshotTest #4567")
             #expect(source.host == "ci-mac-1")

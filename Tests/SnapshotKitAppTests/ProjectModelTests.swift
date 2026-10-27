@@ -216,6 +216,8 @@ extension AppUITests {
             #expect(model.count(of: .lastRun) == 0)                 // the fixture's last run failed nothing
             #expect(model.menuSections == [.workingCopy, .comparison, .lastRun, .run, .library, .orphaned])
             #expect(ProjectSection(id: "ci-job-4567") == .ciJob(4567) && ProjectSection(id: "last-run") == .lastRun)
+            // Only looked at, for now: nothing to re-record or check for flakiness from here.
+            #expect(!model.recordsFailures && model.failingSuites.isEmpty && !model.canReRecordSelection)
         }
 
         @Test func reRecordSelectionFollowsTheSection() throws {

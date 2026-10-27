@@ -408,8 +408,13 @@ final class ProjectModel {
     var settings: ProjectSettings { store.settings(for: project) }
     var config: SnapshotConfig? { context?.config }
     var isRunning: Bool { operation != nil }
-    /// The failing suites of the failures shown.
-    var failingSuites: [SuiteResult] { failureSets[failureOrigin]?.failingSuites ?? [] }
+    /// The failing suites of the failures shown, which Re-record Failing Suites and Check Flakiness act
+    /// on: none for a CI job's, which are only looked at for now.
+    var failingSuites: [SuiteResult] { recordsFailures ? failureSets[failureOrigin]?.failingSuites ?? [] : [] }
+
+    /// Whether the failures shown can be re-recorded and checked for flakiness here: the last run's,
+    /// not (yet) a CI job's.
+    var recordsFailures: Bool { failureOrigin == .lastRun }
     var hasRemote: Bool { !(config?.remoteHost ?? "").isEmpty }
     var baseBranch: String? { config?.baseBranch }
 
@@ -1696,7 +1701,7 @@ final class ProjectModel {
         switch section.content {
         case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
         case .changes: return selectedChange.map { $0.kind != .deleted && !orphanIDs.contains($0.id) } ?? false
-        case .failures: return selectedFailure != nil
+        case .failures: return selectedFailure != nil && recordsFailures
         case .run: return false
         }
     }

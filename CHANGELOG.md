@@ -22,7 +22,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   option `--tab` is now `--section`.
 - Each failed CI job has its own item in the sidebar, under its merge request (*CI · !12*), instead of a banner
   over the failures: a red dot until you open it, which loads it, then its failing count. A job's failures no
-  longer replace the last run's, nor another job's. Its header has **Open in GitLab** and ↻ to load it again.
+  longer replace the last run's, nor another job's. Its header has **Open in GitLab**; re-recording and
+  flakiness checks are for the last run's failures only, for now.
 - The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;
   `scripts/make-app.sh` is gone.
