@@ -29,6 +29,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 ### Fixed
 - A changed or failing snapshot shows its two images as soon as they're decoded; the difference and its
   numbers follow, and are computed about six times faster in a Debug build, where they took seconds.
+- ↑ and ↓ on a clicked image keep stepping through the list. After the first step the image gave way to a
+  spinner while the next one loaded, and the keyboard focus went with it.
 - Opening a project from ⌘K, the menu bar, Add Project… or a drop no longer runs git on the main thread:
   the window stays responsive while git checks the folder, and of two quick picks the later one opens.
   A git command runs at the priority of whatever waits for it, so the main thread no longer waits on

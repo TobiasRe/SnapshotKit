@@ -316,8 +316,14 @@ struct CompareView: View {
     private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
         if mode == .slider, key == .leftArrow || key == .rightArrow { return nudgeSplit(key == .leftArrow ? -1 : 1) }
         var viewport = compare.viewport
-        guard viewport.pan(arrow: key) else { return .ignored }
-        withAnimation(DS.motion) { compare.viewport = viewport }
+        if viewport.pan(arrow: key) {
+            withAnimation(DS.motion) { compare.viewport = viewport }
+            return .handled
+        }
+        // Not zoomed in: ↑ ↓ step through the list beside it, as they would with the list focused.
+        // (Not in a compare window, which has no list.)
+        guard windowCompare == nil, key == .upArrow || key == .downArrow, let project = app.current else { return .ignored }
+        project.selectAdjacent(key == .upArrow ? -1 : 1)
         return .handled
     }
 
@@ -328,12 +334,7 @@ struct CompareView: View {
             showingAfter.toggle()
             return true
         }
-        if arrow(key) == .handled { return true }
-        // Not zoomed in: ↑ ↓ step through the list beside it, as they would with the list focused.
-        // (Not in a compare window, which has no list.)
-        guard windowCompare == nil, key == .upArrow || key == .downArrow, let project = app.current else { return false }
-        project.selectAdjacent(key == .upArrow ? -1 : 1)
-        return true
+        return arrow(key) == .handled
     }
 
     private func nudgeSplit(_ direction: CGFloat) -> KeyPress.Result {
@@ -690,6 +691,24 @@ struct ZoomPanSurface: NSViewRepresentable {
         var onHover: ((point: CGPoint, canvas: CGSize)?) -> Void = { _ in }
         var onKey: (KeyEquivalent) -> Bool = { _ in false }
         private var tracking: NSTrackingArea?
+
+        /// The window (by number: it may be closing) whose image surface had the keyboard when it went
+        /// away: stepping to the next snapshot swaps the image for a spinner while that one loads. The
+        /// next surface to appear there takes the keyboard back, so ↑ ↓ keep stepping, unless something
+        /// else took it meanwhile.
+        private static var handingOver: Int?
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            if newWindow == nil, let window, window.firstResponder === self { Self.handingOver = window.windowNumber }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, Self.handingOver == window.windowNumber else { return }
+            Self.handingOver = nil
+            if window.firstResponder === window || window.firstResponder == nil { window.makeFirstResponder(self) }
+        }
 
         override func keyDown(with event: NSEvent) {
             let key: KeyEquivalent? = switch event.keyCode {
