@@ -163,6 +163,17 @@ extension AppUITests {
             assertPane(project, app: app, appearance: .aqua)
         }
 
+        /// Before the tests start nothing can be counted: the toolbar names the phase instead.
+        @Test func runProgressWhileBuilding() {
+            let (app, project) = makeApp(.running)
+            var f = ProjectFixture()
+            f.operation = .rerecord
+            f.stageLabel = "Recording snapshots"
+            f.phase = .building
+            project.apply(f)
+            assertView(RunProgress(project: project).environment(app).padding(), size: CGSize(width: 300, height: 64), appearance: .aqua)
+        }
+
         /// The toolbar while a run goes on, wherever you are: the stage, the bar, and how far it has got.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func runProgress(appearance: NSAppearance.Name) {

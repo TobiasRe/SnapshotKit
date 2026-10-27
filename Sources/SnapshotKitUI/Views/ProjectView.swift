@@ -127,7 +127,8 @@ struct RunTab: View {
 }
 
 /// What is running and how far it has got, in the toolbar: the stage, a bar, and how many of the tests
-/// are done. A click shows the output, in Run.
+/// are done; before the tests start, the phase (building, say) and how long it has taken, as no total
+/// is known then. A click shows the output, in Run.
 struct RunProgress: View {
     let project: ProjectModel
 
@@ -139,7 +140,20 @@ struct RunProgress: View {
                 HStack(spacing: DS.Space.s) {
                     Text(project.stageLabel).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: DS.Space.s)
-                    if let counts { Text(counts).monospacedDigit().foregroundStyle(.secondary).fixedSize() }
+                    Group {
+                        if let counts {
+                            Text(counts)
+                        } else if let started = project.startedAt {
+                            TimelineView(.periodic(from: started, by: 1)) { context in
+                                Text("\(project.phase.label) · \(RunStatusHeader.elapsed(context.date.timeIntervalSince(started)))")
+                            }
+                        } else {
+                            Text(project.phase.label)
+                        }
+                    }
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
                 }
                 .font(DS.Font.caption)
                 Group {
@@ -158,7 +172,7 @@ struct RunProgress: View {
         .help("Show the output (Run)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(project.stageLabel)
-        .accessibilityValue(counts ?? "")
+        .accessibilityValue(counts ?? project.phase.label)
         .accessibilityHint("Shows the output")
         .accessibilityAddTraits(.isButton)
     }

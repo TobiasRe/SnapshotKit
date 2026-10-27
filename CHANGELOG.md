@@ -21,7 +21,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   records. ⌥⌘1–6 open them; the library's Show scopes and the sidebar's Recent section are gone. The capture
   option `--tab` is now `--section`.
 - While tests run or re-record, the toolbar shows the stage, a progress bar and how many tests are done, wherever
-  you are in the project; a click opens the output in Run, whose item spins meanwhile. A re-record measures its
+  you are in the project (before the tests start, the phase and how long it has taken: "Building · 1:42"); a
+  click opens the output in Run, whose item spins meanwhile. A re-record measures its
   progress against the tests it records.
 - Each failed CI job has its own item in the sidebar, under its merge request (*CI · !12*), instead of a banner
   over the failures: a red dot until you open it, which loads it, then its failing count. A job's failures no
