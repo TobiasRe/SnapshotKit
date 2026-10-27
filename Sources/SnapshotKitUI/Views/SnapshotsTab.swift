@@ -112,7 +112,7 @@ struct SnapshotsTab: View {
         .confirmationDialog("Re-record \(testCount(project.recordableShownSnapshots)) tests?", isPresented: $confirmRecordShown) {
             Button("Re-record") { project.reRecord(project.recordableShownSnapshots, granularity: .tests) }
         } message: {
-            Text("Their reference images are recorded again and then verified. You can review the result in Working copy before committing.")
+            Text("Their reference images are recorded again and then verified. You can review the result in Working Copy before committing.")
         }
     }
 

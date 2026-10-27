@@ -12,6 +12,9 @@ import SwiftUI
 /// The window is placed off-screen and the app does not activate, so it does not disturb
 /// whatever is on screen. Set SNAPSHOTKIT_HOME to keep captures away from real settings.
 struct CaptureOptions: Equatable {
+    /// Whether this process is a capture (`--capture`).
+    static let isCapturing = parse(CommandLine.arguments) != nil
+
     var output: String
     var project: String?
     var section: ProjectSection?

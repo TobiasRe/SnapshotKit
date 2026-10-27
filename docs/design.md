@@ -31,9 +31,10 @@ A deliberately tiny system for a native macOS tool. It follows the Liquid Glass 
 ## What the app is for
 
 SnapshotKit is for **inspecting, managing and updating snapshots**; failing and flaky tests are one part of
-that. The structure follows: the library (every snapshot) is the first tab and the home of a project, Changes
-and Failures are focused views of the same snapshots, and Run is where tests run and record. Every snapshot
-can be followed between these views, and re-recording is available wherever a snapshot is shown.
+that, and the window reads like a review tool. The sidebar shows one project, under a switcher, as sections:
+what you changed (Working Copy, vs develop), what the tests say (Last Run, each failed CI job), and everything
+there is (All Snapshots, Orphaned). Each opens one of a few views of the same snapshots; every snapshot can be
+followed between them, and re-recording is available wherever a snapshot is shown.
 
 ## Principles
 
@@ -85,12 +86,11 @@ can be followed between these views, and re-recording is available wherever a sn
 - `primaryActionStyle()`: the one accent action of a region, a role rather than a look.
 - `PaneBar` / `PaneFooter`: the fixed-height bars of a column. A list has a header (search and view options),
   a filter bar and a footer (counts and the bulk action); a detail has a header (`DetailHeader`) and an info
-  row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window, and the
-  list footers sit level with the sidebar’s footer.
+  row (`DetailInfoRow`) of the same heights, so the hairlines under them continue across the window.
 - `ListDetailSplit`: the list beside its detail (400 points by default, 280–520), with one divider position
-  for every tab, kept across launches; dragging it on one tab sets it everywhere, and switching tabs never moves it. Content too wide
+  for every section, kept across launches; dragging it in one sets it everywhere, and switching never moves it. Content too wide
   for the column gives way (a long branch name truncates) instead of spilling over.
-- `PropertySection` / `PropertyRow`: an inspector’s properties (the Run tab’s configuration): small section
+- `PropertySection` / `PropertyRow`: an inspector’s properties (the Run view’s configuration): small section
   headers, gray labels in a 104-point column, values beside them, and where a value came from in quieter
   type under it.
 - `PositionStepper`: “12 / 40” with previous and next in every detail header (⌥⌘↑ / ⌥⌘↓).
@@ -113,12 +113,16 @@ can be followed between these views, and re-recording is available wherever a sn
 - Capsules are `Capsule(style: .circular)`: the continuous style draws its flat end segment a point outside
   the curve, which showed as a tick at both ends of every pill.
 - `ZoomControls`: − level + on the compare and snapshot bars, plain on the glass.
-- `GlassSegmented`: every segmented control (layout, scope, variant, Results/Output, compare mode) is a glass
+- `GlassSegmented`: every segmented control (layout, variant, Results/Output, compare mode) is a glass
   pill with a quiet thumb (`DS.Surface.thumb`) that slides to the chosen segment, never the system’s gray
   track. On a bar that is glass already (compare), the segments sit on it without a second pill. Labels use
   fixed label colors: glass would otherwise pick its own, which came out dark in dark mode.
-- The sidebar lists every project under Projects, alphabetically, so a project stays where it is when
-  opened. Pinned and Recent above are shortcuts to the same projects; a click highlights only the row clicked.
+- The sidebar (`SidebarView`) is one project: `ProjectSwitcher` on top (the project, its branch, and a popover
+  of the others with search, Pinned and Projects), then `SectionList`. A section's count is status when it
+  needs you (an orange or red dot), a plain number otherwise. The switcher sits above the list rather than
+  inset over it or in it: either way the list drew blank off-screen. Off-screen (`--capture`, the snapshot
+  tests) the sidebar's selection material draws black and its vibrancy drops the dots' colour, so there the
+  selected row is filled by hand, grey as in a background window, and the counts are flattened.
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
   ranked list, one line each, a command’s shortcut where a project shows its folder, so the palette also
   teaches the keyboard.
@@ -150,8 +154,8 @@ can be followed between these views, and re-recording is available wherever a sn
   dark at a 99.9% pixel tolerance, so visual changes have to be re-recorded on purpose.
   Off-screen rendering can’t composite Liquid Glass, so `DS.solidSurfaces` draws an opaque stand-in there
   (headless captures included). Real glass needs a look on screen.
-- **An accessibility audit test** walks each tab’s live accessibility tree and fails on unlabeled controls.
-- **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every tab, compare mode,
+- **An accessibility audit test** walks each view’s live accessibility tree and fails on unlabeled controls.
+- **No runtime warnings.** `scripts/check-runtime-warnings.sh` (also in CI) shows every view, compare mode,
   the palette and the welcome screen in the real window and fails on any SwiftUI or AppKit runtime issue,
   such as *Publishing changes from within view updates*. `ListSelectionTests` select rows in every list the
   way a click does and read the same log in-process. The same captures fail when a list’s scroll view is

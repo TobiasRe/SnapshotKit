@@ -200,6 +200,17 @@ extension AppUITests {
             #expect(model.count(of: .workingCopy) == 2)
             #expect(model.count(of: .comparison) == 4)
             #expect(!model.changesAreFiltered)
+
+            // With nothing uncommitted, Working Copy shows no change, also not the one vs develop selected.
+            var f = ProjectFixture()
+            var committed = AppFixtures.changeSet
+            committed.changes.removeAll(where: \.isUncommitted)
+            f.changeSet = committed
+            f.section = .comparison
+            model.apply(f)
+            #expect(model.selectedChange != nil)
+            model.section = .workingCopy
+            #expect(model.displayedChanges.isEmpty && model.shownChange == nil)
         }
 
         /// A CI job's failures have an item of their own, under the job's merge request, beside the

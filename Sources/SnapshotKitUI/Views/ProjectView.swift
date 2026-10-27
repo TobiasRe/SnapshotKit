@@ -57,7 +57,7 @@ struct ProjectView: View {
                             isPresented: $project.confirmReRecordAll) {
             Button(ProjectModel.testCount(project.recordableSnapshots) == 1 ? "Re-record" : "Re-record All") { project.reRecordAll() }
         } message: {
-            Text("Every reference image is recorded again and then verified. Review the result in Working copy before committing.")
+            Text("Every reference image is recorded again and then verified. Review the result in Working Copy before committing.")
         }
         // The sidebar says which project and section; the title repeats the section, as a Mac
         // window names what it shows, and the subtitle where it is.

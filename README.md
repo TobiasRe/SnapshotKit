@@ -19,17 +19,18 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
 - **Browse and inspect** every snapshot in a project by module, test file and test, as a list with a large
   preview or as a grid. See variants (light/dark, devices, named states) side by side, a snapshot’s history
   across commits, its size, and the pixel under the pointer.
-- **Review changes**: every snapshot that differs from the base branch, with side-by-side, slider, difference
-  and toggle views, *Viewed* marks like a code review, and one-step discard of re-records that only picked up
-  rendering noise.
+- **Review changes**: what you haven’t committed yet (*Working Copy*), and every snapshot that differs from the
+  base branch (*vs develop*), with side-by-side, slider, difference and toggle views, *Viewed* marks like a code
+  review, and one-step discard of re-records that only picked up rendering noise.
 - **Update**: re-record any test, suite or filtered set of snapshots (not just failing ones), with the source
   patch always restored and the result verified.
 - **Manage**: find orphaned snapshots whose test is gone, the largest images, what’s new or modified; drag
   snapshots and changes into a review, or copy them or a side-by-side comparison.
 - **Failing and flaky tests** are part of the same picture: reference vs. actual vs. difference (also for an
   `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
-  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs. A failed GitLab
-  CI job of the branch’s merge request loads the same way, with the images copied from its runner.
+  `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs. The failed
+  GitLab CI jobs of the branch’s merge request are listed in the sidebar and load the same way, with the images
+  copied from their runner.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 
 ## How it fits with swift-snapshot-testing
@@ -194,15 +195,15 @@ with the `perceptualPrecision`, `precision` or both that would pass. See
 
 ## Screenshots
 
-| The library | Changes |
+| All Snapshots | vs develop |
 |---|---|
 | ![The library as a grid](docs/images/library-grid.png) | ![Changes compared with the base branch, dark mode](docs/images/changes-dark.png) |
 | The library as a contact sheet: every snapshot at a glance | Changes since the base branch, with *Viewed* marks |
 
-| Failures | Diagnosis |
+| Last Run | Diagnosis |
 |---|---|
 | ![Failures with triage labels and run-history strips](docs/images/triage.png) | ![The diagnosis for an invisible difference](docs/images/diagnosis.png) |
-| Failures: what kind of difference each one is, and its recent runs | Rendering noise, explained, with the precision that would pass |
+| The failures: what kind of difference each one is, and its recent runs | Rendering noise, explained, with the precision that would pass |
 
 ## Development
 

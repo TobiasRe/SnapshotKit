@@ -6,7 +6,12 @@ struct SidebarView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Group {
+        // Above the list, not inset over it or a row of it: drawn off-screen (`--capture`), the list
+        // came out blank either way.
+        VStack(spacing: 0) {
+            ProjectSwitcher()
+                .padding(.horizontal, DS.Space.s)
+                .padding(.bottom, DS.Space.xs)
             if let project = model.current {
                 SectionList(project: project)
             } else {
@@ -14,7 +19,6 @@ struct SidebarView: View {
                 List {}.listStyle(.sidebar)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { ProjectSwitcher() }
     }
 }
 
@@ -23,8 +27,14 @@ struct SidebarView: View {
 struct SectionList: View {
     let project: ProjectModel
 
+    /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
+    /// black and its vibrancy drops the dots' colour: there the selected row is filled by hand, grey as in
+    /// a window in the background, and the counts are flattened.
+    static var drawsOffScreen: Bool { DS.solidSurfaces || CaptureOptions.isCapturing }
+
     var body: some View {
-        List(selection: Binding(get: { project.section }, set: { if let section = $0 { project.section = section } })) {
+        List(selection: Binding(get: { Self.drawsOffScreen ? nil : project.section },
+                                set: { if let section = $0 { project.section = section } })) {
             Section("Workspace") {
                 row(.workingCopy)
                 row(.comparison)
@@ -61,6 +71,9 @@ struct SectionList: View {
             Image(systemName: Self.symbol(of: section))
         }
         .tag(section)
+        .listRowBackground(Self.drawsOffScreen && project.section == section
+            ? RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous).fill(DS.Surface.selection).padding(.horizontal, DS.Space.s + 2)
+            : nil)
         .help(project.title(of: section))
         // One VoiceOver stop per item, by its full name: "Changes vs develop, 7 changes". The count
         // is in the label: a sidebar row doesn't pass on an accessibility value.
@@ -78,7 +91,13 @@ struct SectionList: View {
                 Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
             }
         } else if let count = project.count(of: section), count > 0 {
-            SectionCount(count: count, color: Self.color(of: section))
+            if Self.drawsOffScreen {
+                // Off-screen the sidebar's vibrancy drops the dot's colour; flattened, the count keeps it.
+                SectionCount(count: count, color: Self.color(of: section), textColor: Color(nsColor: .secondaryLabelColor))
+                    .drawingGroup()
+            } else {
+                SectionCount(count: count, color: Self.color(of: section))
+            }
         }
     }
 
@@ -109,14 +128,16 @@ struct SectionList: View {
 struct SectionCount: View {
     var count: Int
     var color: Color?
+    /// The number's colour, when the secondary style has nothing to resolve against (a flattened badge).
+    var textColor: Color?
 
     var body: some View {
         HStack(spacing: DS.Space.xs) {
             if let color { Circle().fill(color).frame(width: DS.Status.dot, height: DS.Status.dot) }
             Text("\(count)").monospacedDigit()
+                .foregroundStyle(textColor.map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
         }
         .font(DS.Font.caption)
-        .foregroundStyle(.secondary)
     }
 }
 
@@ -152,8 +173,6 @@ struct ProjectSwitcher: View {
         .buttonStyle(.plain)
         .background(RoundedRectangle(cornerRadius: DS.Radius.small, style: .continuous)
             .fill(isPresented ? DS.Surface.selection : .clear))
-        .padding(.horizontal, DS.Space.s)
-        .padding(.bottom, DS.Space.xs)
         .help("Switch project (⌘K also finds projects and commands)")
         .accessibilityLabel(model.current.map { "Project: \($0.project.name)" } ?? "Choose a project")
         .accessibilityValue(model.current?.branchLabel ?? "")

@@ -187,7 +187,7 @@ extension AppUITests {
             let (app, project) = makeApp(section == .run ? .failedRun : .changes)
             project.section = section
             let view = ProjectView(project: project).environment(app)
-            assertView(view, size: CGSize(width: 740, height: 520), appearance: .aqua, named: section == .comparison ? "changes" : section.id)
+            assertView(view, size: CGSize(width: 740, height: 520), appearance: .aqua, named: section.id)
         }
 
         /// Increase Contrast: the selection, hairlines and labels must stay visible.
@@ -241,10 +241,7 @@ extension AppUITests {
         /// The project and its branch on top, then its sections with their counts.
         @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
         func sidebar(appearance: NSAppearance.Name) {
-            let (app, project) = makeApp(.changes)
-            // No row selected (a CI job the sidebar doesn't list): the selection material can't be
-            // rendered off-screen.
-            project.section = .ciJob(1)
+            let (app, _) = makeApp(.changes)
             let view = SidebarView().environment(app)
             assertView(view, size: CGSize(width: 260, height: 420), appearance: appearance,
                        named: appearance == .darkAqua ? "dark" : "light")
@@ -252,8 +249,7 @@ extension AppUITests {
 
         /// A merge request's failed jobs under its own heading: one loaded with its count, one to load.
         @Test func sidebarWithCIJob() {
-            let (app, project) = makeApp(.ciJob)
-            project.section = .ciJob(1)         // no row selected, as above
+            let (app, _) = makeApp(.ciJob)
             assertView(SidebarView().environment(app), size: CGSize(width: 260, height: 480), appearance: .aqua)
         }
 

@@ -54,7 +54,7 @@ extension UserDefaults {
            let suite = UserDefaults(suiteName: name) {
             return suite
         }
-        guard CaptureOptions.parse(CommandLine.arguments) != nil else { return .standard }
+        guard CaptureOptions.isCapturing else { return .standard }
         let name = "org.snapshotkit.SnapshotKit.capture"
         UserDefaults.standard.removePersistentDomain(forName: name)
         return UserDefaults(suiteName: name) ?? .standard

@@ -671,20 +671,15 @@ struct GlassSplitButton<Content: View>: View {
     }
 }
 
-/// A project's failing tests, wherever projects are listed (sidebar, menu bar): the failed dot
+/// A project's failing tests, wherever projects are listed (the switcher, the menu bar): the failed dot
 /// and the number, read as "3 failing".
 struct FailingCount: View {
     var count: Int
 
     var body: some View {
-        HStack(spacing: DS.Space.xs) {
-            Circle().fill(DS.Status.failed).frame(width: DS.Status.dot, height: DS.Status.dot)
-            Text("\(count)").monospacedDigit()
-        }
-        .font(DS.Font.caption)
-        .foregroundStyle(.secondary)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(count) failing")
+        SectionCount(count: count, color: DS.Status.failed)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(count) failing")
     }
 }
 

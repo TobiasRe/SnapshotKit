@@ -28,7 +28,7 @@ struct ChangesTab: View {
             .frame(maxHeight: .infinity, alignment: .top)
         } detail: {
             Group {
-                if let change = project.selectedChange {
+                if let change = project.shownChange {
                     VStack(spacing: 0) {
                         let shown = project.displayedChanges.map(\.id)
                         DetailHeader(title: project.showsVariant(change.file) ? "\(change.file.testName) · \(change.file.variant)" : change.file.testName,
@@ -201,7 +201,7 @@ struct ChangesTab: View {
                 .help("Merge-base shows only this branch’s changes; branch tip also shows changes made on the base branch since.")
 
                 Menu {
-                    // Working copy shows every uncommitted change, whatever its kind.
+                    // Working Copy shows every uncommitted change, whatever its kind.
                     if project.section == .comparison {
                         ForEach(SnapshotChangeKind.allCases, id: \.self) { kind in
                             // A count only when there is one: "Deleted (0)" is noise.

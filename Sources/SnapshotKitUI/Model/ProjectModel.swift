@@ -172,7 +172,7 @@ enum FailureOrigin: Hashable {
 struct FailureSet {
     var items: [FailureItem] = []
     var source: FailureSource?
-    /// The suites Re-record Failing Suites and Check Flakiness act on.
+    /// Its failing suites: for the last run's, what Re-record Failing Suites and Check Flakiness act on.
     var failingSuites: [SuiteResult] = []
     var flakeResults: [FlakeResult] = []
     /// What kind of difference each failure is (first repetition), computed in the background.
@@ -360,6 +360,11 @@ final class ProjectModel {
     }
     var diffBase: DiffBase = .mergeBase { didSet { if oldValue != diffBase { refreshChanges() } } }
     var selectedChangeID: String?
+    /// The selected change, while the section lists it: Working Copy has no committed changes to show,
+    /// even when one stays selected for vs develop.
+    var shownChange: SnapshotChange? {
+        selectedChange.flatMap { change in sectionChanges.contains(change) ? change : nil }
+    }
     /// Changes marked as viewed whose file hasn't changed since.
     private(set) var viewedChanges: Set<String> = []
     var hideViewed = false {
@@ -755,7 +760,7 @@ final class ProjectModel {
         library?.files.contains { $0.path == path } ?? false
     }
 
-    /// Opens a snapshot's change, in Working copy when it isn't committed yet, clearing filters that
+    /// Opens a snapshot's change, in Working Copy when it isn't committed yet, clearing filters that
     /// would hide it.
     func showChange(path: String) {
         guard let change = changeSet?.changes.first(where: { $0.path == path }) else { return }
@@ -872,7 +877,7 @@ final class ProjectModel {
         }
     }
 
-    /// The changes the section is about: the uncommitted ones in Working copy, those of the chosen
+    /// The changes the section is about: the uncommitted ones in Working Copy, those of the chosen
     /// kinds when comparing with the base branch.
     var sectionChanges: [SnapshotChange] {
         let changes = changeSet?.changes ?? []
