@@ -352,7 +352,7 @@ enum AppFixtures {
         return store
     }
 
-    enum Scenario { case library, manyVariants, failedRun, running, changes, failures, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
+    enum Scenario { case library, manyVariants, failedRun, running, changes, failures, ciJob, empty, missingXcode, brokenConfig, missingBaseBranch, neverRun }
 
     /// How payButton.dark.png evolved: recorded, restyled, then re-recorded.
     static let snapshotVersions = [
@@ -446,6 +446,41 @@ enum AppFixtures {
             f.viewedChanges = [changes[3].0.id]
         case .failures:
             f.tab = .failures
+        case .ciJob:
+            // The snapshot job loaded, with what its runner no longer had; the branch's other failed job offered.
+            f.tab = .failures
+            let project = GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop")
+            f.failureSource = FailureSource(label: "snapshotTest #4567", date: date, host: "ci-mac-1",
+                                            jobURL: URL(string: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"), detail: "!12 · 3f1c2a9b",
+                                            notes: ["1 of the 3 images the tests took is no longer on ci-mac-1: it removes them when its next job "
+                                                    + "starts. Run the job again to see it."])
+            f.ciDetection = CIDetection(project: project, branch: "feature/checkout-redesign",
+                                        mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout redesign"), pipeline: GitLabPipeline(id: 89),
+                                        failedJobs: [GitLabJob(id: 4567, name: "snapshotTest", status: "failed"),
+                                                     GitLabJob(id: 4568, name: "snapshotTest-iPad", status: "failed")])
+            f.loadedCIJobID = 4567
+            // As loaded from CI: no local verdicts or history, one image per test, taken on the runner.
+            f.flakeResults = []
+            f.historyFlaky = []
+            f.failures = f.failures.enumerated().map { index, item in
+                var item = item
+                item.verdict = nil
+                item.historyFlaky = nil
+                item.timeline = []
+                item.failingDevices = nil
+                item.test.repetitions = [.failed]
+                item.images = item.images.prefix(1).map { image in
+                    var image = image
+                    image.device = "ci-mac-1"
+                    return image
+                }
+                if index == 0 {
+                    item.test.failureMessages = ["Snapshot does not match reference.\n\nNewly-taken snapshot does not match reference.\n"
+                                                 + "The percentage of pixels that match 0.9935 is less than required 1.0\n"
+                                                 + "The lowest perceptual color precision 0.365 is less than required 0.98"]
+                }
+                return item
+            }
         case .missingXcode:
             f.tab = .run
             f.context = context(at: repository, xcode: "99.2", remoteHost: remoteHost) // what CI asks for, which this Mac lacks

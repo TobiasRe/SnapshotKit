@@ -1,0 +1,28 @@
+[0KRunning with gitlab-runner 17.5.0 (0a1b2c3d)[0;m
+[0K  on ci-mac-1 x1Y2z3, system ID: s_0123456789ab[0;m
+section_start:1761469200:prepare_executor[0K[0K[36;1mPreparing the "shell" executor[0;m[0;m
+section_end:1761469201:prepare_executor[0Ksection_start:1761469201:get_sources[0K[0K[36;1mGetting source from Git repository[0;m[0;m
+[32;1mFetching changes with git depth set to 20...[0;m
+Reinitialized existing Git repository in /Users/ci-runner/builds/x1Y2z3/0/mobile/ios/shop/.git/
+[32;1mChecking out 3f1c2a9b as detached HEAD (ref is feature/checkout)...[0;m
+section_end:1761469205:get_sources[0Ksection_start:1761469205:step_script[0K[0K[36;1mExecuting "step_script" stage of the job script[0;m[0;m
+[32;1m$ xcodebuild test -workspace Example/Shop.xcworkspace -scheme ShopSnapshotTests -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2" -resultBundlePath build/Snapshots.xcresult | xcbeautify --report junit[0;m
+Test Suite 'All tests' started at 2026-10-26 08:20:11.204.
+Test Suite 'CardTests' started at 2026-10-26 08:20:11.205.
+Test Case '-[ShopSnapshotTests.CardTests testPayButton]' failed (0.512 seconds).
+Test Case '-[ShopSnapshotTests.CardTests testPrice]' passed (0.233 seconds).
+Test Suite 'CheckoutTests' started at 2026-10-26 08:20:12.001.
+Test Case '-[ShopSnapshotTests.CheckoutTests testSummary]' failed (0.402 seconds).
+
+Failing tests:
+	ShopSnapshotTests:
+		CardTests.testPayButton()
+		CheckoutTests.testSummary()
+
+Test session results, code coverage, and logs:
+	/Users/ci-runner/builds/x1Y2z3/0/mobile/ios/shop/build/Snapshots.xcresult
+
+** TEST FAILED **
+
+section_end:1761469322:step_script[0K[31;1mERROR: Job failed: exit status 65
+[0;m

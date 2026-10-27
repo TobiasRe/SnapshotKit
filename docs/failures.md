@@ -14,6 +14,7 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | A run on a remote Mac | ⌃⌘R. See [Remote runs](remote-runs.md). |
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Failures header): choose an `.xcresult` downloaded from CI. |
+| A failed GitLab CI job | the banner on the Failures tab, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
 
 The header says which one you’re looking at: *Local run*, *Remote run* or *Verification run* over
 *local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened), or the bundle’s name
@@ -27,6 +28,48 @@ paths.
 
 A test that fails because *No reference was found on disk* is a new snapshot, not a mismatch; it shows as
 such, and recording it is the fix.
+
+## Failures from GitLab CI
+
+When the snapshot tests fail in a GitLab CI job that keeps only its log and a JUnit report, SnapshotKit shows
+those failures as it shows a local run’s: each with its reference, the image CI took, the difference and what
+was measured.
+
+**Finding the job.** When a project opens (and when its branch changes), SnapshotKit asks GitLab about the
+checked-out branch: its open merge request, that request’s latest pipeline and the pipeline’s failed jobs. If
+there are some, the Failures tab says so, *CI failed on !12: `snapshotTest` #4567*, with **Load**. For any
+other job, **Load Failed CI Job…** (⇧⌘L, the File menu, ⌘K or the ⤓ menu) asks for its URL, or its number
+in this project.
+
+**What loads.**
+
+- The failing tests, from the pipeline’s test report (the job’s JUnit report), grouped by suite. The header
+  names the job, the runner, the merge request and the commit (*snapshotTest #4567* over *ci-mac-1 · !12 ·
+  3f1c2a9b · …*); the ⤓ menu opens the job in the browser.
+- Each reference as it was at the commit the job ran (`git show`), not as the working tree has it now, which
+  may have been re-recorded since. A commit that isn’t in your clone yet falls back to the working tree, with
+  a note to `git fetch`.
+- The images the tests took, copied from the runner over SSH. They are in the simulator’s temporary folder,
+  which the runner empties when its next job starts.
+- What the failure message measured, under it: *0.65% of pixels differ, none may · worst pixel matches 0.365,
+  0.98 required*. With both images there, the diagnosis says what kind of difference it is.
+
+**Notes, not errors.** Whatever couldn’t be fetched is listed above the failures, and the rest still shows:
+images no longer on the runner, an SSH login that was refused, a host key not yet trusted, a commit missing
+from your clone. **Re-record Failing Suites** then records the CI failures here.
+
+**What it needs.**
+
+| | |
+|---|---|
+| GitLab’s API | the [`glab`](https://gitlab.com/gitlab-org/cli) CLI, signed in (`glab auth login --hostname …`), or `GITLAB_TOKEN` (or `GITLAB_PRIVATE_TOKEN`) set to a token with `read_api`. SnapshotKit only reads. |
+| The failure messages | the job uploading its JUnit report: `artifacts: reports: junit:`. Without one, the log still names the failing tests. |
+| The images | SSH access to the runner with a key: SnapshotKit never asks for a password and never accepts a host key by itself. Connect once with `ssh user@runner true` to trust it. |
+| The login | **CI login** on the Run tab: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, the note suggests the user whose home folder the images are in. |
+
+The runner is the job’s runner as GitLab names it, so its name has to be one ssh can reach (or an alias in
+`~/.ssh/config`). A CI job is recorded in the history as imported, without a commit, so it doesn’t count
+toward flakiness.
 
 ## The list
 
@@ -154,6 +197,7 @@ History is kept per project in `~/Library/Application Support/SnapshotKit/histor
 ```bash
 snapkit failures                          # the last run's failures, diagnosed
 snapkit failures --xcresult ci.xcresult   # a CI artifact
+snapkit failures --ci                     # the failed CI job of the branch’s merge request
 snapkit flaky --iterations 10             # check the failing tests 10×
 snapkit history 'AppSnapshotTests/CheckoutViewTests/payButton()'
 ```

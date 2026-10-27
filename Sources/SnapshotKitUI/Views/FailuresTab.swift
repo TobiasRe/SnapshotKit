@@ -11,12 +11,16 @@ struct FailuresTab: View {
     @State private var attempt: String?
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
     @State private var quickLookURL: URL?
+    /// What the Load Failed CI Job prompt says.
+    @State private var ciJobText = ""
 
     var body: some View {
         ListDetailSplit {
             VStack(spacing: 0) {
                 header
                 Divider()
+                ciOffer
+                sourceNotes
                 list
                 footer
             }
@@ -40,6 +44,65 @@ struct FailuresTab: View {
             }
             .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .alert("Load Failed CI Job", isPresented: Binding(get: { project.askForCIJob }, set: { project.askForCIJob = $0 })) {
+            TextField("Job URL", text: $ciJobText)
+            Button("Load") {
+                if !ciJobText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.loadCIJob(url: ciJobText) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The URL of a failed GitLab job, or its number in this project. Its failing tests show with their references and the images CI took.")
+        }
+        .onChange(of: project.askForCIJob) { _, asking in
+            guard asking else { return }
+            // The branch's failed job, else a job's URL on the clipboard.
+            ciJobText = project.offeredCIJobs.first.flatMap { project.ciDetection?.link(to: $0).jobURL }
+                ?? NSPasteboard.general.string(forType: .string).flatMap { GitLabLink.job(url: $0)?.jobURL } ?? ""
+        }
+    }
+
+    /// The failed jobs of the branch's merge request, to load.
+    @ViewBuilder
+    private var ciOffer: some View {
+        if let request = project.ciDetection?.mergeRequest, !project.offeredCIJobs.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Space.xs) {
+                ForEach(project.offeredCIJobs.prefix(3)) { job in
+                    HStack(spacing: DS.Space.s) {
+                        StatusNote("CI failed on !\(request.iid): `\(job.name)` #\(job.id)", symbol: "xmark.octagon.fill", color: DS.Status.failed)
+                            .lineLimit(1)
+                            .help(request.title)
+                        Spacer(minLength: DS.Space.s)
+                        Button("Load") { project.loadCIJob(job) }
+                            .quietControl()
+                            .disabled(project.isRunning || project.isLoadingCI)
+                            .help("Show this job’s failing tests with their references and the images CI took (⇧⌘L for another job)")
+                    }
+                }
+            }
+            .font(DS.Font.secondary)
+            .padding(.horizontal, DS.Space.l)
+            .padding(.vertical, DS.Space.s)
+            Divider()
+        }
+    }
+
+    /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on.
+    @ViewBuilder
+    private var sourceNotes: some View {
+        if let notes = project.failureSource?.notes, !notes.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Space.xs) {
+                ForEach(notes, id: \.self) { note in
+                    StatusNote(note, symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .font(DS.Font.caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DS.Space.l)
+            .padding(.vertical, DS.Space.s)
+            Divider()
+        }
     }
 
     /// Where the results come from, then what to do with all failures: level with the detail's
@@ -53,7 +116,8 @@ struct FailuresTab: View {
                         .lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
                     if let source = project.failureSource {
-                        (Text("\(source.host) · ") + Text(source.date, format: DS.Dates.moment.localized(locale, timeZone)))
+                        (Text("\(([source.host] + [source.detail].compactMap { $0 }).joined(separator: " · ")) · ")
+                            + Text(source.date, format: DS.Dates.moment.localized(locale, timeZone)))
                             .font(DS.Font.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -65,6 +129,10 @@ struct FailuresTab: View {
                     app.importResultBundleFromPanel()
                 } menu: {
                     Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
+                    Button("Load Failed CI Job…") { app.loadCIJobFromPrompt() }
+                    if let job = project.failureSource?.jobURL {
+                        Button("Open Job in Browser") { NSWorkspace.shared.open(job) }
+                    }
                     if let bundle = project.failureSource?.resultBundle {
                         Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
                         Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
@@ -260,6 +328,12 @@ struct FailuresTab: View {
                     StatusNote(firstLine(message), symbol: "xmark.circle.fill", color: DS.Status.failed)
                         .lineLimit(2)
                         .textSelection(.enabled)
+                    if let measured = measured(item, image: image) {
+                        Text(measured)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     hint(item)
                 }
                 .font(DS.Font.secondary)
@@ -281,6 +355,15 @@ struct FailuresTab: View {
                                        description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))
             }
         }
+    }
+
+    /// What the failure message measured for the attempt shown: "0.65% of pixels differ, none may · worst pixel
+    /// matches 0.365, 0.98 required".
+    private func measured(_ item: FailureItem, image: SnapshotFailureImages?) -> String? {
+        let mismatches = item.test.failureMessages.flatMap(SnapshotMismatch.parse)
+        let mismatch = image.flatMap { mismatches.indices.contains($0.index) ? mismatches[$0.index] : nil } ?? mismatches.first
+        guard let metrics = mismatch?.metrics, !metrics.isEmpty else { return nil }
+        return metrics.joined(separator: " · ")
     }
 
     @ViewBuilder

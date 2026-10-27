@@ -208,6 +208,14 @@ extension AppUITests {
             assertPane(project, app: app, appearance: appearance)
         }
 
+        /// A failed CI job's failures: the job, its merge request and commit in the header, what couldn't be
+        /// fetched as a note, and the branch's other failed job offered.
+        @Test func failuresTabFromCI() {
+            AppFixtures.defaults.set(CompareMode.sideBySide.rawValue, forKey: "compareMode")
+            let (app, project) = makeApp(.ciJob)
+            assertPane(project, app: app, appearance: .aqua)
+        }
+
         // The label stays `name`: the reference files are named after it.
         @Test(arguments: [AppFixtures.Scenario.missingXcode, .brokenConfig, .missingBaseBranch, .neverRun])
         func problemStates(name scenario: AppFixtures.Scenario) {

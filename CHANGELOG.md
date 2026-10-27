@@ -6,6 +6,13 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Added
+- Failures of a GitLab CI job, shown as a local run’s: each failing test with its reference at the commit the job
+  ran, the image the runner took (copied over SSH) and what its failure message measured. The Failures tab offers
+  the failed jobs of the branch’s merge request; **Load Failed CI Job…** (⇧⌘L) takes any job’s URL. What can’t be
+  fetched becomes a note, not a failed load. **CI login** on the Run tab is the SSH user on the runner.
+  `snapkit failures --ci [URL] [--ci-login USER] [--no-images]` prints the same.
+
 ### Changed
 - The app is built from `SnapshotKit.xcodeproj`: open it in Xcode and run the SnapshotKit scheme, or
   `xcodebuild archive -scheme SnapshotKit`. Its code is the package’s `SnapshotKitUI` library;

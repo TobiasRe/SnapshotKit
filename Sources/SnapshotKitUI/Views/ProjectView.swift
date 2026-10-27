@@ -151,7 +151,8 @@ struct RunInspector: View {
     let project: ProjectModel
     @State private var baseBranch = ""
     @State private var remoteHost = ""
-    private enum Field { case baseBranch, remoteHost }
+    @State private var ciLogin = ""
+    private enum Field { case baseBranch, remoteHost, ciLogin }
     @FocusState private var focused: Field?
 
     var body: some View {
@@ -228,6 +229,18 @@ struct RunInspector: View {
                                 .focused($focused, equals: .remoteHost)
                                 .onSubmit(saveFields)
                         }
+                        PropertyRow("CI login", alignment: .center) {
+                            TextField("", text: $ciLogin)
+                                .textFieldStyle(.plain)
+                                // A hint, not a value: a name here read as one already set.
+                                .placeholder("user, or user@host", shown: ciLogin.isEmpty)
+                                .fieldChrome()
+                                .accessibilityLabel("CI login")
+                                .help("The SSH login on CI runners, to copy the images a failed job’s tests took. "
+                                      + "Empty: ssh’s default, or ~/.ssh/config.")
+                                .focused($focused, equals: .ciLogin)
+                                .onSubmit(saveFields)
+                        }
                     }
                 } else if let error = project.configError {
                     PropertySection("Configuration") {
@@ -245,6 +258,7 @@ struct RunInspector: View {
         .onAppear {
             baseBranch = project.settings.baseBranch ?? ""
             remoteHost = project.settings.remoteHost ?? ""
+            ciLogin = project.settings.ciLogin ?? ""
         }
         // Saved like any Mac field: on Return, and also when you click or tab away or leave the tab.
         .onChange(of: focused) { saveFields() }
@@ -259,6 +273,7 @@ struct RunInspector: View {
 
     /// Stores what the fields say, if it differs from the settings (a save reloads the configuration).
     private func saveFields() {
+        if (ciLogin.isEmpty ? nil : ciLogin) != project.settings.ciLogin { project.setCILogin(ciLogin) }
         let base = baseBranch.isEmpty ? nil : baseBranch, host = remoteHost.isEmpty ? nil : remoteHost
         guard base != project.settings.baseBranch || host != project.settings.remoteHost else { return }
         project.updateSettings {
