@@ -119,6 +119,12 @@ When the test job comes from a template SnapshotKit can’t read (GitLab `projec
 which SnapshotKit can’t read. Settings were taken from CI variables; set anything missing in
 `.snapshotkit.yml`.*
 
+Such a template often changes into a folder before it calls `xcodebuild`, while your variables only name the
+project (`XCODE_PROJECT: App.xcodeproj`). Whenever the workspace or project CI names isn’t where the tests would
+run, SnapshotKit looks for it in the repository (not in build output, `Pods` or `Carthage`). If one folder has
+it, the tests run there, and the configuration says why: *workingDir Example (where App.xcodeproj is)*. If
+several do, a note names them and the tests run at the root.
+
 ## `.snapshotkit.yml`
 
 Put a `.snapshotkit.yml` at the repository root to set or override anything. Commit it to share the setup.

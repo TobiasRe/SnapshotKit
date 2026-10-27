@@ -35,6 +35,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   numbers follow, and are computed about six times faster in a Debug build, where they took seconds.
 - ↑ and ↓ on a clicked image keep stepping through the list. After the first step the image gave way to a
   spinner while the next one loaded, and the keyboard focus went with it.
+- The project CI names is found in its folder: a variable like `XCODE_PROJECT: App.xcodeproj`, used by a
+  shared template that changes into `Example/` first, made `xcodebuild` run at the repository's root and fail
+  with "App.xcodeproj does not exist". When the named workspace or project isn't where the tests would run and
+  one folder of the repository has it, they run there (`snapkit config` and the app's configuration say why).
 - Opening a project from ⌘K, the menu bar, Add Project… or a drop no longer runs git on the main thread:
   the window stays responsive while git checks the folder, and of two quick picks the later one opens.
   A git command runs at the priority of whatever waits for it, so the main thread no longer waits on

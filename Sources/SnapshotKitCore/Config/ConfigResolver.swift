@@ -89,6 +89,7 @@ public enum ConfigResolver {
             config.baseBranch = detected
             config.sources[SnapshotConfig.Field.baseBranch.rawValue] = "git (auto-detected)"
         }
+        locateNamedProjectFile(&config, repository: repository, notes: &notes)
         if config.project == nil && config.workspace == nil {
             if let found = discoverProjectFile(repository: repository, workingDirectory: config.workingDirectory) {
                 if found.hasSuffix(".xcworkspace") { config.workspace = found } else { config.project = found }
@@ -106,6 +107,50 @@ public enum ConfigResolver {
             return candidate
         }
         return nil
+    }
+
+    /// CI can name the workspace or project without the folder its tests run in: `XCODE_PROJECT: App.xcodeproj`
+    /// for a template elsewhere that changes into `Example/` first. When it isn't where the tests would run, and
+    /// one folder of the repository has it, they run there; in several, a note says why the build may not find it.
+    static func locateNamedProjectFile(_ config: inout SnapshotConfig, repository: URL, notes: inout [String]) {
+        guard let name = config.workspace ?? config.project, !name.hasPrefix("/"), !name.contains("$") else { return }
+        let directory = config.workingDirectory.map { repository.appendingPathComponent($0) } ?? repository
+        guard !FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path) else { return }
+        let folders = foldersHolding(name, in: repository)
+        if folders.count == 1 {
+            config.workingDirectory = folders[0].isEmpty ? nil : folders[0]
+            config.sources[SnapshotConfig.Field.workingDirectory.rawValue] = "where \(name) is"
+        } else if folders.count > 1 {
+            let named = folders.map { $0.isEmpty ? "the root" : $0 }
+            let places = named.dropLast().joined(separator: ", ") + " and " + named[named.count - 1]
+            notes.append("CI names \(name), which is in \(places); it doesn’t say which "
+                         + "folder its tests run in, so they run in the repository’s root.")
+        }
+    }
+
+    /// The folders, relative to the repository ("" for its root), that hold `name` (itself a path like
+    /// `App.xcodeproj` or `ios/App.xcodeproj`), sorted. Build output, dependencies and the insides of projects
+    /// aren't searched.
+    static func foldersHolding(_ name: String, in repository: URL, maxDepth: Int = 6) -> [String] {
+        let skipped: Set<String> = [".build", "build", "DerivedData", "Pods", "Carthage", "node_modules", "vendor"]
+        let root = repository.standardizedFileURL.path
+        guard let enumerator = FileManager.default.enumerator(at: repository, includingPropertiesForKeys: [.isDirectoryKey],
+                                                               options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
+        var folders: [String] = []
+        for case let url as URL in enumerator {
+            let path = url.standardizedFileURL.path
+            let relative = String(path.dropFirst(root.count + 1))
+            if skipped.contains(url.lastPathComponent) || ["xcodeproj", "xcworkspace"].contains(url.pathExtension) {
+                enumerator.skipDescendants()
+            }
+            if enumerator.level > maxDepth { enumerator.skipDescendants() }
+            if relative == name {
+                folders.append("")
+            } else if relative.hasSuffix("/" + name) {
+                folders.append(String(relative.dropLast(name.count + 1)))
+            }
+        }
+        return folders.sorted()
     }
 
     /// A single top-level workspace or project, if there is exactly one obvious choice.

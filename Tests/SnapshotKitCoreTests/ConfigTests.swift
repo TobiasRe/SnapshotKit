@@ -837,6 +837,63 @@ import Testing
         #expect(resolved.config.source(of: .baseBranch) == "git (auto-detected)")
     }
 
+    /// CI names the project, and a template it can't read runs the tests in its folder: the folder is the one
+    /// in the repository that holds the project, as there is just one.
+    @Test func theProjectCINamesIsFoundInItsFolder() throws {
+        let repo = try TempRepo()
+        try repo.write(".gitlab-ci.yml", CIConfigParserTests.templated)
+        try repo.write("Example/feature-example.xcodeproj/project.pbxproj", "{}")
+        try repo.write("Sources/Feature.swift", "")
+        try repo.commitAll("init")
+        let resolved = try ConfigResolver.resolve(repository: repo.url)
+        #expect(resolved.config.project == "feature-example.xcodeproj")
+        #expect(resolved.config.workingDirectory == "Example")
+        #expect(resolved.config.source(of: .workingDirectory) == "where feature-example.xcodeproj is")
+        let environment = TestEnvironment(xcode: XcodeInstall(path: "/Applications/Xcode.app", version: "99.0"),
+                                          simulator: Simulator(name: "Example Phone", udid: "X", osVersion: "99.0", platform: "iOS", state: "Shutdown"),
+                                          xcodeIsDefault: true)
+        // xcodebuild runs there, where `-project feature-example.xcodeproj` names it.
+        #expect(TestRunner(repository: repo.url, config: resolved.config, environment: environment).workingDirectory
+                == repo.url.appendingPathComponent("Example"))
+    }
+
+    /// In several folders, the project's isn't guessed: a note says why the build may not find it.
+    @Test func aProjectInSeveralFoldersIsNotGuessed() throws {
+        let repo = try TempRepo()
+        try repo.write(".gitlab-ci.yml", CIConfigParserTests.templated)
+        for folder in ["Example", "Demo"] { try repo.write("\(folder)/feature-example.xcodeproj/project.pbxproj", "{}") }
+        try repo.commitAll("init")
+        let resolved = try ConfigResolver.resolve(repository: repo.url)
+        #expect(resolved.config.workingDirectory == nil)
+        #expect(resolved.notes.contains("CI names feature-example.xcodeproj, which is in Demo and Example; it doesn’t say which "
+                                        + "folder its tests run in, so they run in the repository’s root."))
+    }
+
+    /// Where CI runs the tests has the project, or the repository has none of that name: nothing changes.
+    @Test func aProjectInPlaceIsLeftAlone() throws {
+        let repo = try TempRepo()
+        try repo.write(".gitlab-ci.yml", "test:\n  script:\n    - xcodebuild test -project App.xcodeproj -scheme App\n")
+        try repo.write("App.xcodeproj/project.pbxproj", "{}")
+        try repo.write("Example/App.xcodeproj/project.pbxproj", "{}")
+        try repo.commitAll("init")
+        #expect(try ConfigResolver.resolve(repository: repo.url).config.workingDirectory == nil)
+
+        // CI changes into a folder the project isn't in: it's found at the root.
+        let moved = try TempRepo()
+        try moved.write(".gitlab-ci.yml", "test:\n  script:\n    - cd ios\n    - xcodebuild test -project App.xcodeproj -scheme App\n")
+        try moved.write("App.xcodeproj/project.pbxproj", "{}")
+        try moved.write("ios/README", "")
+        try moved.commitAll("init")
+        let fromRoot = try ConfigResolver.resolve(repository: moved.url).config
+        #expect(fromRoot.workingDirectory == nil && fromRoot.source(of: .workingDirectory) == "where App.xcodeproj is")
+
+        let missing = try TempRepo()
+        try missing.write(".gitlab-ci.yml", CIConfigParserTests.templated)
+        try missing.commitAll("init")
+        let resolved = try ConfigResolver.resolve(repository: missing.url)
+        #expect(resolved.config.workingDirectory == nil && resolved.config.project == "feature-example.xcodeproj")
+    }
+
     /// The branch `origin/HEAD` names comes first: here a `trunk`, though `main` exists too.
     @Test func baseBranchFromOriginHEAD() throws {
         let repo = try TempRepo(branch: "main")
