@@ -1319,9 +1319,10 @@ final class ProjectModel {
         var groups: [CIJobGroup] = []
         var others = loaded
         if let detection = ciDetection {
-            let iid = detection.mergeRequest.iid
-            let extra = loaded.filter { $0.mergeRequest?.iid == iid && !detection.failedJobs.map(\.id).contains($0.job.id) }
-            others.removeAll { $0.mergeRequest?.iid == iid }
+            let iid = detection.mergeRequest.iid, failed = Set(detection.failedJobs.map(\.id))
+            let extra = loaded.filter { $0.mergeRequest?.iid == iid && !failed.contains($0.job.id) }
+            // The branch's jobs are listed here only, whatever their load said of their merge request.
+            others.removeAll { $0.mergeRequest?.iid == iid || failed.contains($0.job.id) }
             let jobs = detection.failedJobs + extra.map(\.job)
             if !jobs.isEmpty { groups.append(CIJobGroup(mergeRequest: detection.mergeRequest, jobs: jobs)) }
         }
@@ -1421,9 +1422,12 @@ final class ProjectModel {
         setHistory(runs.load())
         let origin = FailureOrigin.ciJob(ci.job.id)
         ciLoadErrors[ci.job.id] = nil
+        // A job of the branch's pipeline ran for its merge request, also when the load didn't find it.
+        let mergeRequest = ci.mergeRequest
+            ?? ciDetection.flatMap { detection in detection.failedJobs.contains { $0.id == ci.job.id } ? detection.mergeRequest : nil }
         failureSets[origin, default: FailureSet()].job = ci.job
-        failureSets[origin]?.mergeRequest = ci.mergeRequest
-        let detail = [ci.mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }].compactMap { $0 }
+        failureSets[origin]?.mergeRequest = mergeRequest
+        let detail = [mergeRequest.map { "!\($0.iid)" }, ci.job.sha.map { String($0.prefix(8)) }].compactMap { $0 }
         // Verdicts belong to the runs they came from.
         setFailures(origin, suites: ci.summary.failingSuites, images: ci.images, keepingVerdicts: false,
                     source: FailureSource(label: "\(ci.job.name) #\(ci.job.id)", date: ci.job.finished ?? Date(), host: runner,

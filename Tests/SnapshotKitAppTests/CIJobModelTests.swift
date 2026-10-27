@@ -83,6 +83,25 @@ extension AppUITests {
             #expect(model.count(of: .ciJob(4567)) == 1 && model.count(of: .ciJob(4568)) == nil)
         }
 
+        /// A job of the branch's merge request is listed once, under it, also when its load didn't say
+        /// which merge request it ran for (it was listed twice, once more under a bare "CI").
+        @Test func aLoadedJobOfTheBranchIsListedOnce() async throws {
+            let (model, _) = model()
+            let detection = CIDetection(project: GitLabLink(host: link.host, projectPath: link.projectPath), branch: "feature",
+                                        mergeRequest: GitLabMergeRequest(iid: 12, title: "Checkout"), pipeline: GitLabPipeline(id: 89),
+                                        failedJobs: [job])
+            model.detectCI = { _ in detection }
+            await model.checkCI().value
+            var loaded = loaded()
+            loaded.mergeRequest = nil
+            model.importCI = { [loaded] _, _, _, _ in loaded }
+            await model.loadCIJob(job).value
+            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4567]])
+            model.section = .ciJob(4567)
+            #expect(model.failureSource?.detail == "!12 · 3f1c2a9b")    // the branch's merge request
+        }
+
         /// Opening a job's item loads it, beside the last run's failures, which stay as they were.
         @Test func openingAJobLoadsItBesideTheLastRun() async throws {
             let (model, _) = model()
