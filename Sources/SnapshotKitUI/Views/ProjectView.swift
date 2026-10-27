@@ -72,6 +72,8 @@ struct ProjectView: View {
                     // is always there: an item added only while running never reached the window's toolbar.
                     HStack(spacing: DS.Space.m) {
                         RunProgress(project: project)
+                            // Clear of the capsule's rounded end, which cut off the bar and the text.
+                            .padding(.leading, DS.Space.m)
                         Button("Cancel", systemImage: "stop.fill") { project.cancel() }
                             .labelStyle(.iconOnly)
                             .help("Cancel (⌘.)")
