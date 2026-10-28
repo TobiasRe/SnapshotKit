@@ -395,6 +395,7 @@ final class ProjectModel {
         if autoload {
             reload()
             watchSnapshots()
+            watchXcode()
         }
     }
 
@@ -407,6 +408,24 @@ final class ProjectModel {
                 guard let self, self.fixtureImages == nil, !self.isRunning else { return }
                 self.refreshChanges()
             }
+        }
+    }
+
+    /// Picks up the test runs made in Xcode: as one finishes, its results join the last run, as a run
+    /// here of the same tests would.
+    @ObservationIgnored private var xcodeWatcher: SnapshotWatcher?
+    /// When the last Xcode run taken up finished, or the watching began: earlier runs are old news.
+    @ObservationIgnored private var xcodeRunsSince = Date()
+    /// Where Xcode keeps its runs, and the developer folder of the Xcode that is open, which reads
+    /// its bundles best; tests replace them.
+    @ObservationIgnored var derivedData = XcodeTestRuns.derivedData
+    @ObservationIgnored var openXcode: () -> String? = {
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dt.Xcode").first?.bundleURL?
+            .appendingPathComponent("Contents/Developer").path
+    }
+    private func watchXcode() {
+        xcodeWatcher = SnapshotWatcher(folder: derivedData, isRelevant: XcodeTestRuns.isRunList) { [weak self] in
+            Task { @MainActor in self?.takeUpXcodeRun() }
         }
     }
 
@@ -759,6 +778,38 @@ final class ProjectModel {
 
     func isInLibrary(_ path: String) -> Bool {
         library?.files.contains { $0.path == path } ?? false
+    }
+
+    /// Shows a test from Xcode's editor: its failure in the last run, else its snapshots in the
+    /// library (a suite's, filtered to it).
+    func show(_ test: SourceTest) {
+        if let failure = failureSets[.lastRun]?.items.first(where: { test.ran($0.test, in: $0.suite) }) {
+            showFailure(failure.id)
+            return
+        }
+        guard let first = snapshots(of: test).first else {
+            notify("\(test.name) has no snapshots yet. Run it once to record them.")
+            return
+        }
+        showInLibrary(path: first.path)
+        if test.function == nil { libraryFilter = test.suite }
+    }
+
+    /// Re-records a test from Xcode's editor (a suite's tests), then verifies.
+    func reRecord(_ test: SourceTest) {
+        let files = snapshots(of: test)
+        if !files.isEmpty {
+            reRecord(files, granularity: test.function == nil ? .suites : .tests)
+        } else if let failures = failureSets[.lastRun]?.items.filter({ test.ran($0.test, in: $0.suite) }), !failures.isEmpty {
+            // Failing before it ever recorded: nothing in the library to plan with.
+            reRecord(failures: failures)
+        } else {
+            notify("\(test.name) has no snapshots yet. Run it once to record them.")
+        }
+    }
+
+    private func snapshots(of test: SourceTest) -> [SnapshotFile] {
+        (library?.files ?? []).filter(test.recorded).sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
     /// Opens a snapshot's change, in Working Copy when it isn't committed yet, clearing filters that
@@ -1293,6 +1344,40 @@ final class ProjectModel {
                 moveOn(to: .lastRun, from: start)
             case .failure(let error):
                 notify("Could not read \(url.lastPathComponent): \(error.localizedDescription)", isError: true)
+            }
+        }
+    }
+
+    /// Takes up the project's newest test run in Xcode, if it finished since the last one taken up:
+    /// the tests it ran replace their results in the last run, as a run here of the same tests would.
+    /// The task ends once the notice says how it went.
+    @discardableResult
+    func takeUpXcodeRun() -> Task<Void, Never> {
+        guard !isRunning else { return Task {} }
+        let repo = project.url, since = xcodeRunsSince, derivedData = derivedData
+        let developerDir = openXcode() ?? environment?.xcode.developerDir
+        return Task {
+            guard let run = await offCooperativePool({ XcodeTestRuns.latest(for: repo, in: derivedData, after: since) }),
+                  run.finished > xcodeRunsSince else { return }
+            xcodeRunsSince = run.finished
+            let loaded = await offCooperativePool { () -> (result: TestRunResult, images: URL?)? in
+                guard let result = try? run.result(developerDir: developerDir), result.nothingTested == nil else { return nil }
+                // The images go with the runs' own, which the last run keeps: Xcode may clean its folder.
+                let dir = TestRunner.newResultBundleURL(for: repo).deletingPathExtension().appendingPathExtension("attachments")
+                let images = (try? FailureAttachments.export(resultBundle: run.resultBundle, to: dir, developerDir: developerDir)) ?? []
+                return (result, images.isEmpty ? nil : dir)
+            }
+            // A run of our own started meanwhile: it says what the last run is.
+            guard let (result, images) = loaded, !isRunning else { return }
+            RunHistory(repository: repo).append(RunRecord.make(kind: .run, host: result.host, repository: repo, result: result))
+            setHistory(RunHistory(repository: repo).load())
+            saveLastRun { LastRun.update(with: result, partial: true, attachmentsDirectory: images, repository: $0) }
+            loadLastRun()
+            if result.failed > 0 {
+                notify("Xcode: " + Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) + ".", isError: true,
+                       action: .showFailures(.lastRun))
+            } else {
+                notify(result.passed == 1 ? "Xcode: 1 test passed." : "Xcode: \(result.passed) tests passed.")
             }
         }
     }

@@ -234,6 +234,27 @@ final class AppModel {
         }
     }
 
+    /// A request from Xcode's editor extension, for the project Xcode has in front (or, when Xcode
+    /// won't say, the one open here), once its library has loaded.
+    func handle(_ request: TestRequest, frontmostWorkspace: @escaping () async -> URL? = XcodeWorkspace.frontmost) {
+        Task {
+            let workspace = await frontmostWorkspace()
+            let root = await offCooperativePool { workspace.flatMap { Git.repository(containing: $0)?.root.path } }
+            guard let path = root ?? selectedPath else {
+                startupNotice = "Open the project of \(request.test.name) in SnapshotKit first."
+                return
+            }
+            guard let model = await open(path: path) else { return }
+            for _ in 0..<100 where model.library == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            switch request.action {
+            case .show: model.show(request.test)
+            case .rerecord: model.reRecord(request.test)
+            }
+        }
+    }
+
     private func openSelected() {
         guard let path = selectedPath else {
             current = nil

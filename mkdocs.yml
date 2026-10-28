@@ -88,6 +88,7 @@ nav:
       - Re-recording: re-recording.md
       - Remote runs: remote-runs.md
       - The menu bar item: menu-bar.md
+      - Working with Xcode: xcode.md
       - Keyboard shortcuts: keyboard-shortcuts.md
   - Reference:
       - Configuration: configuration.md

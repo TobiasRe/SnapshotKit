@@ -2,7 +2,8 @@ import CoreServices
 import Foundation
 
 /// Watches a repository for changes to snapshot images (anything under a `__Snapshots__` folder),
-/// so a re-record from Xcode or the command line shows up without switching windows.
+/// so a re-record from Xcode or the command line shows up without switching windows; or any folder
+/// for the changes its caller picks (Xcode's DerivedData for finished test runs).
 /// Bursts of events (a test run writing many PNGs) are coalesced into one callback.
 public final class SnapshotWatcher: @unchecked Sendable { // `stream` is set in init, then only touched on `queue`.
     private var stream: FSEventStreamRef?
@@ -24,12 +25,13 @@ public final class SnapshotWatcher: @unchecked Sendable { // `stream` is set in 
     ///   - onChange: called on a background queue after snapshot files changed. Don't call `stop()`
     ///     from it.
     public convenience init(repository: URL, latency: TimeInterval = 0.5, onChange: @escaping @Sendable () -> Void) {
-        self.init(repository: repository, latency: latency, isRelevant: Self.isSnapshotPath, onChange: onChange)
+        self.init(folder: repository, latency: latency, isRelevant: Self.isSnapshotPath, onChange: onChange)
     }
 
-    /// Calls back for the changed paths `isRelevant` picks: tests watch every change with it.
-    init(repository: URL, latency: TimeInterval, isRelevant: @escaping @Sendable (String) -> Bool, onChange: @escaping @Sendable () -> Void) {
-        start(path: repository.resolvingSymlinksInPath().path, latency: latency, isRelevant: isRelevant, onChange: onChange)
+    /// Calls back for the changed paths in `folder` that `isRelevant` picks: Xcode's finished test
+    /// runs in DerivedData, and every change in tests.
+    public init(folder: URL, latency: TimeInterval = 0.5, isRelevant: @escaping @Sendable (String) -> Bool, onChange: @escaping @Sendable () -> Void) {
+        start(path: folder.resolvingSymlinksInPath().path, latency: latency, isRelevant: isRelevant, onChange: onChange)
     }
 
     deinit { stop() }
