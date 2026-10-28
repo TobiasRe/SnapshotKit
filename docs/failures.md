@@ -11,13 +11,15 @@ of failure it is: a real change, rendering noise, a size change or a flaky test.
 | Source | How |
 |---|---|
 | A run in SnapshotKit | **Run** (⌥⌘4), ⌘R, or the ▶ toolbar button. See [Running tests](running.md). |
+| A run in Xcode | automatic, as it finishes: the tests it ran replace their results. See [Working with Xcode](xcode.md). |
 | A run on a remote Mac | ⌃⌘R. See [Remote runs](remote-runs.md). |
 | A verification after re-recording | automatic, when *Verify after re-recording* is on. |
 | A CI artifact | **Import Result Bundle…** (⇧⌘O, or the ⤓ button in the Last Run header): choose an `.xcresult` downloaded from CI. |
 | A failed GitLab CI job | its item in the sidebar, under its merge request, or **Load Failed CI Job…** (⇧⌘L). See [below](#failures-from-gitlab-ci). |
 
 The header says which one you’re looking at: *Local run*, *Remote run* or *Verification run* over
-*local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened), or the bundle’s name
+*local · Oct 16, 2026 at 7:48 PM* (*Last run* once the app has been reopened, or after a run in Xcode, over
+*Xcode · …*), or the bundle’s name
 (*ci.xcresult*) over *imported · …*. Its arrow menu also offers **Open Result Bundle in Xcode**
 and **Reveal Result Bundle in Finder**.
 

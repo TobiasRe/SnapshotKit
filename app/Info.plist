@@ -9,7 +9,11 @@
 	<array>
 		<string>en</string>
 	</array>
-	<!-- snapshotkit://compare?reference=…&actual=…, from `snapkit open` (the diff tool) or a link. -->
+	<!-- Asked once, when Xcode's editor extension first sends a test: which project Xcode has open. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>SnapshotKit asks Xcode which project is open, to show or re-record the test at your cursor.</string>
+	<!-- snapshotkit://compare?reference=…&actual=…, from `snapkit open` (the diff tool) or a link;
+	     snapshotkit://test?…, from Xcode's editor extension. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

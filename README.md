@@ -32,6 +32,8 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
   GitLab CI jobs of the branch’s merge request are listed in the sidebar and load the same way, with the images
   copied from their runner.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
+- **Beside Xcode**: a test run in Xcode joins the last run as it finishes, and **Editor › SnapshotKit** shows or
+  re-records the test at the cursor.
 
 ## How it fits with swift-snapshot-testing
 
@@ -234,8 +236,9 @@ SnapshotKit itself. Visual guidelines are in [docs/design.md](docs/design.md).
 Repository layout and naming: the Swift package follows SwiftPM conventions: `Sources/` and `Tests/` with one
 PascalCase folder per target (`SnapshotKitCore`, `SnapshotKitUI`, `SnapshotKitCLI`, which builds the `snapkit`
 executable), PascalCase Swift files, and the `__Snapshots__` folders swift-snapshot-testing expects.
-`SnapshotKit.xcodeproj` builds SnapshotKitUI into SnapshotKit.app. Its one target owns the icon and the version
-(`MARKETING_VERSION`); `app/` holds its entry point and the Info.plist keys build settings can’t set. Everything
+`SnapshotKit.xcodeproj` builds SnapshotKitUI into SnapshotKit.app, with the icon, and the Xcode Source Editor
+extension it embeds; the project holds the version (`MARKETING_VERSION`). `app/` holds the app’s entry point and
+the Info.plist keys build settings can’t set, `xcode-extension/` the extension’s. Everything
 else is lowercase kebab-case: `docs/` (with rendered images in `docs/images/`), `scripts/`, `site/` for the
 website (a single static page; `.github/workflows/pages.yml` deploys it to GitHub Pages together with `docs/`
 built by Zensical under `/docs/`), and `assets/` for

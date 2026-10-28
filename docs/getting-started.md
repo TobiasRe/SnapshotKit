@@ -28,6 +28,8 @@ tests need Xcode and a simulator runtime, like running the tests yourself.
    ```bash
    xattr -dr com.apple.quarantine /Applications/SnapshotKit.app
    ```
+4. Optional: for **Editor › SnapshotKit** in Xcode, turn on its extension in System Settings › General › Login
+   Items & Extensions › Xcode Source Editor, and restart Xcode. See [Working with Xcode](xcode.md).
 
 ## Install the command-line tool
 

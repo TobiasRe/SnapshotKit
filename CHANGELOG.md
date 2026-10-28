@@ -6,6 +6,16 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Added
+- Test runs in Xcode join the last run as they finish: the tests a run ran (all of them after ⌘U, one after its
+  diamond) replace their results in Last Run, with their images, as a run of the same tests in SnapshotKit
+  would, and a notice offers **Show Failures**. SnapshotKit reads them from Xcode’s DerivedData; there is
+  nothing to set up.
+- **Editor › SnapshotKit** in Xcode: an Xcode Source Editor extension, inside SnapshotKit.app, with **Show Test**
+  (the test at the cursor’s failure in Last Run, or its snapshots) and **Re-record Test**; outside a test, they
+  act on its suite. SnapshotKit asks Xcode which project is in front, and opens it. Turn the extension on in
+  System Settings › General › Login Items & Extensions › Xcode Source Editor.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
