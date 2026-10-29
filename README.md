@@ -172,8 +172,9 @@ override func invokeTest() {
 ```
 
 The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from Xcode’s Report navigator and
-run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. See
-[Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
+run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. Or let the tool
+return a `snapshotkit://compare` link, which Xcode makes clickable in the failure message. See
+[Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/) for both.
 
 ## How it works
 
