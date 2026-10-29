@@ -6,6 +6,12 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Added
+- **Open in SnapshotKit** in the Services menu: select a test function's name in Xcode, right-click, Services ›
+  Open in SnapshotKit, and the library shows its snapshots (a test struct's or class's name: its test file's).
+  The open project is searched first, then the others.
+- The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

@@ -67,6 +67,8 @@ extension AppModel {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let services = ServiceProvider()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A capture draws off-screen: no Dock icon, and the frontmost app stays in front.
         let capture = CaptureOptions.parse(CommandLine.arguments)
@@ -74,7 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         InterruptGuard.install()
         if let capture {
             Task { await WindowCapture.run(capture, model: AppModel.shared) }
+            return
         }
+        // Open in SnapshotKit (Info.plist's NSServices). Updating the services makes it show up right
+        // after the app is installed or moved, not only after the next login.
+        NSApp.servicesProvider = services
+        NSUpdateDynamicServices()
     }
 
     /// `snapshotkit://compare?reference=…&actual=…`, from `snapkit open` (the diff tool) or a link.
@@ -126,6 +133,32 @@ enum MainWindow {
         }
         NSApp.activate(ignoringOtherApps: true)
         NSApp.windows.first(where: isMain)?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The window's `openWindow`, for AppKit code that has no SwiftUI environment to take it from.
+    static var openWindow: OpenWindowAction?
+
+    static func show() {
+        if let openWindow {
+            show(openWindow)
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first(where: isMain)?.makeKeyAndOrderFront(nil)
+        }
+    }
+}
+
+/// Open in SnapshotKit, the Services menu item Info.plist's `NSServices` declares: in any app with a text
+/// selection, and in Xcode also in the editor's context menu (Services ›). Shows the snapshots of the
+/// test or test file whose name is selected.
+final class ServiceProvider: NSObject {
+    /// AppKit sends the request on the main thread.
+    @objc func openInSnapshotKit(_ pasteboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        guard let selection = pasteboard.string(forType: .string) else { return }
+        MainActor.assumeIsolated {
+            AppModel.shared.openSnapshots(namedIn: selection)
+            MainWindow.show()
+        }
     }
 }
 

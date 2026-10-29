@@ -44,7 +44,7 @@ public enum TestSourceLocator {
     private static let functionName = try! NSRegularExpression(pattern: #"\b"# + functionDeclaration)
 
     /// swift-snapshot-testing's `sanitizePathComponent`.
-    private static func sanitized(_ name: String) -> String {
+    static func sanitized(_ name: String) -> String {
         name.replacingOccurrences(of: #"\W+"#, with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
