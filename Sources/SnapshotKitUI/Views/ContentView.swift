@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -46,6 +47,8 @@ struct ContentView: View {
                     .padding()
             }
         }
+        // For the Services menu's Open in SnapshotKit, which brings the window back if it was closed.
+        .onAppear { MainWindow.openWindow = openWindow }
         // The Dock icon counts the open project's failing tests: from launch, and as you switch.
         .onChange(of: model.current?.dockBadge, initial: true) { _, badge in
             guard !DS.solidSurfaces else { return }

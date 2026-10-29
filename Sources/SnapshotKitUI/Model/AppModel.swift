@@ -223,14 +223,43 @@ final class AppModel {
     }
 
     /// Opens the repository (adding it if it's new) and selects the snapshot at `path` in its library
-    /// once the library has loaded.
-    func reveal(snapshot path: String, in repository: URL) {
+    /// once the library has loaded; with `filter`, the library shows only what matches it.
+    func reveal(snapshot path: String, in repository: URL, filter: String = "") {
         Task {
             guard let model = await open(path: repository.path) else { return }
             for _ in 0..<100 where !model.isInLibrary(path) {
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            model.showInLibrary(path: path)
+            model.showInLibrary(path: path, filter: filter)
+        }
+    }
+
+    /// Open in SnapshotKit, from the Services menu: the snapshots of the test or test file named in
+    /// `selection`, looked for in the open project first, then in the others. One test's are selected
+    /// in the library; several tests' (the same name in two test files, or a test file's) are filtered.
+    func openSnapshots(namedIn selection: String) {
+        guard let name = SnapshotLookup.name(in: selection) else {
+            startupNotice = "Select the name of a test function or a test file to open its snapshots."
+            return
+        }
+        let shown = current?.project.path
+        let paths = (shown.map { [$0] } ?? []) + projects.map(\.path).filter { $0 != shown }
+        Task {
+            let found = await offCooperativePool { () -> (repository: URL, files: [SnapshotFile])? in
+                for path in paths {
+                    let repository = URL(fileURLWithPath: path, isDirectory: true)
+                    guard let library = try? SnapshotLibrary.load(repository: repository) else { continue }
+                    let files = SnapshotLookup.snapshots(named: name, in: library.files)
+                    if !files.isEmpty { return (repository, files) }
+                }
+                return nil
+            }
+            guard let found, let first = found.files.first else {
+                startupNotice = "No snapshots of “\(name)” in your projects."
+                return
+            }
+            let tests = Set(found.files.map { $0.module + "/" + $0.suite + "/" + $0.testName })
+            reveal(snapshot: first.path, in: found.repository, filter: tests.count == 1 ? "" : name)
         }
     }
 

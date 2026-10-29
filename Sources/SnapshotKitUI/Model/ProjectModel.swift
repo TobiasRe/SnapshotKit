@@ -749,10 +749,10 @@ final class ProjectModel {
         refreshChanges()
     }
 
-    /// Shows a snapshot in the library, clearing filters that would hide it.
-    func showInLibrary(path: String) {
+    /// Shows a snapshot in the library, clearing filters that would hide it, or filtering it with `filter`.
+    func showInLibrary(path: String, filter: String = "") {
         guard library?.files.contains(where: { $0.path == path }) == true else { return }
-        libraryFilter = ""
+        libraryFilter = filter
         section = .library
         selectedSnapshotID = path
     }

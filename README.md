@@ -121,6 +121,10 @@ comparison, open or reveal it, or jump to it in another view. In vs develop, pic
 from a menu and revert any change to it. The Dock icon shows the open project’s failing count, and bounces when a run finishes
 in the background.
 
+**From Xcode.** Select a test function’s name in the editor, right-click, and choose **Services › Open in
+SnapshotKit** to see its snapshots in the library (⌥⌘O goes the other way). See
+[The snapshot library](https://tobiasre.github.io/SnapshotKit/docs/library/#from-a-test-in-xcode-to-its-snapshots).
+
 **Menu bar (optional).** Turn on *Show in menu bar* in Settings for a menu bar item that fills like a pie
 as tests complete (with a done/total count) and otherwise shows the failing count. Its panel shows live
 progress for every running project with Cancel, and your failing, pinned and recent projects to open or run
@@ -172,8 +176,9 @@ override func invokeTest() {
 ```
 
 The message then ends in `snapkit open "<reference>" "<actual>"`: copy it from Xcode’s Report navigator and
-run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. See
-[Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/).
+run it in Terminal. It prints the same summary as `snapkit diff` and opens SnapshotKit.app. Or let the tool
+return a `snapshotkit://compare` link, which Xcode makes clickable in the failure message. See
+[Using SnapshotKit as your diff tool](https://tobiasre.github.io/SnapshotKit/docs/diff-tool/) for both.
 
 ## How it works
 
