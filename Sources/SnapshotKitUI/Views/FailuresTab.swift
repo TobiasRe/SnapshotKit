@@ -13,6 +13,7 @@ struct FailuresTab: View {
     @State private var quickLookURL: URL?
     /// What the Load CI Job or Pipeline prompt says.
     @State private var ciJobText = ""
+    @State private var showsCISettings = false
 
     var body: some View {
         ListDetailSplit {
@@ -122,7 +123,7 @@ struct FailuresTab: View {
             Button("Log In as \(login)") { project.useCILogin(login, reloading: job) }
                 .quietControl()
                 .disabled(project.loadingCIJobs.contains(job.id))
-                .help("Set CI login under Run to \(login), then load the job again")
+                .help("Set the CI login (CI Settings) to \(login), then load the job again")
         case .runCommand(let command):
             Button("Copy \(command)") { copy(command) }
                 .quietControl()
@@ -137,7 +138,7 @@ struct FailuresTab: View {
             Button("Load Again") { project.loadCIJob(job) }
                 .quietControl()
                 .disabled(project.loadingCIJobs.contains(job.id))
-                .help("Load the job again, with the CI login set under Run")
+                .help("Load the job again, with the CI login in CI Settings")
         }
     }
 
@@ -189,6 +190,10 @@ struct FailuresTab: View {
                             .quietControl()
                             .help(url.absoluteString)
                     }
+                    Button("CI Settings") { showsCISettings = true }
+                        .quietControl()
+                        .help("The GitLab project, how SnapshotKit signs in, and the SSH login on the runners")
+                        .popover(isPresented: $showsCISettings, arrowEdge: .bottom) { CISettingsView(project: project) }
                 } else {
                     lastRunActions
                 }

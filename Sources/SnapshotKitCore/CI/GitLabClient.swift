@@ -143,6 +143,27 @@ extension GitLabAPI {
     }
 }
 
+/// How SnapshotKit can sign in to GitLab, as far as it can tell without asking GitLab: the glab it would run, and
+/// the variable a token would come from. glab is tried first, then the token.
+public struct GitLabSignIn: Equatable, Sendable {
+    /// Where glab is, when it's installed (on the PATH, or in Homebrew's folders).
+    public var glab: String?
+    /// `GITLAB_TOKEN` or `GITLAB_PRIVATE_TOKEN`, when one is set; never its value.
+    public var tokenVariable: String?
+
+    public init(glab: String? = nil, tokenVariable: String? = nil) {
+        self.glab = glab
+        self.tokenVariable = tokenVariable
+    }
+
+    public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> GitLabSignIn {
+        let path = environment["PATH"].map { GlabAPI.searchPath(adding: $0) } ?? GlabAPI.searchPath
+        let glab = path.split(separator: ":").lazy.map { "\($0)/glab" }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        let token = ["GITLAB_TOKEN", "GITLAB_PRIVATE_TOKEN"].first { !(environment[$0] ?? "").isEmpty }
+        return GitLabSignIn(glab: glab, tokenVariable: token)
+    }
+}
+
 /// The API through the `glab` CLI, signed in with `glab auth login`. Not with `NO_PROMPT` set: glab
 /// prints a deprecation warning for it into the output.
 public struct GlabAPI: GitLabAPI {
@@ -158,9 +179,10 @@ public struct GlabAPI: GitLabAPI {
     }
 
     /// The app's PATH is launchd's, without Homebrew's folders, where glab usually is.
-    static var searchPath: String {
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
-        return ([path] + ["/opt/homebrew/bin", "/usr/local/bin"].filter { !path.split(separator: ":").contains(Substring($0)) })
+    static var searchPath: String { searchPath(adding: ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin") }
+
+    static func searchPath(adding path: String) -> String {
+        ([path] + ["/opt/homebrew/bin", "/usr/local/bin"].filter { !path.split(separator: ":").contains(Substring($0)) })
             .joined(separator: ":")
     }
 }

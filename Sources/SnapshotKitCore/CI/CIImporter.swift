@@ -2,7 +2,7 @@ import Foundation
 
 /// Something to do about what a CI job's load couldn't fetch, offered with the notes.
 public enum CIFix: Hashable, Sendable {
-    /// Log in to the runner as this (CI login under Run, `--ci-login`), then load the job again.
+    /// Log in to the runner as this (the CI login in CI Settings, `--ci-login`), then load the job again.
     case useLogin(String)
     /// A command to run in a terminal first, such as `ssh user@runner true` to trust the runner's host key.
     case runCommand(String)
@@ -297,11 +297,11 @@ public struct CIImporter: Sendable {
                 let count = state.unreadable.count
                 notes.append("Logged in to \(runner) as \(user), who can’t read \(count == paths.count ? "the" : "\(count) of the \(paths.count)") "
                              + "images the tests took" + (home.map { ": they are in \($0)" } ?? "") + "."
-                             + (suggestion.map { " Set CI login under Run to `\($0)`." } ?? " Check the folders’ permissions on \(runner)."))
+                             + (suggestion.map { " Set the CI login to `\($0)`." } ?? " Check the folders’ permissions on \(runner)."))
                 if let suggestion { fixes.append(.useLogin(suggestion)) }
                 for path in state.unreadable {
                     missing[path] = "\(user) on \(runner) can’t read it" + (owner.map { ": it is \($0)’s" } ?? "")
-                        + (suggestion.map { ". Log in as `\($0)` (CI login under Run)." } ?? ".")
+                        + (suggestion.map { ". Log in as `\($0)` (the CI login)." } ?? ".")
                 }
             }
             let gone = state.gone.count
@@ -414,11 +414,11 @@ public struct CIImporter: Sendable {
         if case RemoteError.invalidHost = error {
             return (login ?? "").contains("@")
                 ? SSHDiagnosis(note: "CI login “\(destination)” isn’t a login ssh can use, so the images the tests took couldn’t be copied. "
-                               + "Set CI login under Run to a user, or `user@host`.",
+                               + "Set the CI login to a user, or `user@host`.",
                                reason: "CI login “\(destination)” isn’t a login ssh can use.")
                 : SSHDiagnosis(note: "GitLab names the runner “\(runner)”, which isn’t a host name, so the images the tests took couldn’t be "
-                               + "copied. Set CI login under Run to `user@host`, with the runner’s address.",
-                               reason: "The runner’s name “\(runner)” isn’t a host name: set CI login under Run to `user@host`.")
+                               + "copied. Set the CI login to `user@host`, with the runner’s address.",
+                               reason: "The runner’s name “\(runner)” isn’t a host name: set the CI login to `user@host`.")
         }
         if output.contains("Host key verification failed") {
             return SSHDiagnosis(
@@ -431,14 +431,14 @@ public struct CIImporter: Sendable {
             let suggestion = owner.flatMap { $0 == user ? nil : Self.login(owner: $0, replacing: login) }
             return SSHDiagnosis(
                 note: "\(destination) can’t read the images the tests took" + (owner == nil ? "" : ": they are in \(home)") + "."
-                    + (suggestion.map { " Set CI login under Run to `\($0)`." } ?? " Check the folders’ permissions on \(runner)."),
-                reason: "\(destination) can’t read it" + (suggestion.map { ": log in as `\($0)` (CI login under Run)." } ?? "."),
+                    + (suggestion.map { " Set the CI login to `\($0)`." } ?? " Check the folders’ permissions on \(runner)."),
+                reason: "\(destination) can’t read it" + (suggestion.map { ": log in as `\($0)` (the CI login)." } ?? "."),
                 fixes: suggestion.map { [.useLogin($0)] } ?? [])
         }
         if output.contains("Permission denied") {
             // The images are in a user's folder: that user is likely the one to log in as.
             let refused = "\(destination) refused the SSH login, so the images the tests took couldn’t be copied."
-            let check = " Check CI login under Run, and that `ssh \(destination) true` works without a password."
+            let check = " Check the CI login, and that `ssh \(destination) true` works without a password."
             guard let owner, owner != user else {
                 return SSHDiagnosis(note: refused + check + " SnapshotKit can’t type a key’s passphrase: add the key to ssh-agent "
                                     + "(`ssh-add --apple-use-keychain`), or name it in ~/.ssh/config.",
@@ -448,19 +448,19 @@ public struct CIImporter: Sendable {
             let suggestion = Self.login(owner: owner, replacing: login)
             let suggested = Self.destination(login: suggestion, runner: runner)
             let note = (login ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-                ? refused + " The images are in \(home): set CI login under Run to `\(owner)`."
-                : refused + " The images are in \(home), so the login is likely `\(suggestion)`: set CI login under Run to it."
-                    + " Otherwise check CI login under Run, and that `ssh \(destination) true` works without a password."
+                ? refused + " The images are in \(home): set the CI login to `\(owner)`."
+                : refused + " The images are in \(home), so the login is likely `\(suggestion)`: set the CI login to it."
+                    + " Otherwise check the CI login, and that `ssh \(destination) true` works without a password."
             return SSHDiagnosis(note: note,
-                                reason: "\(destination) refused the SSH login. The images are \(owner)’s: log in as `\(suggestion)` (CI login under Run).",
+                                reason: "\(destination) refused the SSH login. The images are \(owner)’s: log in as `\(suggestion)` (the CI login).",
                                 fixes: [.useLogin(suggestion), .runCommand("ssh \(suggested) true")])
         }
         if output.contains("Could not resolve hostname") || output.contains("nodename nor servname") {
             return SSHDiagnosis(
                 note: "This Mac can’t find \(host) on the network, so the images the tests took couldn’t be copied. GitLab names the runner "
-                    + "“\(runner)”, which may not be its address here: set CI login under Run to `user@address`, or give it a "
+                    + "“\(runner)”, which may not be its address here: set the CI login to `user@address`, or give it a "
                     + "`Host \(host)` entry with its `HostName` in ~/.ssh/config.",
-                reason: "This Mac can’t find \(host): set CI login under Run to `user@address`.")
+                reason: "This Mac can’t find \(host): set the CI login to `user@address`.")
         }
         if ["timed out", "No route to host", "Connection refused", "Network is unreachable", "Connection closed"].contains(where: output.contains) {
             return SSHDiagnosis(

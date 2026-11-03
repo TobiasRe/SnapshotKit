@@ -11,17 +11,21 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Open in SnapshotKit, and the library shows its snapshots (a test struct's or class's name: its test file's).
   The open project is searched first, then the others.
 - The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
-- The sidebar always has a CI section, ending in **Load Job or Pipeline…**: also without a merge request or a
-  failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or Pipeline…** (⇧⌘L, before
+- The sidebar always has a CI section, its heading with **+** (load a job or pipeline) and **⚙** (CI Settings): also
+  without a merge request or a failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or Pipeline…** (⇧⌘L, before
   **Load Failed CI Job…**) and `snapkit failures --ci URL` take a pipeline’s URL: the app lists its failed jobs
   under *CI · Pipeline #89* and opens its snapshot job; `snapkit` shows that job.
 
 ### Changed
+- Settings are where they act. **CI Settings** (the CI section’s ⚙, or the button in a CI job’s header) has the
+  **CI login**, the GitLab project `origin` points at and how SnapshotKit signs in to it (glab, `GITLAB_TOKEN`, or
+  neither, with how to set one up). Run keeps the remote host, under **Remote Mac**; the base branch is picked in
+  vs develop’s branch menu, which already set it. Notes that named “CI login under Run” say “the CI login”.
 - A failed CI job’s failures say why a test has no images, and offer the fix. Each missing reference or image
   has its own reason (no longer on the runner, the login refused or unable to read it, not in the job’s commit),
   and a test without any says what kind of failure it is instead of “it may not be a snapshot mismatch”. Under
   the notes, **Log In as *user*** sets the CI login to the owner of the images’ folder and loads the job again
-  (also offered in Run, under **CI login**), **Copy `ssh … true`** helps trust a host key, **Retry in GitLab**
+  (also offered in CI Settings, under **CI login**), **Copy `ssh … true`** helps trust a host key, **Retry in GitLab**
   and **Load Again** do what they say. `snapkit failures --ci` prints the same as `fix:` lines.
 - A refused SSH login suggests the user whose home the images are in also when a CI login is set, and a login
   that gets in but can’t read the images says so, rather than reporting them gone.

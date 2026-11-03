@@ -269,7 +269,7 @@ struct FakeGitLab: GitLabAPI {
         #expect(hint("Host key verification failed.") == "ci-mac-1 isn’t a known SSH host yet, and SnapshotKit never trusts one by itself. "
                 + "Connect once with `ssh ci-mac-1 true` and accept its key, then load the job again.")
         #expect(hint("ci@ci-mac-1: Permission denied (publickey).") == "ci-mac-1 refused the SSH login, so the images the tests took couldn’t be "
-                + "copied. The images are in /Users/ci-runner/: set CI login under Run to `ci-runner`.")
+                + "copied. The images are in /Users/ci-runner/: set the CI login to `ci-runner`.")
         #expect(hint("Permission denied (publickey).", login: "builder").hasSuffix("that `ssh builder@ci-mac-1 true` works without a password."))
         #expect(hint("Connection timed out").hasPrefix("Couldn’t copy the images the tests took from ci-mac-1: "))
     }
@@ -560,9 +560,9 @@ extension CIImporterTests {
         let denied = "Permission denied (publickey,password,keyboard-interactive)."
         #expect(diagnosis(denied, login: nil).fixes == [.useLogin("ci-runner"), .runCommand("ssh ci-runner@ci-mac-1 true")])
         let builder = diagnosis(denied, login: "builder")
-        #expect(builder.note.contains("so the login is likely `ci-runner`: set CI login under Run to it."))
+        #expect(builder.note.contains("so the login is likely `ci-runner`: set the CI login to it."))
         #expect(builder.fixes == [.useLogin("ci-runner"), .runCommand("ssh ci-runner@ci-mac-1 true")])
-        #expect(builder.reason == "builder@ci-mac-1 refused the SSH login. The images are ci-runner’s: log in as `ci-runner` (CI login under Run).")
+        #expect(builder.reason == "builder@ci-mac-1 refused the SSH login. The images are ci-runner’s: log in as `ci-runner` (the CI login).")
         #expect(diagnosis(denied, login: "builder@ci-mac-1.example.com").fixes.first == .useLogin("ci-runner@ci-mac-1.example.com"))
         // The owner's own login refused: the key, not the user.
         let owner = diagnosis(denied, login: "ci-runner")
@@ -570,7 +570,7 @@ extension CIImporterTests {
         #expect(owner.note.contains("ssh-agent"))
         // Logged in, but not allowed to read the owner's files.
         let unreadable = diagnosis(#"rsync: [sender] send_files failed to open "/Users/ci-runner/a.png": Permission denied (13)"#, login: "builder")
-        #expect(unreadable.note == "builder@ci-mac-1 can’t read the images the tests took: they are in /Users/ci-runner/. Set CI login under Run to `ci-runner`.")
+        #expect(unreadable.note == "builder@ci-mac-1 can’t read the images the tests took: they are in /Users/ci-runner/. Set the CI login to `ci-runner`.")
         #expect(unreadable.fixes == [.useLogin("ci-runner")])
     }
 
@@ -581,7 +581,7 @@ extension CIImporterTests {
         }
         let unknown = diagnosis(RemoteError.commandFailed(host: "ci-mac-1", script: "", status: 255,
                                                           output: "ssh: Could not resolve hostname ci-mac-1: nodename nor servname provided, or not known"))
-        #expect(unknown.note.contains("set CI login under Run to `user@address`, or give it a `Host ci-mac-1` entry"))
+        #expect(unknown.note.contains("set the CI login to `user@address`, or give it a `Host ci-mac-1` entry"))
         let named = diagnosis(RemoteError.invalidHost("Mac mini (M2)"), runner: "Mac mini (M2)")
         #expect(named.note.hasPrefix("GitLab names the runner “Mac mini (M2)”, which isn’t a host name"))
         let trust = diagnosis(RemoteError.commandFailed(host: "ci-mac-1", script: "", status: 255, output: "Host key verification failed."))

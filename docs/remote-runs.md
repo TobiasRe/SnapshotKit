@@ -25,7 +25,7 @@ Nothing else needs installing there: no SnapshotKit, no `snapkit`.
 
 Set the host in one of two places (the project setting wins):
 
-- **Run › Comparison & Remote › Remote host** — stored only for you, in your settings. Hosts are often
+- **Run › Remote Mac › Host** — stored only for you, in your settings. Hosts are often
   personal, so this is the usual place.
 - **`remoteHost:` in `.snapshotkit.yml`** — shared with everyone who uses the repository.
 

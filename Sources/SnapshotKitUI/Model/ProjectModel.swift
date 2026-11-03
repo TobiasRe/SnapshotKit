@@ -1304,6 +1304,8 @@ final class ProjectModel {
     /// The checked-out branch's merge request and the failed jobs of its latest pipeline, which the
     /// sidebar lists.
     private(set) var ciDetection: CIDetection?
+    /// The GitLab project `origin` points at, for CI Settings; nil when it isn't one.
+    private(set) var ciProject: GitLabLink?
     /// The CI jobs being loaded, by id.
     private(set) var loadingCIJobs: Set<Int> = []
     /// Why a job couldn't be loaded, by id, until it loads.
@@ -1391,9 +1393,10 @@ final class ProjectModel {
         let generation = ciGeneration, repository = project.url, detect = detectCI
         ciCheckedBranch = currentBranch
         return Task {
-            let found = await offCooperativePool { try? detect(repository) }
+            let (found, gitLab) = await offCooperativePool { (try? detect(repository), CIDetector.project(of: repository)) }
             guard generation == ciGeneration else { return }
             ciDetection = found
+            ciProject = gitLab
         }
     }
 
@@ -2195,6 +2198,7 @@ extension ProjectModel {
                                           flakeResults: f.flakeResults, diagnoses: Self.diagnose(f.failures),
                                           selectedID: Self.displayOrder(f.failures).first?.id, job: f.ciJob, mergeRequest: f.ciMergeRequest)]
         ciDetection = f.ciDetection
+        ciProject = f.ciDetection?.project
         changeSet = f.changeSet
         changesError = f.changesError
         isLoadingChanges = false

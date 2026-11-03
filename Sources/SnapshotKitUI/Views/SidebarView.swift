@@ -27,6 +27,7 @@ struct SidebarView: View {
 struct SectionList: View {
     @Environment(AppModel.self) private var model
     let project: ProjectModel
+    @State private var showsCISettings = false
 
     /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
     /// black and its vibrancy drops the dots' colour: there the selected row is filled by hand, grey as in
@@ -44,17 +45,17 @@ struct SectionList: View {
                 row(.lastRun)
                 row(.run)
             }
-            // A merge request's or pipeline's failed jobs, each loaded when opened; always a way to load another.
+            // A merge request's or pipeline's failed jobs, each loaded when opened. Always there, its first heading
+            // with a way to load another and the settings jobs load with.
             let groups = project.ciJobGroups
             if groups.isEmpty {
-                Section("CI") { loadCIRow }
+                Section { EmptyView() } header: { ciHeader("CI", help: nil, actions: true) }
             }
             ForEach(groups) { group in
                 Section {
                     ForEach(group.jobs) { row(.ciJob($0.id)) }
-                    if group.id == groups.last?.id { loadCIRow }
                 } header: {
-                    Text(group.title).help(group.mergeRequest?.title ?? "")
+                    ciHeader(group.title, help: group.mergeRequest?.title, actions: group.id == groups.first?.id)
                 }
             }
             Section("Library") {
@@ -66,14 +67,22 @@ struct SectionList: View {
         .listStyle(.sidebar)
     }
 
-    /// Load Job or Pipeline… (⇧⌘L): asks for a job's or pipeline's URL. Not a section: it can't be selected.
-    private var loadCIRow: some View {
-        Button { model.loadCIJobFromPrompt() } label: {
-            Label("Load Job or Pipeline…", systemImage: "plus.circle")
-                .foregroundStyle(.secondary)
+    /// A CI heading; the first has + (Load CI Job or Pipeline…, ⇧⌘L) and CI Settings.
+    private func ciHeader(_ title: String, help: String?, actions: Bool) -> some View {
+        HStack(spacing: DS.Space.xs) {
+            Text(title).help(help ?? "")
+            if actions {
+                Spacer(minLength: DS.Space.s)
+                Button { model.loadCIJobFromPrompt() } label: { Image(systemName: "plus") }
+                    .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
+                    .accessibilityLabel("Load CI Job or Pipeline")
+                Button { showsCISettings = true } label: { Image(systemName: "gearshape") }
+                    .help("CI Settings: the GitLab project, how SnapshotKit signs in, and the SSH login on the runners")
+                    .accessibilityLabel("CI Settings")
+                    .popover(isPresented: $showsCISettings, arrowEdge: .trailing) { CISettingsView(project: project) }
+            }
         }
-        .buttonStyle(.plain)
-        .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
+        .buttonStyle(.borderless)
     }
 
     private func row(_ section: ProjectSection) -> some View {
