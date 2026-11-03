@@ -287,6 +287,15 @@ struct FailuresTab: View {
             } else if project.failures.isEmpty, project.failureSource == nil {
                 ContentUnavailableView("No Results Yet", systemImage: "play.circle",
                                        description: Text("Run the tests, or import a result bundle from CI."))
+            } else if project.failures.isEmpty, ciJob != nil, let note = project.failureSource?.notes.last {
+                // A job without failing tests: its last note says why (failed outside the tests, not finished, no report).
+                ContentUnavailableView {
+                    Label("No Failing Tests", systemImage: "questionmark.circle")
+                } description: {
+                    Text(note)
+                } actions: {
+                    fixButtons(project.failureSource?.fixes ?? [])
+                }
             } else if project.failures.isEmpty {
                 ContentUnavailableView("Nothing Failing", systemImage: "checkmark.circle",
                                        description: Text("Every test passed."))
@@ -431,6 +440,8 @@ struct FailuresTab: View {
                 } actions: {
                     fixButtons(project.failureSource?.fixes ?? [])
                 }
+                // Fills the pane as the images would, so the header stays at the top.
+                .frame(maxHeight: .infinity)
             }
         }
     }

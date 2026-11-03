@@ -92,6 +92,17 @@ struct FakeGitLab: GitLabAPI {
         #expect(mismatches.map(\.perceptual) == [nil, .init(actual: 0.7, required: 0.9)])
     }
 
+    /// A diff tool may quote with single quotes, and a reference may be outside `__Snapshots__`: then the order tells,
+    /// reference first, as swift-snapshot-testing passes them.
+    @Test func readsSingleQuotesAndTheOrder() {
+        let quoted = SnapshotMismatch.parse("ksdiff '/ci/tmp/Card Tests/card.1.png' '/ci/app/__Snapshots__/Card Tests/card.1.png'")
+        #expect(quoted.map(\.reference) == ["/ci/app/__Snapshots__/Card Tests/card.1.png"])
+        #expect(quoted.map(\.actual) == ["/ci/tmp/Card Tests/card.1.png"])
+        let custom = SnapshotMismatch.parse(#"compare "/ci/app/References/card.png" "/ci/tmp/card.png""#)
+        #expect(custom.map(\.reference) == ["/ci/app/References/card.png"] && custom.map(\.actual) == ["/ci/tmp/card.png"])
+        #expect(SnapshotMismatch.parse(#"compare "/ci/a.png" "/ci/a.png""#).isEmpty)
+    }
+
     @Test func aMessageWithoutImagesKeepsItsFirstLine() {
         #expect(SnapshotMismatch.parse("XCTAssertEqual failed: (\"12\") is not equal to (\"13\")").isEmpty)
         #expect(SnapshotMismatch.headline(of: "\n  XCTAssertEqual failed\nmore") == "XCTAssertEqual failed")
@@ -613,6 +624,24 @@ extension CIImporterTests {
         #expect((api.token as? TokenAPI)?.tokenVariable == "GITLAB_PRIVATE_TOKEN")
         #expect(DefaultGitLabAPI(host: "h", environment: ["GITLAB_TOKEN": "", "GITLAB_PRIVATE_TOKEN": "b"]).token != nil)
         #expect(DefaultGitLabAPI(host: "h", environment: ["GITLAB_TOKEN": ""]).token == nil)
+    }
+
+    /// An answer that isn't JSON, as from a sign-in page in front of GitLab, says how it starts.
+    @Test func anAnswerThatIsntJSONSaysHowItStarts() {
+        let api = FakeGitLab(["projects/x/jobs/1": "<!DOCTYPE html>\n<html><title>Sign in</title>"])
+        #expect(throws: GitLabError.unreadable(path: "projects/x/jobs/1", start: "<!DOCTYPE html>")) {
+            try api.get("projects/x/jobs/1", as: GitLabJob.self)
+        }
+    }
+
+    /// A JUnit writer may split the message between system output and stack trace: the snapshot failure is the message.
+    @Test func theMessageIsTheSnapshotFailure() {
+        let failure = "Snapshot does not match reference."
+        let split = CITestReport.Case(status: "failed", name: "testCard()", classname: "CardTests",
+                                      systemOutput: "Rendering CardView", stackTrace: failure)
+        #expect(split.message == failure)
+        let other = CITestReport.Case(status: "failed", name: "testCard()", classname: "CardTests", systemOutput: "", stackTrace: "XCTAssertTrue failed")
+        #expect(other.message == "XCTAssertTrue failed")
     }
 
     /// Without glab and without a token there is no way in, and the error says both ways.

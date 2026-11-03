@@ -24,14 +24,18 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 - Loading a CI job again keeps the images an earlier load copied, so it never shows fewer after the runner
   started its next job.
 - A CI job that can’t load says why: glab missing, signed out or expired, a token rejected, no access, no such
-  job, GitLab unreachable. A job that failed outside its tests, hadn’t finished, or whose pipeline’s test report
-  has no suite for it (a parallel job’s `1/2` is matched) says so.
+  job, GitLab unreachable, an answer that isn’t GitLab’s JSON (a sign-in page in front of it). A job that failed
+  outside its tests, hadn’t finished, or whose pipeline’s test report has no suite for it (a parallel job’s `1/2`
+  is matched) says so in its failures pane, as **No Failing Tests**, instead of “Every test passed”.
 
 ### Fixed
 - Failure messages a JUnit writer escaped (`ksdiff \"/…png\"`, `\n` line breaks, `\u{2212}`, `&quot;`) are read:
   their images load and the message shows unescaped. Also read: `@-` with a plain hyphen, paths instead of file
-  URLs, a diff tool given file URLs, and “No reference was found on disk”, whose recorded image is shown.
-- A snapshot mismatch whose message names no images is noted instead of dropped silently.
+  URLs, a diff tool given file URLs or single quotes (its first image is the reference unless only the second is
+  under `__Snapshots__`), and “No reference was found on disk”, whose recorded image is shown. When a JUnit writer
+  splits a test’s output between system output and stack trace, the part that is the snapshot failure is read.
+- A snapshot mismatch whose message names no images is noted instead of dropped silently, and its reason sits
+  under the failure’s header instead of halfway down the pane.
 
 ## [0.4.0] - 2026-10-28
 

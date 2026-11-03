@@ -152,10 +152,12 @@ public struct SnapshotMismatch: Equatable, Sendable {
         }
         if pairs.isEmpty {
             pairs = ranges(diffToolPair).compactMap { m in
-                let paths = [group(m, 1) ?? group(m, 2), group(m, 3) ?? group(m, 4)].compactMap { $0 }.map(decodedIfURL)
-                guard paths.count == 2, let reference = paths.first(where: { $0.contains("/__Snapshots__/") }),
-                      let actual = paths.first(where: { $0 != reference }) else { return nil }
-                return (m.range.location, reference, actual, false)
+                let paths = [group(m, 1) ?? group(m, 2) ?? group(m, 3), group(m, 4) ?? group(m, 5) ?? group(m, 6)]
+                    .compactMap { $0 }.map(decodedIfURL)
+                guard paths.count == 2, paths[0] != paths[1] else { return nil }
+                // Reference first, as swift-snapshot-testing passes them, unless only the second is under `__Snapshots__`.
+                let swapped = !paths[0].contains("/__Snapshots__/") && paths[1].contains("/__Snapshots__/")
+                return (m.range.location, swapped ? paths[1] : paths[0], swapped ? paths[0] : paths[1], false)
             }
         }
         if pairs.isEmpty {
@@ -221,13 +223,16 @@ public struct SnapshotMismatch: Equatable, Sendable {
     private static let defaultDiff = try! NSRegularExpression(
         pattern: #"@[\x{2212}\-]\s*\n\s*"(file://)?([^"\n]+)"\s*\n\s*@\+\s*\n\s*"(file://)?([^"\n]+)""#
     )
-    /// A diff tool's command line with two absolute image paths or file URLs, quoted or not:
-    /// `ksdiff "/a.png" "/b.png"`, `compare file:///a.png file:///b.png`.
-    private static let diffToolPair = try! NSRegularExpression(
-        pattern: #"(?:"((?:file://)?/[^"\n]+\.(?:png|jpe?g|heic|tiff))"|(?<![^\s])((?:file://)?/[^\s"]+\.(?:png|jpe?g|heic|tiff)))[ \t]+"#
-            + #"(?:"((?:file://)?/[^"\n]+\.(?:png|jpe?g|heic|tiff))"|((?:file://)?/[^\s"]+\.(?:png|jpe?g|heic|tiff))(?![^\s]))"#,
-        options: [.caseInsensitive]
-    )
+    /// A diff tool's command line with two absolute image paths or file URLs, in double quotes, single quotes or
+    /// none: `ksdiff "/a.png" "/b.png"`, `compare file:///a.png file:///b.png`.
+    private static let diffToolPair: NSRegularExpression = {
+        func quoted(_ quote: String) -> String { #"\#(quote)((?:file://)?/[^\#(quote)\n]+\.(?:png|jpe?g|heic|tiff))\#(quote)"# }
+        let bare = #"((?:file://)?/[^\s"']+\.(?:png|jpe?g|heic|tiff))"#
+        return try! NSRegularExpression(
+            pattern: #"(?:\#(quoted("\""))|\#(quoted("'"))|(?<![^\s])\#(bare))[ \t]+(?:\#(quoted("\""))|\#(quoted("'"))|\#(bare)(?![^\s]))"#,
+            options: [.caseInsensitive]
+        )
+    }()
     /// `No reference was found on disk. Automatically recorded snapshot: …` (or `Record mode is on. …`), then
     /// `open "file:///…/__Snapshots__/…png"`.
     private static let recordedSnapshot = try! NSRegularExpression(

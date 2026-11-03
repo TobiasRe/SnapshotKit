@@ -20,6 +20,8 @@ public enum GitLabError: Error, LocalizedError, Equatable {
     case notFound(path: String)
     /// The host didn't answer: DNS, network, VPN.
     case unreachable(host: String, detail: String)
+    /// The answer isn't GitLab's JSON, as from a sign-in page in front of it.
+    case unreadable(path: String, start: String)
     case request(path: String, output: String)
     /// What was pasted for a job names none.
     case notAJob(String, numbers: Bool)
@@ -49,6 +51,9 @@ public enum GitLabError: Error, LocalizedError, Equatable {
             "GitLab has nothing at `\(path)` (404 Not Found): it doesn’t exist, or the account SnapshotKit signs in with can’t see it."
         case let .unreachable(host, detail):
             "Can’t reach GitLab on \(host) (\(detail)). Check the network, and the VPN if \(host) needs one."
+        case let .unreadable(path, start):
+            "GitLab’s answer to `\(path)` isn’t what SnapshotKit can read; it starts “\(start)”. A sign-in page in front of GitLab "
+                + "answers like this: sign in to it in the browser, or ask whoever runs it how to reach the API."
         case let .request(path, output):
             "GitLab answered `\(path)` with: \(output)"
         case let .notAJob(text, numbers):
@@ -99,7 +104,13 @@ extension GitLabAPI {
     public func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(T.self, from: try get(path))
+        let data = try get(path)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch is DecodingError {
+            let start = String(decoding: data.prefix(80), as: UTF8.self).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+            throw GitLabError.unreadable(path: path, start: start.trimmingCharacters(in: .whitespaces))
+        }
     }
 
     public func job(_ id: Int, in project: GitLabLink) throws -> GitLabJob {
@@ -317,8 +328,12 @@ public struct CITestReport: Decodable, Sendable, Equatable {
         public var stackTrace: String?
 
         public var failed: Bool { status == "failed" || status == "error" }
-        /// What the test reported: its failure message, else its stack trace.
-        public var message: String { [systemOutput, stackTrace].compactMap { $0 }.first { !$0.isEmpty } ?? "" }
+        /// What the test reported: its failure message, else its stack trace. The one that is swift-snapshot-testing's,
+        /// when the writer split it between them.
+        public var message: String {
+            let texts = [systemOutput, stackTrace].compactMap { $0 }.filter { !$0.isEmpty }
+            return texts.first(where: SnapshotMismatch.isSnapshotFailure) ?? texts.first ?? ""
+        }
     }
 
     public var testSuites: [Suite]
