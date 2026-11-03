@@ -35,7 +35,7 @@ import Testing
         #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--ci")) == failure(
             "No failed CI job to show: the branch has no open merge request, or nothing failed in its latest pipeline. Pass --ci URL."))
         #expect(Outcome(try snapkit("failures", "--repo", repo.url.path, "--ci", "4567")) == failure(
-            "“4567” isn’t a GitLab job’s URL (https://gitlab.example.com/group/project/-/jobs/123)."))
+            "“4567” isn’t the URL of a GitLab job (https://gitlab.example.com/group/project/-/jobs/123) or pipeline (…/-/pipelines/89)."))
     }
 
     /// The app's version is a build setting of SnapshotKit.xcodeproj, in every configuration.

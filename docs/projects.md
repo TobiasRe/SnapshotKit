@@ -154,5 +154,5 @@ SnapshotKit from another app, the changes are refreshed too.
 | Verify after re-recording | on | After recording new references, run the same tests again to confirm they pass. |
 | Settings file | | **Show in Finder** reveals `settings.json`. |
 
-Per-project choices — the base branch, the remote host and the test target — are made in Run and in
-the branch menu of vs develop, and stored in the same file. See [Configuration](configuration.md).
+Per-project choices are made where they act — the base branch in the branch menu of vs develop, the remote
+host and the test target in Run, the CI login in CI Settings — and stored in the same file. See [Configuration](configuration.md).

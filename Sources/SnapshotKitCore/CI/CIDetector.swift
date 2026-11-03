@@ -39,6 +39,11 @@ public enum CIDetector {
         throw GitLabError.notAJob(text, numbers: project(of: repository) != nil)
     }
 
+    /// The snapshot job among failed ones, when several failed: the first whose name says so, else the first.
+    public static func snapshotJob(of failed: [GitLabJob]) -> GitLabJob {
+        failed.first { $0.name.lowercased().contains("snapshot") } ?? failed[0]
+    }
+
     /// The failed jobs of the branch's open merge request, nil when there is no such request or nothing failed
     /// in its latest pipeline. `api` is made for the remote's host.
     public static func detect(repository: URL, api: (String) -> GitLabAPI = { DefaultGitLabAPI(host: $0) }) throws -> CIDetection? {

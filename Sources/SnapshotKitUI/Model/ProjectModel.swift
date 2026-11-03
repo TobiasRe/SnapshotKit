@@ -152,6 +152,8 @@ struct FailureSource: Equatable {
     var detail: String?
     /// What couldn't be fetched with them, such as images gone from a CI runner.
     var notes: [String] = []
+    /// What would fetch it: a CI login to try, a command to run, the job to retry or load again.
+    var fixes: [CIFix] = []
 }
 
 /// Where a set of failures comes from: the last run (local, remote or imported), or a CI job.
@@ -235,8 +237,10 @@ final class ProjectModel {
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
-    /// Set by Load Failed CI Job… (menu, ⌘K, the failures view); the failures view asks for the job.
+    /// Set by Load CI Job or Pipeline… (menu, ⌘K, the failures view); the failures view asks for the job.
     var askForCIJob = false
+    /// Set by CI Settings… (menu, ⌘K, the CI heading's context menu); the CI heading shows the panel.
+    var showsCISettings = false
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }
@@ -768,10 +772,10 @@ final class ProjectModel {
         refreshChanges()
     }
 
-    /// Shows a snapshot in the library, clearing filters that would hide it.
-    func showInLibrary(path: String) {
+    /// Shows a snapshot in the library, clearing filters that would hide it, or filtering it with `filter`.
+    func showInLibrary(path: String, filter: String = "") {
         guard library?.files.contains(where: { $0.path == path }) == true else { return }
-        libraryFilter = ""
+        libraryFilter = filter
         section = .library
         selectedSnapshotID = path
     }
@@ -1387,23 +1391,36 @@ final class ProjectModel {
     /// The checked-out branch's merge request and the failed jobs of its latest pipeline, which the
     /// sidebar lists.
     private(set) var ciDetection: CIDetection?
+    /// The GitLab project `origin` points at, for CI Settings; nil when it isn't one.
+    private(set) var ciProject: GitLabLink?
     /// The CI jobs being loaded, by id.
     private(set) var loadingCIJobs: Set<Int> = []
     /// Why a job couldn't be loaded, by id, until it loads.
     private(set) var ciLoadErrors: [Int: String] = [:]
+    /// Pipelines loaded by their URL, with their failed jobs: listed under each in the sidebar, each job loaded
+    /// when opened.
+    private(set) var ciPipelines: [CIPipeline] = []
+    struct CIPipeline: Equatable {
+        var project: GitLabLink
+        var id: Int
+        var failedJobs: [GitLabJob]
+    }
     /// The branch's failed jobs not loaded yet.
     var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { failureSets[.ciJob($0.id)] == nil } }
 
     /// A CI job the sidebar lists: one of the branch's failed jobs, or one loaded.
     func ciJob(_ id: Int) -> GitLabJob? {
         failureSets[.ciJob(id)]?.job ?? ciDetection?.failedJobs.first { $0.id == id }
+            ?? ciPipelines.lazy.flatMap(\.failedJobs).first { $0.id == id }
     }
 
     /// The jobs of one merge request, under its heading in the sidebar.
     struct CIJobGroup: Identifiable {
         var mergeRequest: GitLabMergeRequest?
+        /// A pipeline loaded by its URL, for its jobs.
+        var pipeline: Int?
         var jobs: [GitLabJob]
-        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? "CI" }
+        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? pipeline.map { "CI · Pipeline #\($0)" } ?? "CI" }
         var id: String { title }
     }
 
@@ -1422,6 +1439,13 @@ final class ProjectModel {
             let jobs = detection.failedJobs + extra.map(\.job)
             if !jobs.isEmpty { groups.append(CIJobGroup(mergeRequest: detection.mergeRequest, jobs: jobs)) }
         }
+        // Pipelines loaded by their URL, each with its jobs, loaded or not; one the branch's request lists is there already.
+        for pipeline in ciPipelines {
+            let listed = Set(groups.flatMap(\.jobs).map(\.id))
+            let jobs = pipeline.failedJobs.filter { !listed.contains($0.id) }
+            others.removeAll { loaded in pipeline.failedJobs.contains { $0.id == loaded.job.id } }
+            if !jobs.isEmpty { groups.append(CIJobGroup(pipeline: pipeline.id, jobs: jobs)) }
+        }
         let byRequest = Dictionary(grouping: others) { $0.mergeRequest?.iid }
         for iid in byRequest.keys.sorted(by: { ($0 ?? .max) < ($1 ?? .max) }) {
             let jobs = byRequest[iid] ?? []
@@ -1432,11 +1456,17 @@ final class ProjectModel {
 
     /// How the model reaches GitLab and the runners, off the main thread; tests replace them.
     @ObservationIgnored var detectCI: @Sendable (URL) throws -> CIDetection? = { try CIDetector.detect(repository: $0) }
+    /// A pipeline's failed jobs, oldest first.
+    @ObservationIgnored var findCIPipeline: @Sendable (GitLabLink, Int) throws -> [GitLabJob] = { project, id in
+        try DefaultGitLabAPI(host: project.host).failedJobs(ofPipeline: id, in: project).sorted { $0.id < $1.id }
+    }
     /// A job's URL, or its number in the repository's project, as the job.
     @ObservationIgnored var resolveCI: @Sendable (String, URL) throws -> GitLabLink = { try CIDetector.job($0, repository: $1) }
-    /// Loads a job with the CI login into a folder.
+    /// Loads a job with the CI login into a folder of its own below `directory`, which keeps the images an earlier
+    /// load copied: the runner removes them when its next job starts.
     @ObservationIgnored var importCI: @Sendable (GitLabLink, String?, URL, URL) throws -> CIImport = { link, login, repository, directory in
-        try CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repository, login: login).load(link, into: directory)
+        let folder = directory.appendingPathComponent("\(link.host)/\(link.projectPath)/\(link.jobID ?? 0)", isDirectory: true)
+        return try CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repository, login: login).load(link, into: folder)
     }
     @ObservationIgnored private var ciGeneration = 0
     /// The branch the last check was for: a check runs when a project opens and when its branch changes.
@@ -1450,15 +1480,18 @@ final class ProjectModel {
         let generation = ciGeneration, repository = project.url, detect = detectCI
         ciCheckedBranch = currentBranch
         return Task {
-            let found = await offCooperativePool { try? detect(repository) }
+            let (found, gitLab) = await offCooperativePool { (try? detect(repository), CIDetector.project(of: repository)) }
             guard generation == ciGeneration else { return }
             ciDetection = found
+            ciProject = gitLab
         }
     }
 
-    /// Loads the failed CI job `text` names: its URL, or its number in this project's GitLab.
+    /// Loads the failed CI job `text` names: its URL, or its number in this project's GitLab. A pipeline's URL
+    /// lists its failed jobs.
     @discardableResult
     func loadCIJob(url text: String) -> Task<Void, Never> {
+        if let (project, pipeline) = GitLabLink.pipeline(url: text) { return loadCIPipeline(pipeline, in: project) }
         let resolve = resolveCI, repository = project.url
         return loadCI("the CI job", id: nil) { try resolve(text, repository) }
     }
@@ -1468,8 +1501,30 @@ final class ProjectModel {
     func loadCIJob(_ job: GitLabJob) -> Task<Void, Never> {
         let link = failureSets[.ciJob(job.id)]?.source?.jobURL.flatMap { GitLabLink.job(url: $0.absoluteString) }
             ?? ciDetection?.link(to: job)
+            ?? ciPipelines.first { $0.failedJobs.contains(job) }.map { GitLabLink(host: $0.project.host, projectPath: $0.project.projectPath, jobID: job.id) }
         guard let link else { return Task {} }
         return loadCI("\(job.name) #\(job.id)", id: job.id) { link }
+    }
+
+    /// Lists the failed jobs of pipeline `id` under it in the sidebar, and opens its snapshot job, which loads it.
+    @discardableResult
+    func loadCIPipeline(_ id: Int, in project: GitLabLink) -> Task<Void, Never> {
+        notify("Loading pipeline #\(id)…")
+        let find = findCIPipeline, start = section
+        return Task {
+            let result = await offCooperativePool { Result { try find(project, id) } }
+            switch result {
+            case .success(let failed) where failed.isEmpty:
+                notify("Nothing failed in pipeline #\(id).")
+            case .success(let failed):
+                ciPipelines.removeAll { $0.id == id && $0.project == project }
+                ciPipelines.append(CIPipeline(project: project, id: id, failedJobs: failed))
+                notify("Pipeline #\(id) has \(failed.count) failed job\(failed.count == 1 ? "" : "s"), listed under it in the sidebar.")
+                moveOn(to: .ciJob(CIDetector.snapshotJob(of: failed).id), from: start)
+            case .failure(let error):
+                notify("Couldn’t load pipeline #\(id): \(error.localizedDescription)", isError: true)
+            }
+        }
     }
 
     /// Opening a CI job's item loads it, once: after a failed load, its view offers Try Again.
@@ -1489,7 +1544,7 @@ final class ProjectModel {
         }
         notify("Loading \(name)…")
         let repository = project.url, login = settings.ciLogin, start = section, load = importCI
-        let directory = scratchDirectory.appendingPathComponent("ci/\(UUID().uuidString)", isDirectory: true)
+        let directory = scratchDirectory.appendingPathComponent("ci", isDirectory: true)
         return Task {
             let result = await offCooperativePool { Result { try load(try resolve(), login, repository, directory) } }
             if let id { loadingCIJobs.remove(id) }
@@ -1528,7 +1583,25 @@ final class ProjectModel {
         setFailures(origin, suites: ci.summary.failingSuites, images: ci.images, keepingVerdicts: false,
                     source: FailureSource(label: "\(ci.job.name) #\(ci.job.id)", date: ci.job.finished ?? Date(), host: runner,
                                           jobURL: ci.link.jobURL.flatMap(URL.init(string:)),
-                                          detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes))
+                                          detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes, fixes: ci.fixes))
+    }
+
+    /// Logs in to CI runners as `login` from now on, and loads `job` again with it.
+    func useCILogin(_ login: String, reloading job: GitLabJob) {
+        setCILogin(login)
+        loadCIJob(job)
+    }
+
+    /// A CI login a loaded job suggests instead of the one set, and the job: its runner refused the login, or the
+    /// login can't read the images, which are another user's.
+    var suggestedCILogin: (login: String, job: GitLabJob)? {
+        for set in failureSets.values.sorted(by: { ($0.job?.id ?? 0) > ($1.job?.id ?? 0) }) {
+            guard let job = set.job else { continue }
+            for fix in set.source?.fixes ?? [] {
+                if case .useLogin(let login) = fix, login != settings.ciLogin { return (login, job) }
+            }
+        }
+        return nil
     }
 
     /// The SSH login on CI runners. Saved without reloading the configuration, which it isn't part of.
@@ -2212,6 +2285,7 @@ extension ProjectModel {
                                           flakeResults: f.flakeResults, diagnoses: Self.diagnose(f.failures),
                                           selectedID: Self.displayOrder(f.failures).first?.id, job: f.ciJob, mergeRequest: f.ciMergeRequest)]
         ciDetection = f.ciDetection
+        ciProject = f.ciDetection?.project
         changeSet = f.changeSet
         changesError = f.changesError
         isLoadingChanges = false

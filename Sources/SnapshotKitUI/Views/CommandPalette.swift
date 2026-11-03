@@ -106,8 +106,9 @@ extension PaletteCommand {
         }
         if idle {
             commands.append(.init(title: "Import Result Bundle…", symbol: "square.and.arrow.down", shortcut: "⇧⌘O") { app.importResultBundleFromPanel() })
-            commands.append(.init(title: "Load Failed CI Job…", symbol: "arrow.down.circle", shortcut: "⇧⌘L") { app.loadCIJobFromPrompt() })
+            commands.append(.init(title: "Load CI Job or Pipeline…", symbol: "arrow.down.circle", shortcut: "⇧⌘L") { app.loadCIJobFromPrompt() })
         }
+        commands.append(.init(title: "CI Settings…", symbol: "gearshape", shortcut: nil) { project.showsCISettings = true })
         // The sidebar's context menu, for the keyboard.
         let current = project.project
         commands += [

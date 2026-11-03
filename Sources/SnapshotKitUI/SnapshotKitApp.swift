@@ -67,6 +67,8 @@ extension AppModel {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let services = ServiceProvider()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A capture draws off-screen: no Dock icon, and the frontmost app stays in front.
         let capture = CaptureOptions.parse(CommandLine.arguments)
@@ -74,7 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         InterruptGuard.install()
         if let capture {
             Task { await WindowCapture.run(capture, model: AppModel.shared) }
+            return
         }
+        // Open in SnapshotKit (Info.plist's NSServices). Updating the services makes it show up right
+        // after the app is installed or moved, not only after the next login.
+        NSApp.servicesProvider = services
+        NSUpdateDynamicServices()
     }
 
     /// `snapshotkit://compare?reference=…&actual=…`, from `snapkit open` (the diff tool) or a link, and
@@ -132,13 +139,31 @@ enum MainWindow {
         NSApp.windows.first(where: isMain)?.makeKeyAndOrderFront(nil)
     }
 
-    /// The same, from outside any view (a URL the app was sent), with the menu commands' action.
-    static func show() {
-        if let openWindow { show(openWindow) }
-    }
-
-    /// Kept by the menu commands, which are there as long as the app is.
+    /// The window's `openWindow`, for AppKit code that has no SwiftUI environment to take it from.
     static var openWindow: OpenWindowAction?
+
+    static func show() {
+        if let openWindow {
+            show(openWindow)
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first(where: isMain)?.makeKeyAndOrderFront(nil)
+        }
+    }
+}
+
+/// Open in SnapshotKit, the Services menu item Info.plist's `NSServices` declares: in any app with a text
+/// selection, and in Xcode also in the editor's context menu (Services ›). Shows the snapshots of the
+/// test or test file whose name is selected.
+final class ServiceProvider: NSObject {
+    /// AppKit sends the request on the main thread.
+    @objc func openInSnapshotKit(_ pasteboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        guard let selection = pasteboard.string(forType: .string) else { return }
+        MainActor.assumeIsolated {
+            AppModel.shared.openSnapshots(namedIn: selection)
+            MainWindow.show()
+        }
+    }
 }
 
 struct SnapshotKitCommands: Commands {
@@ -154,9 +179,11 @@ struct SnapshotKitCommands: Commands {
             Button("Import Result Bundle…") { model.importResultBundleFromPanel() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(model.current == nil || model.current?.isRunning == true)
-            Button("Load Failed CI Job…") { model.loadCIJobFromPrompt() }
+            Button("Load CI Job or Pipeline…") { model.loadCIJobFromPrompt() }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .disabled(model.current == nil || model.current?.isRunning == true)
+            Button("CI Settings…") { model.current?.showsCISettings = true }
+                .disabled(model.current == nil)
             Divider()
             Button("Go to Project or Command…") { model.showQuickSwitcher.toggle() }
                 .keyboardShortcut("k")

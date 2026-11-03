@@ -193,11 +193,8 @@ struct RunProgress: View {
 /// column and values in the next, like an inspector.
 struct RunInspector: View {
     let project: ProjectModel
-    @State private var baseBranch = ""
     @State private var remoteHost = ""
-    @State private var ciLogin = ""
-    private enum Field { case baseBranch, remoteHost, ciLogin }
-    @FocusState private var focused: Field?
+    @FocusState private var focused: Bool
 
     var body: some View {
         ScrollView {
@@ -252,37 +249,15 @@ struct RunInspector: View {
                         if let wd = c.workingDirectory { PropertyRow("Directory", value: wd, source: source(.workingDirectory), code: true) }
                     }
 
-                    PropertySection("Comparison & Remote",
-                                    footer: project.detectedBaseBranch.map { "Detected `\($0)` from `\(ctx.config.source(of: .baseBranch) ?? "git")`." }) {
-                        PropertyRow("Base branch", alignment: .center) {
-                            TextField("", text: $baseBranch)
-                                .textFieldStyle(.plain)
-                                .placeholder(project.detectedBaseBranch ?? "develop", shown: baseBranch.isEmpty)
-                                .fieldChrome()
-                                .accessibilityLabel("Base branch")
-                                .focused($focused, equals: .baseBranch)
-                                .onSubmit(saveFields)
-                        }
-                        PropertyRow("Remote host", alignment: .center) {
+                    PropertySection("Remote Mac", footer: "Remote runs sync the working tree to this Mac over SSH and run the same "
+                                        + "command there. `ssh <host> true` must work without a password.") {
+                        PropertyRow("Host", alignment: .center) {
                             TextField("", text: $remoteHost)
                                 .textFieldStyle(.plain)
                                 .placeholder(ctx.resolved.config.remoteHost ?? "user@ci-mac", shown: remoteHost.isEmpty)
                                 .fieldChrome()
                                 .accessibilityLabel("Remote host")
-                                .help("Remote runs sync the working tree to this Mac over SSH and run the same command there")
-                                .focused($focused, equals: .remoteHost)
-                                .onSubmit(saveFields)
-                        }
-                        PropertyRow("CI login", alignment: .center) {
-                            TextField("", text: $ciLogin)
-                                .textFieldStyle(.plain)
-                                // A hint, not a value: a name here read as one already set.
-                                .placeholder("user, or user@host", shown: ciLogin.isEmpty)
-                                .fieldChrome()
-                                .accessibilityLabel("CI login")
-                                .help("The SSH login on CI runners, to copy the images a failed job’s tests took. "
-                                      + "Empty: ssh’s default, or ~/.ssh/config.")
-                                .focused($focused, equals: .ciLogin)
+                                .focused($focused)
                                 .onSubmit(saveFields)
                         }
                     }
@@ -300,14 +275,11 @@ struct RunInspector: View {
         .controlSize(.small)
         .background(DS.Surface.content)
         .onAppear {
-            baseBranch = project.settings.baseBranch ?? ""
             remoteHost = project.settings.remoteHost ?? ""
-            ciLogin = project.settings.ciLogin ?? ""
         }
         // Saved like any Mac field: on Return, and also when you click or tab away or leave the view.
         .onChange(of: focused) { saveFields() }
-        // A host also once you stop typing, so the ··· menu's remote section works without leaving the
-        // field. (Not the base branch: a half-typed one would flash "not found" in the changes.)
+        // Also once you stop typing, so the ··· menu's remote section works without leaving the field.
         .task(id: remoteHost) {
             guard (try? await Task.sleep(for: .seconds(1))) != nil else { return }
             saveFields()
@@ -315,15 +287,11 @@ struct RunInspector: View {
         .onDisappear(perform: saveFields)
     }
 
-    /// Stores what the fields say, if it differs from the settings (a save reloads the configuration).
+    /// Stores the host, if it differs from the settings (a save reloads the configuration).
     private func saveFields() {
-        if (ciLogin.isEmpty ? nil : ciLogin) != project.settings.ciLogin { project.setCILogin(ciLogin) }
-        let base = baseBranch.isEmpty ? nil : baseBranch, host = remoteHost.isEmpty ? nil : remoteHost
-        guard base != project.settings.baseBranch || host != project.settings.remoteHost else { return }
-        project.updateSettings {
-            $0.baseBranch = base
-            $0.remoteHost = host
-        }
+        let host = remoteHost.isEmpty ? nil : remoteHost
+        guard host != project.settings.remoteHost else { return }
+        project.updateSettings { $0.remoteHost = host }
     }
 
     @ViewBuilder

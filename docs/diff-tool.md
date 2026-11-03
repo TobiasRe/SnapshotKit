@@ -86,6 +86,49 @@ with:
 
 Opening the same pair again brings its window forward; each new pair gets its own window.
 
+## A clickable link in Xcode
+
+Instead of a command to copy, the tool can put a `snapshotkit://compare` link (see below) into the message.
+Xcode shows it as a link: click it in the failure message and the compare window opens. No `snapkit` on your
+`PATH` needed, only SnapshotKit.app.
+
+```swift
+import Foundation
+import SnapshotTesting
+
+extension SnapshotTestingConfiguration.DiffTool {
+    /// A link that opens a failing snapshot's reference and actual image in SnapshotKit.
+    static let snapkitLink = Self { reference, actual in
+        var components = URLComponents()
+        components.scheme = "snapshotkit"
+        components.host = "compare"
+        components.queryItems = [URLQueryItem(name: "reference", value: reference),
+                                 URLQueryItem(name: "actual", value: actual)]
+        // `+` is a literal in a query value but a space to some decoders; spell it out.
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return components.string ?? ""
+    }
+}
+
+@Suite(.snapshots(diffTool: .snapkitLink))
+```
+
+The paths are percent-encoded, so the link has no spaces and Xcode doesn't cut it short. The message ends like
+this:
+
+```
+Snapshot does not match reference.
+
+snapshotkit://compare?reference=/Users/me/Shop/Tests/__Snapshots__/CheckoutViewTests/payButton.1.png&actual=/var/folders/xy/T/payButton.1.png
+```
+
+The link skips the diagnosis `snapkit` prints in Terminal; the compare window shows it too. To have both, end the
+closure with the command on a line of its own:
+
+```swift
+        return (components.string ?? "") + "\n\nsnapkit open \"\(reference)\" \"\(actual)\""
+```
+
 ## Terminal only: `snapkit diff`
 
 If you’d rather not leave the terminal, define a tool that runs `snapkit diff` instead:

@@ -435,7 +435,7 @@ struct CompareView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if image == nil {
-                    ContentUnavailableView("No Image", systemImage: "photo", description: Text(missing))
+                    ContentUnavailableView("No Image", systemImage: "photo", description: Text(StatusNote.code(missing, font: DS.Font.code)))
                 }
             }
             .overlay(ZoomPanSurface(viewport: Bindable(compare).viewport, onHover: { hover($0, pixelSize: size) }, onKey: surfaceKey))

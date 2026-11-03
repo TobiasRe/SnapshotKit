@@ -9,20 +9,94 @@ public protocol GitLabAPI: Sendable {
 public enum GitLabError: Error, LocalizedError, Equatable {
     /// Neither `glab` nor a token can reach the host.
     case noAccess(host: String, detail: String)
+    /// glab isn't installed, and no token is set.
+    case glabMissing(host: String)
+    /// GitLab didn't accept who SnapshotKit signed in as (401): glab signed out or expired, or the token rejected.
+    /// `via` is `glab` or the token's variable.
+    case unauthorized(host: String, via: String, detail: String)
+    /// Signed in, but not allowed to read `path` (403).
+    case forbidden(host: String, path: String, via: String)
+    /// Nothing at `path` (404), or nothing the account can see.
+    case notFound(path: String)
+    /// The host didn't answer: DNS, network, VPN.
+    case unreachable(host: String, detail: String)
+    /// The answer isn't GitLab's JSON, as from a sign-in page in front of it.
+    case unreadable(path: String, start: String)
     case request(path: String, output: String)
     /// What was pasted for a job names none.
     case notAJob(String, numbers: Bool)
+    /// The job isn't in the project, or the account can't see it.
+    case jobNotFound(id: Int, project: String, host: String)
 
     public var errorDescription: String? {
         switch self {
         case let .noAccess(host, detail):
             "SnapshotKit can’t reach the GitLab API on \(host) (\(detail)). Sign in with `glab auth login --hostname \(host)`, "
                 + "or set GITLAB_TOKEN to an access token with read_api."
+        case let .glabMissing(host):
+            "SnapshotKit reads GitLab with the glab CLI or an access token, and has neither: glab isn’t installed (on the PATH, "
+                + "in /opt/homebrew/bin or /usr/local/bin) and GITLAB_TOKEN isn’t set. Install glab (`brew install glab`) and sign in "
+                + "with `glab auth login --hostname \(host)`, or set GITLAB_TOKEN to an access token with read_api in the environment "
+                + "SnapshotKit starts in."
+        case let .unauthorized(host, via, detail):
+            via == "glab"
+                ? "glab isn’t signed in to \(host), or its sign-in has expired (\(detail)). Sign in with `glab auth login --hostname \(host)`, "
+                    + "or set GITLAB_TOKEN to an access token with read_api."
+                : "GitLab on \(host) rejected \(via) (\(detail)): it may have expired or been revoked. Create a new access token with "
+                    + "read_api, or sign in with `glab auth login --hostname \(host)` and unset \(via)."
+        case let .forbidden(host, path, via):
+            "GitLab on \(host) refused `\(path)` (403 Forbidden): the account \(via == "glab" ? "glab signs in with" : "of \(via)") "
+                + "can’t read this project, or its token lacks the read_api scope."
+        case let .notFound(path):
+            "GitLab has nothing at `\(path)` (404 Not Found): it doesn’t exist, or the account SnapshotKit signs in with can’t see it."
+        case let .unreachable(host, detail):
+            "Can’t reach GitLab on \(host) (\(detail)). Check the network, and the VPN if \(host) needs one."
+        case let .unreadable(path, start):
+            "GitLab’s answer to `\(path)` isn’t what SnapshotKit can read; it starts “\(start)”. A sign-in page in front of GitLab "
+                + "answers like this: sign in to it in the browser, or ask whoever runs it how to reach the API."
         case let .request(path, output):
             "GitLab answered `\(path)` with: \(output)"
         case let .notAJob(text, numbers):
-            "“\(text)” isn’t a GitLab job’s URL (https://gitlab.example.com/group/project/-/jobs/123)" + (numbers ? ", nor a job number." : ".")
+            "“\(text)” isn’t the URL of a GitLab job (https://gitlab.example.com/group/project/-/jobs/123) or pipeline "
+                + "(…/-/pipelines/89)" + (numbers ? ", nor a job number." : ".")
+        case let .jobNotFound(id, project, host):
+            "GitLab on \(host) has no job \(id) in \(project), or the account SnapshotKit signs in with can’t see it. Check the job’s "
+                + "URL, and that glab or GITLAB_TOKEN signs in to an account with access to the project."
         }
+    }
+
+    /// Whether GitLab said there is nothing at the path (404).
+    public var isNotFound: Bool {
+        switch self {
+        case .notFound, .jobNotFound: true
+        case let .request(_, output): Self.contains(output, status: 404) || output.lowercased().contains("not found")
+        default: false
+        }
+    }
+
+    /// What a failed request's output says went wrong: signed out, not allowed, not there, no network, or else
+    /// the output itself.
+    public static func classify(path: String, output: String, host: String, via: String) -> GitLabError {
+        let text = output.lowercased()
+        let detail = output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .last { !$0.isEmpty }.map { String($0.prefix(200)) } ?? output
+        if contains(text, status: 401) || text.contains("unauthorized") || text.contains("not authenticated")
+            || text.contains("glab auth login") || text.contains("invalid_token") || text.contains("token was revoked") {
+            return .unauthorized(host: host, via: via, detail: detail)
+        }
+        if contains(text, status: 403) || text.contains("forbidden") || text.contains("insufficient_scope") {
+            return .forbidden(host: host, path: path, via: via)
+        }
+        if contains(text, status: 404) || text.contains("not found") { return .notFound(path: path) }
+        if ["could not resolve host", "failed to connect", "timed out", "no such host", "connection refused",
+            "network is unreachable", "couldn't connect", "ssl certificate problem"].contains(where: text.contains) {
+            return .unreachable(host: host, detail: detail)
+        }
+        return .request(path: path, output: detail)
+    }
+
+    private static func contains(_ text: String, status: Int) -> Bool {
+        text.range(of: #"(?<![0-9])\#(status)(?![0-9])"#, options: .regularExpression) != nil
     }
 }
 
@@ -31,7 +105,13 @@ extension GitLabAPI {
     public func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(T.self, from: try get(path))
+        let data = try get(path)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch is DecodingError {
+            let start = String(decoding: data.prefix(80), as: UTF8.self).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+            throw GitLabError.unreadable(path: path, start: start.trimmingCharacters(in: .whitespaces))
+        }
     }
 
     public func job(_ id: Int, in project: GitLabLink) throws -> GitLabJob {
@@ -63,6 +143,27 @@ extension GitLabAPI {
     }
 }
 
+/// How SnapshotKit can sign in to GitLab, as far as it can tell without asking GitLab: the glab it would run, and
+/// the variable a token would come from. glab is tried first, then the token.
+public struct GitLabSignIn: Equatable, Sendable {
+    /// Where glab is, when it's installed (on the PATH, or in Homebrew's folders).
+    public var glab: String?
+    /// `GITLAB_TOKEN` or `GITLAB_PRIVATE_TOKEN`, when one is set; never its value.
+    public var tokenVariable: String?
+
+    public init(glab: String? = nil, tokenVariable: String? = nil) {
+        self.glab = glab
+        self.tokenVariable = tokenVariable
+    }
+
+    public static func current(environment: [String: String] = ProcessInfo.processInfo.environment) -> GitLabSignIn {
+        let path = environment["PATH"].map { GlabAPI.searchPath(adding: $0) } ?? GlabAPI.searchPath
+        let glab = path.split(separator: ":").lazy.map { "\($0)/glab" }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        let token = ["GITLAB_TOKEN", "GITLAB_PRIVATE_TOKEN"].first { !(environment[$0] ?? "").isEmpty }
+        return GitLabSignIn(glab: glab, tokenVariable: token)
+    }
+}
+
 /// The API through the `glab` CLI, signed in with `glab auth login`. Not with `NO_PROMPT` set: glab
 /// prints a deprecation warning for it into the output.
 public struct GlabAPI: GitLabAPI {
@@ -78,9 +179,10 @@ public struct GlabAPI: GitLabAPI {
     }
 
     /// The app's PATH is launchd's, without Homebrew's folders, where glab usually is.
-    static var searchPath: String {
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
-        return ([path] + ["/opt/homebrew/bin", "/usr/local/bin"].filter { !path.split(separator: ":").contains(Substring($0)) })
+    static var searchPath: String { searchPath(adding: ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin") }
+
+    static func searchPath(adding path: String) -> String {
+        ([path] + ["/opt/homebrew/bin", "/usr/local/bin"].filter { !path.split(separator: ":").contains(Substring($0)) })
             .joined(separator: ":")
     }
 }
@@ -90,17 +192,21 @@ public struct GlabAPI: GitLabAPI {
 public struct TokenAPI: GitLabAPI {
     public var host: String
     var token: String
+    /// Where the token came from, to name it in errors (never its value).
+    var tokenVariable: String
 
-    public init(host: String, token: String) {
+    public init(host: String, token: String, variable: String = "GITLAB_TOKEN") {
         self.host = host
         self.token = token
+        tokenVariable = variable
     }
 
     public func get(_ path: String) throws -> Data {
         let url = "https://\(host)/api/v4/\(path)"
         let result = try Shell.run(["curl", "-sS", "--fail-with-body", "-H", "@-", url], input: Data("PRIVATE-TOKEN: \(token)\n".utf8))
         guard result.succeeded else {
-            throw GitLabError.request(path: path, output: (result.stdout + result.stderr).trimmingCharacters(in: .whitespacesAndNewlines))
+            throw GitLabError.classify(path: path, output: (result.stdout + "\n" + result.stderr).trimmingCharacters(in: .whitespacesAndNewlines),
+                                       host: host, via: tokenVariable)
         }
         return Data(result.stdout.utf8)
     }
@@ -115,7 +221,9 @@ public struct DefaultGitLabAPI: GitLabAPI {
     public init(host: String, environment: [String: String] = ProcessInfo.processInfo.environment) {
         self.host = host
         glab = GlabAPI(host: host)
-        token = (environment["GITLAB_TOKEN"] ?? environment["GITLAB_PRIVATE_TOKEN"]).flatMap { $0.isEmpty ? nil : TokenAPI(host: host, token: $0) }
+        token = ["GITLAB_TOKEN", "GITLAB_PRIVATE_TOKEN"].lazy.compactMap { name in
+            environment[name].flatMap { $0.isEmpty ? nil : TokenAPI(host: host, token: $0, variable: name) }
+        }.first
     }
 
     public func get(_ path: String) throws -> Data {
@@ -123,13 +231,9 @@ public struct DefaultGitLabAPI: GitLabAPI {
             return try glab.get(path)
         } catch let error as CommandError {
             if let token { return try token.get(path) }
-            let detail = error.isNotFound ? "glab isn’t installed"
-                : error.result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n").last.map(String.init) ?? "glab failed"
-            // A missing project or job reads the same either way; only access problems need the hint.
-            if !error.isNotFound, !detail.contains("401"), !detail.contains("403"), !detail.lowercased().contains("auth") {
-                throw GitLabError.request(path: path, output: detail)
-            }
-            throw GitLabError.noAccess(host: host, detail: detail)
+            if error.isNotFound { throw GitLabError.glabMissing(host: host) }
+            let output = (error.result.stderr + "\n" + error.result.stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitLabError.classify(path: path, output: output.isEmpty ? "glab failed" : output, host: host, via: "glab")
         }
     }
 }
@@ -247,8 +351,12 @@ public struct CITestReport: Decodable, Sendable, Equatable {
         public var stackTrace: String?
 
         public var failed: Bool { status == "failed" || status == "error" }
-        /// What the test reported: its failure message, else its stack trace.
-        public var message: String { [systemOutput, stackTrace].compactMap { $0 }.first { !$0.isEmpty } ?? "" }
+        /// What the test reported: its failure message, else its stack trace. The one that is swift-snapshot-testing's,
+        /// when the writer split it between them.
+        public var message: String {
+            let texts = [systemOutput, stackTrace].compactMap { $0 }.filter { !$0.isEmpty }
+            return texts.first(where: SnapshotMismatch.isSnapshotFailure) ?? texts.first ?? ""
+        }
     }
 
     public var testSuites: [Suite]

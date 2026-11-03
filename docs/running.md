@@ -33,7 +33,7 @@ The left side of Run shows what SnapshotKit will run and where each value comes 
 | **Environment** | the Xcode version (and build) that will be used, *Not pinned by CI* when CI doesn’t name one, and the simulator with its state (e.g. *Booted*). |
 | **Scope** | **Test target**: *What CI runs* (default), or one test target with snapshots, to run only its tests. |
 | **Configuration** | scheme, workspace or project, test plan, `-only-testing` selection and working directory. A footer names the CI files they come from; a value from somewhere else (*.snapshotkit.yml*, a script) names its source. Notes say what SnapshotKit had to guess or couldn’t read. Until Xcode and the simulator are found, it also shows the Xcode and device that were asked for. |
-| **Comparison & Remote** | the **Base branch** for Working Copy and vs develop, and the **Remote host** for remote runs; type to override them for this project. |
+| **Remote Mac** | the **Host** for remote runs; type to override it for this project. The base branch is picked in vs develop’s branch menu, the CI login in CI Settings. |
 
 When something is missing or wrong — Xcode not installed, no simulator runtime, a broken `.snapshotkit.yml` —
 the inspector on the left says exactly what and how to fix it, and the header offers **Check Again**. See

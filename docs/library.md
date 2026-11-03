@@ -100,6 +100,24 @@ the pixel under the pointer.
 
 The footer counts what the library holds: snapshots, tests, modules and total size.
 
+## From a test in Xcode to its snapshots
+
+The way back from ⌥⌘O: in Xcode, select the name of a test function (or of a test struct or class) in the
+editor, right-click it and choose **Services › Open in SnapshotKit**. SnapshotKit opens the project with
+those snapshots in **All Snapshots**:
+
+- a test's snapshots: the first one selected, its variants in the detail;
+- a test file's (the selected name is a type, or no test is called that): the list filtered to it;
+- the same test name in several test files: the list filtered to the name.
+
+It looks in the open project first, then in your other projects. Selecting `payButton`,
+`@Test func payButton()` or the whole declaration line all work, for parameterized tests too. When nothing is
+found, the window says so.
+
+The item is in the Services menu of every app (the app menu › Services, too), wherever text is selected.
+Give it a shortcut in System Settings › Keyboard › Keyboard Shortcuts › Services › Text, or turn it off there.
+It needs SnapshotKit.app installed; if it doesn't appear after the first launch, log out and back in once.
+
 ## Orphaned snapshots
 
 A snapshot is orphaned when no test in its test file records that name any more — typically after a test
