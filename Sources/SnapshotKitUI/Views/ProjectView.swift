@@ -285,6 +285,23 @@ struct RunInspector: View {
                                 .focused($focused, equals: .ciLogin)
                                 .onSubmit(saveFields)
                         }
+                        // A loaded job found the login to use: the runner refused this one, or it can't read the images.
+                        if let suggestion = project.suggestedCILogin {
+                            PropertyRow("") {
+                                VStack(alignment: .leading, spacing: DS.Space.xs) {
+                                    StatusNote(loginNote(suggestion.login, job: suggestion.job), symbol: "exclamationmark.triangle.fill", color: DS.Status.flaky)
+                                        .font(DS.Font.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Button("Use \(suggestion.login) and Load Again") {
+                                        ciLogin = suggestion.login
+                                        project.useCILogin(suggestion.login, reloading: suggestion.job)
+                                    }
+                                    .quietControl()
+                                    .help("Set CI login to \(suggestion.login), then load \(suggestion.job.name) #\(suggestion.job.id) again")
+                                }
+                            }
+                        }
                     }
                 } else if let error = project.configError {
                     PropertySection("Configuration") {
@@ -313,6 +330,13 @@ struct RunInspector: View {
             saveFields()
         }
         .onDisappear(perform: saveFields)
+    }
+
+    /// Why a loaded CI job suggests another login.
+    private func loginNote(_ login: String, job: GitLabJob) -> String {
+        let owner = login.split(separator: "@").first.map(String.init) ?? login
+        let current = ciLogin.isEmpty ? "with ssh’s default login" : "as `\(ciLogin)`"
+        return "\(job.name) #\(job.id) couldn’t copy its images \(current): they are `\(owner)`’s."
     }
 
     /// Stores what the fields say, if it differs from the settings (a save reloads the configuration).

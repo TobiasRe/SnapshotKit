@@ -54,13 +54,28 @@ nothing, and its item shows its failing count once it has loaded.
   may have been re-recorded since. A commit that isn’t in your clone yet falls back to the working tree, with
   a note to `git fetch`.
 - The images the tests took, copied from the runner over SSH. They are in the simulator’s temporary folder,
-  which the runner empties when its next job starts.
+  which the runner empties when its next job starts. Loading the job again keeps the images an earlier load
+  copied, so a reload never shows fewer. A test that recorded a missing reference shows the image it recorded.
 - What the failure message measured, under it: *0.65% of pixels differ, none may · worst pixel matches 0.365,
   0.98 required*. With both images there, the diagnosis says what kind of difference it is.
 
 **Notes, not errors.** Whatever couldn’t be fetched is listed above the failures, and the rest still shows:
-images no longer on the runner, an SSH login that was refused, a host key not yet trusted, a commit missing
-from your clone.
+images no longer on the runner, an SSH login that was refused, a login that can’t read the images, a host key
+not yet trusted, a runner name ssh can’t resolve, a commit missing from your clone, a failure message that
+names no images. Where something would fix it, a button under the notes does it:
+
+| | |
+|---|---|
+| **Log In as *user*** | the runner refused the CI login, or it can’t read the images: they are in *user*’s home folder. Sets **CI login** and loads the job again. **Run** suggests the same under the field. |
+| **Copy `ssh … true`** | the runner’s host key isn’t trusted yet, or the login needs checking: run the command in Terminal once. |
+| **Retry in GitLab** | the runner no longer has the images. Retry the job there, then load the new job. |
+| **Load Again** | the runner didn’t answer, or the job hadn’t finished. |
+
+A failing test without images says why in its detail, as exactly as is known: the image no longer on the
+runner, the login refused, the reference not in the job’s commit, a message that says a snapshot didn’t match
+but not where its images are (a JUnit writer that cut it short), a text snapshot, or a failure that isn’t a
+snapshot mismatch at all. Messages a JUnit writer kept as string literals (`ksdiff \"/…png\"`, `\n` for line
+breaks, `&quot;`) are read and shown unescaped.
 
 A CI job’s failures are for looking at, for now: re-recording them and checking them for flakiness work on
 the last run only.
@@ -69,10 +84,10 @@ the last run only.
 
 | | |
 |---|---|
-| GitLab’s API | the [`glab`](https://gitlab.com/gitlab-org/cli) CLI, signed in (`glab auth login --hostname …`), or `GITLAB_TOKEN` (or `GITLAB_PRIVATE_TOKEN`) set to a token with `read_api`. SnapshotKit only reads. |
+| GitLab’s API | the [`glab`](https://gitlab.com/gitlab-org/cli) CLI, signed in (`glab auth login --hostname …`), or `GITLAB_TOKEN` (or `GITLAB_PRIVATE_TOKEN`) set to a token with `read_api`. SnapshotKit only reads, and never stores or logs the token. A load that fails says which: glab missing, signed out or expired, a token rejected, no access to the project, no such job, GitLab unreachable. |
 | The failure messages | the job uploading its JUnit report: `artifacts: reports: junit:`. Without one, the log still names the failing tests. |
 | The images | SSH access to the runner with a key: SnapshotKit never asks for a password and never accepts a host key by itself. Connect once with `ssh user@runner true` to trust it. |
-| The login | **CI login** in Run: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, the note suggests the user whose home folder the images are in. |
+| The login | **CI login** in Run: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, or can’t read the images, the note suggests the user whose home folder they are in, also when a login is set. |
 
 The runner is the job’s runner as GitLab names it, so its name has to be one ssh can reach (or an alias in
 `~/.ssh/config`). A CI job is recorded in the history as imported, without a commit, so it doesn’t count

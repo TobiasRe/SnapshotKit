@@ -22,10 +22,14 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
     public var arguments: [String]?
     /// Repository-relative path of the reference PNG, when it could be read from the failure message.
     public var referencePath: String?
+    /// Why there is no `reference`, when it is known: "isn’t in the job’s commit 3f1c2a9b".
+    public var referenceMissing: String?
+    /// Why there is no `failure`, when it is known: "no longer on ci-mac-1: …", "ci-mac-1 refused the SSH login".
+    public var failureMissing: String?
 
     public init(testIdentifier: String, bundle: String? = nil, repetition: Int, index: Int, reference: URL? = nil, failure: URL? = nil,
                 difference: URL? = nil, device: String? = nil, deviceID: String? = nil, arguments: [String]? = nil,
-                referencePath: String? = nil) {
+                referencePath: String? = nil, referenceMissing: String? = nil, failureMissing: String? = nil) {
         self.testIdentifier = testIdentifier
         self.bundle = bundle
         self.repetition = repetition
@@ -37,6 +41,8 @@ public struct SnapshotFailureImages: Hashable, Codable, Sendable, Identifiable {
         self.deviceID = deviceID
         self.arguments = arguments
         self.referencePath = referencePath
+        self.referenceMissing = referenceMissing
+        self.failureMissing = failureMissing
     }
 
     /// One assertion's images: per test, device, test case, repetition and assertion.

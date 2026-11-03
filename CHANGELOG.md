@@ -12,6 +12,27 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   The open project is searched first, then the others.
 - The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
 
+### Changed
+- A failed CI job’s failures say why a test has no images, and offer the fix. Each missing reference or image
+  has its own reason (no longer on the runner, the login refused or unable to read it, not in the job’s commit),
+  and a test without any says what kind of failure it is instead of “it may not be a snapshot mismatch”. Under
+  the notes, **Log In as *user*** sets the CI login to the owner of the images’ folder and loads the job again
+  (also offered in Run, under **CI login**), **Copy `ssh … true`** helps trust a host key, **Retry in GitLab**
+  and **Load Again** do what they say. `snapkit failures --ci` prints the same as `fix:` lines.
+- A refused SSH login suggests the user whose home the images are in also when a CI login is set, and a login
+  that gets in but can’t read the images says so, rather than reporting them gone.
+- Loading a CI job again keeps the images an earlier load copied, so it never shows fewer after the runner
+  started its next job.
+- A CI job that can’t load says why: glab missing, signed out or expired, a token rejected, no access, no such
+  job, GitLab unreachable. A job that failed outside its tests, hadn’t finished, or whose pipeline’s test report
+  has no suite for it (a parallel job’s `1/2` is matched) says so.
+
+### Fixed
+- Failure messages a JUnit writer escaped (`ksdiff \"/…png\"`, `\n` line breaks, `\u{2212}`, `&quot;`) are read:
+  their images load and the message shows unescaped. Also read: `@-` with a plain hyphen, paths instead of file
+  URLs, a diff tool given file URLs, and “No reference was found on disk”, whose recorded image is shown.
+- A snapshot mismatch whose message names no images is noted instead of dropped silently.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

@@ -76,7 +76,8 @@ struct FailuresTab: View {
             ?? ciJob.flatMap { job in project.ciDetection?.link(to: job).jobURL }.flatMap(URL.init(string:))
     }
 
-    /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on.
+    /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on, with the
+    /// fixes the load found.
     @ViewBuilder
     private var sourceNotes: some View {
         if let notes = project.failureSource?.notes, !notes.isEmpty {
@@ -86,12 +87,54 @@ struct FailuresTab: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                fixButtons(project.failureSource?.fixes ?? [])
             }
             .font(DS.Font.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Space.l)
             .padding(.vertical, DS.Space.s)
             Divider()
+        }
+    }
+
+    /// What would fetch what a CI job's load couldn't: log in as another user, run a command first, retry the
+    /// job on GitLab, load it again.
+    @ViewBuilder
+    private func fixButtons(_ fixes: [CIFix]) -> some View {
+        if let job = ciJob, !fixes.isEmpty {
+            HStack(spacing: DS.Space.s) {
+                ForEach(fixes, id: \.self) { fix in
+                    fixButton(fix, job: job)
+                }
+            }
+            .controlSize(.small)
+            .padding(.top, DS.Space.xxs)
+        }
+    }
+
+    @ViewBuilder
+    private func fixButton(_ fix: CIFix, job: GitLabJob) -> some View {
+        switch fix {
+        case .useLogin(let login):
+            Button("Log In as \(login)") { project.useCILogin(login, reloading: job) }
+                .quietControl()
+                .disabled(project.loadingCIJobs.contains(job.id))
+                .help("Set CI login under Run to \(login), then load the job again")
+        case .runCommand(let command):
+            Button("Copy \(command)") { copy(command) }
+                .quietControl()
+                .help("Copy the command to run it in Terminal, then load the job again")
+        case .retryJob:
+            if let url = jobURL {
+                Button("Retry in GitLab") { NSWorkspace.shared.open(url) }
+                    .quietControl()
+                    .help("The runner no longer has these images. Retry the job on GitLab, then load the new job to see them.")
+            }
+        case .loadAgain:
+            Button("Load Again") { project.loadCIJob(job) }
+                .quietControl()
+                .disabled(project.loadingCIJobs.contains(job.id))
+                .help("Load the job again, with the CI login set under Run")
         }
     }
 
@@ -375,11 +418,19 @@ struct FailuresTab: View {
                             beforeLabel: "Reference",
                             afterLabel: "Actual · \(image?.device ?? project.failureSource?.host ?? "run")",
                             identity: item.id + "#" + (image?.id ?? ""),
-                            beforeMissing: "No reference was recorded yet.",
-                            afterMissing: "This run’s images are no longer kept. Run the tests again to see what the test draws.")
+                            beforeMissing: image?.referenceMissing ?? "No reference was recorded yet.",
+                            afterMissing: image?.failureMissing ?? "This run’s images are no longer kept. Run the tests again to see what the test draws.")
             } else {
-                ContentUnavailableView("No Images Attached", systemImage: "photo.badge.exclamationmark",
-                                       description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))
+                // Why, as exactly as is known: what couldn't be fetched, or what kind of failure it is.
+                let missing = MissingImages.explain(messages: item.test.failureMessages, images: image.map { [$0] } ?? item.images)
+                ContentUnavailableView {
+                    Label(missing.title, systemImage: "photo.badge.exclamationmark")
+                } description: {
+                    Text(StatusNote.code(missing.reason, font: DS.Font.code))
+                        .textSelection(.enabled)
+                } actions: {
+                    fixButtons(project.failureSource?.fixes ?? [])
+                }
             }
         }
     }

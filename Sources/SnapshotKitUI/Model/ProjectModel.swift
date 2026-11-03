@@ -152,6 +152,8 @@ struct FailureSource: Equatable {
     var detail: String?
     /// What couldn't be fetched with them, such as images gone from a CI runner.
     var notes: [String] = []
+    /// What would fetch it: a CI login to try, a command to run, the job to retry or load again.
+    var fixes: [CIFix] = []
 }
 
 /// Where a set of failures comes from: the last run (local, remote or imported), or a CI job.
@@ -1349,9 +1351,11 @@ final class ProjectModel {
     @ObservationIgnored var detectCI: @Sendable (URL) throws -> CIDetection? = { try CIDetector.detect(repository: $0) }
     /// A job's URL, or its number in the repository's project, as the job.
     @ObservationIgnored var resolveCI: @Sendable (String, URL) throws -> GitLabLink = { try CIDetector.job($0, repository: $1) }
-    /// Loads a job with the CI login into a folder.
+    /// Loads a job with the CI login into a folder of its own below `directory`, which keeps the images an earlier
+    /// load copied: the runner removes them when its next job starts.
     @ObservationIgnored var importCI: @Sendable (GitLabLink, String?, URL, URL) throws -> CIImport = { link, login, repository, directory in
-        try CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repository, login: login).load(link, into: directory)
+        let folder = directory.appendingPathComponent("\(link.host)/\(link.projectPath)/\(link.jobID ?? 0)", isDirectory: true)
+        return try CIImporter(api: DefaultGitLabAPI(host: link.host), repository: repository, login: login).load(link, into: folder)
     }
     @ObservationIgnored private var ciGeneration = 0
     /// The branch the last check was for: a check runs when a project opens and when its branch changes.
@@ -1404,7 +1408,7 @@ final class ProjectModel {
         }
         notify("Loading \(name)…")
         let repository = project.url, login = settings.ciLogin, start = section, load = importCI
-        let directory = scratchDirectory.appendingPathComponent("ci/\(UUID().uuidString)", isDirectory: true)
+        let directory = scratchDirectory.appendingPathComponent("ci", isDirectory: true)
         return Task {
             let result = await offCooperativePool { Result { try load(try resolve(), login, repository, directory) } }
             if let id { loadingCIJobs.remove(id) }
@@ -1443,7 +1447,25 @@ final class ProjectModel {
         setFailures(origin, suites: ci.summary.failingSuites, images: ci.images, keepingVerdicts: false,
                     source: FailureSource(label: "\(ci.job.name) #\(ci.job.id)", date: ci.job.finished ?? Date(), host: runner,
                                           jobURL: ci.link.jobURL.flatMap(URL.init(string:)),
-                                          detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes))
+                                          detail: detail.isEmpty ? nil : detail.joined(separator: " · "), notes: ci.notes, fixes: ci.fixes))
+    }
+
+    /// Logs in to CI runners as `login` from now on, and loads `job` again with it.
+    func useCILogin(_ login: String, reloading job: GitLabJob) {
+        setCILogin(login)
+        loadCIJob(job)
+    }
+
+    /// A CI login a loaded job suggests instead of the one set, and the job: its runner refused the login, or the
+    /// login can't read the images, which are another user's.
+    var suggestedCILogin: (login: String, job: GitLabJob)? {
+        for set in failureSets.values.sorted(by: { ($0.job?.id ?? 0) > ($1.job?.id ?? 0) }) {
+            guard let job = set.job else { continue }
+            for fix in set.source?.fixes ?? [] {
+                if case .useLogin(let login) = fix, login != settings.ciLogin { return (login, job) }
+            }
+        }
+        return nil
     }
 
     /// The SSH login on CI runners. Saved without reloading the configuration, which it isn't part of.
