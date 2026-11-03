@@ -6,6 +6,8 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-03
+
 ### Added
 - Test runs in Xcode join the last run as they finish: the tests a run ran (all of them after ⌘U, one after its
   diamond) replace their results in Last Run, with their images, as a run of the same tests in SnapshotKit
@@ -19,10 +21,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Open in SnapshotKit, and the library shows its snapshots (a test struct's or class's name: its test file's).
   The open project is searched first, then the others.
 - The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
-- The sidebar always has a CI section, its heading with a **+** to load a job or pipeline: also
-  without a merge request or a failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or Pipeline…** (⇧⌘L, before
-  **Load Failed CI Job…**) and `snapkit failures --ci URL` take a pipeline’s URL: the app lists its failed jobs
-  under *CI · Pipeline #89* and opens its snapshot job; `snapkit` shows that job.
+- The sidebar always has a CI section, its heading with a **+** to load a job or pipeline: also without a merge
+  request or a failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or
+  Pipeline…** (⇧⌘L, before **Load Failed CI Job…**) and `snapkit failures --ci URL` take a pipeline’s URL: the
+  app lists its failed jobs under *CI · Pipeline #89* and opens its snapshot job; `snapkit` shows that job.
 
 ### Changed
 - Settings are where they act. **CI Settings** (a CI job’s header, the CI heading’s context menu, File or ⌘K) has the
@@ -351,7 +353,8 @@ snapshot tests built with swift-snapshot-testing.
 - `scripts/make-samples.sh` generates five sample projects with real recorded snapshots, feature branches,
   changes and failures, to try SnapshotKit on.
 
-[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/TobiasRe/SnapshotKit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/TobiasRe/SnapshotKit/compare/v0.1.1...v0.2.0
