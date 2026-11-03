@@ -28,6 +28,14 @@ struct FakeGitLab: GitLabAPI {
         #expect(link?.jobURL == "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567")
     }
 
+    @Test func readsAPipelinesURL() throws {
+        let (project, id) = try #require(GitLabLink.pipeline(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/89"))
+        #expect(project == GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop") && id == 89)
+        #expect(GitLabLink.pipeline(url: " gitlab.example.com/a/b/-/pipelines/90/failures?tab=1\n")?.id == 90)
+        #expect(GitLabLink.pipeline(url: "https://gitlab.example.com/a/b/-/jobs/3") == nil)
+        #expect(GitLabLink.pipeline(url: "https://gitlab.example.com/-/pipelines/3") == nil)
+    }
+
     @Test(arguments: [
         "git@gitlab.example.com:mobile/ios/shop.git",
         "ssh://git@gitlab.example.com:2222/mobile/ios/shop.git",
@@ -90,6 +98,17 @@ struct FakeGitLab: GitLabAPI {
         #expect(mismatches.map(\.reference) == ["/r/__Snapshots__/S/a.1.png", "/r/__Snapshots__/S/a.2.png"])
         #expect(mismatches.map(\.pixels) == [.init(actual: 0.5, required: 1), nil])
         #expect(mismatches.map(\.perceptual) == [nil, .init(actual: 0.7, required: 0.9)])
+    }
+
+    /// A diff tool may quote with single quotes, and a reference may be outside `__Snapshots__`: then the order tells,
+    /// reference first, as swift-snapshot-testing passes them.
+    @Test func readsSingleQuotesAndTheOrder() {
+        let quoted = SnapshotMismatch.parse("ksdiff '/ci/tmp/Card Tests/card.1.png' '/ci/app/__Snapshots__/Card Tests/card.1.png'")
+        #expect(quoted.map(\.reference) == ["/ci/app/__Snapshots__/Card Tests/card.1.png"])
+        #expect(quoted.map(\.actual) == ["/ci/tmp/Card Tests/card.1.png"])
+        let custom = SnapshotMismatch.parse(#"compare "/ci/app/References/card.png" "/ci/tmp/card.png""#)
+        #expect(custom.map(\.reference) == ["/ci/app/References/card.png"] && custom.map(\.actual) == ["/ci/tmp/card.png"])
+        #expect(SnapshotMismatch.parse(#"compare "/ci/a.png" "/ci/a.png""#).isEmpty)
     }
 
     @Test func aMessageWithoutImagesKeepsItsFirstLine() {
@@ -250,7 +269,7 @@ struct FakeGitLab: GitLabAPI {
         #expect(hint("Host key verification failed.") == "ci-mac-1 isn’t a known SSH host yet, and SnapshotKit never trusts one by itself. "
                 + "Connect once with `ssh ci-mac-1 true` and accept its key, then load the job again.")
         #expect(hint("ci@ci-mac-1: Permission denied (publickey).") == "ci-mac-1 refused the SSH login, so the images the tests took couldn’t be "
-                + "copied. The images are in /Users/ci-runner/: set CI login under Run to `ci-runner`.")
+                + "copied. The images are in /Users/ci-runner/: set the CI login to `ci-runner`.")
         #expect(hint("Permission denied (publickey).", login: "builder").hasSuffix("that `ssh builder@ci-mac-1 true` works without a password."))
         #expect(hint("Connection timed out").hasPrefix("Couldn’t copy the images the tests took from ci-mac-1: "))
     }
@@ -316,5 +335,355 @@ extension JSONDecoder {
 extension CITestReport.Case {
     init(status: String, name: String, classname: String?) {
         self.init(status: status, name: name, classname: classname, systemOutput: nil, stackTrace: nil)
+    }
+}
+
+/// The forms swift-snapshot-testing's messages take, and those JUnit writers turn them into.
+extension SnapshotMismatchTests {
+    static let pair = (reference: "/ci/app/__Snapshots__/CardTests/card.1.png", actual: "/ci/tmp/CardTests/card.1.png")
+
+    /// A writer that keeps the message as a string literal escapes its quotes, and maybe its line breaks.
+    @Test(arguments: [
+        #"Snapshot does not match reference.\n\nksdiff \"/ci/app/__Snapshots__/CardTests/card.1.png\" \"/ci/tmp/CardTests/card.1.png\"\n\nThe percentage of pixels that match 0.5 is less than required 1.0"#,
+        "Snapshot does not match reference.\n\nksdiff \\\"/ci/app/__Snapshots__/CardTests/card.1.png\\\" \\\"/ci/tmp/CardTests/card.1.png\\\"\n\nThe percentage of pixels that match 0.5 is less than required 1.0",
+        #"Snapshot does not match reference.\n\n@\u{2212}\n\"file:///ci/app/__Snapshots__/CardTests/card.1.png\"\n@+\n\"file:///ci/tmp/CardTests/card.1.png\"\n\nThe percentage of pixels that match 0.5 is less than required 1.0"#,
+        #"Snapshot does not match reference.\n\n@−\n\"file:///ci/app/__Snapshots__/CardTests/card.1.png\"\n@+\n\"file:///ci/tmp/CardTests/card.1.png\"\n\nThe percentage of pixels that match 0.5 is less than required 1.0"#,
+        // Escaped twice: a literal of a literal.
+        #"Snapshot does not match reference.\\n\\n@−\\n\\\"file:///ci/app/__Snapshots__/CardTests/card.1.png\\\"\\n@+\\n\\\"file:///ci/tmp/CardTests/card.1.png\\\"\\n\\nThe percentage of pixels that match 0.5 is less than required 1.0"#,
+        // XML entities a writer left in.
+        "Snapshot does not match reference.&#10;&#10;@−&#10;&quot;file:///ci/app/__Snapshots__/CardTests/card.1.png&quot;&#10;@+&#10;&quot;file:///ci/tmp/CardTests/card.1.png&quot;&#10;&#10;The percentage of pixels that match 0.5 is less than required 1.0",
+    ])
+    func readsAnEscapedMessage(_ message: String) {
+        let mismatches = SnapshotMismatch.parse(message)
+        #expect(mismatches == [SnapshotMismatch(reference: Self.pair.reference, actual: Self.pair.actual, pixels: .init(actual: 0.5, required: 1))])
+        // Shown unescaped: the paths read as paths.
+        #expect(SnapshotMismatch.readable(message).contains("/ci/tmp/CardTests/card.1.png\""))
+        #expect(!SnapshotMismatch.readable(message).contains("\\\""))
+        #expect(SnapshotMismatch.isSnapshotFailure(message))
+    }
+
+    @Test(arguments: [
+        // A plain hyphen, and paths instead of URLs.
+        "@-\n\"/ci/app/__Snapshots__/CardTests/card.1.png\"\n@+\n\"/ci/tmp/CardTests/card.1.png\"",
+        "@−\r\n\"file:///ci/app/__Snapshots__/CardTests/card.1.png\"\r\n@+\r\n\"file:///ci/tmp/CardTests/card.1.png\"",
+        // A diff tool given file URLs, unquoted; another quoted, with its own words around them.
+        "compare file:///ci/app/__Snapshots__/CardTests/card.1.png file:///ci/tmp/CardTests/card.1.png diff.png",
+        "open -a Kaleidoscope \"/ci/tmp/CardTests/card.1.png\" \"/ci/app/__Snapshots__/CardTests/card.1.png\"",
+    ])
+    func readsOtherForms(_ message: String) {
+        #expect(SnapshotMismatch.parse(message).map(\.reference) == [Self.pair.reference])
+        #expect(SnapshotMismatch.parse(message).map(\.actual) == [Self.pair.actual])
+    }
+
+    @Test func decodesTheURLsOfPathsWithSpaces() {
+        let message = "@−\n\"file:///Users/ci/My%20App/__Snapshots__/S/a.1.png\"\n@+\n\"file:///tmp/My%20App/S/a.1.png\""
+        #expect(SnapshotMismatch.parse(message).first?.reference == "/Users/ci/My App/__Snapshots__/S/a.1.png")
+        #expect(SnapshotMismatch.parse(message).first?.actual == "/tmp/My App/S/a.1.png")
+    }
+
+    /// No reference: the test recorded the image it took as one, on the runner, and failed.
+    @Test func readsARecordedSnapshot() {
+        for opening in ["No reference was found on disk.", "Record mode is on."] {
+            let message = """
+            failed - \(opening) Automatically recorded snapshot: …
+
+            open "file:///ci/app/__Snapshots__/CardTests/card.1.png"
+
+            Re-run "card()" to assert against the newly-recorded snapshot.
+            """
+            let mismatch = SnapshotMismatch.parse(message)
+            #expect(mismatch == [SnapshotMismatch(actual: Self.pair.reference, recorded: true)])
+            #expect(mismatch.first?.namesImages == true)
+        }
+    }
+
+    @Test func tellsTextSnapshotsFromImages() {
+        let text = SnapshotMismatch.parse("@−\n\"file:///r/__Snapshots__/S/a.1.txt\"\n@+\n\"file:///t/S/a.1.txt\"\n\n@@ −1,1 +1,1 @@\n−a\n+b")
+        #expect(text.count == 1 && text[0].namesImages && !text[0].isImage)
+        #expect(SnapshotMismatch.parse(Self.message("testPayButton"))[0].isImage)
+    }
+
+    /// Some messages say a snapshot didn't match without naming its images: that is still a snapshot failure.
+    @Test func knowsASnapshotFailureWithoutItsImages() {
+        #expect(SnapshotMismatch.isSnapshotFailure("Snapshot does not match reference."))
+        #expect(SnapshotMismatch.isSnapshotFailure(#"Snapshot \"dark\" does not match reference."#))
+        #expect(SnapshotMismatch.isSnapshotFailure("The percentage of pixels that match 0.5 is less than required 1.0"))
+        #expect(SnapshotMismatch.parse("Snapshot does not match reference.").isEmpty)
+        #expect(!SnapshotMismatch.isSnapshotFailure(#"XCTAssertEqual failed: ("\"12\"") is not equal to ("\"13\"")"#))
+    }
+
+    /// Only a message that reads as a snapshot failure once unescaped is shown unescaped.
+    @Test func leavesOtherMessagesAsTheyAre() {
+        let other = #"XCTAssertEqual failed: ("\"12\"") is not equal to ("\"13\"")\n"#
+        #expect(SnapshotMismatch.readable(other) == other)
+        #expect(SnapshotMismatch.readable(Self.message("testPayButton")) == Self.message("testPayButton"))
+        #expect(SnapshotMismatch.unescaped(#"a\u{2212}b A &amp;&lt;&#x41; \q &nope;"#) == "a−b A &<A \\q &nope;")
+    }
+}
+
+extension CIImporterTests {
+    /// The report with one test case's message replaced.
+    func report(_ api: FakeGitLab, replacing name: String, with message: String) throws -> FakeGitLab {
+        let path = "projects/mobile%2Fios%2Fshop/pipelines/89/test_report"
+        let data = try #require(api.responses[path])
+        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var suites = try #require(json["test_suites"] as? [[String: Any]])
+        var cases = try #require(suites[0]["test_cases"] as? [[String: Any]])
+        let i = try #require(cases.firstIndex { $0["name"] as? String == name })
+        cases[i]["system_output"] = message
+        suites[0]["test_cases"] = cases
+        json["test_suites"] = suites
+        var changed = api
+        changed.responses[path] = try JSONSerialization.data(withJSONObject: json)
+        return changed
+    }
+
+    @Test func anEscapedMessageStillFetchesItsImages() throws {
+        let (repo, api) = try setUp()
+        let original = SnapshotMismatchTests.message("testPayButton").replacingOccurrences(of: "/Users/ci-runner", with: runner.path)
+        let escaped = original.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n")
+        let result = try importer(repo, try report(api, replacing: "testPayButton", with: escaped)).load(link, into: directory)
+        let image = try #require(result.images.first { $0.testIdentifier == "CardTests/testPayButton()" })
+        #expect(try image.failure.map { try String(contentsOf: $0, encoding: .utf8) } == "actual pay")
+        #expect(image.reference != nil)
+        // Shown as swift-snapshot-testing wrote it.
+        #expect(result.summary.suites.flatMap(\.tests).first?.failureMessages == [original])
+    }
+
+    /// A snapshot failure whose message names no images says so, for the job and the test.
+    @Test func aMismatchWithoutPathsIsNoted() throws {
+        let (repo, api) = try setUp()
+        let result = try importer(repo, try report(api, replacing: "testPayButton", with: "Snapshot does not match reference.")).load(link, into: directory)
+        #expect(!result.images.contains { $0.testIdentifier == "CardTests/testPayButton()" })
+        #expect(result.notes.contains("The failure message of testPayButton() says a snapshot didn’t match, but names no image files, so there is "
+                                      + "nothing to fetch. The test report may cut long messages short."))
+    }
+
+    /// Each image not shown says why: here, gone from the runner. And the fix: a new run of the job.
+    @Test func aMissingImageSaysWhy() throws {
+        let (repo, api) = try setUp()
+        let result = try importer(repo, api).load(link, into: directory)
+        let summary = try #require(result.images.first { $0.testIdentifier == "CheckoutTests/testSummary()" })
+        #expect(summary.failureMissing?.hasPrefix("No longer on ci-mac-1: it removes the images the tests took when its next job starts.") == true)
+        #expect(summary.referenceMissing == nil)
+        #expect(result.images.first { $0.testIdentifier == "CardTests/testPayButton()" }?.failureMissing == nil)
+        #expect(result.fixes == [.retryJob])
+    }
+
+    /// The runner removes the images when its next job starts: loading the job again keeps those copied before.
+    @Test func loadingAgainKeepsTheImagesCopiedBefore() throws {
+        let (repo, api) = try setUp()
+        _ = try importer(repo, api).load(link, into: directory)
+        try FileManager.default.removeItem(at: runner.appendingPathComponent("\(tmp)/CardTests/testPayButton.1.png"))
+        let again = try importer(repo, api).load(link, into: directory)
+        let pay = try #require(again.images.first { $0.testIdentifier == "CardTests/testPayButton()" })
+        #expect(try pay.failure.map { try String(contentsOf: $0, encoding: .utf8) } == "actual pay")
+        #expect(again.notes == ["1 of the 2 images the tests took is no longer on ci-mac-1: it removes them when its next job starts. "
+                                + "Run the job again to see it."])
+    }
+
+    /// No reference: the test recorded one on the runner, which is the image to show.
+    @Test func aRecordedSnapshotIsTheImageTaken() throws {
+        let (repo, api) = try setUp()
+        let recorded = runner.appendingPathComponent("builds/x1Y2z3/0/mobile/ios/shop/Example/ShopSnapshotTests/__Snapshots__/CardTests/testNew.1.png")
+        try FileManager.default.createDirectory(at: recorded.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("recorded".utf8).write(to: recorded)
+        let message = "No reference was found on disk. Automatically recorded snapshot: …\n\nopen \"file://\(recorded.path)\"\n\n"
+            + "Re-run \"testNew\" to assert against the newly-recorded snapshot."
+        let result = try importer(repo, try report(api, replacing: "testPayButton", with: message)).load(link, into: directory)
+        let image = try #require(result.images.first { $0.testIdentifier == "CardTests/testPayButton()" })
+        #expect(try image.failure.map { try String(contentsOf: $0, encoding: .utf8) } == "recorded")
+        #expect(image.reference == nil)
+        #expect(image.referenceMissing?.hasPrefix("No reference was committed") == true)
+        #expect(image.referencePath == "Example/ShopSnapshotTests/__Snapshots__/CardTests/testNew.1.png")
+    }
+
+    /// The runner's answer to which images it has: there, behind a folder the login can't open, or gone.
+    @Test func readsWhichImagesTheRunnerHas() throws {
+        let files = CIImporter.RunnerFiles(output: "user\tbuilder\nok\t/a.png\ndenied\t/b.png\nok\t/elsewhere.png\n", asked: ["/a.png", "/b.png", "/c.png"])
+        #expect(files.user == "builder")
+        #expect(files.present == ["/a.png"])
+        #expect(files.unreadable == ["/b.png"])
+        #expect(files.gone == ["/c.png"])
+
+        let there = runner.appendingPathComponent("there.png")
+        try FileManager.default.createDirectory(at: runner, withIntermediateDirectories: true)
+        try Data().write(to: there)
+        let gone = runner.appendingPathComponent("gone/it's.png").path
+        let output = try LocalDirectoryTransport().run(CIImporter.RunnerFiles.script([there.path, gone]))
+        let local = CIImporter.RunnerFiles(output: output, asked: [there.path, gone])
+        #expect(local.present == [there.path])
+        #expect(local.gone == [gone])
+        #expect(local.user?.isEmpty == false)
+    }
+
+    @Test func aJobGitLabDoesntHaveSaysSo() throws {
+        let (repo, _) = try setUp()
+        #expect(throws: GitLabError.jobNotFound(id: 4567, project: "mobile/ios/shop", host: "gitlab.example.com")) {
+            try importer(repo, FakeGitLab([:])).load(link, into: directory)
+        }
+    }
+
+    /// A job that failed without a failing test failed elsewhere: building, a script step.
+    @Test func aJobThatFailedOutsideTheTestsSaysSo() throws {
+        let (repo, api) = try setUp()
+        var bare = api
+        bare.responses["projects/mobile%2Fios%2Fshop/pipelines/89/test_report"] = Data(#"{"test_suites": []}"#.utf8)
+        bare.responses["projects/mobile%2Fios%2Fshop/jobs/4567/trace"] = Data("error: build failed\n".utf8)
+        let result = try importer(repo, bare).load(link, into: directory)
+        #expect(result.summary.suites.isEmpty)
+        #expect(result.notes == ["snapshotTest failed, but neither its test report nor its log names a failing test: it failed outside the tests "
+                                 + "(building, a script step, a timeout). Its log on GitLab says why."])
+    }
+
+    /// The report names its suites after the jobs; one that has none for this job says which it has.
+    @Test func aReportWithoutTheJobsSuiteNamesThoseItHas() throws {
+        let (repo, api) = try setUp()
+        var other = api
+        other.responses["projects/mobile%2Fios%2Fshop/pipelines/89/test_report"] = Data(#"{"test_suites": [{"name": "unitTests", "test_cases": []}]}"#.utf8)
+        let result = try importer(repo, other).load(link, into: directory)
+        #expect(result.notes == ["The pipeline’s test report has no suite for snapshotTest, only for “unitTests”, so its failure messages, "
+                                 + "references and images are unknown."])
+        #expect(CIImporter.suite("snapshotTest", isOf: "snapshotTest 2/3"))
+        #expect(!CIImporter.suite("snapshotTest", isOf: "snapshotTest-iPad"))
+    }
+
+    /// A refused login suggests the user whose home the images are in, also when a login is set, and offers it.
+    @Test func aRefusedLoginSuggestsTheImagesOwner() {
+        let paths = ["/Users/ci-runner/Library/Developer/CoreSimulator/Devices/X/data/tmp/a.png"]
+        func diagnosis(_ output: String, login: String?) -> CIImporter.SSHDiagnosis {
+            var importer = CIImporter(api: FakeGitLab([:]), repository: URL(fileURLWithPath: "/"))
+            importer.login = login
+            return importer.sshDiagnosis(for: RemoteError.commandFailed(host: "x", script: "", status: 255, output: output),
+                                         destination: CIImporter.destination(login: login, runner: "ci-mac-1"), runner: "ci-mac-1", paths: paths)
+        }
+        let denied = "Permission denied (publickey,password,keyboard-interactive)."
+        #expect(diagnosis(denied, login: nil).fixes == [.useLogin("ci-runner"), .runCommand("ssh ci-runner@ci-mac-1 true")])
+        let builder = diagnosis(denied, login: "builder")
+        #expect(builder.note.contains("so the login is likely `ci-runner`: set the CI login to it."))
+        #expect(builder.fixes == [.useLogin("ci-runner"), .runCommand("ssh ci-runner@ci-mac-1 true")])
+        #expect(builder.reason == "builder@ci-mac-1 refused the SSH login. The images are ci-runner’s: log in as `ci-runner` (the CI login).")
+        #expect(diagnosis(denied, login: "builder@ci-mac-1.example.com").fixes.first == .useLogin("ci-runner@ci-mac-1.example.com"))
+        // The owner's own login refused: the key, not the user.
+        let owner = diagnosis(denied, login: "ci-runner")
+        #expect(owner.fixes == [.runCommand("ssh ci-runner@ci-mac-1 true"), .loadAgain])
+        #expect(owner.note.contains("ssh-agent"))
+        // Logged in, but not allowed to read the owner's files.
+        let unreadable = diagnosis(#"rsync: [sender] send_files failed to open "/Users/ci-runner/a.png": Permission denied (13)"#, login: "builder")
+        #expect(unreadable.note == "builder@ci-mac-1 can’t read the images the tests took: they are in /Users/ci-runner/. Set the CI login to `ci-runner`.")
+        #expect(unreadable.fixes == [.useLogin("ci-runner")])
+    }
+
+    @Test func otherSSHProblemsSayWhatToCheck() throws {
+        let importer = CIImporter(api: FakeGitLab([:]), repository: URL(fileURLWithPath: "/"))
+        func diagnosis(_ error: Error, runner: String = "ci-mac-1") -> CIImporter.SSHDiagnosis {
+            importer.sshDiagnosis(for: error, destination: runner, runner: runner, paths: [])
+        }
+        let unknown = diagnosis(RemoteError.commandFailed(host: "ci-mac-1", script: "", status: 255,
+                                                          output: "ssh: Could not resolve hostname ci-mac-1: nodename nor servname provided, or not known"))
+        #expect(unknown.note.contains("set the CI login to `user@address`, or give it a `Host ci-mac-1` entry"))
+        let named = diagnosis(RemoteError.invalidHost("Mac mini (M2)"), runner: "Mac mini (M2)")
+        #expect(named.note.hasPrefix("GitLab names the runner “Mac mini (M2)”, which isn’t a host name"))
+        let trust = diagnosis(RemoteError.commandFailed(host: "ci-mac-1", script: "", status: 255, output: "Host key verification failed."))
+        #expect(trust.fixes == [.runCommand("ssh ci-mac-1 true"), .loadAgain])
+        let timeout = diagnosis(RemoteError.commandFailed(host: "ci-mac-1", script: "", status: 255,
+                                                          output: "ssh: connect to host ci-mac-1 port 22: Operation timed out"))
+        #expect(timeout.note == "Couldn’t copy the images the tests took from ci-mac-1: ci-mac-1 didn’t answer over SSH (ssh: connect to host "
+                + "ci-mac-1 port 22: Operation timed out). Check that you’re on its network (or VPN) and that Remote Login is on there, then load the job again.")
+        #expect(CIImporter.homeOwner(of: "/home/gitlab-runner/builds/a.png") == "gitlab-runner")
+        #expect(CIImporter.homeOwner(of: "/Users/Shared/a.png") == nil)
+        #expect(CIImporter.homeOwner(of: "/private/var/folders/a.png") == nil)
+    }
+
+    /// Each SSH problem leaves every image it kept from being copied a reason.
+    @Test func anSSHProblemIsEachImagesReason() throws {
+        let (repo, api) = try setUp()
+        var importer = importer(repo, api)
+        importer.transport = { _ in throw RemoteError.invalidHost("ci-mac-1") }
+        let result = try importer.load(link, into: directory)
+        #expect(result.images.allSatisfy { $0.failure == nil && $0.failureMissing?.contains("isn’t a host name") == true })
+    }
+}
+
+@Suite(.isolated) struct GitLabErrorTests {
+    @Test func tellsWhatWentWrong() {
+        func classify(_ output: String, via: String = "glab") -> GitLabError {
+            GitLabError.classify(path: "projects/x/jobs/1", output: output, host: "gitlab.example.com", via: via)
+        }
+        #expect(classify("glab: 401 Unauthorized (HTTP 401)") == .unauthorized(host: "gitlab.example.com", via: "glab", detail: "glab: 401 Unauthorized (HTTP 401)"))
+        #expect(classify("none of the git remotes configured for this repository points to a known GitLab host. Please use `glab auth login`")
+                == .unauthorized(host: "gitlab.example.com", via: "glab",
+                                 detail: "none of the git remotes configured for this repository points to a known GitLab host. Please use `glab auth login`"))
+        #expect(classify(#"{"message":"403 Forbidden"}"#) == .forbidden(host: "gitlab.example.com", path: "projects/x/jobs/1", via: "glab"))
+        #expect(classify("glab: 404 Not Found (HTTP 404)") == .notFound(path: "projects/x/jobs/1"))
+        #expect(classify("curl: (6) Could not resolve host: gitlab.example.com", via: "GITLAB_TOKEN")
+                == .unreachable(host: "gitlab.example.com", detail: "curl: (6) Could not resolve host: gitlab.example.com"))
+        #expect(classify("500 Internal Server Error\nupstream 4040ms") == .request(path: "projects/x/jobs/1", output: "upstream 4040ms"))
+        #expect(GitLabError.request(path: "p", output: "404 Not Found").isNotFound)
+        #expect(!GitLabError.request(path: "p", output: "took 4045 ms").isNotFound)
+    }
+
+    /// Each says what to do, naming the token's variable, never its value.
+    @Test func saysWhatToDo() {
+        #expect(GitLabError.glabMissing(host: "gitlab.example.com").localizedDescription.contains("`glab auth login --hostname gitlab.example.com`"))
+        let rejected = GitLabError.unauthorized(host: "gitlab.example.com", via: "GITLAB_PRIVATE_TOKEN", detail: "401 Unauthorized").localizedDescription
+        #expect(rejected.hasPrefix("GitLab on gitlab.example.com rejected GITLAB_PRIVATE_TOKEN (401 Unauthorized)"))
+        let api = DefaultGitLabAPI(host: "gitlab.example.com", environment: ["GITLAB_PRIVATE_TOKEN": "glpat-secret"])
+        #expect((api.token as? TokenAPI)?.tokenVariable == "GITLAB_PRIVATE_TOKEN")
+        #expect(DefaultGitLabAPI(host: "h", environment: ["GITLAB_TOKEN": "", "GITLAB_PRIVATE_TOKEN": "b"]).token != nil)
+        #expect(DefaultGitLabAPI(host: "h", environment: ["GITLAB_TOKEN": ""]).token == nil)
+    }
+
+    /// An answer that isn't JSON, as from a sign-in page in front of GitLab, says how it starts.
+    @Test func anAnswerThatIsntJSONSaysHowItStarts() {
+        let api = FakeGitLab(["projects/x/jobs/1": "<!DOCTYPE html>\n<html><title>Sign in</title>"])
+        #expect(throws: GitLabError.unreadable(path: "projects/x/jobs/1", start: "<!DOCTYPE html>")) {
+            try api.get("projects/x/jobs/1", as: GitLabJob.self)
+        }
+    }
+
+    /// A JUnit writer may split the message between system output and stack trace: the snapshot failure is the message.
+    @Test func theMessageIsTheSnapshotFailure() {
+        let failure = "Snapshot does not match reference."
+        let split = CITestReport.Case(status: "failed", name: "testCard()", classname: "CardTests",
+                                      systemOutput: "Rendering CardView", stackTrace: failure)
+        #expect(split.message == failure)
+        let other = CITestReport.Case(status: "failed", name: "testCard()", classname: "CardTests", systemOutput: "", stackTrace: "XCTAssertTrue failed")
+        #expect(other.message == "XCTAssertTrue failed")
+    }
+
+    /// Without glab and without a token there is no way in, and the error says both ways.
+    @Test func withoutGlabOrATokenSaysHowToSignIn() throws {
+        struct MissingGlab: GitLabAPI {
+            func get(_ path: String) throws -> Data {
+                throw CommandError(command: ["glab"], result: CommandResult(status: 127, stdout: "", stderr: "env: glab: No such file or directory"))
+            }
+        }
+        var api = DefaultGitLabAPI(host: "gitlab.example.com", environment: [:])
+        api.glab = MissingGlab()
+        #expect(throws: GitLabError.glabMissing(host: "gitlab.example.com")) { try api.get("projects/x/jobs/1") }
+    }
+}
+
+@Suite(.isolated) struct MissingImagesTests {
+    func explain(_ messages: [String], _ images: [SnapshotFailureImages] = []) -> MissingImages {
+        MissingImages.explain(messages: messages, images: images)
+    }
+
+    /// What was tried comes first: the image's own reasons.
+    @Test func saysWhyEachSideIsMissing() {
+        let image = SnapshotFailureImages(testIdentifier: "S/a()", repetition: 1, index: 0,
+                                          referenceMissing: "isn’t in the job’s commit 3f1c2a9b.", failureMissing: "No longer on ci-mac-1.")
+        #expect(explain(["Snapshot does not match reference."], [image])
+                == MissingImages(title: "Images Not Available", reason: "Reference: isn’t in the job’s commit 3f1c2a9b.\nActual: No longer on ci-mac-1."))
+    }
+
+    /// A snapshot failure whose paths didn't come through is still one.
+    @Test func aSnapshotFailureIsNeverCalledSomethingElse() {
+        #expect(explain(["Snapshot does not match reference."]).title == "Images Not Named")
+        #expect(explain([#"Snapshot does not match reference.\n\nksdiff \"/r/__Snapshots__/a.png\" \"/t/a.png\""#]).title == "Images Not Found")
+        #expect(explain(["@−\n\"file:///r/__Snapshots__/S/a.1.txt\"\n@+\n\"file:///t/S/a.1.txt\""]).title == "Text Snapshot")
+        #expect(explain([]).title == "No Failure Message")
+        #expect(explain(["XCTAssertEqual failed: (\"12\") is not equal to (\"13\")"]).title == "Not a Snapshot Failure")
     }
 }

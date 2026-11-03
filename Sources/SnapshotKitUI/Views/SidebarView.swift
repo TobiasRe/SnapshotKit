@@ -25,6 +25,7 @@ struct SidebarView: View {
 /// The open project's sections, grouped as they're used: what you changed, what the tests say,
 /// what CI says, and everything there is.
 struct SectionList: View {
+    @Environment(AppModel.self) private var model
     let project: ProjectModel
 
     /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
@@ -43,12 +44,17 @@ struct SectionList: View {
                 row(.lastRun)
                 row(.run)
             }
-            // A merge request's failed jobs, each loaded when opened.
-            ForEach(project.ciJobGroups) { group in
+            // A merge request's or pipeline's failed jobs, each loaded when opened. Always there, its first heading
+            // with a way to load another and the settings jobs load with.
+            let groups = project.ciJobGroups
+            if groups.isEmpty {
+                Section { EmptyView() } header: { ciHeader("CI", help: nil, actions: true) }
+            }
+            ForEach(groups) { group in
                 Section {
                     ForEach(group.jobs) { row(.ciJob($0.id)) }
                 } header: {
-                    Text(group.title).help(group.mergeRequest?.title ?? "")
+                    ciHeader(group.title, help: group.mergeRequest?.title, actions: group.id == groups.first?.id)
                 }
             }
             Section("Library") {
@@ -60,6 +66,36 @@ struct SectionList: View {
         .listStyle(.sidebar)
     }
 
+    /// A CI heading; the first has + (Load CI Job or Pipeline…, ⇧⌘L), drawn as quietly as the heading, and shows
+    /// CI Settings, which its context menu, the File menu and ⌘K open.
+    @ViewBuilder
+    private func ciHeader(_ title: String, help: String?, actions: Bool) -> some View {
+        if actions {
+            HStack(spacing: DS.Space.xs) {
+                Text(title).help(help ?? "")
+                Spacer(minLength: DS.Space.s)
+                Button { model.loadCIJobFromPrompt() } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                // Level with the rows' counts, not the heading's far edge.
+                .padding(.trailing, DS.Space.s)
+                .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
+                .accessibilityLabel("Load CI Job or Pipeline")
+            }
+            .contextMenu {
+                Button("Load CI Job or Pipeline…") { model.loadCIJobFromPrompt() }
+                Button("CI Settings…") { project.showsCISettings = true }
+            }
+            // A key path, not get/set closures: SwiftUI reads this off the main actor, where the closures trapped.
+            .popover(isPresented: Bindable(project).showsCISettings, arrowEdge: .trailing) {
+                CISettingsView(project: project)
+            }
+        } else {
+            Text(title).help(help ?? "")
+        }
+    }
+
     private func row(_ section: ProjectSection) -> some View {
         Label {
             HStack(spacing: DS.Space.s) {
@@ -68,7 +104,13 @@ struct SectionList: View {
                 badge(section)
             }
         } icon: {
-            Image(systemName: Self.symbol(of: section))
+            // Off-screen the sidebar's vibrancy is dropped and the symbols came out near-black in dark mode; there
+            // they're the secondary label colour, as the counts are flattened.
+            if Self.drawsOffScreen {
+                Image(systemName: Self.symbol(of: section)).foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            } else {
+                Image(systemName: Self.symbol(of: section))
+            }
         }
         .tag(section)
         .listRowBackground(Self.drawsOffScreen && project.section == section

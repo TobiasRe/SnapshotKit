@@ -55,7 +55,7 @@ Configuration, with the fix; the header offers **Check Again**. `snapkit config`
 
 **The configuration SnapshotKit found is wrong.**
 Run `snapkit config` to see every value and where it came from, then override what’s wrong in
-`.snapshotkit.yml`. Values typed in Run (base branch, remote host) override everything for you alone.
+`.snapshotkit.yml`. The base branch picked in vs develop and the remote host typed in Run override everything for you alone.
 
 **My CI uses `swift test`, not `xcodebuild`.**
 SnapshotKit runs `xcodebuild`. Set `scheme:` (for a package, `<Package>-Package`) and `device:` in

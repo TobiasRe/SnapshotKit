@@ -763,10 +763,16 @@ func printFailures(_ failingSuites: [SuiteResult], images: [SnapshotFailureImage
                 let owner = [severalDevices ? img.device : nil, severalCases ? img.arguments?.joined(separator: ", ") : nil].compactMap { $0 }
                 if !owner.isEmpty { say("    " + owner.joined(separator: " · ") + ":") }
                 say("    failure:    \(img.failure?.path ?? "—")\n    difference: \(img.difference?.path ?? "—")")
+                // Why an image is missing, when it is known: gone from the runner, a login refused.
+                if img.reference == nil, let why = img.referenceMissing { say("    no reference: " + why) }
+                if img.failure == nil, let why = img.failureMissing { say("    no image:   " + why) }
                 if let ref = img.reference.flatMap({ try? readImage($0.path) }), let act = img.failure.flatMap({ try? readImage($0.path) }) {
                     let diagnosis = DiffDiagnosis(ImageDiff.compare(ref, act))
                     say("    " + diagnosis.summary + (diagnosis.suggestion.map { " Would pass with \($0)." } ?? ""))
                 }
+            }
+            if shown.isEmpty, test.failureMessages.contains(where: SnapshotMismatch.isSnapshotFailure) {
+                say("    no images:  " + MissingImages.explain(messages: test.failureMessages, images: []).reason)
             }
             let timeline = RunHistory.timeline(for: suite.onlyTestingIdentifier(of: test), in: RunHistory(repository: repository).load())
             if timeline.count > 1 { say("    recent runs: " + historyStrip(timeline)) }
@@ -775,19 +781,29 @@ func printFailures(_ failingSuites: [SuiteResult], images: [SnapshotFailureImage
 }
 
 /// `failures --ci`: a failed GitLab CI job's failing tests, with the references at the commit it ran and the
-/// images its runner took. The job is the one `--ci URL` names, else the failed one of the branch's merge request.
+/// images its runner took. The job is the one `--ci URL` names (a pipeline's: its failed snapshot job), else the failed
+/// one of the branch's merge request.
 func ciFailures(_ o: CommandArguments) {
     let repo = repository(o)
     do {
         let link: GitLabLink
-        if let text = o.value("--ci") {
+        if let text = o.value("--ci"), let (project, pipeline) = GitLabLink.pipeline(url: text) {
+            let failed = try DefaultGitLabAPI(host: project.host).failedJobs(ofPipeline: pipeline, in: project).sorted { $0.id < $1.id }
+            guard !failed.isEmpty else { fail("Nothing failed in pipeline #\(pipeline).") }
+            let job = CIDetector.snapshotJob(of: failed)
+            if failed.count > 1 {
+                say("Failed in pipeline #\(pipeline): " + failed.map { "\($0.name) #\($0.id)" }.joined(separator: ", ")
+                    + ". Showing \(job.name); pass --ci URL for another.")
+            }
+            link = GitLabLink(host: project.host, projectPath: project.projectPath, jobID: job.id)
+        } else if let text = o.value("--ci") {
             link = try CIDetector.job(text, repository: repo)
         } else {
             guard let found = try CIDetector.detect(repository: repo) else {
                 fail("No failed CI job to show: the branch has no open merge request, or nothing failed in its latest pipeline. Pass --ci URL.")
             }
             // The snapshot job, when several failed.
-            let job = found.failedJobs.first { $0.name.lowercased().contains("snapshot") } ?? found.failedJobs[0]
+            let job = CIDetector.snapshotJob(of: found.failedJobs)
             if found.failedJobs.count > 1 {
                 say("Failed in !\(found.mergeRequest.iid): " + found.failedJobs.map { "\($0.name) #\($0.id)" }.joined(separator: ", ")
                     + ". Showing \(job.name); pass --ci URL for another.")
@@ -806,6 +822,16 @@ func ciFailures(_ o: CommandArguments) {
         printFailures(ci.summary.failingSuites, images: ci.images, repository: repo)
         if ci.summary.failingSuites.isEmpty { say("No failing tests in \(ci.job.name) #\(ci.job.id).") }
         for note in ci.notes { say(color("33", "note: ") + note) }
+        let again = "snapkit failures --ci " + Shell.quote(link.jobURL ?? "\(ci.job.id)")
+        for fix in ci.fixes {
+            let hint = switch fix {
+            case .useLogin(let login): "log in as \(login): " + again + " --ci-login " + Shell.quote(login)
+            case .runCommand(let command): "run `\(command)`, then " + again
+            case .retryJob: "retry the job on GitLab, then load the new one: " + (link.jobURL ?? again)
+            case .loadAgain: "load the job again: " + again
+            }
+            say(color("36", "fix: ") + hint)
+        }
         // Without a commit: another machine's results say nothing about flakiness here.
         RunHistory(repository: repo).append(RunRecord(kind: .imported, host: runner, commit: nil, branch: nil, dirty: false, summary: ci.summary,
                                                       passed: ci.passed, failed: ci.summary.failed, skipped: ci.skipped, resultBundle: nil))

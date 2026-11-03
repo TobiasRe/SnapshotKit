@@ -11,8 +11,9 @@ struct FailuresTab: View {
     @State private var attempt: String?
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
     @State private var quickLookURL: URL?
-    /// What the Load Failed CI Job prompt says.
+    /// What the Load CI Job or Pipeline prompt says.
     @State private var ciJobText = ""
+    @State private var showsCISettings = false
 
     var body: some View {
         ListDetailSplit {
@@ -43,20 +44,23 @@ struct FailuresTab: View {
             }
             .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .alert("Load Failed CI Job", isPresented: Binding(get: { project.askForCIJob }, set: { project.askForCIJob = $0 })) {
-            TextField("Job URL", text: $ciJobText)
+        .alert("Load CI Job or Pipeline", isPresented: Binding(get: { project.askForCIJob }, set: { project.askForCIJob = $0 })) {
+            TextField("Job or pipeline URL", text: $ciJobText)
             Button("Load") {
                 if !ciJobText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.loadCIJob(url: ciJobText) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The URL of a failed GitLab job, or its number in this project. Its failing tests show with their references and the images CI took.")
+            Text("The URL of a failed GitLab job, or its number in this project, or a pipeline’s URL to list its failed jobs. "
+                 + "Their failing tests show with their references and the images CI took.")
         }
         .onChange(of: project.askForCIJob) { _, asking in
             guard asking else { return }
-            // The branch's failed job, else a job's URL on the clipboard.
+            // The branch's failed job, else a job's or pipeline's URL on the clipboard.
             ciJobText = project.offeredCIJobs.first.flatMap { project.ciDetection?.link(to: $0).jobURL }
-                ?? NSPasteboard.general.string(forType: .string).flatMap { GitLabLink.job(url: $0)?.jobURL } ?? ""
+                ?? NSPasteboard.general.string(forType: .string).flatMap { text in
+                    GitLabLink.job(url: text)?.jobURL ?? GitLabLink.pipeline(url: text).map { _ in text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                } ?? ""
         }
     }
 
@@ -76,7 +80,8 @@ struct FailuresTab: View {
             ?? ciJob.flatMap { job in project.ciDetection?.link(to: job).jobURL }.flatMap(URL.init(string:))
     }
 
-    /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on.
+    /// What couldn't be fetched with the failures shown: wrapped and selectable, to act on or pass on, with the
+    /// fixes the load found.
     @ViewBuilder
     private var sourceNotes: some View {
         if let notes = project.failureSource?.notes, !notes.isEmpty {
@@ -86,12 +91,54 @@ struct FailuresTab: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                fixButtons(project.failureSource?.fixes ?? [])
             }
             .font(DS.Font.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DS.Space.l)
             .padding(.vertical, DS.Space.s)
             Divider()
+        }
+    }
+
+    /// What would fetch what a CI job's load couldn't: log in as another user, run a command first, retry the
+    /// job on GitLab, load it again.
+    @ViewBuilder
+    private func fixButtons(_ fixes: [CIFix]) -> some View {
+        if let job = ciJob, !fixes.isEmpty {
+            HStack(spacing: DS.Space.s) {
+                ForEach(fixes, id: \.self) { fix in
+                    fixButton(fix, job: job)
+                }
+            }
+            .controlSize(.small)
+            .padding(.top, DS.Space.xxs)
+        }
+    }
+
+    @ViewBuilder
+    private func fixButton(_ fix: CIFix, job: GitLabJob) -> some View {
+        switch fix {
+        case .useLogin(let login):
+            Button("Log In as \(login)") { project.useCILogin(login, reloading: job) }
+                .quietControl()
+                .disabled(project.loadingCIJobs.contains(job.id))
+                .help("Set the CI login (CI Settings) to \(login), then load the job again")
+        case .runCommand(let command):
+            Button("Copy \(command)") { copy(command) }
+                .quietControl()
+                .help("Copy the command to run it in Terminal, then load the job again")
+        case .retryJob:
+            if let url = jobURL {
+                Button("Retry in GitLab") { NSWorkspace.shared.open(url) }
+                    .quietControl()
+                    .help("The runner no longer has these images. Retry the job on GitLab, then load the new job to see them.")
+            }
+        case .loadAgain:
+            Button("Load Again") { project.loadCIJob(job) }
+                .quietControl()
+                .disabled(project.loadingCIJobs.contains(job.id))
+                .help("Load the job again, with the CI login in CI Settings")
         }
     }
 
@@ -125,7 +172,7 @@ struct FailuresTab: View {
                         app.importResultBundleFromPanel()
                     } menu: {
                         Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
-                        Button("Load Failed CI Job…") { app.loadCIJobFromPrompt() }
+                        Button("Load CI Job or Pipeline…") { app.loadCIJobFromPrompt() }
                         if let bundle = project.failureSource?.resultBundle {
                             Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
                             Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }
@@ -143,6 +190,10 @@ struct FailuresTab: View {
                             .quietControl()
                             .help(url.absoluteString)
                     }
+                    Button("CI Settings") { showsCISettings = true }
+                        .quietControl()
+                        .help("The GitLab project, how SnapshotKit signs in, and the SSH login on the runners")
+                        .popover(isPresented: $showsCISettings, arrowEdge: .bottom) { CISettingsView(project: project) }
                 } else {
                     lastRunActions
                 }
@@ -244,6 +295,15 @@ struct FailuresTab: View {
             } else if project.failures.isEmpty, project.failureSource == nil {
                 ContentUnavailableView("No Results Yet", systemImage: "play.circle",
                                        description: Text("Run the tests, or import a result bundle from CI."))
+            } else if project.failures.isEmpty, ciJob != nil, let note = project.failureSource?.notes.last {
+                // A job without failing tests: its last note says why (failed outside the tests, not finished, no report).
+                ContentUnavailableView {
+                    Label("No Failing Tests", systemImage: "questionmark.circle")
+                } description: {
+                    Text(note)
+                } actions: {
+                    fixButtons(project.failureSource?.fixes ?? [])
+                }
             } else if project.failures.isEmpty {
                 ContentUnavailableView("Nothing Failing", systemImage: "checkmark.circle",
                                        description: Text("Every test passed."))
@@ -375,11 +435,21 @@ struct FailuresTab: View {
                             beforeLabel: "Reference",
                             afterLabel: "Actual · \(image?.device ?? project.failureSource?.host ?? "run")",
                             identity: item.id + "#" + (image?.id ?? ""),
-                            beforeMissing: "No reference was recorded yet.",
-                            afterMissing: "This run’s images are no longer kept. Run the tests again to see what the test draws.")
+                            beforeMissing: image?.referenceMissing ?? "No reference was recorded yet.",
+                            afterMissing: image?.failureMissing ?? "This run’s images are no longer kept. Run the tests again to see what the test draws.")
             } else {
-                ContentUnavailableView("No Images Attached", systemImage: "photo.badge.exclamationmark",
-                                       description: Text("This failure has no snapshot images; it may not be a snapshot mismatch."))
+                // Why, as exactly as is known: what couldn't be fetched, or what kind of failure it is.
+                let missing = MissingImages.explain(messages: item.test.failureMessages, images: image.map { [$0] } ?? item.images)
+                ContentUnavailableView {
+                    Label(missing.title, systemImage: "photo.badge.exclamationmark")
+                } description: {
+                    Text(StatusNote.code(missing.reason, font: DS.Font.code))
+                        .textSelection(.enabled)
+                } actions: {
+                    fixButtons(project.failureSource?.fixes ?? [])
+                }
+                // Fills the pane as the images would, so the header stays at the top.
+                .frame(maxHeight: .infinity)
             }
         }
     }

@@ -83,6 +83,43 @@ extension AppUITests {
             #expect(model.count(of: .ciJob(4567)) == 1 && model.count(of: .ciJob(4568)) == nil)
         }
 
+        /// A pipeline's URL lists its failed jobs under it, each loaded from its own project when opened; its
+        /// snapshot job is the one to open.
+        @Test func aPipelinesURLListsItsFailedJobs() async throws {
+            let (model, _) = model()
+            let unit = GitLabJob(id: 4566, name: "unitTests", status: "failed")
+            let pipelines = Calls(), jobs = Calls()
+            model.findCIPipeline = { [job] project, id in
+                pipelines.append("\(project.host)/\(project.projectPath) #\(id)")
+                return [unit, job]
+            }
+            let loaded = loaded()
+            model.importCI = { link, _, _, _ in
+                jobs.append(link.jobURL ?? "")
+                return loaded
+            }
+            #expect(model.ciJobGroups.isEmpty)
+            await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/89").value
+
+            #expect(pipelines.all == ["gitlab.example.com/mobile/ios/shop #89"])
+            #expect(model.ciJobGroups.map(\.title) == ["CI · Pipeline #89"])
+            #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4566, 4567]])
+            #expect(model.lastMessage == "Pipeline #89 has 2 failed jobs, listed under it in the sidebar.")
+            #expect(CIDetector.snapshotJob(of: [unit, job]) == job)
+
+            model.section = .ciJob(4567)
+            try await waitUntil(model.loadingCIJobs.isEmpty && model.failureSets[.ciJob(4567)] != nil, "the job didn't load")
+            #expect(jobs.all == ["https://gitlab.example.com/mobile/ios/shop/-/jobs/4567"])
+            // Loaded, it stays under its pipeline rather than moving to its merge request's heading.
+            #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4566, 4567]])
+            #expect(model.title(of: .ciJob(4566)) == "CI Job unitTests #4566")
+
+            model.findCIPipeline = { _, _ in [] }
+            await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/90").value
+            #expect(model.lastMessage == "Nothing failed in pipeline #90.")
+            #expect(model.ciJobGroups.count == 1)
+        }
+
         /// A job of the branch's merge request is listed once, under it, also when its load didn't say
         /// which merge request it ran for (it was listed twice, once more under a bare "CI").
         @Test func aLoadedJobOfTheBranchIsListedOnce() async throws {
@@ -167,9 +204,9 @@ extension AppUITests {
         @Test func whatCantBeLoadedSaysWhy() async {
             let (model, _) = model()
             model.importCI = { _, _, _, _ in Issue.record("nothing to load"); throw CancellationError() }
-            await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/89").value
-            #expect(model.lastMessage == "Couldn’t load the CI job: “https://gitlab.example.com/mobile/ios/shop/-/pipelines/89” isn’t a GitLab "
-                    + "job’s URL (https://gitlab.example.com/group/project/-/jobs/123).")
+            await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/merge_requests/12").value
+            #expect(model.lastMessage == "Couldn’t load the CI job: “https://gitlab.example.com/mobile/ios/shop/-/merge_requests/12” isn’t the URL "
+                    + "of a GitLab job (https://gitlab.example.com/group/project/-/jobs/123) or pipeline (…/-/pipelines/89).")
             #expect(model.lastMessageIsError)
 
             model.importCI = { _, _, _, _ in throw GitLabError.request(path: "projects/mobile%2Fios%2Fshop/jobs/4567", output: "404 Not Found") }
