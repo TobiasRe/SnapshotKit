@@ -27,7 +27,6 @@ struct SidebarView: View {
 struct SectionList: View {
     @Environment(AppModel.self) private var model
     let project: ProjectModel
-    @State private var showsCISettings = false
 
     /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
     /// black and its vibrancy drops the dots' colour: there the selected row is filled by hand, grey as in
@@ -67,22 +66,34 @@ struct SectionList: View {
         .listStyle(.sidebar)
     }
 
-    /// A CI heading; the first has + (Load CI Job or Pipeline…, ⇧⌘L) and CI Settings.
+    /// A CI heading; the first has + (Load CI Job or Pipeline…, ⇧⌘L), drawn as quietly as the heading, and shows
+    /// CI Settings, which its context menu, the File menu and ⌘K open.
+    @ViewBuilder
     private func ciHeader(_ title: String, help: String?, actions: Bool) -> some View {
-        HStack(spacing: DS.Space.xs) {
-            Text(title).help(help ?? "")
-            if actions {
+        if actions {
+            HStack(spacing: DS.Space.xs) {
+                Text(title).help(help ?? "")
                 Spacer(minLength: DS.Space.s)
-                Button { model.loadCIJobFromPrompt() } label: { Image(systemName: "plus") }
-                    .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
-                    .accessibilityLabel("Load CI Job or Pipeline")
-                Button { showsCISettings = true } label: { Image(systemName: "gearshape") }
-                    .help("CI Settings: the GitLab project, how SnapshotKit signs in, and the SSH login on the runners")
-                    .accessibilityLabel("CI Settings")
-                    .popover(isPresented: $showsCISettings, arrowEdge: .trailing) { CISettingsView(project: project) }
+                Button { model.loadCIJobFromPrompt() } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                // Level with the rows' counts, not the heading's far edge.
+                .padding(.trailing, DS.Space.s)
+                .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
+                .accessibilityLabel("Load CI Job or Pipeline")
             }
+            .contextMenu {
+                Button("Load CI Job or Pipeline…") { model.loadCIJobFromPrompt() }
+                Button("CI Settings…") { project.showsCISettings = true }
+            }
+            // A key path, not get/set closures: SwiftUI reads this off the main actor, where the closures trapped.
+            .popover(isPresented: Bindable(project).showsCISettings, arrowEdge: .trailing) {
+                CISettingsView(project: project)
+            }
+        } else {
+            Text(title).help(help ?? "")
         }
-        .buttonStyle(.borderless)
     }
 
     private func row(_ section: ProjectSection) -> some View {

@@ -177,6 +177,8 @@ struct SnapshotKitCommands: Commands {
             Button("Load CI Job or Pipeline…") { model.loadCIJobFromPrompt() }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .disabled(model.current == nil || model.current?.isRunning == true)
+            Button("CI Settings…") { model.current?.showsCISettings = true }
+                .disabled(model.current == nil)
             Divider()
             Button("Go to Project or Command…") { model.showQuickSwitcher.toggle() }
                 .keyboardShortcut("k")

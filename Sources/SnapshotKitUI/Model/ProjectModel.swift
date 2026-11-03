@@ -239,6 +239,8 @@ final class ProjectModel {
     var confirmReRecordAll = false
     /// Set by Load CI Job or Pipeline… (menu, ⌘K, the failures view); the failures view asks for the job.
     var askForCIJob = false
+    /// Set by CI Settings… (menu, ⌘K, the CI heading's context menu); the CI heading shows the panel.
+    var showsCISettings = false
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
     }

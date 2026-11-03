@@ -11,13 +11,13 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Open in SnapshotKit, and the library shows its snapshots (a test struct's or class's name: its test file's).
   The open project is searched first, then the others.
 - The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
-- The sidebar always has a CI section, its heading with **+** (load a job or pipeline) and **⚙** (CI Settings): also
+- The sidebar always has a CI section, its heading with a **+** to load a job or pipeline: also
   without a merge request or a failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or Pipeline…** (⇧⌘L, before
   **Load Failed CI Job…**) and `snapkit failures --ci URL` take a pipeline’s URL: the app lists its failed jobs
   under *CI · Pipeline #89* and opens its snapshot job; `snapkit` shows that job.
 
 ### Changed
-- Settings are where they act. **CI Settings** (the CI section’s ⚙, or the button in a CI job’s header) has the
+- Settings are where they act. **CI Settings** (a CI job’s header, the CI heading’s context menu, File or ⌘K) has the
   **CI login**, the GitLab project `origin` points at and how SnapshotKit signs in to it (glab, `GITLAB_TOKEN`, or
   neither, with how to set one up). Run keeps the remote host, under **Remote Mac**; the base branch is picked in
   vs develop’s branch menu, which already set it. Notes that named “CI login under Run” say “the CI login”.
