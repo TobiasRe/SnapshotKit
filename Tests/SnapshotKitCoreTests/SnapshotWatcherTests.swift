@@ -18,7 +18,7 @@ import Testing
         try FileManager.default.createDirectory(at: tests, withIntermediateDirectories: true)
         let counter = Counter(), control = Counter()
         let watcher = SnapshotWatcher(repository: repo, latency: 0.05) { counter.increment() }
-        let source = SnapshotWatcher(repository: repo, latency: 0.05, isRelevant: { $0.hasSuffix("/CardTests.swift") }) { control.increment() }
+        let source = SnapshotWatcher(folder: repo, latency: 0.05, isRelevant: { $0.hasSuffix("/CardTests.swift") }) { control.increment() }
         defer { watcher.stop(); source.stop() }
 
         try Data("x".utf8).write(to: tests.appendingPathComponent("CardTests.swift"))

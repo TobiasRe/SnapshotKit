@@ -40,6 +40,7 @@ find out why they failed, and re-record what should change.
 | [Re-recording](re-recording.md) | what can be re-recorded, the record patch, how it is always restored, verification |
 | [Remote runs](remote-runs.md) | running, recording and checking flakiness on another Mac over SSH |
 | [The menu bar item](menu-bar.md) | run progress, failing counts and quick access from the menu bar |
+| [Working with Xcode](xcode.md) | test runs in Xcode joining Last Run, and Editor › SnapshotKit for the test at the cursor |
 | [Keyboard shortcuts](keyboard-shortcuts.md) | every shortcut |
 
 ## Reference

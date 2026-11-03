@@ -130,6 +130,21 @@ A path contains a space and isn’t quoted. That happens when the diff tool is t
 swift-snapshot-testing appends the paths to a string unquoted. Define the tool with a closure that quotes them,
 as in [Set it up](diff-tool.md#set-it-up).
 
+## Xcode
+
+**Editor › SnapshotKit isn’t in Xcode.**
+Open SnapshotKit once from the Applications folder, turn the extension on in System Settings › General › Login
+Items & Extensions › Xcode Source Editor, and restart Xcode. A copy of SnapshotKit.app elsewhere (Downloads, a
+build folder) can register its extension instead; keep one copy.
+
+**Show Test opens the wrong project, or the one already open.**
+SnapshotKit asks Xcode which project is in front. If you didn’t allow SnapshotKit to control Xcode, it uses
+the project open in its window: allow it in System Settings › Privacy & Security › Automation.
+
+**A run in Xcode doesn’t show up in Last Run.**
+Only runs that finish while the project has been opened in SnapshotKit are taken up, and none while SnapshotKit
+runs tests itself. Older runs can be imported (⇧⌘O) from the `Logs/Test` folder of the project’s DerivedData.
+
 ## Where to report a problem
 
 Open an issue at [github.com/TobiasRe/SnapshotKit/issues](https://github.com/TobiasRe/SnapshotKit/issues) with

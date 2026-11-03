@@ -84,9 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
     }
 
-    /// `snapshotkit://compare?reference=…&actual=…`, from `snapkit open` (the diff tool) or a link.
-    /// Taken as the Apple event itself: SwiftUI would otherwise route it to a scene and open
-    /// another main window instead of a compare window.
+    /// `snapshotkit://compare?reference=…&actual=…`, from `snapkit open` (the diff tool) or a link, and
+    /// `snapshotkit://test?…` from Xcode's editor extension. Taken as the Apple event itself: SwiftUI
+    /// would otherwise route it to a scene and open another main window instead of a compare window.
     func applicationWillFinishLaunching(_ notification: Notification) {
         // A single-window app: no window tabs, nor their View menu items.
         NSWindow.allowsAutomaticWindowTabbing = false
@@ -102,9 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
-        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
-              let url = URL(string: text), let request = CompareRequest(url: url) else { return }
-        CompareWindows.show(request)
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, let url = URL(string: text) else { return }
+        if let request = CompareRequest(url: url) {
+            CompareWindows.show(request)
+        } else if let request = TestRequest(url: url) {
+            MainWindow.show()
+            AppModel.shared.handle(request)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -168,6 +172,7 @@ struct SnapshotKitCommands: Commands {
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
 
     var body: some Commands {
+        let _ = MainWindow.openWindow = openWindow
         CommandGroup(after: .newItem) {
             Button("Add Project…") { model.addProjectFromPanel() }
                 .keyboardShortcut("o")

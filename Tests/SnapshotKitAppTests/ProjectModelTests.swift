@@ -1537,6 +1537,103 @@ extension AppUITests {
             #expect(record.resultBundle == bundle.path)
         }
 
+        /// A DerivedData folder of `repo` with one test run in Xcode, which finished at `finished`.
+        func xcodeRun(of repo: URL, finished: Date) throws -> URL {
+            let derivedData = AppFixtures.temporaryDirectory("DerivedData")
+            let folder = derivedData.appendingPathComponent("SampleApp-abc", isDirectory: true)
+            let logs = folder.appendingPathComponent("Logs/Test", isDirectory: true)
+            try FileManager.default.createDirectory(at: logs.appendingPathComponent("Test-SampleApp.xcresult"), withIntermediateDirectories: true)
+            try PropertyListSerialization.data(fromPropertyList: ["WorkspacePath": repo.path], format: .xml, options: 0)
+                .write(to: folder.appendingPathComponent("info.plist"))
+            let run: [String: Any] = ["fileName": "Test-SampleApp.xcresult", "title": "Test SampleApp",
+                                      "timeStoppedRecording": finished.timeIntervalSinceReferenceDate]
+            try PropertyListSerialization.data(fromPropertyList: ["logs": ["A": run]], format: .xml, options: 0)
+                .write(to: logs.appendingPathComponent("LogStoreManifest.plist"))
+            return derivedData
+        }
+
+        /// A test run in Xcode joins the last run as it finishes, with its images, and says so with
+        /// a way to the failures; it stays where it is. Once taken up, it isn't again.
+        @Test func aTestRunInXcodeJoinsTheLastRun() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.payButtonFailed, attachments: try payButtonAttachments())
+            model.openXcode = { nil }
+            model.section = .library
+            model.derivedData = try xcodeRun(of: repo, finished: Date() + 1)
+
+            await model.takeUpXcodeRun().value
+            #expect(model.lastMessage == "Xcode: 1 failing test in 1 suite.")
+            #expect(model.lastMessageAction == .showFailures(.lastRun))
+            #expect(model.section == .library)
+            #expect(model.failures.map(\.id) == ["AppSnapshotTests/CheckoutViewTests/payButton()"])
+            #expect(try Data(contentsOf: try #require(model.failures.first?.images.first?.failure)) == AppFixtures.actual)
+            #expect(model.failureSource?.host == "Xcode")
+            let record = try #require(model.history.last)
+            #expect(record.kind == .run && record.host == "Xcode" && record.failed == 1)
+
+            let saved = try savedLastRun(in: repo)
+            await model.takeUpXcodeRun().value
+            #expect(model.history.count == 1)
+            #expect(try savedLastRun(in: repo) == saved)
+        }
+
+        /// A run that finished before the project opened was seen then, or never mattered: it stays out.
+        @Test func anEarlierTestRunInXcodeStaysOut() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "exit 0", testResults: Self.payButtonFailed, failures: true)
+            model.openXcode = { nil }
+            model.derivedData = try xcodeRun(of: repo, finished: Date() - 60)
+            let failures = model.failures.map(\.id)
+            await model.takeUpXcodeRun().value
+            #expect(model.lastMessage == nil)
+            #expect(model.failures.map(\.id) == failures)
+        }
+
+        /// From Xcode's editor, a failing test opens on its failure, another on its first snapshot, a
+        /// suite on its snapshots; a test with none says so.
+        @Test func aTestFromXcodeShowsItsFailureOrSnapshots() {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            model.show(SourceTest(suite: "CheckoutViewTests", function: "payButton"))
+            #expect(model.section == .lastRun)
+            #expect(model.selectedFailureID == "AppSnapshotTests/CheckoutViewTests/payButton()")
+
+            model.show(SourceTest(suite: "ProfileViewTests", function: "header"))
+            #expect(model.section == .library)
+            #expect(model.selectedSnapshotID == "\(AppFixtures.snapshotDir)/ProfileViewTests/header.1.png")
+
+            model.show(SourceTest(suite: "ButtonTests"))
+            #expect(model.selectedSnapshotID?.hasSuffix("/ButtonTests/primary.1.png") == true)
+            #expect(model.libraryFilter == "ButtonTests")
+
+            model.show(SourceTest(suite: "CheckoutViewTests", function: "refund"))
+            #expect(model.lastMessage == "CheckoutViewTests.refund has no snapshots yet. Run it once to record them.")
+            #expect(model.libraryFilter == "ButtonTests")
+        }
+
+        /// Re-recording a test from Xcode's editor plans from its snapshots; one with none says so.
+        @Test func aTestFromXcodeReRecords() async throws {
+            let model = AppFixtures.project(.library, store: AppFixtures.store())
+            model.reRecord(SourceTest(suite: "CheckoutViewTests", function: "refund"))
+            #expect(!model.isRunning)
+            #expect(model.lastMessage == "CheckoutViewTests.refund has no snapshots yet. Run it once to record them.")
+            model.reRecord(SourceTest(suite: "ProfileViewTests", function: "header"))
+            #expect(model.isRunning)
+            #expect(model.stageLabel == "Finding the tests to record")
+            try await waitUntilFinished(model)
+        }
+
+        /// The project is the one Xcode has in front, opened (and added) here if it isn't yet.
+        @Test func aTestFromXcodeOpensXcodesProject() async throws {
+            let (repo, png) = try makeRepo()
+            let project = repo.appendingPathComponent("Example/Shop.xcodeproj")
+            try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+            let app = AppModel(store: AppFixtures.store())
+            app.handle(TestRequest(.show, SourceTest(suite: "CardTests", function: "card")), frontmostWorkspace: { project })
+            try await waitUntil(app.current?.selectedSnapshotID == png, "the snapshot was never shown")
+            #expect(app.current?.project.url.resolvingSymlinksInPath() == repo.resolvingSymlinksInPath())
+            #expect(app.current?.section == .library)
+        }
+
         /// Moving snapshots to the Trash that all stay says so, without claiming any moved.
         @Test func aTrashThatMovesNothingSaysSo() throws {
             let model = AppFixtures.project(.library, store: AppFixtures.store())   // its files aren't on disk
