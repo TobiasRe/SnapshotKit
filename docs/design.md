@@ -122,7 +122,8 @@ followed between them, and re-recording is available wherever a snapshot is show
   needs you (an orange or red dot), a plain number otherwise. The switcher sits above the list rather than
   inset over it or in it: either way the list drew blank off-screen. Off-screen (`--capture`, the snapshot
   tests) the sidebar's selection material draws black and its vibrancy drops the dots' colour, so there the
-  selected row is filled by hand, grey as in a background window, and the counts are flattened.
+  selected row is filled by hand, grey as in a background window, the counts are flattened, and the symbols are
+  the secondary label colour (they came out near-black in dark mode).
 - The ⌘K palette (`QuickSwitcherView`, `PaletteCommand`): projects and the commands available right now in one
   ranked list, one line each, a command’s shortcut where a project shows its folder, so the palette also
   teaches the keyboard.

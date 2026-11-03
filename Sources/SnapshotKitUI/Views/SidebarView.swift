@@ -104,7 +104,13 @@ struct SectionList: View {
                 badge(section)
             }
         } icon: {
-            Image(systemName: Self.symbol(of: section))
+            // Off-screen the sidebar's vibrancy is dropped and the symbols came out near-black in dark mode; there
+            // they're the secondary label colour, as the counts are flattened.
+            if Self.drawsOffScreen {
+                Image(systemName: Self.symbol(of: section)).foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            } else {
+                Image(systemName: Self.symbol(of: section))
+            }
         }
         .tag(section)
         .listRowBackground(Self.drawsOffScreen && project.section == section
