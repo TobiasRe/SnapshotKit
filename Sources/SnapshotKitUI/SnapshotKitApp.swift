@@ -174,7 +174,7 @@ struct SnapshotKitCommands: Commands {
             Button("Import Result Bundle…") { model.importResultBundleFromPanel() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(model.current == nil || model.current?.isRunning == true)
-            Button("Load Failed CI Job…") { model.loadCIJobFromPrompt() }
+            Button("Load CI Job or Pipeline…") { model.loadCIJobFromPrompt() }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .disabled(model.current == nil || model.current?.isRunning == true)
             Divider()

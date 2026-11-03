@@ -25,6 +25,7 @@ struct SidebarView: View {
 /// The open project's sections, grouped as they're used: what you changed, what the tests say,
 /// what CI says, and everything there is.
 struct SectionList: View {
+    @Environment(AppModel.self) private var model
     let project: ProjectModel
 
     /// Drawn off-screen (`--capture`, the snapshot tests), where the sidebar's selection material comes out
@@ -43,10 +44,15 @@ struct SectionList: View {
                 row(.lastRun)
                 row(.run)
             }
-            // A merge request's failed jobs, each loaded when opened.
-            ForEach(project.ciJobGroups) { group in
+            // A merge request's or pipeline's failed jobs, each loaded when opened; always a way to load another.
+            let groups = project.ciJobGroups
+            if groups.isEmpty {
+                Section("CI") { loadCIRow }
+            }
+            ForEach(groups) { group in
                 Section {
                     ForEach(group.jobs) { row(.ciJob($0.id)) }
+                    if group.id == groups.last?.id { loadCIRow }
                 } header: {
                     Text(group.title).help(group.mergeRequest?.title ?? "")
                 }
@@ -58,6 +64,16 @@ struct SectionList: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    /// Load Job or Pipeline… (⇧⌘L): asks for a job's or pipeline's URL. Not a section: it can't be selected.
+    private var loadCIRow: some View {
+        Button { model.loadCIJobFromPrompt() } label: {
+            Label("Load Job or Pipeline…", systemImage: "plus.circle")
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Load a GitLab job or pipeline by its URL, or a job by its number (⇧⌘L)")
     }
 
     private func row(_ section: ProjectSection) -> some View {

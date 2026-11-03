@@ -25,13 +25,24 @@ public struct GitLabLink: Equatable, Sendable {
     /// A job's page as GitLab links it: `https://host/group/project/-/jobs/123`, also with a trailing
     /// path (`/raw`), query or fragment, and without the scheme.
     public static func job(url: String) -> GitLabLink? {
+        page(url, kind: "jobs").map { GitLabLink(host: $0.project.host, projectPath: $0.project.projectPath, jobID: $0.id) }
+    }
+
+    /// A pipeline's page, `https://host/group/project/-/pipelines/89`, read as `job(url:)` reads a job's: the
+    /// project, and the pipeline's number.
+    public static func pipeline(url: String) -> (project: GitLabLink, id: Int)? {
+        page(url, kind: "pipelines")
+    }
+
+    /// `host/group/project/-/<kind>/<id>`, whatever follows it.
+    private static func page(_ url: String, kind: String) -> (project: GitLabLink, id: Int)? {
         var text = url.trimmingCharacters(in: .whitespacesAndNewlines)
         if let scheme = text.range(of: "://") { text = String(text[scheme.upperBound...]) }
         text = String(text.prefix { $0 != "?" && $0 != "#" })
         let parts = text.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        guard let dash = parts.firstIndex(of: "-"), dash >= 2, parts.count > dash + 2, parts[dash + 1] == "jobs",
+        guard let dash = parts.firstIndex(of: "-"), dash >= 2, parts.count > dash + 2, parts[dash + 1] == kind,
               let id = Int(parts[dash + 2]) else { return nil }
-        return GitLabLink(host: parts[0], projectPath: parts[1..<dash].joined(separator: "/"), jobID: id)
+        return (GitLabLink(host: parts[0], projectPath: parts[1..<dash].joined(separator: "/")), id)
     }
 
     /// The project a git remote points at: `git@host:group/project.git`, `ssh://git@host:2222/group/project.git`,

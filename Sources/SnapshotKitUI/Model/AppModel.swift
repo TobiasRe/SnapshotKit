@@ -350,7 +350,7 @@ final class AppModel {
         if panel.runModal() == .OK, let url = panel.url { current?.importResultBundle(url) }
     }
 
-    /// Load Failed CI Job… (⇧⌘L): the failures view asks for the job's URL.
+    /// Load CI Job or Pipeline… (⇧⌘L): the failures view asks for a job's or pipeline's URL.
     func loadCIJobFromPrompt() {
         guard let project = current else { return }
         if project.section.content != .failures { project.section = .lastRun }

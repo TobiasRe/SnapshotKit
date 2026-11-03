@@ -11,6 +11,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
   Open in SnapshotKit, and the library shows its snapshots (a test struct's or class's name: its test file's).
   The open project is searched first, then the others.
 - The docs show a diff tool that puts a clickable `snapshotkit://compare` link into the failure message.
+- The sidebar always has a CI section, ending in **Load Job or Pipeline…**: also without a merge request or a
+  failed job of the branch, any job or pipeline can be loaded from there. **Load CI Job or Pipeline…** (⇧⌘L, before
+  **Load Failed CI Job…**) and `snapkit failures --ci URL` take a pipeline’s URL: the app lists its failed jobs
+  under *CI · Pipeline #89* and opens its snapshot job; `snapkit` shows that job.
 
 ### Changed
 - A failed CI job’s failures say why a test has no images, and offer the fix. Each missing reference or image

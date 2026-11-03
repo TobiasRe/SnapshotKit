@@ -28,6 +28,14 @@ struct FakeGitLab: GitLabAPI {
         #expect(link?.jobURL == "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567")
     }
 
+    @Test func readsAPipelinesURL() throws {
+        let (project, id) = try #require(GitLabLink.pipeline(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/89"))
+        #expect(project == GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop") && id == 89)
+        #expect(GitLabLink.pipeline(url: " gitlab.example.com/a/b/-/pipelines/90/failures?tab=1\n")?.id == 90)
+        #expect(GitLabLink.pipeline(url: "https://gitlab.example.com/a/b/-/jobs/3") == nil)
+        #expect(GitLabLink.pipeline(url: "https://gitlab.example.com/-/pipelines/3") == nil)
+    }
+
     @Test(arguments: [
         "git@gitlab.example.com:mobile/ios/shop.git",
         "ssh://git@gitlab.example.com:2222/mobile/ios/shop.git",

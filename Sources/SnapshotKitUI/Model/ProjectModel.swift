@@ -237,7 +237,7 @@ final class ProjectModel {
     var focusFilterRequest = 0
     /// Set by Re-record All Snapshot Tests… (toolbar, menu, ⌘K); the window asks before recording.
     var confirmReRecordAll = false
-    /// Set by Load Failed CI Job… (menu, ⌘K, the failures view); the failures view asks for the job.
+    /// Set by Load CI Job or Pipeline… (menu, ⌘K, the failures view); the failures view asks for the job.
     var askForCIJob = false
     var librarySort = LibrarySort(rawValue: UserDefaults.app.string(forKey: "librarySort") ?? "") ?? .name {
         didSet { UserDefaults.app.set(librarySort.rawValue, forKey: "librarySort") }
@@ -1308,19 +1308,30 @@ final class ProjectModel {
     private(set) var loadingCIJobs: Set<Int> = []
     /// Why a job couldn't be loaded, by id, until it loads.
     private(set) var ciLoadErrors: [Int: String] = [:]
+    /// Pipelines loaded by their URL, with their failed jobs: listed under each in the sidebar, each job loaded
+    /// when opened.
+    private(set) var ciPipelines: [CIPipeline] = []
+    struct CIPipeline: Equatable {
+        var project: GitLabLink
+        var id: Int
+        var failedJobs: [GitLabJob]
+    }
     /// The branch's failed jobs not loaded yet.
     var offeredCIJobs: [GitLabJob] { (ciDetection?.failedJobs ?? []).filter { failureSets[.ciJob($0.id)] == nil } }
 
     /// A CI job the sidebar lists: one of the branch's failed jobs, or one loaded.
     func ciJob(_ id: Int) -> GitLabJob? {
         failureSets[.ciJob(id)]?.job ?? ciDetection?.failedJobs.first { $0.id == id }
+            ?? ciPipelines.lazy.flatMap(\.failedJobs).first { $0.id == id }
     }
 
     /// The jobs of one merge request, under its heading in the sidebar.
     struct CIJobGroup: Identifiable {
         var mergeRequest: GitLabMergeRequest?
+        /// A pipeline loaded by its URL, for its jobs.
+        var pipeline: Int?
         var jobs: [GitLabJob]
-        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? "CI" }
+        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? pipeline.map { "CI · Pipeline #\($0)" } ?? "CI" }
         var id: String { title }
     }
 
@@ -1339,6 +1350,13 @@ final class ProjectModel {
             let jobs = detection.failedJobs + extra.map(\.job)
             if !jobs.isEmpty { groups.append(CIJobGroup(mergeRequest: detection.mergeRequest, jobs: jobs)) }
         }
+        // Pipelines loaded by their URL, each with its jobs, loaded or not; one the branch's request lists is there already.
+        for pipeline in ciPipelines {
+            let listed = Set(groups.flatMap(\.jobs).map(\.id))
+            let jobs = pipeline.failedJobs.filter { !listed.contains($0.id) }
+            others.removeAll { loaded in pipeline.failedJobs.contains { $0.id == loaded.job.id } }
+            if !jobs.isEmpty { groups.append(CIJobGroup(pipeline: pipeline.id, jobs: jobs)) }
+        }
         let byRequest = Dictionary(grouping: others) { $0.mergeRequest?.iid }
         for iid in byRequest.keys.sorted(by: { ($0 ?? .max) < ($1 ?? .max) }) {
             let jobs = byRequest[iid] ?? []
@@ -1349,6 +1367,10 @@ final class ProjectModel {
 
     /// How the model reaches GitLab and the runners, off the main thread; tests replace them.
     @ObservationIgnored var detectCI: @Sendable (URL) throws -> CIDetection? = { try CIDetector.detect(repository: $0) }
+    /// A pipeline's failed jobs, oldest first.
+    @ObservationIgnored var findCIPipeline: @Sendable (GitLabLink, Int) throws -> [GitLabJob] = { project, id in
+        try DefaultGitLabAPI(host: project.host).failedJobs(ofPipeline: id, in: project).sorted { $0.id < $1.id }
+    }
     /// A job's URL, or its number in the repository's project, as the job.
     @ObservationIgnored var resolveCI: @Sendable (String, URL) throws -> GitLabLink = { try CIDetector.job($0, repository: $1) }
     /// Loads a job with the CI login into a folder of its own below `directory`, which keeps the images an earlier
@@ -1375,9 +1397,11 @@ final class ProjectModel {
         }
     }
 
-    /// Loads the failed CI job `text` names: its URL, or its number in this project's GitLab.
+    /// Loads the failed CI job `text` names: its URL, or its number in this project's GitLab. A pipeline's URL
+    /// lists its failed jobs.
     @discardableResult
     func loadCIJob(url text: String) -> Task<Void, Never> {
+        if let (project, pipeline) = GitLabLink.pipeline(url: text) { return loadCIPipeline(pipeline, in: project) }
         let resolve = resolveCI, repository = project.url
         return loadCI("the CI job", id: nil) { try resolve(text, repository) }
     }
@@ -1387,8 +1411,30 @@ final class ProjectModel {
     func loadCIJob(_ job: GitLabJob) -> Task<Void, Never> {
         let link = failureSets[.ciJob(job.id)]?.source?.jobURL.flatMap { GitLabLink.job(url: $0.absoluteString) }
             ?? ciDetection?.link(to: job)
+            ?? ciPipelines.first { $0.failedJobs.contains(job) }.map { GitLabLink(host: $0.project.host, projectPath: $0.project.projectPath, jobID: job.id) }
         guard let link else { return Task {} }
         return loadCI("\(job.name) #\(job.id)", id: job.id) { link }
+    }
+
+    /// Lists the failed jobs of pipeline `id` under it in the sidebar, and opens its snapshot job, which loads it.
+    @discardableResult
+    func loadCIPipeline(_ id: Int, in project: GitLabLink) -> Task<Void, Never> {
+        notify("Loading pipeline #\(id)…")
+        let find = findCIPipeline, start = section
+        return Task {
+            let result = await offCooperativePool { Result { try find(project, id) } }
+            switch result {
+            case .success(let failed) where failed.isEmpty:
+                notify("Nothing failed in pipeline #\(id).")
+            case .success(let failed):
+                ciPipelines.removeAll { $0.id == id && $0.project == project }
+                ciPipelines.append(CIPipeline(project: project, id: id, failedJobs: failed))
+                notify("Pipeline #\(id) has \(failed.count) failed job\(failed.count == 1 ? "" : "s"), listed under it in the sidebar.")
+                moveOn(to: .ciJob(CIDetector.snapshotJob(of: failed).id), from: start)
+            case .failure(let error):
+                notify("Couldn’t load pipeline #\(id): \(error.localizedDescription)", isError: true)
+            }
+        }
     }
 
     /// Opening a CI job's item loads it, once: after a failed load, its view offers Try Again.

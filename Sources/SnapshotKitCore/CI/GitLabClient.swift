@@ -57,7 +57,8 @@ public enum GitLabError: Error, LocalizedError, Equatable {
         case let .request(path, output):
             "GitLab answered `\(path)` with: \(output)"
         case let .notAJob(text, numbers):
-            "“\(text)” isn’t a GitLab job’s URL (https://gitlab.example.com/group/project/-/jobs/123)" + (numbers ? ", nor a job number." : ".")
+            "“\(text)” isn’t the URL of a GitLab job (https://gitlab.example.com/group/project/-/jobs/123) or pipeline "
+                + "(…/-/pipelines/89)" + (numbers ? ", nor a job number." : ".")
         case let .jobNotFound(id, project, host):
             "GitLab on \(host) has no job \(id) in \(project), or the account SnapshotKit signs in with can’t see it. Check the job’s "
                 + "URL, and that glab or GITLAB_TOKEN signs in to an account with access to the project."

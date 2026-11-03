@@ -330,7 +330,7 @@ pass with …*: `perceptualPrecision: …`, `precision: …`, or both (see
 |---|---|
 | `--xcresult PATH` | read this result bundle instead of the last run’s |
 | `--out DIR` | where to export the failure images (default: next to the bundle, `<bundle>.attachments`; with `--ci`, `snapkit-ci-<job>` in the temporary folder). Only the files of an earlier export there are replaced. |
-| `--ci [URL]` | a GitLab CI job’s failures: the job at `URL`, else the failed job of the branch’s merge request |
+| `--ci [URL]` | a GitLab CI job’s failures: the job at `URL` (a pipeline’s URL: its failed snapshot job), else the failed job of the branch’s merge request |
 | `--ci-login USER` | the SSH login on the runner, for this run (a user, or `user@host`); default: the project’s **CI login** |
 | `--no-images` | with `--ci`: don’t copy the images from the runner |
 

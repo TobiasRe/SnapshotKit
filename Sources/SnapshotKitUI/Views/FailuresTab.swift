@@ -11,7 +11,7 @@ struct FailuresTab: View {
     @State private var attempt: String?
     @AppStorage("compareMode") private var compareMode = CompareMode.sideBySide.rawValue
     @State private var quickLookURL: URL?
-    /// What the Load Failed CI Job prompt says.
+    /// What the Load CI Job or Pipeline prompt says.
     @State private var ciJobText = ""
 
     var body: some View {
@@ -43,20 +43,23 @@ struct FailuresTab: View {
             }
             .frame(minWidth: DS.Pane.minDetailWidth, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .alert("Load Failed CI Job", isPresented: Binding(get: { project.askForCIJob }, set: { project.askForCIJob = $0 })) {
-            TextField("Job URL", text: $ciJobText)
+        .alert("Load CI Job or Pipeline", isPresented: Binding(get: { project.askForCIJob }, set: { project.askForCIJob = $0 })) {
+            TextField("Job or pipeline URL", text: $ciJobText)
             Button("Load") {
                 if !ciJobText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.loadCIJob(url: ciJobText) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The URL of a failed GitLab job, or its number in this project. Its failing tests show with their references and the images CI took.")
+            Text("The URL of a failed GitLab job, or its number in this project, or a pipeline’s URL to list its failed jobs. "
+                 + "Their failing tests show with their references and the images CI took.")
         }
         .onChange(of: project.askForCIJob) { _, asking in
             guard asking else { return }
-            // The branch's failed job, else a job's URL on the clipboard.
+            // The branch's failed job, else a job's or pipeline's URL on the clipboard.
             ciJobText = project.offeredCIJobs.first.flatMap { project.ciDetection?.link(to: $0).jobURL }
-                ?? NSPasteboard.general.string(forType: .string).flatMap { GitLabLink.job(url: $0)?.jobURL } ?? ""
+                ?? NSPasteboard.general.string(forType: .string).flatMap { text in
+                    GitLabLink.job(url: text)?.jobURL ?? GitLabLink.pipeline(url: text).map { _ in text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                } ?? ""
         }
     }
 
@@ -168,7 +171,7 @@ struct FailuresTab: View {
                         app.importResultBundleFromPanel()
                     } menu: {
                         Button("Import Result Bundle…") { app.importResultBundleFromPanel() }
-                        Button("Load Failed CI Job…") { app.loadCIJobFromPrompt() }
+                        Button("Load CI Job or Pipeline…") { app.loadCIJobFromPrompt() }
                         if let bundle = project.failureSource?.resultBundle {
                             Button("Open Result Bundle in Xcode") { NSWorkspace.shared.open(bundle) }
                             Button("Reveal Result Bundle in Finder") { NSWorkspace.shared.activateFileViewerSelecting([bundle]) }

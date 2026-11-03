@@ -781,19 +781,29 @@ func printFailures(_ failingSuites: [SuiteResult], images: [SnapshotFailureImage
 }
 
 /// `failures --ci`: a failed GitLab CI job's failing tests, with the references at the commit it ran and the
-/// images its runner took. The job is the one `--ci URL` names, else the failed one of the branch's merge request.
+/// images its runner took. The job is the one `--ci URL` names (a pipeline's: its failed snapshot job), else the failed
+/// one of the branch's merge request.
 func ciFailures(_ o: CommandArguments) {
     let repo = repository(o)
     do {
         let link: GitLabLink
-        if let text = o.value("--ci") {
+        if let text = o.value("--ci"), let (project, pipeline) = GitLabLink.pipeline(url: text) {
+            let failed = try DefaultGitLabAPI(host: project.host).failedJobs(ofPipeline: pipeline, in: project).sorted { $0.id < $1.id }
+            guard !failed.isEmpty else { fail("Nothing failed in pipeline #\(pipeline).") }
+            let job = CIDetector.snapshotJob(of: failed)
+            if failed.count > 1 {
+                say("Failed in pipeline #\(pipeline): " + failed.map { "\($0.name) #\($0.id)" }.joined(separator: ", ")
+                    + ". Showing \(job.name); pass --ci URL for another.")
+            }
+            link = GitLabLink(host: project.host, projectPath: project.projectPath, jobID: job.id)
+        } else if let text = o.value("--ci") {
             link = try CIDetector.job(text, repository: repo)
         } else {
             guard let found = try CIDetector.detect(repository: repo) else {
                 fail("No failed CI job to show: the branch has no open merge request, or nothing failed in its latest pipeline. Pass --ci URL.")
             }
             // The snapshot job, when several failed.
-            let job = found.failedJobs.first { $0.name.lowercased().contains("snapshot") } ?? found.failedJobs[0]
+            let job = CIDetector.snapshotJob(of: found.failedJobs)
             if found.failedJobs.count > 1 {
                 say("Failed in !\(found.mergeRequest.iid): " + found.failedJobs.map { "\($0.name) #\($0.id)" }.joined(separator: ", ")
                     + ". Showing \(job.name); pass --ci URL for another.")
