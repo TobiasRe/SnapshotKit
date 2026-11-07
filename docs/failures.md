@@ -39,11 +39,12 @@ was measured.
 
 **Finding the job.** When a project opens (and when its branch changes), SnapshotKit asks GitLab about the
 checked-out branch: its open merge request, that request’s latest pipeline and the pipeline’s failed jobs.
-The sidebar lists them in a section of their own, *CI · !12*, one item per job (*snapshotTest #4567*) with a
-red dot. Click one to load it. For any other job or pipeline, **Load CI Job or Pipeline…** (the CI section’s
-last item, which is always there, ⇧⌘L, the File menu, ⌘K or Last Run’s ⤓ menu) asks for its URL, or a job’s
-number in this project. A job gets an item under its own merge request; a pipeline lists its failed jobs under
-*CI · Pipeline #89* and opens its snapshot job.
+The sidebar’s **CI** section, which is always there, lists them under the merge request (*!12 · Checkout
+redesign*), one item per job (*snapshotTest #4567*) with a red dot. Click one to load it. For any other job or
+pipeline, **Load CI Job or Pipeline…** (the **+** in the CI heading, ⇧⌘L, the File menu, ⌘K or Last Run’s ⤓
+menu) asks for its URL, or a job’s number in this project. A job gets an item under its own merge request; a
+pipeline lists its failed jobs under *Pipeline #89* and opens its snapshot job. However many there are, they
+stay in the one CI section.
 
 Each job keeps its failures apart from the last run’s, and from the other jobs’: loading one replaces
 nothing, and its item shows its failing count once it has loaded.

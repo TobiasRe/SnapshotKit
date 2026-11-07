@@ -6,6 +6,10 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Fixed
+- Jobs of more than one merge request or pipeline stay in the sidebar’s one **CI** section, each group under a
+  label (*!12 · Checkout redesign*, *Pipeline #89*), instead of adding a CI section each.
+
 ## [0.5.0] - 2026-11-03
 
 ### Added

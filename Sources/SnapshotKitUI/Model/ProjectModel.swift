@@ -1414,14 +1414,17 @@ final class ProjectModel {
             ?? ciPipelines.lazy.flatMap(\.failedJobs).first { $0.id == id }
     }
 
-    /// The jobs of one merge request, under its heading in the sidebar.
+    /// The jobs of one merge request or pipeline, under its label in the sidebar's CI section.
     struct CIJobGroup: Identifiable {
         var mergeRequest: GitLabMergeRequest?
         /// A pipeline loaded by its URL, for its jobs.
         var pipeline: Int?
         var jobs: [GitLabJob]
-        var title: String { mergeRequest.map { "CI · !\($0.iid)" } ?? pipeline.map { "CI · Pipeline #\($0)" } ?? "CI" }
-        var id: String { title }
+        /// "!12 · Checkout redesign", "Pipeline #89", or "Other Jobs" for jobs loaded without either.
+        var title: String {
+            mergeRequest.map { "!\($0.iid) · \($0.title)" } ?? pipeline.map { "Pipeline #\($0)" } ?? "Other Jobs"
+        }
+        var id: String { mergeRequest.map { "!\($0.iid)" } ?? pipeline.map { "#\($0)" } ?? "" }
     }
 
     /// The branch's merge request with its failed jobs and any loaded since; then jobs loaded for

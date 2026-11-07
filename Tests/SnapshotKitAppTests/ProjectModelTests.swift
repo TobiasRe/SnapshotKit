@@ -218,7 +218,7 @@ extension AppUITests {
         @Test func aCIJobsFailuresHaveTheirOwnItem() {
             let model = AppFixtures.project(.ciJob, store: AppFixtures.store())
             #expect(model.section == .ciJob(4567) && model.failureOrigin == .ciJob(4567))
-            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.map(\.title) == ["!12 · Checkout redesign"])
             #expect(model.ciJobGroups.first?.jobs.map(\.id) == [4567, 4568])
             #expect(model.isListed(.ciJob(4567)) && model.isListed(.ciJob(4568)) && !model.isListed(.ciJob(1)))
             #expect(model.shortTitle(of: .ciJob(4567)) == "snapshotTest #4567")

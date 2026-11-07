@@ -282,6 +282,19 @@ extension AppUITests {
             assertView(view, size: CGSize(width: 420, height: 300), appearance: .aqua)
         }
 
+        /// The merge request's jobs and a pipeline loaded by its URL: one CI section, each group under its label.
+        @Test func sidebarWithSeveralCIGroups() async throws {
+            let (app, project) = makeApp(.ciJob)
+            project.findCIPipeline = { _, _ in [GitLabJob(id: 4601, name: "snapshotTest", status: "failed"),
+                                                GitLabJob(id: 4602, name: "uiTests", status: "failed")] }
+            // Loading the pipeline opens its snapshot job, which would load it from GitLab.
+            project.importCI = { _, _, _, _ in throw CancellationError() }
+            await project.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/90").value
+            for _ in 0..<200 where !project.loadingCIJobs.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+            project.section = .ciJob(4567)
+            assertView(SidebarView().environment(app), size: CGSize(width: 260, height: 560), appearance: .aqua)
+        }
+
         /// The other projects: pinned first, then by name, each with its failing count.
         @Test func projectSwitcher() {
             let (app, _) = makeApp(.changes)

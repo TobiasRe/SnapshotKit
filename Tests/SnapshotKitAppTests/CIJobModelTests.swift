@@ -42,7 +42,7 @@ extension AppUITests {
 
             #expect(calls.all == ["4567 as ci-runner"])
             #expect(model.failureSets[.lastRun] == nil)          // the job has its own failures
-            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.map(\.title) == ["!12 · Checkout"])
             model.section = .ciJob(4567)
             #expect(model.failures.map(\.id) == ["AppTests/CardTests/card()"])
             #expect(model.failureSets[.ciJob(4567)]?.failingSuites.map(\.identifier) == ["AppTests/CardTests"])
@@ -102,7 +102,7 @@ extension AppUITests {
             await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/pipelines/89").value
 
             #expect(pipelines.all == ["gitlab.example.com/mobile/ios/shop #89"])
-            #expect(model.ciJobGroups.map(\.title) == ["CI · Pipeline #89"])
+            #expect(model.ciJobGroups.map(\.title) == ["Pipeline #89"])
             #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4566, 4567]])
             #expect(model.lastMessage == "Pipeline #89 has 2 failed jobs, listed under it in the sidebar.")
             #expect(CIDetector.snapshotJob(of: [unit, job]) == job)
@@ -133,7 +133,7 @@ extension AppUITests {
             loaded.mergeRequest = nil
             model.importCI = { [loaded] _, _, _, _ in loaded }
             await model.loadCIJob(job).value
-            #expect(model.ciJobGroups.map(\.title) == ["CI · !12"])
+            #expect(model.ciJobGroups.map(\.title) == ["!12 · Checkout"])
             #expect(model.ciJobGroups.map { $0.jobs.map(\.id) } == [[4567]])
             model.section = .ciJob(4567)
             #expect(model.failureSource?.detail == "!12 · 3f1c2a9b")    // the branch's merge request

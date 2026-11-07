@@ -80,7 +80,7 @@ The sections come in groups: Workspace, Tests, one per merge request with failed
 | **vs develop** | ⌥⌘2 | Every snapshot this checkout changes compared with the base branch, committed or not. [Details](changes.md) |
 | **Last Run** | ⌥⌘3 | Failing snapshots from the last run or an imported `.xcresult`. [Details](failures.md) |
 | **Run** | ⌥⌘4 | Configuration, runs, live output and results. [Details](running.md) |
-| **CI · !12** › *snapshotTest #4567* | | A failed GitLab CI job of the branch’s merge request, loaded when you open it. [Details](failures.md#failures-from-gitlab-ci) |
+| **CI** › *!12* › *snapshotTest #4567* | | A failed GitLab CI job of the branch’s merge request, loaded when you open it. [Details](failures.md#failures-from-gitlab-ci) |
 | **All Snapshots** | ⌥⌘5 | The library: every reference image. [Details](library.md) |
 | **Orphaned** | ⌥⌘6 | Snapshots no test records any more; listed only while there are some. [Details](library.md#orphaned-snapshots) |
 
