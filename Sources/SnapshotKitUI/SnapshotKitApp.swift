@@ -196,6 +196,8 @@ struct SnapshotKitCommands: Commands {
             Button("Run Snapshot Tests") { project?.runTests() }
                 .keyboardShortcut("r")
                 .disabled(cantRun)
+            Button("Run Failing Tests") { project?.runFailingTests() }
+                .disabled(cantRun || (project?.failingSuites.isEmpty ?? true))
             Divider()
             Button(project?.reRecordSelectionTitle ?? "Re-record Selected Test") { project?.reRecordSelection() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])

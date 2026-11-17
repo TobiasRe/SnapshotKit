@@ -44,6 +44,7 @@ extension AppUITests {
             #expect(!titles.contains("Re-record All Snapshot Tests…"))
             // There is something failing to re-record or check, but nothing to run it with.
             #expect(!titles.contains("Re-record Failing Suites"))
+            #expect(!titles.contains("Run Failing Tests"))
             #expect(!titles.contains("Check Flakiness of Failing Tests"))
         }
     }

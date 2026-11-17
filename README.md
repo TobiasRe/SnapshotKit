@@ -30,7 +30,7 @@ the `snapkit` CLI, works with them, with no package to add and no test code to c
   `.xcresult` from CI), a diagnosis of each difference (invisible, a few pixels, size changed) with the
   `precision`/`perceptualPrecision` that would pass, flakiness checks and each test’s recent runs. The failed
   GitLab CI jobs of the branch’s merge request are listed in the sidebar and load the same way, with the images
-  copied from their runner.
+  copied from their runner; their failing tests run, re-record and are checked for flakiness from there.
 - **Run like CI**, locally or on a CI machine over SSH, with exactly the configuration your pipeline uses.
 - **Beside Xcode**: a test run in Xcode joins the last run as it finishes, and **Editor › SnapshotKit** shows or
   re-records the test at the cursor.

@@ -82,8 +82,23 @@ but not where its images are (a JUnit writer that cut it short), a text snapshot
 snapshot mismatch at all. Messages a JUnit writer kept as string literals (`ksdiff \"/…png\"`, `\n` for line
 breaks, `&quot;`) are read and shown unescaped.
 
-A CI job’s failures are for looking at, for now: re-recording them and checking them for flakiness work on
-the last run only.
+**Acting on them.** The bar under a job’s header does with its failing tests what Last Run does with its
+own, on this Mac and in your working tree as it is now (not at the commit the job ran):
+
+| | |
+|---|---|
+| **Run Here** | runs the job’s failing tests once. What they do here joins the last run: *1 failing test in 1 suite here, too*, or *All 3 tests passed here*, which points at the runner (it draws differently) or at the commit. |
+| **Check Flakiness** | runs them several times and labels each of the job’s failures: *Fails every time*, *Flaky* or *Passes*. |
+| **Re-record** | records them again, then verifies. A test’s **Re-record** button, its right-click menu and a selection of several do the same for fewer. |
+
+The arrow beside **Open in GitLab** has **Load Again**, **CI Settings…** and, with a [remote Mac](remote-runs.md)
+set, **Re-record Failing Suites** and **Check Flakiness of Failing Tests** on it: recorded where CI compares them,
+the references match what the runner draws.
+
+The job’s list stays what CI found, so you can still compare its images. A test re-recorded here is marked
+**Re-recorded** (when verifying is on, only if it then passed), and the footer counts them. The new references
+are uncommitted changes in Working Copy: commit and push them to fix the job. The verification, like **Run
+Here**, is a run on this Mac, so its results are in Last Run.
 
 **What it needs.**
 
@@ -92,7 +107,7 @@ the last run only.
 | GitLab’s API | the [`glab`](https://gitlab.com/gitlab-org/cli) CLI, signed in (`glab auth login --hostname …`), or `GITLAB_TOKEN` (or `GITLAB_PRIVATE_TOKEN`) set to a token with `read_api`. SnapshotKit only reads, and never stores or logs the token. A load that fails says which: glab missing, signed out or expired, a token rejected, no access to the project, no such job, GitLab unreachable, or an answer that isn’t GitLab’s (a sign-in page in front of it). |
 | The failure messages | the job uploading its JUnit report: `artifacts: reports: junit:`. Without one, the log still names the failing tests. |
 | The images | SSH access to the runner with a key: SnapshotKit never asks for a password and never accepts a host key by itself. Connect once with `ssh user@runner true` to trust it. |
-| The login | **CI login** in **CI Settings** (the button in a job’s header, the CI heading’s context menu, the File menu or ⌘K), which also shows the GitLab project and how SnapshotKit signs in: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, or can’t read the images, the note suggests the user whose home folder they are in, also when a login is set. |
+| The login | **CI login** in **CI Settings** (the menu in a job’s header, the CI heading’s context menu, the File menu or ⌘K), which also shows the GitLab project and how SnapshotKit signs in: a user (logged in to the runner as `user@runner`), `user@host` (as is), or empty for ssh’s default or `~/.ssh/config`. When the login is refused, or can’t read the images, the note suggests the user whose home folder they are in, also when a login is set. |
 
 The runner is the job’s runner as GitLab names it, so its name has to be one ssh can reach (or an alias in
 `~/.ssh/config`). A CI job is recorded in the history as imported, without a commit, so it doesn’t count
