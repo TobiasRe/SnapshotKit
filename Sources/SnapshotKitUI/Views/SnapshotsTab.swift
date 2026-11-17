@@ -201,6 +201,7 @@ struct SnapshotsTab: View {
                 app.compare.pass(press.key == .leftArrow ? .left : .right)
                 return .handled
             }
+            .singleKeys()
             .quickLookPreview($quickLookURL)
             // ⌘C copies the selected snapshot (image and file), as in Finder.
             .onCopyCommand {
@@ -688,8 +689,12 @@ struct SnapshotViewer: View {
         }
     }
 
-    /// Zoomed in, the arrows look around; at fit, ↑ ↓ step through the list beside it.
+    /// Zoomed in, the arrows look around; at fit, ↑ ↓ step through the list beside it. The single keys
+    /// work as in the list (there is one image, so 1–4 only set the mode for the next comparison).
     private func surfaceKey(_ key: KeyEquivalent) -> Bool {
+        if let single = SingleKey(String(key.character)) {
+            return app.press(single) { UserDefaults.app.set($0.rawValue, forKey: "compareMode") }
+        }
         var viewport = compare.viewport
         if viewport.pan(arrow: key) {
             withAnimation(DS.motion) { compare.viewport = viewport }
@@ -808,6 +813,7 @@ struct SnapshotGrid: View {
                     open(file)
                     return .handled
                 }
+                .singleKeys()
                 .onKeyPress(.space) {
                     guard let file = project.selectedSnapshot else { return .ignored }
                     quickLookURL = project.project.url.appendingPathComponent(file.path)

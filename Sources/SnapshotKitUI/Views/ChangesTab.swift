@@ -383,6 +383,7 @@ struct ChangesTab: View {
                 project.setViewed(!project.viewedChanges.contains(change.id), for: change)
                 return .handled
             }
+            .singleKeys()
             .overlay {
                 if groups.isEmpty {
                     if project.hideViewed && !project.sectionChanges.isEmpty && project.changeFilter.isEmpty {

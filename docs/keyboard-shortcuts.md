@@ -1,5 +1,8 @@
 # Keyboard shortcuts
 
+Press **?** with a list or an image in focus (or ⌘/, or **Help › Keyboard Shortcuts**) for the ones worth knowing
+by heart, over the window. This page has them all.
+
 ## Projects and sections
 
 | Shortcut | Action |
@@ -36,10 +39,15 @@
 | ↑ / ↓ | Previous / next item in the focused list (in the library’s grid, the arrow keys move the selection; ↑ / ↓ by a row) |
 | Return | Open the selected tile large (library grid) |
 | ⌥⌘↑ / ⌥⌘↓ | Previous / next snapshot, change or failure, wherever the focus is |
+| J / K | Next / previous snapshot, change or failure, with a list or an image in focus |
 | V (in the Working Copy or vs develop list), ⌥⌘V | Toggle the selected change’s Viewed mark; marking it viewed goes to the next unviewed change |
 | ⌘-click, ⇧-click | Select several failures (Last Run list), to re-record or flakiness-check them together |
 | Space | Quick Look the selected snapshot, change or failure’s image (while comparing in Toggle mode, it flips the images instead) |
 | ⌘C | Copy the selected image (in Last Run, the actual image of the attempt shown) |
+| ? | Show or hide the list of shortcuts (also ⌘/) |
+
+The keys without a modifier (J, K, V, 1 – 4, ?) work while a list or an image has the keyboard, never while you
+type in a field. On the image, V marks the change viewed as it does in the list.
 
 ## Comparing
 
@@ -49,6 +57,7 @@
 | ⌘2 | Slider |
 | ⌘3 | Difference |
 | ⌘4 | Toggle |
+| 1 – 4 | The same four modes, with a list or an image in focus |
 | Space | Flip between the images (in Toggle mode), from the list or the image |
 | ← / → | Move the slider divider (in Slider mode), from the list or the image |
 | Arrow keys | Look around a zoomed-in image (on the image; in Slider mode ← / → move the divider) |

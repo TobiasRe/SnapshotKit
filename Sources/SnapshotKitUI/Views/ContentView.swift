@@ -21,6 +21,8 @@ struct ContentView: View {
         .overlay {
             if model.showQuickSwitcher {
                 QuickSwitcherView()
+            } else if model.showsShortcuts {
+                KeyboardShortcutsView()
             }
         }
         // Drop a repository folder anywhere on the window to add and open it.

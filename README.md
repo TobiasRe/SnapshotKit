@@ -109,6 +109,8 @@ counts: Working Copy, vs develop (the base branch), Last Run, Run, All Snapshots
 | ⌘C | Copy the selected image (in a list) |
 | ⌥⌘O | Open the selected snapshot’s test in Xcode, at its function |
 | ⌥⌘↓ / ⌥⌘↑ | Next / previous snapshot, change or failure, wherever the focus is |
+| J / K, 1 – 4 | The same, and the four compare modes, with one key while a list or an image is in focus |
+| ? | The shortcuts worth knowing, over the window (also ⌘/) |
 | V (in the list), ⌥⌘V | Toggle a change’s *Viewed* mark; marking it viewed goes to the next one |
 
 In the library, filter by name, sort by size or recency, and switch between list and grid; **vs develop**,

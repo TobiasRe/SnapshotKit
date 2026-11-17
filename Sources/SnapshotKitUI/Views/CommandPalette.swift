@@ -58,8 +58,9 @@ extension PaletteCommand {
     /// What can be done right now in the open project; unavailable commands are left out.
     @MainActor
     static func available(app: AppModel) -> [PaletteCommand] {
+        let shortcuts = PaletteCommand(title: "Keyboard Shortcuts", symbol: "keyboard", shortcut: "⌘/") { app.showsShortcuts = true }
         guard let project = app.current else {
-            return [PaletteCommand(title: "Add Project…", symbol: "plus", shortcut: "⌘O") { app.addProjectFromPanel() }]
+            return [PaletteCommand(title: "Add Project…", symbol: "plus", shortcut: "⌘O") { app.addProjectFromPanel() }, shortcuts]
         }
         var commands: [PaletteCommand] = []
         let idle = !project.isRunning
@@ -118,6 +119,7 @@ extension PaletteCommand {
             },
             .init(title: "Remove Project from List", symbol: "minus.circle", shortcut: nil) { app.remove(current) },
             .init(title: "Add Project…", symbol: "plus", shortcut: "⌘O") { app.addProjectFromPanel() },
+            shortcuts,
         ]
         return commands
     }
