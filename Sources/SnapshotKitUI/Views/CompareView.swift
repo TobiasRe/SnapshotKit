@@ -166,6 +166,11 @@ struct CompareView: View {
             showingAfter.toggle()
             return .handled
         }
+        .onKeyPress(characters: SingleKey.imageCharacters) { press in
+            guard press.modifiers.isDisjoint(with: [.command, .option, .control]), let key = SingleKey(press.characters) else { return .ignored }
+            if press.phase == .repeat, !key.repeats { return .handled }
+            return single(key) ? .handled : .ignored
+        }
         .onChange(of: compare.zoomToChangeRequest) { zoomToChange() }
         .onChange(of: compare.key) { _, request in
             switch request.key {
@@ -327,8 +332,20 @@ struct CompareView: View {
         return .handled
     }
 
+    /// The single keys on the image: J K step through the list beside it, 1–4 pick the mode, V marks the
+    /// change viewed, ? lists the shortcuts. A compare window has no list or project: only the modes.
+    private func single(_ key: SingleKey) -> Bool {
+        if windowCompare != nil {
+            guard case .compare(let mode) = key else { return false }
+            modeRaw = mode.rawValue
+            return true
+        }
+        return app.press(key) { modeRaw = $0.rawValue }
+    }
+
     /// Keys that reach the image itself (see `ZoomPanSurface.onKey`): the same as on the canvas.
     private func surfaceKey(_ key: KeyEquivalent) -> Bool {
+        if let single = SingleKey(String(key.character)) { return self.single(single) }
         if key == .space {
             guard mode == .toggle else { return false }
             showingAfter.toggle()
@@ -660,8 +677,8 @@ struct ZoomPanSurface: NSViewRepresentable {
     @Binding var viewport: Viewport
     /// Pointer position and surface size while the pointer is over the surface; nil when it leaves.
     var onHover: ((point: CGPoint, canvas: CGSize)?) -> Void = { _ in }
-    /// The arrow keys and Space, which reach the surface once a click on the image made it first
-    /// responder; true when handled. By default the arrows look around a zoomed-in image.
+    /// The arrow keys, Space and the single keys (see `SingleKey`), which reach the surface once a click on
+    /// the image made it first responder; true when handled. By default the arrows look around a zoomed-in image.
     var onKey: ((KeyEquivalent) -> Bool)?
 
     func makeNSView(context: Context) -> SurfaceView {
@@ -710,6 +727,12 @@ struct ZoomPanSurface: NSViewRepresentable {
             if window.firstResponder === window || window.firstResponder == nil { window.makeFirstResponder(self) }
         }
 
+        /// The key equivalent of a single key, for the characters a key press typed; nil for any other key.
+        private static func singleKey(typedBy characters: String?) -> KeyEquivalent? {
+            guard let characters, SingleKey(characters) != nil, let character = characters.first else { return nil }
+            return KeyEquivalent(character)
+        }
+
         override func keyDown(with event: NSEvent) {
             let key: KeyEquivalent? = switch event.keyCode {
             case 123: .leftArrow
@@ -717,10 +740,14 @@ struct ZoomPanSurface: NSViewRepresentable {
             case 125: .downArrow
             case 126: .upArrow
             case 49: .space
-            default: nil
+            // J, K, 1–4, V and ?: the single keys, by what they type.
+            default: Self.singleKey(typedBy: event.characters)
             }
-            // With a modifier it's a shortcut (⌥⌘↓ is Next Item), not a look around.
-            let plain = event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty
+            // With a modifier it's a shortcut (⌥⌘↓ is Next Item), not a look around. ? is typed with Shift.
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            let plain = modifiers.isEmpty || (modifiers == .shift && key == KeyEquivalent("?"))
+            // Held down, only stepping repeats.
+            if event.isARepeat, let key, let single = SingleKey(String(key.character)), !single.repeats { return }
             if plain, let key, onKey(key) { return }
             super.keyDown(with: event)
         }

@@ -17,6 +17,8 @@ final class AppModel {
         }
     }
     var showQuickSwitcher = false
+    /// The list of keyboard shortcuts, over the window (?, ⌘/, Help › Keyboard Shortcuts).
+    var showsShortcuts = false
     private(set) var isScanning = false
     private(set) var startupNotice: String?
     /// The main window's zoom, pan and passed-on keys.

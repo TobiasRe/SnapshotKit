@@ -6,6 +6,14 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Added
+- **?** shows the shortcuts worth knowing by heart, over the window, grouped by what you are doing (also ⌘/,
+  **Help › Keyboard Shortcuts** and ⌘K); ?, Escape or a click beside it closes it. The Help menu also opens the
+  documentation.
+- A review with one hand: **J** and **K** go to the next and previous snapshot, change or failure, and **1**–**4**
+  pick the compare mode, with a list or the image in focus, as **V** marks a change viewed. V works on the image
+  too. None of them act while you type in a field.
+
 ### Fixed
 - Jobs of more than one merge request or pipeline stay in the sidebar’s one **CI** section, each group under a
   label (*!12 · Checkout redesign*, *Pipeline #89*), instead of adding a CI section each.

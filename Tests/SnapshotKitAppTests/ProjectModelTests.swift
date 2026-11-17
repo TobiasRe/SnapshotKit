@@ -365,7 +365,7 @@ extension AppUITests {
 
         @Test func paletteOffersOnlyWhatCanBeDoneNow() {
             let app = AppModel(store: AppFixtures.store())
-            #expect(PaletteCommand.available(app: app).map(\.title) == ["Add Project…"])   // no project open
+            #expect(PaletteCommand.available(app: app).map(\.title) == ["Add Project…", "Keyboard Shortcuts"])   // no project open
             let model = AppFixtures.project(.failedRun, store: app.store)
             app.show(model)
             let titles = PaletteCommand.available(app: app).map(\.title)

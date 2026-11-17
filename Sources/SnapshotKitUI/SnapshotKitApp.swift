@@ -268,6 +268,14 @@ struct SnapshotKitCommands: Commands {
                 .keyboardShortcut("0", modifiers: [.command, .shift])
             Divider()
         }
+        // The Help menu: the shortcuts and the documentation (there is no help book to search).
+        CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") { model.showsShortcuts.toggle() }
+                .keyboardShortcut("/", modifiers: .command)
+            Button("SnapshotKit Documentation") {
+                if let url = URL(string: "https://tobiasre.github.io/SnapshotKit/docs/") { NSWorkspace.shared.open(url) }
+            }
+        }
         CommandGroup(after: .windowArrangement) {
             // The Window menu doesn't list a closed main window, and with the menu bar item shown
             // SnapshotKit outlives it: this brings it back without the Dock.

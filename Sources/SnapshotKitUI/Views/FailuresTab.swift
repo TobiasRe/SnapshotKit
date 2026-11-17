@@ -267,6 +267,7 @@ struct FailuresTab: View {
             app.compare.pass(press.key == .leftArrow ? .left : .right)
             return .handled
         }
+        .singleKeys()
         .quickLookPreview($quickLookURL)
         // ⌘C copies the actual image of the attempt shown.
         .onCopyCommand {
