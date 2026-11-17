@@ -227,8 +227,127 @@ extension AppUITests {
             #expect(model.count(of: .lastRun) == 0)                 // the fixture's last run failed nothing
             #expect(model.menuSections == [.workingCopy, .comparison, .lastRun, .run, .library, .orphaned])
             #expect(ProjectSection(id: "ci-job-4567") == .ciJob(4567) && ProjectSection(id: "last-run") == .lastRun)
-            // Only looked at, for now: nothing to re-record or check for flakiness from here.
-            #expect(!model.recordsFailures && model.failingSuites.isEmpty && !model.canReRecordSelection)
+            // Its failing tests can be run, checked and re-recorded here, as the last run's.
+            #expect(model.showsCIFailures && model.canReRecordSelection)
+            #expect(model.failingSuites.map(\.identifier) == [AppFixtures.checkoutSuite.identifier, AppFixtures.profileSuite.identifier])
+            #expect(model.reRecordedFailures.isEmpty)
+        }
+
+        /// A model of `repo` that can run, with the CI job #4567 loaded and open: payButton() failed there.
+        func modelWithCIJob(_ repo: URL, xcodebuild script: String, testResults: String) async throws -> ProjectModel {
+            let model = try runnableModel(repo, xcodebuild: script, testResults: testResults)
+            let test = TestCaseResult(name: "payButton()", identifier: "CheckoutViewTests/payButton()", outcome: .failed,
+                                      failureMessages: ["Snapshot does not match reference."], repetitions: [.failed])
+            let ci = CIImport(link: GitLabLink(host: "gitlab.example.com", projectPath: "mobile/ios/shop", jobID: 4567),
+                              job: GitLabJob(id: 4567, name: "snapshotTest", status: "failed"),
+                              summary: TestRunSummary(suites: [SuiteResult(bundle: "AppSnapshotTests", path: ["CheckoutViewTests"],
+                                                                           tests: [test], failureFiles: [])]))
+            model.importCI = { _, _, _, _ in ci }
+            await model.loadCIJob(url: "https://gitlab.example.com/mobile/ios/shop/-/jobs/4567").value
+            model.section = .ciJob(4567)
+            try #require(model.failures.map(\.id) == [Self.payButtonID])
+            return model
+        }
+
+        static let payButtonID = "AppSnapshotTests/CheckoutViewTests/payButton()"
+        static let payButtonPassed = payButtonFailed.replacingOccurrences(of: #""result": "Failed""#, with: #""result": "Passed""#)
+
+        /// A CI job's failing test re-recorded here: the job's list stays what CI found, with the test marked,
+        /// and the verification joins the last run.
+        @Test func aCIJobsFailureIsReRecordedHere() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            saveLastRun(in: repo, suites: [AppFixtures.profileSuite], failed: 1)
+            let model = try await modelWithCIJob(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 0", testResults: Self.payButtonPassed)
+            #expect(model.failingSuites.map(\.identifier) == ["AppSnapshotTests/CheckoutViewTests"])
+            #expect(model.canReRecordSelection)
+
+            model.reRecord(failures: model.failures)
+            #expect(model.operation == .rerecord)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded payButton(). Verified: 1 passed.")
+            #expect(model.lastMessageAction == .reviewChanges)
+            #expect(model.failures.map(\.id) == [Self.payButtonID])            // still what the job failed
+            #expect(model.reRecordedFailures == [Self.payButtonID])
+            #expect(model.count(of: .ciJob(4567)) == 1)
+            // The record and the verification ran just that test.
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let runs = try String(contentsOfFile: xcodebuild, encoding: .utf8).split(separator: "\n")
+            #expect(runs.count == 2)
+            for run in runs { #expect(run.contains("-only-testing:\(Self.payButtonID)"), "\(run)") }
+            // Its verification is a run here: the last run's other failure stays, on disk too.
+            let last = try #require(LastRun.load(repository: repo))
+            #expect(last.failingSuites.map(\.identifier) == [AppFixtures.profileSuite.identifier])
+        }
+
+        /// Re-recorded but still failing here, a CI job's test isn't marked: its failure here joins the last run.
+        @Test func aCIJobsFailureThatStillFailsHereIsNotMarked() async throws {
+            let repo = try makeRecordableRepo(suite: "CheckoutViewTests")
+            let model = try await modelWithCIJob(repo, xcodebuild: Self.recordsThenFails, testResults: Self.payButtonFailed)
+            model.reRecord(failures: model.failures)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "Re-recorded payButton(). Verification still fails (1) — the test may be flaky; try Check Flakiness.")
+            #expect(model.reRecordedFailures.isEmpty)
+            #expect(model.failures.map(\.id) == [Self.payButtonID])
+            #expect(model.failureSets[.lastRun]?.items.map(\.id) == [Self.payButtonID])
+        }
+
+        /// A flakiness check of a CI job's failures says whether they fail here: the verdicts are the job's
+        /// failures', and the last run keeps its own.
+        @Test func aCIJobsFailuresAreCheckedForFlakinessHere() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try await modelWithCIJob(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 65", testResults: Self.payButtonFailed)
+            model.checkFlakiness()
+            #expect(model.operation == .flakeCheck)
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "5× on local: 1 fails every time, 0 flaky, 0 pass.")
+            #expect(model.lastMessageAction == .showFailures(.ciJob(4567)))
+            #expect(model.failures.first?.verdict == .alwaysFails)
+            #expect(model.failureSets[.lastRun]?.items.isEmpty == true)
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let run = try String(contentsOfFile: xcodebuild, encoding: .utf8)
+            #expect(run.contains("-only-testing:\(Self.payButtonID)") && run.contains("-test-iterations 5"))
+        }
+
+        /// Run Here runs a CI job's failing tests once in the working tree: what they do here joins the last
+        /// run, and the job's list stays.
+        @Test func aCIJobsFailingTestsRunHere() async throws {
+            let (repo, _) = try makeRepo()
+            let failing = try await modelWithCIJob(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 65", testResults: Self.payButtonFailed)
+            failing.runFailingTests()
+            #expect(failing.operation == .run)
+            try await waitUntilFinished(failing)
+            #expect(failing.lastMessage == "1 failing test in 1 suite here, too")
+            #expect(failing.lastMessageIsError && failing.lastMessageAction == .showFailures(.lastRun))
+            #expect(failing.failures.map(\.id) == [Self.payButtonID])
+            #expect(failing.failureSets[.lastRun]?.items.map(\.id) == [Self.payButtonID])
+            #expect(LastRun.load(repository: repo)?.failingSuites.map(\.identifier) == ["AppSnapshotTests/CheckoutViewTests"])
+            let xcodebuild = try #require(failing.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let run = try String(contentsOfFile: xcodebuild, encoding: .utf8)
+            #expect(run.contains("-only-testing:\(Self.payButtonID)") && !run.contains("-test-iterations"))
+
+            let (other, _) = try makeRepo()
+            let passing = try await modelWithCIJob(other, xcodebuild: "exit 0", testResults: Self.payButtonPassed)
+            passing.runFailingTests()
+            try await waitUntilFinished(passing)
+            #expect(passing.lastMessage == "1 test passed here. The job’s runner draws differently, or the job ran another commit.")
+            #expect(!passing.lastMessageIsError)
+            #expect(passing.failures.map(\.id) == [Self.payButtonID])
+            #expect(passing.failureSets[.lastRun]?.items.isEmpty == true)
+        }
+
+        /// The last run's failing tests run again the same way, without the others.
+        @Test func theLastRunsFailingTestsRunAgain() async throws {
+            let (repo, _) = try makeRepo()
+            let model = try runnableModel(repo, xcodebuild: "echo \"$@\" >> \"$0.args\"\nexit 65", testResults: Self.payButtonFailed, failures: true)
+            model.runFailingTests()
+            try await waitUntilFinished(model)
+            #expect(model.lastMessage == "1 failing test in 1 suite")
+            // payButton() ran and failed again; badge() wasn't in this run's results, so it keeps its failure.
+            #expect(Set(model.failures.map(\.test.name)) == ["payButton()", "badge()"])
+            let xcodebuild = try #require(model.environment).xcode.developerDir + "/usr/bin/xcrun.args"
+            let run = try String(contentsOfFile: xcodebuild, encoding: .utf8)
+            #expect(run.contains("-only-testing:\(Self.payButtonID)"))
+            #expect(run.contains("-only-testing:AppSnapshotTests/ProfileViewTests/badge()"))
         }
 
         /// A re-record measures its progress against the tests it records: those named, else its suites'.

@@ -174,7 +174,7 @@ enum FailureOrigin: Hashable {
 struct FailureSet {
     var items: [FailureItem] = []
     var source: FailureSource?
-    /// Its failing suites: for the last run's, what Re-record Failing Suites and Check Flakiness act on.
+    /// Its failing suites, which Re-record Failing Suites and Check Flakiness act on.
     var failingSuites: [SuiteResult] = []
     var flakeResults: [FlakeResult] = []
     /// What kind of difference each failure is (first repetition), computed in the background.
@@ -186,6 +186,9 @@ struct FailureSet {
     /// A CI job's job and merge request, which the sidebar names and groups it by.
     var job: GitLabJob?
     var mergeRequest: GitLabMergeRequest?
+    /// A CI job's tests re-recorded here since it loaded (those the verification passed, when there was one):
+    /// fixed in the working tree, though the job failed them and lists them still.
+    var reRecorded: Set<String> = []
 }
 
 @MainActor @Observable
@@ -436,13 +439,15 @@ final class ProjectModel {
     var settings: ProjectSettings { store.settings(for: project) }
     var config: SnapshotConfig? { context?.config }
     var isRunning: Bool { operation != nil }
-    /// The failing suites of the failures shown, which Re-record Failing Suites and Check Flakiness act
-    /// on: none for a CI job's, which are only looked at for now.
-    var failingSuites: [SuiteResult] { recordsFailures ? failureSets[failureOrigin]?.failingSuites ?? [] : [] }
+    /// The failing suites of the failures shown (the last run's, or the open CI job's), which Re-record
+    /// Failing Suites and Check Flakiness act on.
+    var failingSuites: [SuiteResult] { failureSets[failureOrigin]?.failingSuites ?? [] }
 
-    /// Whether the failures shown can be re-recorded and checked for flakiness here: the last run's,
-    /// not (yet) a CI job's.
-    var recordsFailures: Bool { failureOrigin == .lastRun }
+    /// Whether a CI job's failures are shown. Acting on them runs their tests here (or on the remote Mac), in
+    /// the working tree as it is now, not at the commit the job ran.
+    var showsCIFailures: Bool { failureOrigin != .lastRun }
+    /// The tests of the CI job shown that were re-recorded here since it loaded.
+    var reRecordedFailures: Set<String> { failureSets[failureOrigin]?.reRecorded ?? [] }
     var hasRemote: Bool { !(config?.remoteHost ?? "").isEmpty }
     var baseBranch: String? { config?.baseBranch }
 
@@ -1817,6 +1822,7 @@ final class ProjectModel {
     }
 
     /// Re-records the failing suites of the failures shown (the last run's, or the open CI job's), then verifies.
+    /// A CI job's are recorded here, in the working tree: its verification joins the last run.
     func reRecordFailed(suites: [SuiteResult]? = nil) {
         let targets = suites ?? failingSuites
         guard !targets.isEmpty else {
@@ -1876,7 +1882,7 @@ final class ProjectModel {
         switch section.content {
         case .snapshots: return selectedSnapshot.map { !orphanIDs.contains($0.id) } ?? false
         case .changes: return selectedChange.map { $0.kind != .deleted && !orphanIDs.contains($0.id) } ?? false
-        case .failures: return selectedFailure != nil && recordsFailures
+        case .failures: return selectedFailure != nil
         case .run: return false
         }
     }
@@ -1967,6 +1973,7 @@ final class ProjectModel {
                     isError = isError || verified.isError
                 }
                 if outcome.verifyRun?.cancelled == true { message += " The verification was cancelled." }
+                markReRecorded(suites: targets, onlyTesting: onlyTesting, record: record, verification: outcome.verifyRun)
                 // A cancelled run's few results don't replace what the Run view shows (see `completeRun`).
                 if !record.cancelled, outcome.verifyRun?.cancelled != true { lastResult = outcome.verifyRun ?? record }
                 // New references are working-tree changes: the next step is to look at them.
@@ -1991,20 +1998,92 @@ final class ProjectModel {
                              : ("Verification still fails (\(run.failed)) — the test may be flaky; try Check Flakiness.", true)
     }
 
-    /// Takes in a run of some tests (a re-record's verification) into the failures it re-recorded:
-    /// those tests have their new results and images; the others keep theirs, here and, for the last
-    /// run, on disk.
+    /// Takes a run of some tests (a re-record's verification, a run of the failing tests) into the last
+    /// run: those tests have their new results and images; the others keep theirs, here and on disk. Also
+    /// when it was started from a CI job's failures: the tests ran here, and the job's list stays what CI found.
     private func applyPartialRun(_ run: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?) {
-        let origin = operationOrigin
-        if origin == .lastRun {
-            saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
-        }
-        let set = failureSets[origin] ?? FailureSet()
+        saveLastRun { LastRun.update(with: run, partial: true, attachmentsDirectory: attachmentsDirectory, repository: $0) }
+        let set = failureSets[.lastRun] ?? FailureSet()
         let ran = run.summary?.suites ?? []
         let rerun = Set(ran.flatMap { suite in suite.tests.map(suite.onlyTestingIdentifier) })
-        setFailures(origin, suites: SuiteResult.merging(ran, into: set.failingSuites).filter(\.isFailing),
+        setFailures(.lastRun, suites: SuiteResult.merging(ran, into: set.failingSuites).filter(\.isFailing),
                     images: set.items.filter { !rerun.contains($0.id) }.flatMap(\.images) + images, keepingVerdicts: true,
                     source: set.source ?? FailureSource(label: "Verification run", date: Date(), host: run.host))
+    }
+
+    /// Marks the failures of the CI job a re-record was started from as re-recorded here: those its
+    /// verification passed, or all it recorded when there was none. One that still fails loses its mark.
+    private func markReRecorded(suites: [SuiteResult], onlyTesting: [String]?, record: TestRunResult, verification: TestRunResult?) {
+        let origin = operationOrigin
+        guard origin != .lastRun, !record.cancelled, record.nothingTested == nil, var set = failureSets[origin] else { return }
+        let recorded = set.items.filter { item in
+            if let onlyTesting { return onlyTesting.contains(item.id) || onlyTesting.contains(item.suite.identifier) }
+            return suites.contains { $0.identifier == item.suite.identifier }
+        }.map(\.id)
+        if let verification {
+            // One that was cancelled or ran no test says nothing about what was recorded.
+            guard !verification.cancelled, verification.nothingTested == nil else { return }
+            let passed = Set((verification.summary?.suites ?? []).flatMap { suite in
+                suite.tests.filter { $0.outcome == .passed }.map { suite.onlyTestingIdentifier(of: $0) }
+            })
+            set.reRecorded.subtract(recorded)
+            set.reRecorded.formUnion(recorded.filter { passed.contains($0) })
+        } else {
+            set.reRecorded.formUnion(recorded)
+        }
+        failureSets[origin] = set
+    }
+
+    /// Runs just the failing tests shown, once, here: for a CI job's, to see whether they fail in the working
+    /// tree too. The tests it ran replace their results in the last run, as a run of them in Xcode does.
+    func runFailingTests() {
+        let tests = failingTestIdentifiers
+        guard !tests.isEmpty else {
+            notify("No failing tests to run. Run the tests first.", isError: true)
+            return
+        }
+        let fromCI = showsCIFailures
+        guard begin(.run), let (ctx, env) = requireEnvironment() else { return }
+        expectedTotal = tests.count
+        let runner = TestRunner(repository: ctx.repository, config: ctx.config, environment: env)
+        cancelAction = { runner.cancel() }
+        let onLine = onLine, onEvent = onEvent
+        Task {
+            do {
+                let result = try await runner.run(onlyTesting: tests, onLine: onLine, onEvent: onEvent)
+                let (images, dir) = await Self.exportImages(of: result, developerDir: env.xcode.developerDir)
+                completeRunOfFailingTests(result, images: images, attachmentsDirectory: dir, fromCI: fromCI)
+            } catch {
+                finish(throwing: error)
+            }
+        }
+    }
+
+    private func completeRunOfFailingTests(_ result: TestRunResult, images: [SnapshotFailureImages], attachmentsDirectory: URL?, fromCI: Bool) {
+        guard !result.cancelled else {
+            finish(message: Self.cancelled)
+            return
+        }
+        RunHistory(repository: project.url).append(RunRecord.make(kind: .run, host: result.host, repository: project.url, result: result))
+        // Nothing ran (the tests don't build, or none has that name here): the failures stay as they were.
+        if let why = result.nothingTested {
+            finish(message: "No test ran: \(why).", isError: true)
+            return
+        }
+        lastResult = result
+        passed = result.passed
+        failed = result.failed
+        skipped = result.skipped
+        applyPartialRun(result, images: images, attachmentsDirectory: attachmentsDirectory)
+        let start = operationSection
+        if result.failed > 0 {
+            finish(message: Self.failureTitle(tests: result.failed, suites: result.failingSuites.count) + (fromCI ? " here, too" : ""),
+                   isError: true, action: .showFailures(.lastRun))
+            moveOn(to: .lastRun, from: start)
+        } else {
+            finish(message: (result.passed == 1 ? "1 test passed" : "All \(result.passed) tests passed")
+                   + (fromCI ? " here. The job’s runner draws differently, or the job ran another commit." : "."))
+        }
     }
 
     /// Reruns the failing suites — or just `tests` (`Bundle/Suite/test()`) — N times.
@@ -2140,7 +2219,10 @@ final class ProjectModel {
                         var message = "Recorded on \(out.host); downloaded \(count) snapshot\(count == 1 ? "" : "s").", isError = false
                         // The Run view shows the verification, as for a local re-record; the record run
                         // when there is none to show (not asked for, or it couldn't run).
-                        if !verify { lastResult = out.run }
+                        if !verify {
+                            lastResult = out.run
+                            markReRecorded(suites: suites, onlyTesting: nil, record: out.run, verification: nil)
+                        }
                         // Verified where it was recorded, as `snapkit rerecord --remote` does.
                         if verify {
                             do {
@@ -2148,6 +2230,7 @@ final class ProjectModel {
                                                                    onStage: onStage, onLine: onLine, onEvent: onEvent)
                                 if checked.run.cancelled { message += " The verification was cancelled." }
                                 else { lastResult = checked.run }
+                                markReRecorded(suites: suites, onlyTesting: nil, record: out.run, verification: checked.run)
                                 if let verified = await applyVerification(checked.run, images: { (checked.attachments, checked.attachmentsDirectory) }) {
                                     message += " " + verified.note
                                     isError = verified.isError

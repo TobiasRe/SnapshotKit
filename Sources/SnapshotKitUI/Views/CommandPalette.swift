@@ -76,6 +76,7 @@ extension PaletteCommand {
             commands.append(.init(title: "Open Test in Xcode", symbol: "hammer", shortcut: "⌥⌘O") { project.openTestInXcode(file) })
         }
         if idle && project.environment != nil && !project.failingSuites.isEmpty {
+            commands.append(.init(title: "Run Failing Tests", symbol: "play.circle", shortcut: nil) { project.runFailingTests() })
             commands.append(.init(title: "Re-record Failing Suites", symbol: "camera.badge.ellipsis", shortcut: "⌥⇧⌘R") { project.reRecordFailed() })
             commands.append(.init(title: "Check Flakiness of Failing Tests", symbol: "waveform.path.ecg", shortcut: "⌥⌘R") { project.checkFlakiness() })
         }

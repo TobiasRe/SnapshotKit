@@ -6,6 +6,20 @@ All notable changes to SnapshotKit are documented in this file. The format is ba
 
 ## [Unreleased]
 
+### Added
+- A failed CI job’s failures can be acted on, as the last run’s: **Run Here** runs the job’s failing tests once in
+  your working tree, **Check Flakiness** says which fail here every time, sometimes or never, and **Re-record**
+  (all of them, the selected ones, or one test or suite) records them again and verifies. The job’s menu (the
+  arrow beside **Open in GitLab**) does the last two on the remote Mac, where CI compares them. The job’s list stays
+  what CI found: a test re-recorded here is marked **Re-recorded**, and what the tests did here joins the last run.
+  ⇧⌘R, ⌥⇧⌘R and ⌥⌘R act on the open job’s failures too.
+- **Run Failing Tests** (Snapshots menu, ⌘K) runs just the failing tests of the last run, or of the open CI job,
+  once: their results replace their own in the last run, and the other tests keep theirs.
+
+### Changed
+- A CI job’s header has **Open in GitLab** as a button with a menu (**Load Again**, **CI Settings…**, the remote
+  Mac’s actions), where the last run has its import; the bar under it has what to do with the failures.
+
 ### Fixed
 - Jobs of more than one merge request or pipeline stay in the sidebar’s one **CI** section, each group under a
   label (*!12 · Checkout redesign*, *Pipeline #89*), instead of adding a CI section each.
